@@ -3,6 +3,8 @@ import type { ReactElement } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useRootNavigationDockClearance } from '@/frontend/appShell/navigationShell/state';
+
 import { type MarketplaceEntry, MarketplaceRow } from './MarketplaceRow';
 import { useMarketplaceColumns } from './useMarketplaceColumns';
 
@@ -26,13 +28,19 @@ export function MarketplaceList({
   testID?: string;
 }) {
   const { bottom } = useSafeAreaInsets();
+  const dockClearance = useRootNavigationDockClearance();
   const columns = useMarketplaceColumns();
+  const isCardLayout = columns >= 2;
 
   return (
     <LegendList
       key={columns}
       alwaysBounceVertical={false}
-      contentContainerStyle={{ paddingBottom: bottom + 24, paddingTop: 4 }}
+      contentContainerStyle={{
+        paddingBottom: bottom + dockClearance + 24,
+        paddingHorizontal: isCardLayout ? 8 : 0,
+        paddingTop: 4,
+      }}
       contentInsetAdjustmentBehavior="never"
       data={entries}
       estimatedItemSize={ROW_ESTIMATED_HEIGHT}
@@ -48,15 +56,18 @@ export function MarketplaceList({
       onEndReachedThreshold={0.5}
       recycleItems
       renderItem={({ item }) => (
-        <View className="px-4">
-          <MarketplaceRow entry={item} />
+        <View className={isCardLayout ? 'px-2 py-1.5' : 'px-4'}>
+          <MarketplaceRow entry={item} isCard={isCardLayout} />
         </View>
       )}
       showsVerticalScrollIndicator={false}
-      style={styles.list}
+      style={[styles.list, isCardLayout && styles.wideList]}
       testID={testID}
     />
   );
 }
 
-const styles = StyleSheet.create({ list: { flex: 1 } });
+const styles = StyleSheet.create({
+  list: { flex: 1 },
+  wideList: { alignSelf: 'center', maxWidth: 880, width: '100%' },
+});

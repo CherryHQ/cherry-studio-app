@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { appendFileSync, readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 
-// Matches EAS_CLI_VERSION in the release workflows; update them together.
+// Matches package.json devDependencies["eas-cli"] and eas.json cli.version; update them together.
 export const EAS_CLI_VERSION = '24.4.2';
 
 type PlatformSettings = { channel?: string; env?: Record<string, string> };

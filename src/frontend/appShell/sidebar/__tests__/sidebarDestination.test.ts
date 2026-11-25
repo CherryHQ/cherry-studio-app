@@ -4,6 +4,9 @@ describe('resolveSidebarDestination', () => {
   test.each([
     ['/agents', 'agents'],
     ['/agents/a1/edit', 'agents'],
+    ['/devices', 'devices'],
+    ['/devices/d1', 'devices'],
+    ['/more', 'more'],
     ['/scheduled-tasks/pc', 'scheduled-tasks'],
     ['/scheduled-tasks/pc/task/session', 'scheduled-tasks'],
     ['/drawings', 'paintings'],

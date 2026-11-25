@@ -2,6 +2,8 @@ import ArrowLeftIcon from '@cherrystudio/app-icons/icons/arrow-left';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePaneChrome } from '@/frontend/appShell/layout';
+
 import type { HeaderToolbarAction } from '../components/HeaderAction';
 import { HeaderChrome } from '../components/HeaderChrome';
 import type { RouteHeaderProps } from './RouteHeader.types';
@@ -17,6 +19,7 @@ export function RouteHeader({
   titleElement,
 }: RouteHeaderProps) {
   const { t } = useTranslation();
+  const paneChrome = usePaneChrome();
   const leadingAction = useRouteHeaderLeadingAction(onBack);
   const defaultLeftActions = useMemo<HeaderToolbarAction[]>(
     () => (leadingAction ? [leadingAction] : []),
@@ -43,7 +46,7 @@ export function RouteHeader({
       }
       rightActions={selection ? undefined : rightActions}
       title={selection ? t('common.selection.count', { count: selection.selectedCount }) : title}
-      titleAlign="center"
+      titleAlign={paneChrome?.titleAlign ?? 'center'}
       titleElement={selection ? undefined : titleElement}
     />
   );

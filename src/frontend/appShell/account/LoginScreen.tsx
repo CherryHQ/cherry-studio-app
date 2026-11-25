@@ -5,6 +5,7 @@ import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getAppLogo } from '@/frontend/appShell/branding';
+import { isAcross, useFoldRegion, useWindowClass } from '@/frontend/appShell/layout';
 
 import { AccountSignInFields } from './AccountSignInFields';
 import { organizationLabel } from './organizationLabel';
@@ -30,6 +31,10 @@ type LoginScreenProps = {
 export function LoginScreen({ onLeave, onSignedIn, purpose, returnTo }: LoginScreenProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const windowClass = useWindowClass();
+  const fold = useFoldRegion();
+  const isFoldSplit = Boolean(fold && !isAcross(fold));
+  const isWide = windowClass === 'wide';
   const { state } = useAccount();
   const isExpired = purpose === 'expired';
   // An expired private session signs in again to the same server and, when known, the same user.
@@ -82,11 +87,21 @@ export function LoginScreen({ onLeave, onSignedIn, purpose, returnTo }: LoginScr
       ) : null}
       <ScrollView
         automaticallyAdjustKeyboardInsets
-        contentContainerClassName="flex-grow justify-between gap-8 pb-4"
+        contentContainerClassName={
+          isFoldSplit
+            ? 'flex-grow flex-row items-center justify-center gap-8 px-8 pb-4'
+            : 'flex-grow justify-between gap-8 pb-4'
+        }
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View className="flex-grow items-center justify-center gap-5 px-8 py-12">
+        <View
+          className={
+            isFoldSplit
+              ? 'flex-1 items-center justify-center gap-5 px-8 py-12'
+              : 'mx-auto w-full max-w-[460px] flex-grow items-center justify-center gap-5 px-8 py-12'
+          }
+        >
           <Image
             accessibilityIgnoresInvertColors
             className="size-20 rounded-2xl"
@@ -102,7 +117,15 @@ export function LoginScreen({ onLeave, onSignedIn, purpose, returnTo }: LoginScr
             <Text className="text-center text-base text-muted-foreground">{description}</Text>
           </View>
         </View>
-        <View className="gap-4 px-6">
+        <View
+          className={
+            isFoldSplit
+              ? 'mx-auto w-full max-w-[460px] flex-1 justify-center gap-4 px-6'
+              : isWide
+                ? 'mx-auto w-full max-w-[460px] gap-4 px-6'
+                : 'gap-4 px-6'
+          }
+        >
           {isPrivate ? <AccountSignInFields form={form} onSubmit={signIn} /> : null}
           <View className="gap-2">
             <Button disabled={!canSignIn} loading={state.isBusy} onPress={signIn} size="lg">

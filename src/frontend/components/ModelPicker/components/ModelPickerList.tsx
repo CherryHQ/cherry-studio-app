@@ -216,7 +216,13 @@ export function ModelPickerList({
     [onCloudOffer, onSelect, showBadges],
   );
   const keyExtractor = useCallback((item: ModelPickerListItem) => item.key, []);
-  const getItemType = useCallback((item: ModelPickerListItem) => item.type, []);
+  const getItemType = useCallback(
+    (item: ModelPickerListItem) =>
+      item.type === 'groupHeader' && item.provider.id === CLOUD_PROVIDER_ID
+        ? 'cloudGroupHeader'
+        : item.type,
+    [],
+  );
   const handleFirstVisibleItemChanged = useCallback(
     ({ index }: { index: number }) => {
       const anchorIndex = listRef.current?.getState().isAtEnd
@@ -348,7 +354,11 @@ function ModelPickerGroupHeader({
 }) {
   return (
     <View
-      className={cn('pb-1', contentInset === 'default' && 'px-5', isFirstGroup ? 'pt-1' : 'pt-3')}
+      className={cn(
+        children ? 'gap-2 pb-2' : 'pb-1',
+        contentInset === 'default' && 'px-5',
+        isFirstGroup ? 'pt-1' : 'pt-3',
+      )}
       style={children && trailingInset !== undefined ? { paddingRight: trailingInset } : undefined}
     >
       <Text className="font-medium text-muted-foreground text-xs">{title}</Text>

@@ -1,5 +1,11 @@
-import { useEffect } from 'react';
+import { NavigationContext } from 'expo-router/react-navigation';
+import { type ContextType, useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import {
+  NavigationShellActionsContext,
+  type NavigationShellActions,
+} from '@/frontend/appShell/navigationShell/state';
 
 import {
   SelectionProvider,
@@ -55,6 +61,32 @@ function SourceProbe() {
   }, [source]);
 
   return null;
+}
+
+function createFocusableNavigation(initialFocused = true) {
+  let focused = initialFocused;
+  const listeners: Record<'blur' | 'focus', Set<() => void>> = {
+    blur: new Set(),
+    focus: new Set(),
+  };
+  const navigation = {
+    addListener: (event: 'blur' | 'focus', listener: () => void) => {
+      listeners[event].add(listener);
+      return () => {
+        listeners[event].delete(listener);
+      };
+    },
+    isFocused: () => focused,
+  } as unknown as ContextType<typeof NavigationContext>;
+
+  const emit = (event: 'blur' | 'focus') => {
+    focused = event === 'focus';
+    for (const listener of listeners[event]) {
+      listener();
+    }
+  };
+
+  return { emit, navigation };
 }
 
 beforeEach(() => {
@@ -193,5 +225,100 @@ describe('SelectionProvider', () => {
     });
 
     expect(onEditingChange).toHaveBeenLastCalledWith(false);
+  });
+
+  test('hides the floating dock only while editing is active and releases on exit, deletion, or unmount', async () => {
+    const unregisterHideDock = jest.fn();
+    const registerHideDock = jest.fn(() => unregisterHideDock);
+    const navigationActions = { registerHideDock } as unknown as NavigationShellActions;
+
+    await act(async () => {
+      renderer = create(
+        <NavigationShellActionsContext value={navigationActions}>
+          <SelectionProvider>
+            <SelectionProbe />
+          </SelectionProvider>
+        </NavigationShellActionsContext>,
+      );
+    });
+
+    expect(registerHideDock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      currentActions?.enterEditing();
+    });
+    expect(registerHideDock).toHaveBeenCalledTimes(1);
+    expect(unregisterHideDock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      currentActions?.exitEditing();
+    });
+    expect(unregisterHideDock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      currentActions?.enterEditing();
+      currentActions?.toggleId('topic-1');
+    });
+    expect(registerHideDock).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      currentActions?.beginDeletion('conversations', ['topic-1']);
+    });
+    expect(unregisterHideDock).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      currentActions?.finishDeletion('conversations', ['topic-1']);
+    });
+    await act(async () => {
+      currentActions?.enterEditing();
+    });
+    expect(registerHideDock).toHaveBeenCalledTimes(3);
+
+    await act(async () => {
+      renderer?.unmount();
+      renderer = undefined;
+    });
+    expect(unregisterHideDock).toHaveBeenCalledTimes(3);
+  });
+
+  test('releases floating dock hiding when the screen blurs and re-acquires when it focuses again', async () => {
+    const unregisterHideDock = jest.fn();
+    const registerHideDock = jest.fn(() => unregisterHideDock);
+    const navigationActions = { registerHideDock } as unknown as NavigationShellActions;
+    const { emit, navigation } = createFocusableNavigation(true);
+
+    await act(async () => {
+      renderer = create(
+        <NavigationContext value={navigation}>
+          <NavigationShellActionsContext value={navigationActions}>
+            <SelectionProvider>
+              <SelectionProbe />
+            </SelectionProvider>
+          </NavigationShellActionsContext>
+        </NavigationContext>,
+      );
+    });
+
+    await act(async () => {
+      currentActions?.enterEditing();
+    });
+    expect(registerHideDock).toHaveBeenCalledTimes(1);
+    expect(unregisterHideDock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      emit('blur');
+    });
+    expect(currentState?.isEditing).toBe(true);
+    expect(unregisterHideDock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      emit('focus');
+    });
+    expect(registerHideDock).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      currentActions?.exitEditing();
+    });
+    expect(unregisterHideDock).toHaveBeenCalledTimes(2);
   });
 });

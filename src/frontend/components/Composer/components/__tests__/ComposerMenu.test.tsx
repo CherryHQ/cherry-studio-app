@@ -73,10 +73,15 @@ jest.mock('@cherrystudio/ui/components', () => {
 
   return {
     Composer: { Dock: MockDock, Menu: Object.assign(MockMenu, { Item: MockMenuItem }) },
+    getComposerBottomPadding: (bottom: number) => Math.max(bottom, 8) + 4,
     useAlert: () => ({ alert: { confirm: mockAlertConfirm } }),
     useToast: () => ({ toast: { show: mockToastShow } }),
   };
 });
+
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 0 }),
+}));
 
 jest.mock('expo-image-picker', () => ({
   UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' },

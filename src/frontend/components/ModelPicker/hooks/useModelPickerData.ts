@@ -5,8 +5,10 @@ import { useCloud } from '@/frontend/hooks/useCloud';
 import {
   CLOUD_PROVIDER_ID,
   cloudModelUnavailable,
+  isCloudModelListed,
   type CloudModelUse,
 } from '@/shared/contracts/cloud';
+import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 
 import {
   buildModelPickerGroups,
@@ -46,8 +48,6 @@ export function useModelPickerData({
     refetch: refetchProviders,
   } = useProviders({ enabled: true });
   const error = modelsQuery.error ?? providersQuery.error;
-  const hasLoadedCatalog =
-    !error && modelsQuery.data !== undefined && providersQuery.data !== undefined;
   const providers = useMemo(
     () =>
       providerId
@@ -55,6 +55,26 @@ export function useModelPickerData({
         : enabledProviders,
     [enabledProviders, providerId],
   );
+  const isCloudIncluded =
+    !isEnterpriseProfile() &&
+    (!providerId || providerId === CLOUD_PROVIDER_ID) &&
+    providers.some((provider) => provider.id === CLOUD_PROVIDER_ID);
+  const cloudSettledError = cloud.guestCatalog === 'error' || cloud.phase === 'error';
+  const hasListedCloudModels = cloud.models.some((model) => isCloudModelListed(cloud, model.id));
+  const hasProjectedCloudModels = models.some((model) => model.providerId === CLOUD_PROVIDER_ID);
+  // Cloud publishes its catalog before the invalidated /models query refetches.
+  const isCloudCatalogPending =
+    isCloudIncluded &&
+    !cloudSettledError &&
+    (cloud.phase === 'loading' ||
+      (cloud.phase === 'signed_out' && cloud.guestCatalog !== 'ready') ||
+      (hasListedCloudModels && !hasProjectedCloudModels));
+  const hasLoadedCatalog =
+    !error &&
+    modelsQuery.data !== undefined &&
+    providersQuery.data !== undefined &&
+    !isCloudCatalogPending;
+  const isLoading = isModelsLoading || isProvidersLoading || (!error && isCloudCatalogPending);
   const groups = useMemo(
     () =>
       buildModelPickerGroups({ modelType, models, providers, searchText })
@@ -103,7 +123,7 @@ export function useModelPickerData({
       error,
       groups,
       hasLoadedCatalog,
-      isLoading: isModelsLoading || isProvidersLoading,
+      isLoading,
       modelItems,
       models,
       providers,
@@ -116,8 +136,7 @@ export function useModelPickerData({
       getModelItem,
       groups,
       hasLoadedCatalog,
-      isModelsLoading,
-      isProvidersLoading,
+      isLoading,
       modelItems,
       models,
       providers,

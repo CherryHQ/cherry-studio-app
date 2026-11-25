@@ -84,6 +84,8 @@ beforeEach(() => {
     messages: [message('older')],
     hasNewerMessages: false,
     hasOlderMessages: false,
+    hasUnfetchedOlderMessages: false,
+    hiddenUserTurnCount: 0,
     isLoadingInitial: false,
     isRefreshing: false,
     isLoadingOlder: false,

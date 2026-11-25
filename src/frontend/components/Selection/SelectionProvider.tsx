@@ -8,6 +8,8 @@ import {
   useState,
 } from 'react';
 
+import { useHideFloatingDock } from '@/frontend/appShell/navigationShell/state';
+
 import { areAllSelected, toggleSelection } from './selection';
 
 // A list body describes how the shared selection toolbar should act on its own
@@ -60,6 +62,7 @@ export function SelectionProvider({ children, onEditingChange }: SelectionProvid
   );
   const [sources, setSources] = useState<Record<string, SelectionSource>>({});
   const isDeletionPending = Object.values(pendingDeletionIds).some((ids) => ids.size > 0);
+  useHideFloatingDock(isEditing);
 
   const enterEditing = useCallback(() => {
     if (isDeletionPending) {

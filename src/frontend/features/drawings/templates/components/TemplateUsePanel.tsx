@@ -109,7 +109,7 @@ export function TemplateUsePanel({ template }: { template: PaintingTemplate }) {
   );
 
   return (
-    <View className="flex-1">
+    <View className="mx-auto w-full max-w-[720px] flex-1">
       {/* The fields scroll inside the card, so a long template never cuts its edge. */}
       <View className="mx-4 shrink overflow-hidden rounded-3xl border border-border-subtle bg-card/85">
         <KeyboardAwareScrollView

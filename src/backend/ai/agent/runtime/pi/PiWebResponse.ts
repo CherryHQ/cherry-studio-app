@@ -1,3 +1,4 @@
+import { getLowerBaseModelName } from '@cherrystudio/universal/utils/model';
 import type { Api, AssistantMessage, JsonObject, Message, Model } from '@earendil-works/pi-ai';
 import { z } from 'zod';
 
@@ -189,8 +190,11 @@ function replayAnthropicContent(
   }
   for (const index of restored)
     replayed[index] = withoutStrandedAnthropicCalls(replayed, index, body.tools);
-  // Other Messages-compatible providers can require their original thinking for tool replay.
-  if (!/^https:\/\/api\.anthropic\.com(?::443)?(?:\/|$)/i.test(model.baseUrl)) {
+  // Non-Claude Messages-compatible models can require their original thinking for tool replay.
+  if (
+    !/^https:\/\/api\.anthropic\.com(?::443)?(?:\/|$)/i.test(model.baseUrl) &&
+    !getLowerBaseModelName(model.id).startsWith('claude-')
+  ) {
     return { ...body, messages: replayed };
   }
   // A user message carrying tool results still belongs to the active tool loop.

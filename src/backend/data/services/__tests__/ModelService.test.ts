@@ -19,6 +19,7 @@ jest.mock('@/backend/data/db/schemas/userModel', () => ({
 }));
 
 jest.mock('../utils/orderKey', () => ({
+  applyScopedMoves: jest.fn(),
   insertManyWithOrderKey: jest.fn(async (_tx, _table, values) =>
     values.map((value: Record<string, unknown>, index: number) => ({
       ...value,

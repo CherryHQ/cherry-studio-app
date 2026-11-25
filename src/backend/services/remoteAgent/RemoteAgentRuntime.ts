@@ -8,10 +8,14 @@ import {
 } from '@/backend/core/lifecycle';
 import type { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
 import type { DesktopConnections } from '@/backend/services/desktopConnections';
+import { RemoteFailureError } from '@/backend/services/desktopConnections/remoteErrors';
+import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
+import { raceAbort } from '@/backend/utils/raceAbort';
 import type { RemoteAgentModule, RemoteAgentSource } from '@/shared/contracts/remoteAgent';
 
 import { RemoteAgentError } from './RemoteAgentError';
 import { RemoteAgentScope, type RemoteBackgroundExecution } from './RemoteAgentScope';
+import { projectAgentPage } from './remoteAgentViews';
 import { RemoteSessionReadCache } from './RemoteSessionReadCache';
 import type { RemoteUploadFiles } from './remoteUploads';
 
@@ -33,12 +37,14 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
   };
   private readonly readCache = new RemoteSessionReadCache();
   private uninvalidate?: () => void;
+  private readonly preparedAgents = new Map<string, ReturnType<RemoteAgentSource['listAgents']>>();
   private readonly sources = new Map<string, Entry>();
   private readonly opening = new Map<string, Opening>();
   private readonly drains = new Set<Promise<void>>();
   private readonly lifetime = new AbortController();
   configure(dependencies: NonNullable<RemoteAgentRuntime['dependencies']>) {
     this.uninvalidate?.();
+    this.preparedAgents.clear();
     this.readCache.clear();
     this.dependencies = dependencies;
     this.uninvalidate = dependencies.connections.subscribeInvalidation((event) => {
@@ -46,6 +52,72 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
         this.readCache.invalidate(event.connectionId, event.grantId);
     });
   }
+  prewarm(id: string, view: 'agents' | 'sessions', signal: AbortSignal): Promise<void> {
+    const preparation = this.prepareCatalog(id, view, signal);
+    this.drains.add(preparation);
+    void preparation.finally(() => this.drains.delete(preparation)).catch(() => undefined);
+    return preparation;
+  }
+
+  private async prepareCatalog(id: string, view: 'agents' | 'sessions', signal: AbortSignal) {
+    const connections = this.dependencies?.connections;
+    if (!connections || this.sources.has(id) || this.opening.has(id)) return;
+    const linked = linkAbortSignals([signal, this.lifetime.signal]);
+    let lease: Awaited<ReturnType<typeof connections.prewarmAgent>>;
+    try {
+      lease = await connections.prewarmAgent(id, linked.signal);
+    } catch (error) {
+      linked.dispose();
+      throw error;
+    }
+    if (!lease) {
+      linked.dispose();
+      return;
+    }
+    if (lease.signal.aborted) linked.dispose();
+    else lease.signal.addEventListener('abort', linked.dispose, { once: true });
+    if (this.sources.has(id)) {
+      lease.release();
+      return;
+    }
+    if (this.opening.has(id) || lease.signal.aborted) return;
+    // Ordinary session lists can traverse all scheduled-task memberships. Leave that work to a
+    // real selection; preparing the authenticated channel still benefits either view.
+    if (view !== 'agents') {
+      try {
+        await lease.ready(lease.signal);
+      } catch (error) {
+        lease.release();
+        throw error;
+      }
+      return;
+    }
+    const page = lease.ready(lease.signal).then(async (session) => {
+      const result = await session.request('agent.agents.list', {}, lease.signal);
+      lease.signal.throwIfAborted();
+      return projectAgentPage(result);
+    });
+    this.preparedAgents.set(lease.scope, page);
+    const discard = () => {
+      if (this.preparedAgents.get(lease.scope) === page) this.preparedAgents.delete(lease.scope);
+    };
+    lease.signal.addEventListener('abort', discard, { once: true });
+    try {
+      await page;
+    } catch (error) {
+      discard();
+      if (
+        !lease.signal.aborted &&
+        error instanceof RemoteFailureError &&
+        (error.reason === 'FORBIDDEN' || error.reason === 'GRANT_REVOKED')
+      ) {
+        await connections.revoke(id, 'agent', lease.grantId);
+      }
+      lease.release();
+      throw error;
+    }
+  }
+
   async open(id: string, signal: AbortSignal): Promise<RemoteAgentSource> {
     signal.throwIfAborted();
     this.lifetime.signal.throwIfAborted();
@@ -136,9 +208,23 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
         assertActive();
         return subscribe(scope.subscribeState(listener));
       },
-      listAgents: (...args) => {
+      listAgents: async (cursor, signal) => {
         assertActive();
-        return scope.listAgents(...args);
+        signal.throwIfAborted();
+        const prepared =
+          cursor === undefined ? this.preparedAgents.get(scope.draftScope) : undefined;
+        if (prepared) {
+          this.preparedAgents.delete(scope.draftScope);
+          // A cancelled or timed-out speculative read must not fail the user's own read.
+          const page = await raceAbort(
+            prepared.catch(() => undefined),
+            signal,
+          );
+          assertActive();
+          signal.throwIfAborted();
+          if (page && scope.getState().status === 'ready') return page;
+        }
+        return scope.listAgents(cursor, signal);
       },
       listWorkspaces: (...args) => {
         assertActive();
@@ -258,6 +344,7 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
   protected override async onStop() {
     this.lifetime.abort();
     this.uninvalidate?.();
+    this.preparedAgents.clear();
     this.readCache.clear();
     await Promise.allSettled([...this.opening.values()].map((opening) => opening.promise));
     for (const [id, entry] of this.sources) this.close(id, entry);

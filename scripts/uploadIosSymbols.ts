@@ -263,7 +263,10 @@ function jsonFile(path: string): any {
 export function resolveBuildContext(env: NodeJS.ProcessEnv): BuildContext {
   if (env.EAS_BUILD_PLATFORM && env.EAS_BUILD_PLATFORM !== 'ios')
     return { kind: 'skip', reason: 'platform is not ios' };
-  if (env.EAS_BUILD_RUNNER === 'local-build-plugin')
+  const localReleaseGate =
+    env.EAS_BUILD_RUNNER === 'local-build-plugin' &&
+    env.CHERRY_LOCAL_RELEASE_SYMBOL_GATE === 'true';
+  if (env.EAS_BUILD_RUNNER === 'local-build-plugin' && !localReleaseGate)
     return { kind: 'skip', reason: 'local EAS build' };
   if (env.PROFILE && env.EAS_BUILD_PROFILE)
     requireValue(
@@ -274,7 +277,7 @@ export function resolveBuildContext(env: NodeJS.ProcessEnv): BuildContext {
     return { kind: 'skip', reason: 'development or preview build' };
   const claimed = Object.keys(env).some((key) => key.startsWith('EAS_BUILD'));
   if (!claimed) return { kind: 'skip', reason: 'not an EAS build' };
-  validateCloudIdentity(env);
+  const identity = validateBuildIdentity(env);
   const archivePath = resolve('ios/build/CherryStudio.xcarchive');
   requireValue(
     !env.GYM_ARCHIVE_PATH || resolve('ios', env.GYM_ARCHIVE_PATH) === archivePath,
@@ -285,13 +288,21 @@ export function resolveBuildContext(env: NodeJS.ProcessEnv): BuildContext {
     'archive path ios/build/CherryStudio.xcarchive',
   );
   const ipaPath = selectIpa(resolve('ios/build'));
-  if (env.EAS_BUILD_ARTIFACT_PATH)
-    requireValue(resolve(env.EAS_BUILD_ARTIFACT_PATH) === ipaPath, 'EAS_BUILD_ARTIFACT_PATH');
+  if (env.EAS_BUILD_ARTIFACT_PATH) {
+    const resolvedArtifact = resolve(env.EAS_BUILD_ARTIFACT_PATH);
+    const matchesArtifact =
+      resolvedArtifact === ipaPath ||
+      (localReleaseGate &&
+        existsSync(resolvedArtifact) &&
+        existsSync(ipaPath) &&
+        realpathSync(resolvedArtifact) === realpathSync(ipaPath));
+    requireValue(matchesArtifact, 'EAS_BUILD_ARTIFACT_PATH');
+  }
   return {
     kind: 'active',
     env: { ...env },
-    buildId: (env.EAS_BUILD_ID ?? '').toLowerCase(),
-    sourceSha: (env.EAS_BUILD_GIT_COMMIT_HASH ?? '').toLowerCase(),
+    buildId: identity.buildId,
+    sourceSha: identity.sourceSha,
     sentryUrl: '',
     org: '',
     project: '',
@@ -301,20 +312,41 @@ export function resolveBuildContext(env: NodeJS.ProcessEnv): BuildContext {
     ipaPath,
   };
 }
-function validateCloudIdentity(env: NodeJS.ProcessEnv) {
+function validateBuildIdentity(env: NodeJS.ProcessEnv) {
+  const localReleaseGate =
+    env.EAS_BUILD_RUNNER === 'local-build-plugin' &&
+    env.CHERRY_LOCAL_RELEASE_SYMBOL_GATE === 'true';
   for (const [name, expected] of [
-    ['EAS_BUILD_RUNNER', 'eas-build'],
+    ['EAS_BUILD_RUNNER', localReleaseGate ? 'local-build-plugin' : 'eas-build'],
     ['EAS_BUILD_PLATFORM', 'ios'],
     ['PROFILE', 'production'],
   ])
     requireValue(env[name] === expected, name);
   requireValue(env.EAS_BUILD_PROFILE?.startsWith('production'), 'EAS_BUILD_PROFILE');
   requireValue(env.EAS_BUILD === 'true' || env.EAS_BUILD === '1', 'EAS_BUILD');
-  requireValue(validUuid(env.EAS_BUILD_ID ?? ''), 'EAS_BUILD_ID (UUID)');
+  const buildId = (
+    localReleaseGate
+      ? (env.CHERRY_LOCAL_BUILD_ID ?? env.EAS_BUILD_ID ?? '')
+      : (env.EAS_BUILD_ID ?? '')
+  ).toLowerCase();
   requireValue(
-    /^[a-f0-9]{40}$/i.test(env.EAS_BUILD_GIT_COMMIT_HASH ?? ''),
-    'EAS_BUILD_GIT_COMMIT_HASH (SHA)',
+    validUuid(buildId),
+    localReleaseGate ? 'CHERRY_LOCAL_BUILD_ID (UUID)' : 'EAS_BUILD_ID (UUID)',
   );
+  const sourceSha = (
+    localReleaseGate
+      ? (env.CHERRY_SOURCE_SHA ?? env.EAS_BUILD_GIT_COMMIT_HASH ?? '')
+      : (env.EAS_BUILD_GIT_COMMIT_HASH ?? '')
+  ).toLowerCase();
+  requireValue(
+    /^[a-f0-9]{40}$/i.test(sourceSha),
+    localReleaseGate ? 'CHERRY_SOURCE_SHA (SHA)' : 'EAS_BUILD_GIT_COMMIT_HASH (SHA)',
+  );
+  return {
+    runner: localReleaseGate ? ('local-build-plugin' as const) : ('eas-build' as const),
+    buildId,
+    sourceSha,
+  };
 }
 export function parseDsnProjectId(value: string): string {
   try {
@@ -341,7 +373,7 @@ export function validateBuildContext(ctx: ActiveContext) {
     return;
   }
   const env = ctx.env;
-  validateCloudIdentity(env);
+  validateBuildIdentity(env);
   if (!env.SENTRY_AUTH_TOKEN?.trim())
     throw new GateError('SENTRY_TOKEN_MISSING', 'Missing SENTRY_AUTH_TOKEN');
   if (!env.EXPO_PUBLIC_SENTRY_DSN?.trim())
@@ -920,7 +952,8 @@ export async function stageSymbols({
       buildId: ctx.buildId,
       sourceSha: ctx.sourceSha,
       sentryTarget: sentryTargetFingerprint(ctx),
-      runner: 'eas-build',
+      runner:
+        ctx.env?.EAS_BUILD_RUNNER === 'local-build-plugin' ? 'local-build-plugin' : 'eas-build',
       platform: 'ios',
       profile: redact(ctx.env?.EAS_BUILD_PROFILE ?? 'production'),
       createdAt: new Date(now()).toISOString(),

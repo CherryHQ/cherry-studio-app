@@ -87,6 +87,11 @@ export function useCatalog<T>(
     ...query,
     // A disabled source can still have an unsettled read, but cannot report active loading.
     isLoading: active && query.isLoading,
+    isCachedCatalog:
+      source.ref.kind === 'desktop' &&
+      availability.state === 'disabled' &&
+      !retired &&
+      !!query.data,
     data: retired ? undefined : query.data,
     items: retired ? [] : (query.data?.pages.flatMap((page) => page.items) ?? []),
   };

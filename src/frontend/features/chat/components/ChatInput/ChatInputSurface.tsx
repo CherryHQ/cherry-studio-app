@@ -1,9 +1,5 @@
 import PauseIcon from '@cherrystudio/app-icons/icons/pause';
-import {
-  Composer,
-  type ComposerInputProps,
-  useComposerExpansion,
-} from '@cherrystudio/ui/components';
+import { Composer, type ComposerInputProps } from '@cherrystudio/ui/components';
 import { type ComponentProps, type PropsWithChildren, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type StyleProp, type TextStyle, View } from 'react-native';
@@ -28,14 +24,10 @@ import { ContextUsageRing } from './components/ContextUsageRing';
 import type { ContextUsage } from './utils/contextUsage';
 
 /** A drafted follow-up can be admitted while Pi continues its current answer. */
-export function ChatInputComposer(props: ComponentProps<typeof ComposerSurface>) {
-  const { attachments, draft } = useComposerState();
-  return (
-    <ComposerSurface
-      {...props}
-      streaming={props.streaming && !hasComposerSendableContent(draft, attachments)}
-    />
-  );
+export function ChatInputComposer(
+  props: Omit<ComponentProps<typeof ComposerSurface>, 'allowFollowUp'>,
+) {
+  return <ComposerSurface {...props} allowFollowUp />;
 }
 
 export function ChatInputAccessories({ children }: PropsWithChildren) {
@@ -126,8 +118,6 @@ function ChatInputLayout({
   const submit = useComposerSubmit();
   const { isEditing } = useComposerPresentationState();
   const { attachments, draft } = useComposerState();
-  const isExpanded = useComposerExpansion()?.state.isExpanded ?? false;
-  const active = isEditing || isExpanded || draft.length > 0 || attachments.length > 0;
   const hasFollowUp = onStop !== undefined && hasComposerSendableContent(draft, attachments);
   const send = (
     <Composer.Send
@@ -145,8 +135,7 @@ function ChatInputLayout({
   ) : null;
   return (
     <ComposerEditor
-      restingTrailingActionCount={contextUsage ? 2 : 1}
-      active={active}
+      restingTrailingActionCount={1}
       attachmentMode={attachmentMode}
       fieldStyle={fieldStyle}
       onLinkPress={onLinkPress}
@@ -169,11 +158,11 @@ function ChatInputLayout({
           </Composer.Action>
         </Composer.EditorSecondary>
       ) : null}
-      <View className="ml-auto flex-row items-center gap-2" pointerEvents="box-none">
+      <View className="ml-auto flex-row items-center gap-1.5" pointerEvents="box-none">
         {trailingAction ? (
           <Composer.EditorSecondary>{trailingAction}</Composer.EditorSecondary>
         ) : null}
-        {ring}
+        {ring ? <Composer.EditorSecondary>{ring}</Composer.EditorSecondary> : null}
         {renderPrimary ? renderPrimary(send) : send}
       </View>
     </ComposerEditor>

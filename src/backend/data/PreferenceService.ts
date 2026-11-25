@@ -19,6 +19,7 @@ import {
   type PreferenceKeyType,
   type PreferenceUpdateOptions,
 } from '@/shared/data/preference';
+import { normalizeAssistantMessageToolbarConfig } from '@/shared/data/types/assistantMessageToolbar';
 
 type PreferenceListener = () => void;
 type PreferenceValue = PreferenceSchema[PreferenceKeyType];
@@ -82,7 +83,10 @@ export class PreferenceService extends BaseService implements PreferenceClient {
 
     for (const row of rows) {
       if (isPreferenceKey(row.key)) {
-        this.cache[row.key] = row.value as PreferenceValue;
+        this.cache[row.key] =
+          row.key === 'ui.chat.assistant_toolbar_actions'
+            ? normalizeAssistantMessageToolbarConfig(row.value)
+            : (row.value as PreferenceValue);
       }
     }
   }
@@ -92,6 +96,11 @@ export class PreferenceService extends BaseService implements PreferenceClient {
   }
 
   getCachedValue<K extends PreferenceKeyType>(key: K): PreferenceSchema[K] | undefined {
+    if (key === 'ui.chat.assistant_toolbar_actions') {
+      const value = normalizeAssistantMessageToolbarConfig(this.cache[key]);
+      this.cache['ui.chat.assistant_toolbar_actions'] = value;
+      return value as PreferenceSchema[K];
+    }
     if (key === 'chat.web_search.model_tools') {
       return resolveModelWebToolsPreference(this.cache[key]) as PreferenceSchema[K];
     }

@@ -1,6 +1,8 @@
 import { useLayoutEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { NavigationShellContext } from '@/frontend/appShell/navigationShell/state';
+
 import { usePairingNavigation } from '../usePairingNavigation';
 
 const mockRouter = {
@@ -70,4 +72,20 @@ it('applies the same missing-connection exit to native back', () => {
   act(() => args[1]());
   expect(mockAllowLeave).toHaveBeenCalled();
   expect(mockRouter.dismissTo).toHaveBeenCalledWith('/settings/device-connections');
+});
+
+it('uses /devices base route when inside standalone devices destination', () => {
+  mockRouter.canGoBack.mockReturnValue(false);
+  act(() => {
+    renderer = create(
+      <NavigationShellContext value={{ activeDestination: 'devices' } as never}>
+        <Probe connectionId="desktop-1" />
+      </NavigationShellContext>,
+    );
+  });
+  act(() => cancel());
+  expect(mockRouter.replace).toHaveBeenCalledWith({
+    pathname: '/devices/[connectionId]',
+    params: { connectionId: 'desktop-1' },
+  });
 });

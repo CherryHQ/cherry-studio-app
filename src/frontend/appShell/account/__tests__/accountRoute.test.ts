@@ -3,6 +3,7 @@ import { accountSessionReturnTo, accountSignInHref, readAccountReturnTo } from '
 it('keeps the originating chat identity when opening reauthentication', () => {
   const returnTo = accountSessionReturnTo('/', { sessionId: 'session-1', messageId: 'message-2' }, [
     '(drawer)',
+    '(content)',
     '(main)',
     '(chat)',
   ]);
@@ -27,7 +28,7 @@ it('does not duplicate entity parameters already encoded in the route path', () 
     accountSessionReturnTo(
       '/settings/device-connections/desktop-1',
       { connectionId: 'desktop-1', filter: 'all devices' },
-      ['(drawer)', '(main)', 'settings', 'device-connections', '[connectionId]'],
+      ['(drawer)', 'settings', 'device-connections', '[connectionId]'],
     ),
   ).toBe('/settings/device-connections/desktop-1?filter=all+devices');
 });

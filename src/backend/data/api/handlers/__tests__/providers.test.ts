@@ -14,6 +14,8 @@ describe('provider Data API handlers', () => {
       list: jest.fn(async () => [provider]),
       listPage: jest.fn(async () => ({ items: [provider] })),
       listApiKeys: jest.fn(async () => ({ keys: [apiKey] })),
+      reorder: jest.fn(async () => undefined),
+      reorderBatch: jest.fn(async () => undefined),
       replaceApiKeys: jest.fn(async () => provider),
       update: jest.fn(async () => provider),
       updateApiKey: jest.fn(async () => provider),
@@ -47,6 +49,19 @@ describe('provider Data API handlers', () => {
       params: { id: 'provider-1', keyId: 'key-1' },
     });
     await handlers['/providers/:id/auth'].GET({ params: { id: 'provider-1' } });
+    await handlers['/providers/:id/order'].PATCH({
+      body: { position: 'first' },
+      params: { id: 'provider-1' },
+    });
+    await handlers['/providers/order:batch'].PATCH({
+      body: { moves: [{ id: 'provider-2', anchor: { after: 'provider-1' } }] },
+    });
+    await expect(
+      handlers['/providers/:id/order'].PATCH({
+        body: {} as never,
+        params: { id: 'provider-1' },
+      }),
+    ).rejects.toThrow();
 
     expect(service.list).toHaveBeenCalledWith({ enabled: true });
     expect(service.listPage).toHaveBeenCalledWith({ limit: 20 });
@@ -64,5 +79,10 @@ describe('provider Data API handlers', () => {
       isEnabled: false,
     });
     expect(service.getAuthConfig).toHaveBeenCalledWith('provider-1');
+    expect(service.reorder).toHaveBeenCalledTimes(1);
+    expect(service.reorder).toHaveBeenCalledWith('provider-1', { position: 'first' });
+    expect(service.reorderBatch).toHaveBeenCalledWith([
+      { id: 'provider-2', anchor: { after: 'provider-1' } },
+    ]);
   });
 });

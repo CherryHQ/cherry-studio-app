@@ -6,6 +6,7 @@ import {
   OptionPickerBottomSheet,
   Section,
   useAlert,
+  useFieldText,
   useToast,
 } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
@@ -317,6 +318,7 @@ function AgentEditForm({
     },
     [saveField],
   );
+  const [name, changeName] = useFieldText(form.name, (value) => updateForm('name', value));
   const openModelSelect = useCallback(() => {
     Keyboard.dismiss();
     setIsModelPickerOpen(true);
@@ -610,12 +612,12 @@ function AgentEditForm({
                     )}
                     cursorColor={mutedForegroundColor}
                     onBlur={flush}
-                    onChangeText={(value) => updateForm('name', value)}
+                    onChangeText={changeName}
                     placeholder={t('agent.form.namePlaceholder')}
                     placeholderTextColor={mutedForegroundColor}
                     returnKeyType="done"
                     selectionColor={mutedForegroundColor}
-                    value={form.name}
+                    value={name}
                   />
                   {isNameInvalid ? (
                     <Text accessibilityLiveRegion="polite" className="text-error text-sm">

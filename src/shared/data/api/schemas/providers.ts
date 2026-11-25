@@ -1,3 +1,4 @@
+import type { OrderEndpoints } from '@/shared/data/api/schemas/endpointHelpers';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import type { EndpointType } from '@/shared/data/types/model';
 import type {
@@ -101,4 +102,4 @@ export type ProviderSchemas = {
       response: AuthConfig | null;
     };
   };
-};
+} & OrderEndpoints<'/providers'>;

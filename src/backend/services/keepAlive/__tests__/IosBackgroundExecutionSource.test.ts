@@ -2,6 +2,8 @@ import { randomUUID as mockRandomUUID } from 'node:crypto';
 
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 
+import { LoggerService } from '@/shared/core/logger/LoggerService';
+
 import { IosBackgroundExecutionSource } from '../IosBackgroundExecutionSource';
 import type { KeepAliveTask } from '../KeepAliveCoordinator';
 import { KeepAliveInterruptionError } from '../KeepAliveInterruptionError';
@@ -412,9 +414,10 @@ describe('IosBackgroundExecutionSource', () => {
     },
   );
 
-  test('native revocation interrupts once even in foreground and never falls back for that task', async () => {
+  test('native revocation logs only safe metadata, interrupts once and never falls back for that task', async () => {
     consent = true;
     mockBeginContinued.mockResolvedValue(true);
+    const info = jest.spyOn(LoggerService.prototype, 'info').mockImplementation(() => {});
     const source = new IosBackgroundExecutionSource(preference);
     await source._doInit();
     const interrupt = jest.fn();
@@ -427,6 +430,19 @@ describe('IosBackgroundExecutionSource', () => {
     await flushOperations();
     expect(interrupt).toHaveBeenCalledTimes(1);
     expect(interrupt.mock.calls[0][0]).toBeInstanceOf(KeepAliveInterruptionError);
+    expect(interrupt.mock.calls[0][0].reason).toBe('continued-processing-expired');
+    expect(
+      info.mock.calls.filter(([message]) => message === 'Continued processing expired'),
+    ).toEqual([
+      [
+        'Continued processing expired',
+        {
+          operation: 'background.continued_processing',
+          reasonCode: 'continued-processing-expired',
+          appState: 'active',
+        },
+      ],
+    ]);
     mockContinuedState({ id, state: 'active' });
     changeState('background');
     changeState('active');
@@ -459,14 +475,22 @@ describe('IosBackgroundExecutionSource', () => {
     await source._doStop();
   });
 
-  test('revocation after finite expiry lets owner cancellation settle before protecting unrelated demand with audio', async () => {
+  test('expiry releases its fence after suspension and permits audio and a fresh foreground task', async () => {
     consent = true;
     mockBeginContinued.mockResolvedValue(true);
     const source = new IosBackgroundExecutionSource(preference);
     await source._doInit();
-    const cancel = jest.fn();
+    let finishSuspension!: () => void;
+    const suspension = new Promise<void>((resolve) => {
+      finishSuspension = resolve;
+    });
+    const interrupt = jest.fn(async () => {
+      await suspension;
+      lease.release();
+    });
     const other = jest.fn();
-    const lease = source.acquire('chat', cancel, task);
+    const deepLinkUrl = 'cherry:///?sessionId=a';
+    const lease = source.acquire('chat', interrupt, { ...task, deepLinkUrl });
     source.acquire('other', other);
     await flushOperations();
     const id = mockBeginContinued.mock.calls[0][0];
@@ -475,13 +499,32 @@ describe('IosBackgroundExecutionSource', () => {
     mockExpire({ id: mockBegin.mock.calls[0][0] });
     mockContinuedState({ id, state: 'expired' });
     await flushOperations();
-    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(interrupt).toHaveBeenCalledTimes(1);
     expect(other).not.toHaveBeenCalled();
     expect(mockBeginAudio).not.toHaveBeenCalled();
-    lease.release();
+    expect(source.systemActivities.hasActive()).toBe(true);
+    finishSuspension();
     await flushOperations();
+    expect(mockEndContinued).toHaveBeenCalledWith(id, false);
+    expect(source.systemActivities.has(deepLinkUrl)).toBe(false);
+    expect(source.systemActivities.hasActive()).toBe(false);
     expect(mockBeginAudio).toHaveBeenCalledTimes(1);
     expect(other).not.toHaveBeenCalled();
+
+    changeState('active');
+    const recovered = jest.fn();
+    const replacement = source.acquire('chat', recovered, { ...task, deepLinkUrl });
+    await flushOperations();
+    const replacementId = mockBeginContinued.mock.calls[1][0];
+    expect(replacementId).not.toBe(id);
+    mockContinuedState({ id: replacementId, state: 'active' });
+    mockContinuedState({ id, state: 'expired' });
+    changeState('background');
+    await flushOperations();
+    expect(recovered).not.toHaveBeenCalled();
+    expect(mockEndAudio).toHaveBeenCalled();
+    expect(source.systemActivities.has(deepLinkUrl)).toBe(true);
+    replacement.release();
     await source._doStop();
   });
 

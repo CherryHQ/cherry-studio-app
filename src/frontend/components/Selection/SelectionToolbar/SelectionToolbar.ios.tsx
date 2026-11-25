@@ -1,16 +1,26 @@
 import { Color, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { Platform } from 'react-native';
 
 import { usePaneChrome } from '@/frontend/appShell/layout';
+import { useHideFloatingDock } from '@/frontend/appShell/navigationShell/state';
 
 import { InlineSelectionToolbar } from './InlineSelectionToolbar';
 import type { SelectionToolbarProps } from './types';
 
+function supportsNativeBottomToolbar(): boolean {
+  const majorVersion = Number.parseInt(String(Platform.Version), 10);
+  return Number.isNaN(majorVersion) || majorVersion >= 18;
+}
+
 // Native bottom toolbar, matching the Android bar's selection and file actions.
 // The header owns the selected count and exit; this bar owns batch actions.
-// A pane has no native-stack screen to host the toolbar, so it draws the app's own bar.
+// Side panes lack a native-stack host, and expo-router's bottom Stack.Toolbar host requires
+// iOS 18+, so both fall back to the app's inline bar.
 export function SelectionToolbar(props: SelectionToolbarProps) {
-  return usePaneChrome() ? (
+  useHideFloatingDock(true);
+
+  return usePaneChrome() || !supportsNativeBottomToolbar() ? (
     <InlineSelectionToolbar {...props} />
   ) : (
     <NativeSelectionToolbar {...props} />

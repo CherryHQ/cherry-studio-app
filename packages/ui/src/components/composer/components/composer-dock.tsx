@@ -1,19 +1,29 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   type PropsWithChildren,
   type RefObject,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
-import { type LayoutChangeEvent, Pressable, View, type ViewInstance } from 'react-native';
+import {
+  type LayoutChangeEvent,
+  Pressable,
+  StyleSheet,
+  View,
+  type ViewInstance,
+} from 'react-native';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import Animated, {
   type SharedValue,
   useAnimatedReaction,
   useAnimatedStyle,
+  useDerivedValue,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useResolveClassNames } from 'uniwind';
 
 import {
   composerHorizontalScreenInset,
@@ -22,6 +32,18 @@ import {
 } from '../utils/composer-dock-layout';
 import { useComposerExpansion } from './composer-expansion';
 
+const COMPOSER_DOCK_FADE_OVERHANG = 28;
+const FADE_START = { x: 0.5, y: 0 } as const;
+const FADE_END = { x: 0.5, y: 1 } as const;
+const FADE_LOCATIONS = [0, 0.58, 1] as const;
+const FADE_OVERHANG_STYLE = {
+  bottom: 0,
+  left: 0,
+  position: 'absolute',
+  right: 0,
+  top: -COMPOSER_DOCK_FADE_OVERHANG,
+} as const;
+
 export type ComposerDockProps = PropsWithChildren<{
   /** Paints the compact dock's whole footprint so an overlaid transcript stays out of sight. */
   backgroundClassName?: string;
@@ -29,6 +51,8 @@ export type ComposerDockProps = PropsWithChildren<{
   /** Expandable overlays publish contentInset instead of reserving parent flow space. */
   layoutMode?: 'floating' | 'flow' | 'expandable' | 'expandable-overlay';
   collapseLabel?: string;
+  /** Extra resting bottom clearance (e.g. a floating bottom navigation bar), eased to 0 on keyboard/expansion. */
+  extraBottomOffset?: number;
   /**
    * Follows keyboard coordinates only while true, so another surface can own input. Read on the
    * UI thread: focus lifts the dock on the keyboard's first frame, not after a React commit.
@@ -42,6 +66,7 @@ export function ComposerDock({
   backgroundClassName,
   children,
   containerRef,
+  extraBottomOffset = 0,
   layoutMode = 'floating',
   collapseLabel = 'Collapse editor',
   keyboardTracking,
@@ -52,6 +77,7 @@ export function ComposerDock({
   const { height: keyboardHeight, progress: keyboardProgress } = useReanimatedKeyboardAnimation();
   const keyboardOffset = getComposerKeyboardStickyOffset(bottom);
   const bottomPadding = getComposerBottomPadding(bottom);
+  const restingExtraOffset = Math.max(0, extraBottomOffset);
   const expansion = useComposerExpansion();
   const fallbackRef = useRef<ViewInstance>(null);
   const dockRef = containerRef ?? fallbackRef;
@@ -63,6 +89,8 @@ export function ComposerDock({
   const progress = expansion?.meta.progress;
   const compactDockHeight = expansion?.meta.compactDockHeight;
   const contentInset = expansion?.meta.contentInset;
+  const dockLift = expansion?.meta.dockLift;
+  const editorMorphing = expansion?.meta.editorMorphing;
 
   const recordCompactHeight = useCallback(
     (height: number) => {
@@ -71,9 +99,8 @@ export function ComposerDock({
         setCompactHeight((current) => (current === measuredHeight ? current : measuredHeight));
       }
       compactDockHeight?.set(measuredHeight);
-      contentInset?.set(measuredHeight);
     },
-    [compactDockHeight, contentInset, reservesSpace],
+    [compactDockHeight, reservesSpace],
   );
 
   useEffect(() => {
@@ -81,8 +108,9 @@ export function ComposerDock({
     return () => {
       compactDockHeight?.set(0);
       contentInset?.set(0);
+      dockLift?.set(0);
     };
-  }, [compactDockHeight, contentInset, isExpandable]);
+  }, [compactDockHeight, contentInset, dockLift, isExpandable]);
 
   useEffect(() => {
     if (!isExpandable || isPresented) return;
@@ -105,15 +133,31 @@ export function ComposerDock({
     [isExpandable, keyboardTracking, tracking],
   );
 
+  // The list uses the settled compact footprint. Intermediate editor layout events only move
+  // visual accessories. Manual expansion separately keeps the compact footprint reserved.
+  useAnimatedReaction(
+    () =>
+      isExpandable && !isPresented && !editorMorphing?.get() ? compactDockHeight?.get() : undefined,
+    (height) => {
+      if (height !== undefined && height !== contentInset?.get()) contentInset?.set(height);
+    },
+  );
+
+  const stickyTranslation = useDerivedValue(() => {
+    const isTracking = keyboardTracking?.get() ?? true;
+    if (!isTracking) return 0;
+    const expandProgress = isExpandable ? (progress?.get() ?? 0) : 0;
+    const baseTranslation = keyboardHeight.get() + keyboardProgress.get() * keyboardOffset;
+    const collapsedExtraOffset =
+      Math.min(restingExtraOffset, Math.max(0, -baseTranslation)) * (1 - expandProgress);
+    return baseTranslation + collapsedExtraOffset;
+  });
+  useAnimatedReaction(
+    () => (isExpandable ? Math.max(0, -stickyTranslation.get()) : 0),
+    (lift) => dockLift?.set(lift),
+  );
   const stickyStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateY:
-          (keyboardTracking?.get() ?? true)
-            ? keyboardHeight.get() + keyboardProgress.get() * keyboardOffset
-            : 0,
-      },
-    ],
+    transform: [{ translateY: stickyTranslation.get() }],
   }));
 
   const backdropStyle = useAnimatedStyle(() => ({
@@ -122,11 +166,14 @@ export function ComposerDock({
   const restingBackgroundStyle = useAnimatedStyle(() => ({
     opacity: 1 - (progress?.get() ?? 0),
   }));
-  const dockStyle = useAnimatedStyle(() => ({
-    paddingBottom: bottomPadding,
-    paddingHorizontal:
-      composerHorizontalScreenInset * (1 - (isExpandable ? (progress?.get() ?? 0) : 0)),
-  }));
+  const dockStyle = useAnimatedStyle(() => {
+    const expandProgress = isExpandable ? (progress?.get() ?? 0) : 0;
+    const restingOffset = restingExtraOffset * (1 - expandProgress);
+    return {
+      paddingBottom: bottomPadding + restingOffset,
+      paddingHorizontal: composerHorizontalScreenInset * (1 - expandProgress),
+    };
+  });
 
   const handleLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -151,22 +198,14 @@ export function ComposerDock({
         (isExpandable && !isPresented) || onHeightChange || onLayout ? handleLayout : undefined
       }
       pointerEvents="box-none"
-      style={
-        isExpandable
-          ? stickyStyle
-          : [
-              { paddingBottom: bottomPadding, paddingHorizontal: composerHorizontalScreenInset },
-              stickyStyle,
-            ]
-      }
+      style={isExpandable ? stickyStyle : [dockStyle, stickyStyle]}
     >
       {isExpandable ? (
         <Animated.View pointerEvents="box-none" style={dockStyle}>
           {backgroundClassName ? (
-            <Animated.View
-              className={`absolute inset-0 ${backgroundClassName}`}
-              pointerEvents="none"
-              style={restingBackgroundStyle}
+            <ComposerDockFade
+              backgroundClassName={backgroundClassName}
+              restingBackgroundStyle={restingBackgroundStyle}
             />
           ) : null}
           <Animated.View
@@ -202,5 +241,51 @@ export function ComposerDock({
       </Animated.View>
       {dock}
     </>
+  );
+}
+
+function ComposerDockFade({
+  backgroundClassName,
+  restingBackgroundStyle,
+}: {
+  backgroundClassName: string;
+  restingBackgroundStyle: ReturnType<typeof useAnimatedStyle>;
+}) {
+  const transparentClassName = backgroundClassName.includes(' ') ? '' : `${backgroundClassName}/0`;
+  const resolvedSolid = useResolveClassNames(backgroundClassName);
+  const resolvedTransparent = useResolveClassNames(transparentClassName);
+  const fadeSolidColor =
+    typeof resolvedSolid.backgroundColor === 'string' ? resolvedSolid.backgroundColor : undefined;
+  const fadeStartColor =
+    typeof resolvedTransparent.backgroundColor === 'string'
+      ? resolvedTransparent.backgroundColor
+      : undefined;
+  const fadeColors = useMemo(
+    () =>
+      fadeStartColor && fadeSolidColor
+        ? ([fadeStartColor, fadeSolidColor, fadeSolidColor] as const)
+        : null,
+    [fadeSolidColor, fadeStartColor],
+  );
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[fadeColors ? FADE_OVERHANG_STYLE : StyleSheet.absoluteFill, restingBackgroundStyle]}
+      testID="composer-dock-fade"
+    >
+      {fadeColors ? (
+        <LinearGradient
+          colors={fadeColors}
+          end={FADE_END}
+          locations={FADE_LOCATIONS}
+          pointerEvents="none"
+          start={FADE_START}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : (
+        <View className={`absolute inset-0 ${backgroundClassName}`} pointerEvents="none" />
+      )}
+    </Animated.View>
   );
 }

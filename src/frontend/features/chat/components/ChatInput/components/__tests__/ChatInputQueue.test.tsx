@@ -606,16 +606,22 @@ it('ignores repeated Return while submission is pending and preserves a newer dr
   expect(mockStop).not.toHaveBeenCalled();
 });
 
-it('uses the latest native text even before the controlled draft catches up', async () => {
-  render('Older draft');
-  await act(async () =>
-    tree.root.findByType('ChatEditor' as never).props.onReturnSubmit('Latest native draft'),
-  );
-  expect(mockSubmit).toHaveBeenCalledWith([{ type: 'text', text: 'Latest native draft' }]);
-});
+it.each(['', 'Older draft'])(
+  'queues the native Return text once while the rendered draft is %j',
+  async (renderedDraft) => {
+    render(renderedDraft);
+    await act(async () =>
+      tree.root.findByType('ChatEditor' as never).props.onReturnSubmit('Latest native draft'),
+    );
+    expect(mockSubmit).toHaveBeenCalledTimes(1);
+    expect(mockSubmit).toHaveBeenCalledWith([{ type: 'text', text: 'Latest native draft' }]);
+    expect(mockInputs.map((queued) => queued.turnId)).toEqual(['turn-1', 'turn-2', 'resent']);
+    expect(mockStop).not.toHaveBeenCalled();
+  },
+);
 
-it('ignores a whitespace-only keyboard submission', async () => {
-  render('');
+it('ignores a whitespace-only keyboard submission even with an older rendered draft', async () => {
+  render('Older draft');
   await act(async () => tree.root.findByType('ChatEditor' as never).props.onReturnSubmit(' \n '));
   expect(mockSubmit).not.toHaveBeenCalled();
   expect(mockStop).not.toHaveBeenCalled();

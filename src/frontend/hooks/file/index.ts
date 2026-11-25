@@ -3,3 +3,4 @@ export { type FileUploadSelection, useFileUploadPicker } from './useFileUploadPi
 export { useFileOcrActive, useFileOcrState } from './useFileOcrState';
 export { type FileWorkspaceAddress, useFileWorkspace } from './useFileWorkspace';
 export { useAudioTranscriptionActivity } from './useAudioTranscriptionActivity';
+export { useAutoSelectMasterFile } from './useAutoSelectMasterFile';

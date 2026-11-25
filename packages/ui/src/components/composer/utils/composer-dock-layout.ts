@@ -7,7 +7,7 @@ const composerBottomLift = 4;
 
 const composerMinBottomPadding = 8;
 export const composerHorizontalScreenInset = 16;
-export const composerContentGap = 8;
+export const composerContentGap = 24;
 
 export function getComposerBottomPadding(bottomInset: number) {
   return Math.max(bottomInset, composerMinBottomPadding) + composerBottomLift;

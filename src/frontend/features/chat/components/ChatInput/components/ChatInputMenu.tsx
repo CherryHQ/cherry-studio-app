@@ -166,7 +166,7 @@ export function ChatInputMenu({
           onPress={openMenu}
           testID="composer-menu"
         >
-          <PlusIcon className="size-5 text-foreground" />
+          <PlusIcon className="size-4.5 text-foreground" />
         </Composer.Action>
       </View>
       <BottomSheet

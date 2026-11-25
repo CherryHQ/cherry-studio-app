@@ -60,7 +60,7 @@
         "buildType": "apk",
         "withoutCredentials": false,
         "credentialsSource": "remote",
-        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a -Dorg.gradle.jvmargs=-Xmx4096m --max-workers=2 --no-parallel"
+        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a -Dorg.gradle.jvmargs=-Xmx8192m"
       },
       "ios": {
         "channel": "production-ios",
@@ -84,7 +84,7 @@
         "channel": "production-google-play",
         "env": { "APK_UPDATES_ENABLED": "false" },
         "buildType": "app-bundle",
-        "gradleCommand": ":app:bundleRelease -PreactNativeArchitectures=arm64-v8a -Dorg.gradle.jvmargs=-Xmx4096m --max-workers=2 --no-parallel"
+        "gradleCommand": ":app:bundleRelease -PreactNativeArchitectures=arm64-v8a -Dorg.gradle.jvmargs=-Xmx8192m"
       }
     }
   },
@@ -92,6 +92,13 @@
     "production": {
       "ios": {
         "ascAppId": "6809783714"
+      }
+    },
+    "production-google-play": {
+      "android": {
+        "applicationId": "com.cherryai.cherrystudio_app",
+        "track": "production",
+        "releaseStatus": "draft"
       }
     }
   }

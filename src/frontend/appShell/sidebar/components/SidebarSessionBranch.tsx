@@ -1,5 +1,4 @@
-import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
-import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
+import { DisclosureChevron } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import { type ComponentProps, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -238,11 +237,7 @@ export function SidebarSessionBranchToggle({
       })}
       testID={`sidebar-session-expand-${sessionId}`}
     >
-      {action.expanded ? (
-        <ChevronDownIcon className="size-4 text-muted-foreground" />
-      ) : (
-        <ChevronRightIcon className="size-4 text-muted-foreground" />
-      )}
+      <DisclosureChevron expanded={action.expanded} />
     </Pressable>
   );
 }
