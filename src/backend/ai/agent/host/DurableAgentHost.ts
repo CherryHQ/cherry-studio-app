@@ -8,7 +8,6 @@ import type {
   BackgroundReplyTurn,
 } from '@/backend/services/backgroundReply';
 import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
-import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import { traceErrorAttributes } from '@/backend/utils/diagnosticTrace';
 import {
   AgentCancelSubmissionInputSchema,
@@ -516,7 +515,9 @@ export class DurableAgentHost implements AgentProtocol {
 
   private protectWork(active: boolean) {
     if (active && !this.executionLease && !this.controller.signal.aborted)
-      this.executionLease = this.ports.executionLease?.(() => this.suspend());
+      this.executionLease = this.ports.executionLease?.((reason) =>
+        this.handleExecutionLeaseInterrupted(reason),
+      );
     if (!active) {
       this.executionLease?.release();
       this.executionLease = undefined;
@@ -526,14 +527,36 @@ export class DurableAgentHost implements AgentProtocol {
   private startSessionExecution(sessionId: string): void {
     if (this.sessionExecutions.has(sessionId)) return;
     const lease = this.ports.executionLease?.(
-      (reason) =>
-        reason instanceof KeepAliveInterruptionError &&
-        reason.reason === 'continued-processing-expired'
-          ? this.cancelBackgroundSession(sessionId, reason)
-          : this.suspend(reason),
+      (reason) => this.handleExecutionLeaseInterrupted(reason),
       sessionId,
     );
     if (lease) this.sessionExecutions.set(sessionId, { lease, completed: false });
+  }
+
+  private async handleExecutionLeaseInterrupted(reason: Error): Promise<void> {
+    await this.suspend(reason);
+    if (
+      !this.controller.signal.aborted &&
+      this.ports.isForeground?.() &&
+      !storageMutationGate.isFrozen
+    ) {
+      try {
+        await this.resumeSuspended();
+        if (this.accepting) {
+          for (const sessionId of this.listeners.keys())
+            this.publish(sessionId, { type: 'runtime.recovered' });
+        }
+      } catch (error) {
+        logger.error(
+          'Failed to resume durable Agent work after foreground lease expiry',
+          error as Error,
+        );
+        if (!this.controller.signal.aborted) {
+          for (const sessionId of this.listeners.keys())
+            this.publish(sessionId, { type: 'runtime.failed' });
+        }
+      }
+    }
   }
 
   private updateSessionExecution(sessionId: string): void {
@@ -2982,14 +3005,6 @@ export class DurableAgentHost implements AgentProtocol {
         'SESSION_RECOVERY_FAILED',
         'Stored execution data could not be observed. The Session was preserved; start another conversation or submit diagnostics.',
       );
-  }
-
-  /** Continued-processing expiry includes a system-UI cancellation; do not auto-resume it. */
-  private async cancelBackgroundSession(sessionId: string, reason: Error): Promise<void> {
-    this.admissions.get(sessionId)?.controller.abort(reason);
-    await Promise.all(
-      this.liveStates(sessionId).map((state) => this.conversations.abort(state.lane)),
-    );
   }
 
   private recordQueue(
