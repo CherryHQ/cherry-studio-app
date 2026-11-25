@@ -538,7 +538,7 @@ function resolveNativeWebTools({
           : api === 'openai-completions'
             ? 'deepseek-chat'
             : undefined;
-    if (dialect) return { dialect, search: true, fetch: true, functionToolMixing: true };
+    if (dialect) return { dialect, search: true, fetch: true, functionToolMixing: false };
   }
   const serverTools = providerRegistryService.resolveServerTools(
     provider,

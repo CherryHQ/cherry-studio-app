@@ -14,7 +14,7 @@ import {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Text, View, type ViewInstance } from 'react-native';
+import { Keyboard, View, type ViewInstance } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -32,18 +32,19 @@ import {
   useRemoteConversationSource,
 } from '@/frontend/appShell/conversation/remote';
 import { MainHeaderView } from '@/frontend/appShell/header';
-import { ChatDockFooter } from '@/frontend/appShell/layout';
 import {
   parseRemoteChatRoute,
   type RemoteChatRouteParams,
   useChatSource,
 } from '@/frontend/appShell/navigation/chat';
+import { useNavigationDockClearance } from '@/frontend/appShell/navigationShell/state';
 import { useSidebarPresence } from '@/frontend/appShell/sidebar';
 import { AgentPickerSheet } from '@/frontend/components/AgentPicker';
 import {
   ComposerDismissArea,
   ComposerDock,
   ComposerSessionProvider,
+  getComposerExtraBottomOffset,
 } from '@/frontend/components/Composer';
 import { ConversationStatus } from '@/frontend/components/ConversationStatus';
 import type { MessageListItem } from '@/frontend/components/Message';
@@ -163,6 +164,8 @@ function RemoteChatSession() {
   const target = parseRemoteChatRoute(useLocalSearchParams<RemoteChatRouteParams>());
   const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
+  const dockClearance = useNavigationDockClearance();
+  const extraBottomOffset = getComposerExtraBottomOffset(bottom, dockClearance);
   const composerHeight = useSharedValue(0);
   const setComposerHeight = useCallback(
     (height: number) => composerHeight.set(height),
@@ -248,7 +251,7 @@ function RemoteChatSession() {
                   assistantName={agent?.name}
                   isAssistantToolbarEnabled
                   contentBottomInset={composerContentGap}
-                  keyboardOffset={getComposerKeyboardStickyOffset(bottom)}
+                  keyboardOffset={getComposerKeyboardStickyOffset(bottom) + extraBottomOffset}
                   onPendingSendDisplayed={ignorePending}
                 />
               )}
@@ -298,11 +301,6 @@ function RemoteChatSession() {
                     draftKey={draftKey}
                     onSessionCreated={onSessionCreated}
                   />
-                  <ChatDockFooter>
-                    <Text className="text-center text-xs text-muted-foreground">
-                      {t('chat.input.disclaimer')}
-                    </Text>
-                  </ChatDockFooter>
                 </View>
               </ComposerDock>
             </ChatShareComposerGuard>

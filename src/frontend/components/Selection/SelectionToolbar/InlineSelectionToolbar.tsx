@@ -3,6 +3,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useHideFloatingDock } from '@/frontend/appShell/navigationShell/state';
+
 import { selectionToolbarGap } from '../selectionToolbarLayout';
 import type { SelectionToolbarProps } from './types';
 
@@ -18,6 +20,7 @@ export function InlineSelectionToolbar({
 }: SelectionToolbarProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  useHideFloatingDock(true);
   const isDeleteDisabled = selectedCount === 0 || isPending;
   const selectionLabel = t(
     allSelected ? 'common.selection.deselectAll' : 'common.selection.selectAll',

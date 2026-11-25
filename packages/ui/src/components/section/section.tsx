@@ -314,6 +314,16 @@ function isSectionItemElement(
   );
 }
 
+function hasLeadingContent(node: ReactNode): boolean {
+  if (!isSectionItemElement(node)) return false;
+
+  return (
+    Boolean(node.props.leading) ||
+    ((node.type as SectionItemComponent).sectionItem === true &&
+      Children.toArray((node.props as { children?: ReactNode }).children).some(hasLeadingContent))
+  );
+}
+
 function SectionRoot({
   children,
   className,
@@ -331,7 +341,7 @@ function SectionRoot({
     (child) => !(isValidElement<SectionHeaderProps>(child) && child.type === SectionHeader),
   );
   const [pressedIndex, setPressedIndex] = useState<number | null>(null);
-  const hasLeading = rows.some((row) => isSectionItemElement(row) && Boolean(row.props.leading));
+  const hasLeading = rows.some(hasLeadingContent);
   // Inside a locked group the group's card holds every section, so a section adds only its rows.
   const nested = useIsInLockedGroup();
 

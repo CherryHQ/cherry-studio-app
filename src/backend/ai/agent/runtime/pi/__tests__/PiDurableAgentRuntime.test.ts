@@ -2242,6 +2242,87 @@ describe('Native web tools', () => {
     dialect: 'anthropic',
   };
 
+  test.each([
+    ['deepseek-chat', 'openai-completions', streamCompletions],
+    ['deepseek-responses', 'openai-responses', streamResponses],
+    ['deepseek-messages', 'anthropic-messages', streamAnthropic],
+  ] as const)(
+    'keeps DeepSeek web tools and safety checks compatible with Agent functions on %s',
+    async (dialect, api, adapter) => {
+      const response =
+        api === 'anthropic-messages'
+          ? anthropicResponse([{ type: 'text', text: 'Done.' }])
+          : api === 'openai-responses'
+            ? sse([...item(0, answer), completed])
+            : `data: ${JSON.stringify({
+                id: 'chat',
+                object: 'chat.completion.chunk',
+                choices: [
+                  {
+                    index: 0,
+                    delta: { role: 'assistant', content: 'Done.' },
+                    finish_reason: 'stop',
+                  },
+                ],
+              })}\n\ndata: [DONE]\n\n`;
+      for (const declared of [tools, []]) {
+        const state = nativeFixture(
+          [response],
+          { dialect, search: true, fetch: true, functionToolMixing: false },
+          api,
+          adapter as PiStreamFn,
+        );
+        const resolveModel = state.dependencies.resolveModel;
+        state.dependencies.resolveModel = async (...args) => ({
+          ...(await resolveModel(...args)),
+          deepseekSafetyCheck: true,
+        });
+        const runtime = state.create();
+        await runtime.initialize(state.database, state.ports);
+        try {
+          await runtime.ensureConversation({
+            ...seed,
+            configuration: { ...configuration, tools: declared },
+          });
+          await submitAndWait(runtime, input('deepseek'));
+          expect(state.payloads).toHaveLength(1);
+          const payload = state.payloads[0]!;
+          if (declared.length) {
+            const names = payload.tools.map((definition) =>
+              api === 'openai-completions'
+                ? (definition.function as { name: string }).name
+                : definition.name,
+            );
+            expect(names).toEqual(['web_search', 'web_fetch', 'read_file']);
+            expect(payload).not.toHaveProperty('safety_check');
+            expect(
+              payload.tools.every((definition) =>
+                api === 'anthropic-messages'
+                  ? definition.type === undefined && !!definition.input_schema
+                  : definition.type === 'function',
+              ),
+            ).toBe(true);
+          } else {
+            expect(payload.tools).toEqual([
+              {
+                type: 'deepseek_web_search',
+                ...(api === 'anthropic-messages' ? { name: 'deepseek_web_search' } : {}),
+              },
+              {
+                type: 'deepseek_read_url',
+                ...(api === 'anthropic-messages' ? { name: 'deepseek_read_url' } : {}),
+              },
+            ]);
+            expect(payload.safety_check).toEqual({ level: 'high' });
+          }
+          expect((await runtime.message(lane, 'answer-deepseek'))?.turn.status).toBe('completed');
+        } finally {
+          await runtime.close();
+        }
+      }
+    },
+  );
+
   test('disabled retains external functions without native request definitions', async () => {
     const state = nativeFixture(
       [anthropicResponse([{ type: 'text', text: 'Done.' }])],

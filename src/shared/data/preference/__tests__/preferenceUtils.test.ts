@@ -1,3 +1,5 @@
+import { DEFAULT_ASSISTANT_MESSAGE_TOOLBAR_CONFIG } from '@/shared/data/types/assistantMessageToolbar';
+
 import {
   getDefaultValue,
   getPreferenceKeys,
@@ -5,7 +7,7 @@ import {
   resolveModelWebToolsPreference,
   ThemeMode,
 } from '..';
-import { DEVICE_LOCAL_PREFERENCE_KEYS } from '../preferenceSchema';
+import { INHERITABLE_PREFERENCE_KEYS, DEVICE_LOCAL_PREFERENCE_KEYS } from '../preferenceSchema';
 
 describe('preference schema', () => {
   // The schema used to be generated from desktop's classification.json, which
@@ -106,4 +108,14 @@ test.each([
   [{ value: 'preferred' }, 'disabled'],
 ])('resolves invalid model-tools values to disabled without coercion (%p)', (value, expected) => {
   expect(resolveModelWebToolsPreference(value)).toBe(expected);
+});
+
+test('toolbar ordering is a portable, inheritable preference with the standard defaults', () => {
+  const key = 'ui.chat.assistant_toolbar_actions';
+  expect(isPreferenceKey(key)).toBe(true);
+  expect(getPreferenceKeys()).toContain(key);
+  expect(key).toMatch(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/);
+  expect(getDefaultValue(key)).toEqual(DEFAULT_ASSISTANT_MESSAGE_TOOLBAR_CONFIG);
+  expect(INHERITABLE_PREFERENCE_KEYS).toContain(key);
+  expect(DEVICE_LOCAL_PREFERENCE_KEYS).not.toContain(key);
 });

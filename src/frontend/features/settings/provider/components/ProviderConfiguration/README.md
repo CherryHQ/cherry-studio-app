@@ -11,8 +11,9 @@ Sections always appear in one order and hide themselves when they do not apply:
 1. Identity — avatar (tap to replace) and name (tap to rename; an input-style underline hints at it).
 2. Account — sign-in for providers whose account supplies keys or a balance.
 3. API keys — the first key is typed into the card; later keys toggle in place and open a
-   sheet for their label or removal. Two or more keys expose an ordering sheet using CherryUI's
-   `ReorderList`; each move is saved immediately, with rollback on failure.
+   sheet for their label or removal. Multiple editable keys reorder directly via CherryUI
+   `Sortable` (long-press drag or `Move to top` menu action); each move is saved immediately, with
+   rollback on failure.
    Vertex instead exposes a service-account section: paste a Google Cloud JSON key, then edit its
    project and location. The email and configured-key status are visible; replacing the key uses
    a new import. Raw JSON is held only while editing, and failed saves preserve the draft.

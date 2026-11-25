@@ -1,6 +1,7 @@
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import { CacheService, createInMemoryBackendCacheStorage } from '@/backend/data/CacheService';
 import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
+import { ErrorCode } from '@/shared/data/api/errors';
 
 import { createServiceTestDatabase } from '../../serviceTestDatabase';
 import { ProviderService } from '../ProviderService';
@@ -131,6 +132,85 @@ describe('ProviderService integration', () => {
     });
     await expect(service.getRotatedApiKey('key-provider')).resolves.toBe('key-c');
     await expect(service.getRotatedApiKey('key-provider')).resolves.toBe('key-a');
+  });
+
+  it('reorders within enabled and disabled groups while keeping CherryAI pinned first across pages', async () => {
+    insertProvider(CLOUD_PROVIDER_ID, true, 'a9');
+    insertProvider('enabled-a', true, 'a0');
+    insertProvider('enabled-b', true, 'a1');
+    insertProvider('enabled-c', true, 'a2');
+    insertProvider('disabled-a', false, 'a0');
+    insertProvider('disabled-b', false, 'a1');
+
+    await service.reorder('enabled-c', { position: 'first' });
+    await service.reorder('disabled-b', { before: 'disabled-a' });
+
+    await expect(service.list({ enabled: true })).resolves.toMatchObject([
+      { id: CLOUD_PROVIDER_ID },
+      { id: 'enabled-c' },
+      { id: 'enabled-a' },
+      { id: 'enabled-b' },
+    ]);
+    await expect(service.list({ enabled: false })).resolves.toMatchObject([
+      { id: 'disabled-b' },
+      { id: 'disabled-a' },
+    ]);
+
+    const page1 = await service.listPage({ limit: 2 });
+    const page2 = await service.listPage({ cursor: page1.nextCursor, limit: 2 });
+    const page3 = await service.listPage({ cursor: page2.nextCursor, limit: 2 });
+    expect([...page1.items, ...page2.items, ...page3.items].map((p) => p.id)).toEqual([
+      CLOUD_PROVIDER_ID,
+      'enabled-c',
+      'enabled-a',
+      'enabled-b',
+      'disabled-b',
+      'disabled-a',
+    ]);
+    expect(page3.nextCursor).toBeUndefined();
+
+    // Batch reorder within enabled providers
+    await service.reorderBatch([
+      { id: 'enabled-b', anchor: { position: 'first' } },
+      { id: 'enabled-a', anchor: { after: 'enabled-b' } },
+    ]);
+    const enabledAfterBatch = await service.list({ enabled: true });
+    expect(enabledAfterBatch.map((p) => p.id)).toEqual([
+      CLOUD_PROVIDER_ID,
+      'enabled-b',
+      'enabled-a',
+      'enabled-c',
+    ]);
+
+    // Reject cross-group anchors and CherryAI target/anchors
+    await expect(service.reorder('enabled-a', { before: 'disabled-a' })).rejects.toMatchObject({
+      code: ErrorCode.NOT_FOUND,
+    });
+    await expect(service.reorder(CLOUD_PROVIDER_ID, { position: 'last' })).rejects.toMatchObject({
+      code: ErrorCode.INVALID_OPERATION,
+    });
+    await expect(service.reorder('enabled-a', { after: CLOUD_PROVIDER_ID })).rejects.toMatchObject({
+      code: ErrorCode.INVALID_OPERATION,
+    });
+  });
+
+  it('can insert between providers whose keys coincide after enabling one of them', async () => {
+    insertProvider('a', true, 'a0');
+    insertProvider('b', false, 'a1');
+    insertProvider('c', true, 'a2');
+    insertProvider('d', true, 'a3');
+    await service.reorder('d', { before: 'c' });
+    await service.update('b', { isEnabled: true });
+    // The new group has b and d at a1, in provider ID order.
+    await service.reorder('c', { after: 'b' });
+    const page = await service.listPage();
+    expect(page.items.map((row) => row.id)).toEqual(['a', 'b', 'c', 'd']);
+    expect((await service.list({ enabled: true })).map((row) => row.id)).toEqual([
+      'a',
+      'b',
+      'c',
+      'd',
+    ]);
   });
 
   function insertProvider(

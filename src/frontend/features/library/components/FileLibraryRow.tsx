@@ -24,6 +24,7 @@ const PREVIEW_SIZE = 40;
 export const FILE_LIBRARY_ROW_ESTIMATED_SIZE = 72;
 
 export const FileLibraryRow = memo(function FileLibraryRow({
+  isActive = false,
   isEditing,
   isSelected,
   item,
@@ -33,6 +34,7 @@ export const FileLibraryRow = memo(function FileLibraryRow({
   onOpen,
   onToggle,
 }: {
+  isActive?: boolean;
   isEditing: boolean;
   isSelected: boolean;
   item: FileLibraryEntry;
@@ -53,36 +55,44 @@ export const FileLibraryRow = memo(function FileLibraryRow({
   // result list. Long press opens the row's menu, which also offers selection.
   return (
     <ContextMenu items={menuItems}>
-      <FileBrowserRow
-        accessibilityLabel={`${item.libraryFile?.name ?? item.entry.filename}, ${description}`}
-        accessibilityRole={isEditing ? 'checkbox' : 'button'}
-        accessibilityState={isEditing ? { checked: isSelected } : undefined}
-        description={description}
-        name={item.libraryFile?.name ?? item.entry.filename}
-        onPress={() => {
-          if (isEditing) {
-            onToggle(item.entry.id);
-          } else if (item.uri) {
-            onOpen({ entry: item.entry, uri: item.uri });
-          }
-        }}
-        testID={`file-library-entry-${item.entry.id}`}
-        preview={
-          item.uri && fileEntryPreviewKind(item.entry) === 'image' && !item.previewUri ? (
-            <FileEntrySkeleton size={PREVIEW_SIZE} variant="icon" />
-          ) : (
-            <LoadedFileEntryPreview
-              entry={item.entry}
-              previewUri={item.previewUri}
-              size={PREVIEW_SIZE}
-              uri={item.uri}
-              variant="icon"
-            />
-          )
+      <View
+        className={
+          isActive && !isEditing ? 'bg-secondary-active -mx-2 rounded-2xl px-2' : undefined
         }
       >
-        {isEditing ? <SelectionIndicator selected={isSelected} /> : null}
-      </FileBrowserRow>
+        <FileBrowserRow
+          accessibilityLabel={`${item.libraryFile?.name ?? item.entry.filename}, ${description}`}
+          accessibilityRole={isEditing ? 'checkbox' : 'button'}
+          accessibilityState={
+            isEditing ? { checked: isSelected } : isActive ? { selected: true } : undefined
+          }
+          description={description}
+          name={item.libraryFile?.name ?? item.entry.filename}
+          onPress={() => {
+            if (isEditing) {
+              onToggle(item.entry.id);
+            } else if (item.uri) {
+              onOpen({ entry: item.entry, uri: item.uri });
+            }
+          }}
+          testID={`file-library-entry-${item.entry.id}`}
+          preview={
+            item.uri && fileEntryPreviewKind(item.entry) === 'image' && !item.previewUri ? (
+              <FileEntrySkeleton size={PREVIEW_SIZE} variant="icon" />
+            ) : (
+              <LoadedFileEntryPreview
+                entry={item.entry}
+                previewUri={item.previewUri}
+                size={PREVIEW_SIZE}
+                uri={item.uri}
+                variant="icon"
+              />
+            )
+          }
+        >
+          {isEditing ? <SelectionIndicator selected={isSelected} /> : null}
+        </FileBrowserRow>
+      </View>
     </ContextMenu>
   );
 });

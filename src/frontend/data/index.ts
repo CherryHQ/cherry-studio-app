@@ -13,6 +13,9 @@ export {
   usePrefetch,
   usePrefetchInfiniteQuery,
   useQuery,
+  useReorder,
+  type ReorderResource,
+  type UseReorderOptions,
 } from './hooks';
 export { createMobileQueryClient, QueryProvider } from './QueryProvider';
 export { queryKeys } from './queryKeys';

@@ -15,7 +15,7 @@ import {
   type ChatRouteParamsInput,
   type ChatTarget,
 } from '@/frontend/appShell/navigation/chat';
-import { useFilePane } from '@/frontend/appShell/pane/state';
+import { useLibraryMasterDetail } from '@/frontend/appShell/pane/state';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { FilePreviewSource, ResolvedFile } from '@/shared/contracts/file';
 import type { FileExportOptions } from '@/shared/contracts/fileExport';
@@ -42,7 +42,7 @@ export function useOpenFileEntry(options: FileExportOptions = {}) {
   const { toast } = useToast();
   const createWatermark = useExportWatermark(options.watermark);
   const requestImageEdit = useImagePreviewEditRequest();
-  const pane = useFilePane();
+  const masterDetail = useLibraryMasterDetail();
 
   const openFileEntryWithSystem = async ({ entry, uri }: FilePreviewSource) => {
     try {
@@ -80,10 +80,10 @@ export function useOpenFileEntry(options: FileExportOptions = {}) {
       replaceImage && canEditFileImage(file.entry.mediaType)
         ? requestImageEdit(file.entry.id, replaceImage)
         : undefined;
-    // Beside chat, a file opens in the pane instead of covering the conversation. Pages above the
-    // chat share its drawer but not its pane, so they keep opening files on their own page.
-    if (pane?.isAvailable && pathname === '/') {
-      pane.openFile({ entryId: file.entry.id, imageEditRequestId });
+    // In wide Files Master-Detail, tapping an entry updates the live right preview pane.
+    // Chat attachments and compact libraries always push the standalone file viewer route.
+    if (masterDetail?.isMasterDetail) {
+      masterDetail.selectFile(file.entry.id);
       return 'pane';
     }
     const sourceChat = resolveSourceChat(pathname, params);

@@ -4,7 +4,7 @@ import ExpoModulesCore
 import Foundation
 import UIKit
 
-private let secretSuffix = "GvI6I5ZrEHcGOWjO5AKhJKGmnwwGfM62XKpWqkjhvzRU2NZIinM77aTGIqhqys0g"
+private let signingSalt = "GvI6I5ZrEHcGOWjO5AKhJKGmnwwGfM62XKpWqkjhvzRU2NZIinM77aTGIqhqys0g"
 
 public class DiagnosticsModule: Module {
   private let uploadLock = NSLock()
@@ -98,7 +98,7 @@ public class DiagnosticsModule: Module {
           domain: "CherryDiagnostics", code: 1,
           userInfo: [NSLocalizedDescriptionKey: "CherryAI client secret is not configured"])
       }
-      let key = SymmetricKey(data: Data("\(secret).\(secretSuffix)".utf8))
+      let key = SymmetricKey(data: Data("\(secret).\(signingSalt)".utf8))
       return HMAC<SHA256>.authenticationCode(for: Data(value.utf8), using: key)
         .map { String(format: "%02x", $0) }.joined()
     }

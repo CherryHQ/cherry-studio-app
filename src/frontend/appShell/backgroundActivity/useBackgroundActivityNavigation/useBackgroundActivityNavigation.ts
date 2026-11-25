@@ -5,8 +5,8 @@ import {
   dismissNotificationAsync,
   useLastNotificationResponse,
 } from 'expo-notifications';
-import { useRootNavigationState, useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { usePathname, useRootNavigationState, useRouter } from 'expo-router';
+import { useEffect, useEffectEvent } from 'react';
 
 import { parseBackgroundTaskUrl } from '@/shared/backgroundActivity/taskLink';
 import { BACKGROUND_NOTIFICATION_OWNER } from '@/shared/backgroundActivity/types';
@@ -25,6 +25,14 @@ export function useBackgroundActivityNavigation(): void {
   const router = useRouter();
   const navigationKey = useRootNavigationState()?.key;
   const response = useLastNotificationResponse();
+  const pathname = usePathname();
+  const openDestination = useEffectEvent(
+    (href: NonNullable<ReturnType<typeof backgroundActivityHref>>) => {
+      // Reuse the content scene under Settings instead of opening a second one.
+      if (pathname === '/settings' || pathname.startsWith('/settings/')) router.dismissTo(href);
+      else router.navigate(href);
+    },
+  );
 
   useEffect(() => {
     if (!navigationKey || !response) return;
@@ -38,7 +46,7 @@ export function useBackgroundActivityNavigation(): void {
     const scheme = resolveScheme({});
     const href = backgroundActivityHref(data.url, scheme);
     if (href && !isBackgroundTaskVisible(parseBackgroundTaskUrl(data.url, scheme))) {
-      router.navigate(href);
+      openDestination(href);
     }
     clearLastNotificationResponse();
     if (data.terminal !== true && data.attention !== true) return;
@@ -47,5 +55,5 @@ export function useBackgroundActivityNavigation(): void {
         logger.warn('Could not dismiss opened notification', { error });
       },
     );
-  }, [navigationKey, response, router]);
+  }, [navigationKey, response]);
 }

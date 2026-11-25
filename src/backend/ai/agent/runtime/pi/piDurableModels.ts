@@ -196,8 +196,19 @@ export function createPiDurableModels(
                 // A credential retry sends the request again; its metadata starts over.
                 if (!continuedContent) web?.reset();
                 let sent = (await onPayload?.(payload, wire)) ?? payload;
-                if (resolved.deepseekSafetyCheck)
-                  sent = { ...(sent as Record<string, unknown>), safety_check: { level: 'high' } };
+                if (resolved.deepseekSafetyCheck) {
+                  const body = sent as Record<string, unknown>;
+                  const tools = body.tools;
+                  if (
+                    !Array.isArray(tools) ||
+                    tools.every(
+                      (tool) =>
+                        tool?.type === 'deepseek_web_search' || tool?.type === 'deepseek_read_url',
+                    )
+                  ) {
+                    sent = { ...body, safety_check: { level: 'high' } };
+                  }
+                }
                 // Replay follows routing: a deferred server tool returns only beside its definition.
                 const prepared = applyPiWebReplay(
                   applyPiWebTools(sent, native?.dialect, routes),

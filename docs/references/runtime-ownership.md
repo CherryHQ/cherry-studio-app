@@ -3,9 +3,9 @@
 The current Agent lifetime is specified in
 [Pi Durable Migration](./agent/pi-durable-migration.md). One app generation owns the native Harness
 and Pi connection. Native task demand, including compaction, holds the existing execution lease.
-Ordinary disposal or loss of the finite UIKit background window preserves work; foreground reopening
-reconstructs current capabilities before resuming. Revocation of an iOS continued-processing task
-stops its owning work instead of suspending it for restart, as specified in
+Ordinary disposal or loss of iOS background execution preserves Agent work; foreground reopening
+reconstructs current capabilities before resuming. Continued-processing expiry suspends the Agent
+Host without marking unfinished turns as aborted, as specified in
 [Background Activity Presentation](./background-activity-presentation.md). User stop aborts the
 selected Session. Route disposal only releases observation.
 
@@ -129,8 +129,9 @@ User cancellation affects only the selected Session. Pi executes one input at a 
 Session and retains admitted follow-ups in its inbox; different Sessions may run concurrently.
 Ordinary disposal suspends the Harness without a user-abort mark. Finite UIKit window expiry does
 the same only when no continued-processing or audio protection remains. The next Host reopens
-committed tasks and reconstructs current capabilities. Continued-processing revocation
-stops the owning work and does not follow this recovery path. An unsafe tool interrupted after
+committed tasks and reconstructs current capabilities. Continued-processing expiry follows the same
+recovery path because the native signal cannot distinguish system revocation from system-UI
+cancellation. An unsafe tool interrupted after
 execution intent is not blindly replayed. Missing or obsolete execution copies reconcile through
 Cherry reservations, as specified in [Pi Durable Migration](./agent/pi-durable-migration.md).
 None of this guarantees continuous execution or a preserved network stream after process death.
@@ -284,7 +285,9 @@ user-owned verification policy.
   and approvals retain protection on the same lease. The final release stops finite/audio protection
   immediately. Official requests follow the owning work through final settlement.
   New local painting enqueues carry process-local intent and real handler progress. Native continued-task
-  revocation stops its owning work and never restarts it through audio. SystemIntegration's `BackgroundAudio` yields the profile to token-owned voice
+  expiry suspends Agent work for foreground recovery; jobs retain their interruption policy. The
+  expired owner cannot restart through audio before settling and releasing its lease.
+  SystemIntegration's `BackgroundAudio` yields the profile to token-owned voice
   uses, stops its loop for capture, and reports native protection loss. `AndroidBackgroundActivityRuntime`
   owns Android execution demand, reused task notifications, protection status, and background budget.
   SystemIntegration shares notification IDs with the patched background-actions service. The host stops

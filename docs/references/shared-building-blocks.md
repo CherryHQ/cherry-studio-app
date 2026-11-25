@@ -12,6 +12,7 @@ it already exists.
 
 | Need | Owner |
 | --- | --- |
+| Pure within-array reordering | `reorderLocally` in `src/shared/utils/reorder.ts`; the frontend `data/utils/reorder.ts` entry re-exports it alongside query-cache ordering helpers |
 | Installed-package updates | `appUpdate` in `src/backend/services/appUpdate`; app-shell `appUpdate` owns the update dialog, cold-start offer and entry state |
 | Egress region for provider discovery, recommendations and distribution | `RegionService` in `src/backend/services/region`; Config Service `POST /v1/resolve` lookup independent of data-collection consent, ten-minute success cache and explicit unknown-region result |
 | Provider discovery and first-install recommendation edition | `getProviderCatalogEdition` in `src/backend/services/providers/providerCatalogEdition.ts`; all distributions prefer detected egress region, then device region, retaining the domestic default only when both are unavailable |
@@ -104,12 +105,12 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | File/folder row presentation and path navigation | CherryUI `FileBrowserRow` and `Breadcrumbs`, shared by library folders and SSH files; callers own local or remote identities and file operations |
 | Preserving reading position before expanding message content or switching answers | `useMessageListDisclosureToggle` from `src/frontend/components/Message` |
 | Controlled calendar range selection | CherryUI `DateRangePicker`; caller-owned drafts, presets and calendar-day boundaries |
-| Ordering a small collection with up/down controls | CherryUI `ReorderList`; controlled items and caller-owned persistence/scrolling |
+| Inline within-group drag reordering & long-press menu | CherryUI `Sortable` (`Sortable.Root`, `Sortable.Group`, `Sortable.Item`, `Sortable.Chrome`, `Sortable.Exclusion`); paired with `useReorder` (`src/frontend/data/hooks/useReorder.ts`) and `computeMinimalMoves` (`src/frontend/data/utils/reorder.ts`) for persistent collections |
 | Window size classes and the docked-sidebar rule | `useWindowClass` and `useCanDockSidebar` in `src/frontend/appShell/layout` |
 | Where a foldable display divides a layout | `FoldRegionProvider`, `WindowFoldRegion`, and their hooks in `src/frontend/appShell/layout`, over `react-native-reserved-regions` |
 | Header actions in the iOS native toolbar | `HeaderToolbarAction.nativeIcon` (a template image of the existing glyph) and `renderHeaderToolbarItem` in `src/frontend/appShell/header` |
 | Android back for a layer inside a route | `useFocusedBackPress` in `src/frontend/appShell/navigation`, held only while the route is focused |
-| Pages rendered in a side pane, and the file pane beside chat | `PaneChromeProvider` in `src/frontend/appShell/layout`; `FilePaneProvider`, `FilePaneHost`, and `useFilePane` in `src/frontend/appShell/pane` |
+| Inline pane headers/toolbars and Files Master-Detail layout | `PaneChromeProvider` in `src/frontend/appShell/layout`; `LibraryMasterDetailHost` and `useLibraryMasterDetail` in `src/frontend/appShell/pane` |
 | Mermaid diagrams in Markdown | `MermaidBlock`, `MermaidSvgView`, and the shared hidden renderer in `src/frontend/components/MermaidDiagram`; the offline page is `packages/mermaid-webview` |
 | Readable message detail content and full-text copy | `MessageDetail` in `src/frontend/components/MessageDetail`, composing CherryUI `MessagePart.TextBody` and the full-source `CodeBlock` |
 | Message and individual-call usage details | `AiUsageDetail` in `src/frontend/components/AiUsageDetail`; callers own measurement/query semantics, and `src/frontend/utils/aiUsage` owns precise cost formatting |

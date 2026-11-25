@@ -17,6 +17,10 @@ import {
   type OcrEngine,
 } from '@/shared/contracts/fileAttachment';
 import type { VoiceEngineId } from '@/shared/contracts/voice';
+import {
+  type AssistantMessageToolbarConfig,
+  DEFAULT_ASSISTANT_MESSAGE_TOOLBAR_CONFIG,
+} from '@/shared/data/types/assistantMessageToolbar';
 import type {
   WebSearchCompressionMethod,
   WebSearchProviderId,
@@ -30,6 +34,16 @@ export type ModelWebToolsPreference = 'preferred' | 'fallback' | 'disabled';
 
 export const FONT_SIZE_STEPS = [0, 1, 2] as const;
 export type FontSizeStep = (typeof FONT_SIZE_STEPS)[number];
+
+export const NAVIGATION_PINNABLE_TAB_IDS = [
+  'agents',
+  'drawings',
+  'plugins',
+  'marketplace',
+  'files',
+  'devices',
+] as const;
+export type NavigationPinTabId = (typeof NAVIGATION_PINNABLE_TAB_IDS)[number];
 
 /** These defaults are delivered by the organization in enterprise profiles. */
 export const ENTERPRISE_DEFAULT_MODEL_KEYS = [
@@ -120,8 +134,10 @@ export interface PreferenceSchema {
   'agent.session_naming.model_id': string | null;
   'agent.session_naming.prompt': string;
 
+  'ui.chat.assistant_toolbar_actions': AssistantMessageToolbarConfig;
   'ui.font_size_step': FontSizeStep;
   'ui.library.view_mode': 'grid' | 'list';
+  'ui.navigation.pinned_tabs': NavigationPinTabId[];
   /** The user hid the sidebar a wide window would otherwise keep beside the content. */
   'ui.sidebar.collapsed': boolean;
   'ui.sidebar.recent_view_mode': 'agents' | 'sessions';
@@ -181,8 +197,10 @@ export const PreferenceDefaults = {
   'agent.session_naming.model_id': null,
   'agent.session_naming.prompt': '',
 
+  'ui.chat.assistant_toolbar_actions': DEFAULT_ASSISTANT_MESSAGE_TOOLBAR_CONFIG,
   'ui.font_size_step': 0,
   'ui.library.view_mode': 'grid',
+  'ui.navigation.pinned_tabs': ['agents'],
   'ui.sidebar.collapsed': false,
   'ui.sidebar.recent_view_mode': 'sessions',
   'ui.sidebar.session_tree_enabled': true,
@@ -204,8 +222,10 @@ export const INHERITABLE_PREFERENCE_KEYS = [
   'chat.completion_notifications.enabled',
   'file.document_parser.mode',
   'file.export.watermark_enabled',
+  'ui.chat.assistant_toolbar_actions',
   'ui.font_size_step',
   'ui.library.view_mode',
+  'ui.navigation.pinned_tabs',
   'ui.sidebar.collapsed',
   'ui.sidebar.recent_view_mode',
   'ui.theme_mode',

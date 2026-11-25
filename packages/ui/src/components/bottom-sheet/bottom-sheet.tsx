@@ -77,6 +77,28 @@ const SheetPresentationContext = createContext<{
   returnFocusRef: RefObject<ViewInstance | null>;
 } | null>(null);
 
+const BottomSheetBoundsContext = createContext<{ insetLeft: number; insetRight: number }>({
+  insetLeft: 0,
+  insetRight: 0,
+});
+
+/**
+ * Constrains bottom sheets to the active content pane on wide multi-column layouts so sheets
+ * center inside the open pane instead of straddling a permanent navigation rail or sidebar.
+ */
+export function BottomSheetBoundsProvider({
+  children,
+  insetLeft = 0,
+  insetRight = 0,
+}: {
+  children: ReactNode;
+  insetLeft?: number;
+  insetRight?: number;
+}) {
+  const value = useMemo(() => ({ insetLeft, insetRight }), [insetLeft, insetRight]);
+  return <BottomSheetBoundsContext value={value}>{children}</BottomSheetBoundsContext>;
+}
+
 type BottomSheetBaseProps = {
   /** A sibling overlay may cover this sheet while its content and scroll state stay mounted. */
   active?: boolean;
@@ -179,8 +201,14 @@ export function BottomSheet(props: BottomSheetProps) {
   const [headerHeight, setHeaderHeight] = useState(0);
   const [footerHeight, setFooterHeight] = useState(0);
   const insets = useSafeAreaInsets();
+  const bounds = use(BottomSheetBoundsContext);
+  const effectiveLeft = Math.max(insets.left, bounds.insetLeft);
+  const effectiveRight = Math.max(insets.right, bounds.insetRight);
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
-  const cardWidth = Math.max(0, Math.min(MAX_CARD_WIDTH, windowWidth - insets.left - insets.right));
+  const isConstrainedPane = bounds.insetLeft > insets.left || bounds.insetRight > insets.right;
+  const isWideWindow = windowWidth >= 800 || isConstrainedPane;
+  const paneWidth = Math.max(0, windowWidth - effectiveLeft - effectiveRight);
+  const cardWidth = Math.max(0, Math.min(MAX_CARD_WIDTH, paneWidth));
   const scrimStyle = useResolveClassNames('bg-scrim');
   const scrimColor =
     typeof scrimStyle.backgroundColor === 'string' ? scrimStyle.backgroundColor : undefined;
@@ -202,8 +230,18 @@ export function BottomSheet(props: BottomSheetProps) {
         size === 'content' ? undefined : size,
         sizes,
         isOverlay ? parent?.height : undefined,
+        isWideWindow,
       ),
-    [availableCardHeight, dismissible, measuredHeight, size, sizes, isOverlay, parent?.height],
+    [
+      availableCardHeight,
+      dismissible,
+      measuredHeight,
+      size,
+      sizes,
+      isOverlay,
+      parent?.height,
+      isWideWindow,
+    ],
   );
   const isResizable = detents.length > 2;
   // Resizable sheets keep their snap points; keyboard space only shrinks the body.
@@ -385,7 +423,7 @@ export function BottomSheet(props: BottomSheetProps) {
         position={position}
         style={[
           styles.layout,
-          { width: '100%', paddingLeft: insets.left, paddingRight: insets.right },
+          { width: '100%', paddingLeft: effectiveLeft, paddingRight: effectiveRight },
         ]}
       >
         {/* The native host keeps its full-window scrim. The transparent space
@@ -595,6 +633,12 @@ function keyboardLift(height: number, progress: number, bottomInset: number): nu
   return Math.max(0, -height - progress * (bottomInset - KEYBOARD_GAP));
 }
 
+const WIDE_SIZE_MAX_HEIGHTS: Partial<Record<BottomSheetSize, number>> = {
+  compact: 460,
+  medium: 560,
+  large: 680,
+};
+
 function resolveSheetHeights(
   availableCardHeight: number,
   dismissible: boolean,
@@ -602,14 +646,19 @@ function resolveSheetHeights(
   size: BottomSheetSize | undefined,
   sizes: BottomSheetSizes | undefined,
   minimumHeight = 0,
+  isWideWindow = false,
 ) {
   const requestedCardHeights =
     height !== undefined
       ? [{ height, size: undefined }]
-      : (sizes ?? (size ? [size] : [])).map((sheetSize) => ({
-          height: Math.round(availableCardHeight * HEIGHT_RATIOS[sheetSize]),
-          size: sheetSize,
-        }));
+      : (sizes ?? (size ? [size] : [])).map((sheetSize) => {
+          const proportional = Math.round(availableCardHeight * HEIGHT_RATIOS[sheetSize]);
+          const maxCap = isWideWindow ? WIDE_SIZE_MAX_HEIGHTS[sheetSize] : undefined;
+          return {
+            height: maxCap ? Math.min(maxCap, proportional) : proportional,
+            size: sheetSize,
+          };
+        });
   const cardHeights = requestedCardHeights
     .map((item) => ({
       ...item,

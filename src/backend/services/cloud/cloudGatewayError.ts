@@ -28,11 +28,17 @@ export function readCloudGatewayCode(body: unknown) {
   return data.data.error?.code ?? data.data.code;
 }
 
-export function cloudRetryDeadline(retryAfter: string | null, now: number): number {
-  if (!retryAfter) return now;
-  const value = retryAfter.trim();
-  const deadline = /^\d+$/.test(value) ? now + Number(value) * 1000 : Date.parse(value);
-  return Number.isFinite(deadline) && deadline > now ? deadline : now;
+const DEFAULT_RATE_LIMIT_COOLDOWN_MS = 30_000;
+
+export function cloudRetryDeadline(retryAfter: string | null | undefined, now: number): number {
+  const fallback = now + DEFAULT_RATE_LIMIT_COOLDOWN_MS;
+  const value = retryAfter?.trim();
+  if (!value) return fallback;
+  const isSeconds = /^\d+$/.test(value);
+  // Date.parse also accepts malformed delta-seconds such as "-1" as calendar dates.
+  if (!isSeconds && Number.isFinite(Number(value))) return fallback;
+  const deadline = isSeconds ? now + Number(value) * 1000 : Date.parse(value);
+  return Number.isFinite(deadline) ? Math.max(deadline, now) : fallback;
 }
 
 export class CloudGatewayRequestError extends Error {

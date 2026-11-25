@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 
+import { useLibraryMasterDetail } from '@/frontend/appShell/pane/state';
 import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import {
   type SelectionSource,
@@ -15,6 +16,7 @@ import {
   useSelectionState,
 } from '@/frontend/components/Selection';
 import { useBackendModule } from '@/frontend/data';
+import { useAutoSelectMasterFile } from '@/frontend/hooks/file';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import type { FileFolder } from '@/shared/data/types/fileLibrary';
 
@@ -47,6 +49,7 @@ type FileLibraryListItem =
   | { kind: 'file'; file: FileLibraryEntry };
 
 type FileLibraryListExtraData = {
+  activeFileId: string | null;
   directory: FileLibraryListProps['directory'];
   folderPaths: FileLibraryListProps['folderPaths'];
   getMenuItems: (selection: LibrarySelection) => MenuItem[];
@@ -129,8 +132,17 @@ export function FileLibraryList({
       }),
     [locale],
   );
+  const masterDetail = useLibraryMasterDetail();
+  const visibleFileIds = useMemo(
+    () => visibleEntries.map((item) => item.entry.id),
+    [visibleEntries],
+  );
+  useAutoSelectMasterFile(visibleFileIds, isLoading);
+  const activeFileId = masterDetail?.isMasterDetail ? masterDetail.selectedFileId : null;
+
   const listExtraData = useMemo<FileLibraryListExtraData>(
     () => ({
+      activeFileId,
       directory,
       folderPaths,
       dateFormatter,
@@ -142,6 +154,7 @@ export function FileLibraryList({
       selectedIds,
     }),
     [
+      activeFileId,
       directory,
       folderPaths,
       dateFormatter,
@@ -278,6 +291,7 @@ function FileItem({ item, data }: { item: FileLibraryEntry; data: FileLibraryLis
     <View className="flex-row items-center gap-2">
       <View className="min-w-0 flex-1">
         <FileLibraryRow
+          isActive={data.activeFileId === item.entry.id}
           isEditing={data.isEditing}
           isSelected={data.selectedIds.has(item.entry.id)}
           item={item}

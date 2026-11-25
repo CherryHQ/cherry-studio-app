@@ -93,7 +93,7 @@ export function PaintingBoardWorkspace({
   onReceipt: (paintingId: string | undefined) => void;
 }) {
   return (
-    <ComposerSessionProvider>
+    <ComposerSessionProvider retainEditing>
       <Composer.Expansion>
         {/* The board attaches the focused image itself; a sent image never lingers. */}
         <PaintingInputProvider adoptSubmittedReference={false}>
