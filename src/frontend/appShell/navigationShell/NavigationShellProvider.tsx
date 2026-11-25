@@ -16,6 +16,7 @@ import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useFoldRegionLayout, useWindowClass } from '@/frontend/appShell/layout';
+import { useFirstUseAdmission } from '@/frontend/appShell/navigation';
 import { usePreference } from '@/frontend/data/hooks/usePreference';
 import type { NavigationPinTabId } from '@/shared/data/preference/preferenceSchema';
 
@@ -176,14 +177,17 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
     tRef.current = t;
   });
 
+  const isOnboardingBlocking = useFirstUseAdmission() !== 'admitted';
   const platform = Platform?.OS ?? 'ios';
-  const isDockVisible = shellMode === 'compact-dock' && isAtRoot && hideDockCount === 0;
-  const isVerticalRailVisible = shellMode === 'vertical-rail' && isAtRoot && hideDockCount === 0;
+  const isDockVisible =
+    !isOnboardingBlocking && shellMode === 'compact-dock' && isAtRoot && hideDockCount === 0;
+  const isVerticalRailVisible =
+    !isOnboardingBlocking && shellMode === 'vertical-rail' && isAtRoot && hideDockCount === 0;
   const restingDockClearance =
     shellMode === 'compact-dock'
       ? resolveFloatingDockClearance(restingDockHeight, insets.bottom, platform)
       : 0;
-  const dockClearance = isAtRoot ? restingDockClearance : 0;
+  const dockClearance = isAtRoot && !isOnboardingBlocking ? restingDockClearance : 0;
 
   useEffect(() => {
     if ((!isAtRoot || shellMode === 'wide-rail') && dragStateRef.current) {
@@ -208,7 +212,7 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
       ? 0
       : activeDestination === 'files'
         ? columnWidths.files
-        : activeDestination === 'chat'
+        : activeDestination === 'chat' || activeDestination === 'settings'
           ? columnWidths.sidebar
           : 0;
 
@@ -402,6 +406,15 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
       if (mainNavigatorRef.current?.(id, currentRouter, href)) {
         return;
       }
+      if (id === 'settings') {
+        if (pathnameRef.current.startsWith('/settings/')) currentRouter.dismissTo(href);
+        else if (pathnameRef.current !== '/settings') currentRouter.push(href);
+        return;
+      }
+      if (resolveNavDestination(pathnameRef.current) === 'settings') {
+        currentRouter.dismissTo(href);
+        return;
+      }
       if (id === 'chat') {
         currentRouter.navigate('/');
         return;
@@ -422,6 +435,7 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
       dockClearance,
       isAtRoot,
       isDockVisible,
+      isOnboardingBlocking,
       isFileListCollapsed,
       isVerticalRailVisible,
       middleColumnWidth,
@@ -436,6 +450,7 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
       dockClearance,
       isAtRoot,
       isDockVisible,
+      isOnboardingBlocking,
       isFileListCollapsed,
       isVerticalRailVisible,
       middleColumnWidth,

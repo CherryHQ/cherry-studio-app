@@ -28,6 +28,8 @@ jest.mock('../../../hooks/useMessageCitationSources', () => ({
   useMessageCitationSources: (messages: readonly ConversationMessage[]) => messages,
 }));
 
+jest.mock('react-native-worklets', () => ({ scheduleOnRN: jest.fn() }));
+jest.mock('@cherrystudio/ui/motion', () => ({ duration: { base: 250, slow: 350 }, easing: {} }));
 jest.mock('react-native-reanimated', () => ({
   useDerivedValue: (read: () => unknown) => ({ get: read }),
   useSharedValue: <T,>(initial: T) => ({ get: () => initial, set: jest.fn(), value: initial }),

@@ -33,19 +33,24 @@ export function ScrollToBottomButton({
   ];
 
   const wrapStyle = useAnimatedStyle(
-    () => ({ bottom: (bottomAccessoryHeight?.get() ?? 0) + gap }),
+    () => ({ transform: [{ translateY: -((bottomAccessoryHeight?.get() ?? 0) + gap) }] }),
     [bottomAccessoryHeight, gap],
   );
   const containerStyle = useAnimatedStyle(
-    () => ({ transform: [{ scale: withTiming(isAtBottom ? 0.8 : 1, visibilityMotion) }] }),
+    () => ({
+      opacity: withTiming(isAtBottom ? 0 : 1, visibilityMotion),
+      transform: [{ scale: withTiming(isAtBottom ? 0.9 : 1, visibilityMotion) }],
+    }),
     [isAtBottom],
   );
 
   return (
     <Animated.View pointerEvents="box-none" style={[styles.wrap, wrapStyle]}>
       <Animated.View
+        accessibilityElementsHidden={isAtBottom}
+        importantForAccessibility={isAtBottom ? 'no-hide-descendants' : 'auto'}
         pointerEvents={isAtBottom ? 'none' : 'auto'}
-        style={[containerStyle, { opacity: isAtBottom ? 0 : 1 }]}
+        style={containerStyle}
       >
         <BackgroundPressExclusion>
           <Pressable
@@ -79,6 +84,7 @@ const styles = StyleSheet.create({
   },
   wrap: {
     alignItems: 'center',
+    bottom: 0,
     left: 0,
     position: 'absolute',
     right: 0,

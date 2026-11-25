@@ -1,10 +1,7 @@
 import { BottomSheetBoundsProvider } from '@cherrystudio/ui/components';
-import { usePathname } from 'expo-router';
-import { type DrawerContentComponentProps, Drawer } from 'expo-router/drawer';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
-import type { LegacyPanGesture } from 'react-native-gesture-handler';
+import { Stack } from 'expo-router';
+import { View } from 'react-native';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useUniwind } from 'uniwind';
 
 import {
   ChatDockLayoutProvider,
@@ -12,61 +9,47 @@ import {
   useCanDockSidebar,
   WindowFoldRegion,
 } from '@/frontend/appShell/layout';
+import { FirstUseGate } from '@/frontend/appShell/navigation';
 import { ChatSourceProvider } from '@/frontend/appShell/navigation/chat';
 import {
+  NAV_ROUTE_MANIFEST,
   NavigationShellProvider,
-  resolveCompactLeadingAction,
   useNavigationShell,
-  useNavigationShellInteraction,
   WIDE_RAIL_WIDTH,
   WideNavRail,
 } from '@/frontend/appShell/navigationShell';
 import {
-  resolveSidebarDrawer,
-  resolveSidebarOverlayWidth,
-  Sidebar,
+  DockedSidebar,
   SidebarColumnProvider,
   SidebarToggleProvider,
-  useSidebarColumn,
 } from '@/frontend/appShell/sidebar';
 import { AppSearchPanel } from '@/frontend/features/search';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
-import { appSidebar } from '@/frontend/utils/constants';
 
-// Keep a stable render callback and render Sidebar as a component so React owns
-// its hook lifecycle.
-function renderSidebar(props: DrawerContentComponentProps) {
-  return <Sidebar navigation={props.navigation} searchPanel={AppSearchPanel} />;
-}
-
-// Module-level so the drawer's memoized pan gesture is not rebuilt per render.
-// The swipe commits after native horizontal scroll surfaces in chat have had
-// their chance to claim the touch (see appSidebar.swipeActivationDistance). The
-// vertical fail distance scales with it so the accepted swipe angle stays the
-// same as the library default; vertical intent is already claimed earlier by
-// the message list.
-function configureDrawerGesture(gesture: LegacyPanGesture) {
-  const distance = appSidebar.swipeActivationDistance;
-  return gesture.activeOffsetX([-distance, distance]).failOffsetY([-distance, distance]);
-}
+export const unstable_settings = { initialRouteName: '(content)' };
 
 export default function DrawerLayout() {
   return (
-    <ChatSourceProvider>
-      <FoldRegionProvider>
-        <WindowFoldRegion>
-          <NavigationShellProvider>
-            <DrawerShell />
-          </NavigationShellProvider>
-        </WindowFoldRegion>
-      </FoldRegionProvider>
-    </ChatSourceProvider>
+    <FirstUseGate>
+      <ChatSourceProvider>
+        <FoldRegionProvider>
+          <WindowFoldRegion>
+            <NavigationShellProvider>
+              <DrawerShell />
+            </NavigationShellProvider>
+          </WindowFoldRegion>
+        </FoldRegionProvider>
+      </ChatSourceProvider>
+    </FirstUseGate>
   );
 }
 
 function DrawerShell() {
   const outerInsets = useSafeAreaInsets();
   const { middleColumnWidth, shellMode } = useNavigationShell();
+  const canDock = useCanDockSidebar();
+  const isWide = shellMode === 'wide-rail';
+  const backgroundColor = useThemeColor('background');
 
   const contentInsets = {
     ...outerInsets,
@@ -88,7 +71,24 @@ function DrawerShell() {
             <SidebarColumnProvider>
               <ChatDockLayoutProvider>
                 <SidebarToggleProvider>
-                  <SidebarDrawer />
+                  <View className="flex-1 flex-row">
+                    {canDock ? <DockedSidebar searchPanel={AppSearchPanel} /> : null}
+                    <View className="min-w-0 flex-1">
+                      <Stack
+                        screenOptions={{ headerShown: false, contentStyle: { backgroundColor } }}
+                      >
+                        <Stack.Screen name="(content)" />
+                        <Stack.Screen
+                          name={NAV_ROUTE_MANIFEST.settings.stackRoute}
+                          options={
+                            isWide
+                              ? { animation: 'none', gestureEnabled: false, headerShown: false }
+                              : { gestureEnabled: true, headerShown: false }
+                          }
+                        />
+                      </Stack>
+                    </View>
+                  </View>
                 </SidebarToggleProvider>
               </ChatDockLayoutProvider>
             </SidebarColumnProvider>
@@ -96,56 +96,5 @@ function DrawerShell() {
         </SafeAreaInsetsContext>
       </View>
     </View>
-  );
-}
-
-function SidebarDrawer() {
-  const { width } = useWindowDimensions();
-  const outerInsets = useSafeAreaInsets();
-  const pathname = usePathname();
-  const canDock = useCanDockSidebar();
-  const { theme } = useUniwind();
-  const { column } = useSidebarColumn();
-  const { pinnedTabs, shellMode } = useNavigationShell();
-  const { dragState } = useNavigationShellInteraction();
-  const [backgroundColor, sidebarColor, sidebarBorderColor, overlayColor] = useThemeColor([
-    'background',
-    'sidebar',
-    'sidebar-border',
-    'scrim',
-  ]);
-  const overlayWidth = resolveSidebarOverlayWidth(width, outerInsets.right);
-  const { drawerType, drawerStyle } = resolveSidebarDrawer(column, overlayWidth, canDock);
-  const swipeEnabled =
-    shellMode !== 'wide-rail' &&
-    column.kind === 'overlay' &&
-    resolveCompactLeadingAction(pathname, pinnedTabs) === 'drawer' &&
-    !dragState;
-
-  return (
-    <Drawer
-      drawerContent={renderSidebar}
-      screenOptions={{
-        configureGestureHandler: configureDrawerGesture,
-        drawerStyle: {
-          backgroundColor: theme === 'dark' ? sidebarColor : backgroundColor,
-          borderEndColor: sidebarBorderColor,
-          borderEndWidth: StyleSheet.hairlineWidth,
-          ...drawerStyle,
-        },
-        drawerType,
-        headerShown: false,
-        overlayColor,
-        sceneStyle: {
-          backgroundColor,
-          overflow: 'hidden',
-        },
-        swipeEdgeWidth: width,
-        swipeEnabled,
-        swipeMinDistance: 44,
-      }}
-    >
-      <Drawer.Screen name="(main)" />
-    </Drawer>
   );
 }

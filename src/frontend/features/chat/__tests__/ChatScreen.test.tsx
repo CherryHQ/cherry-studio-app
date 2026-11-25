@@ -42,6 +42,7 @@ jest.mock('@cherrystudio/ui/components', () => ({
   ContentState: {
     Error: () => null,
   },
+  getComposerBottomPadding: () => 38,
   getComposerKeyboardStickyOffset: () => 26,
 }));
 
@@ -74,6 +75,9 @@ jest.mock('react-i18next', () => ({
 }));
 
 jest.mock('@/frontend/components/Composer', () => ({
+  getComposerExtraBottomOffset: jest.requireActual(
+    '@/frontend/components/Composer/utils/composerDockOffset',
+  ).getComposerExtraBottomOffset,
   ComposerDismissArea: jest.requireActual(
     '@/frontend/components/Composer/components/ComposerDismissArea',
   ).ComposerDismissArea,

@@ -12,6 +12,25 @@ import {
 } from '../components/ChatTurnDirectory';
 
 const mockToastShow = jest.fn();
+const mockHaptic = jest.fn();
+let mockReducedMotion = false;
+let mockDeferExit = false;
+let mockExit: ((finished: boolean) => void) | undefined;
+const mockTiming = jest.fn(
+  (target: number, _config: object, onFinish?: (finished: boolean) => void) => {
+    if (target === 0 && mockDeferExit) mockExit = onFinish;
+    else onFinish?.(true);
+    return target;
+  },
+);
+jest.mock('@cherrystudio/ui/motion', () => ({
+  duration: { base: 250, slow: 350 },
+  easing: { overshoot: 'overshoot', settle: 'settle' },
+}));
+jest.mock('@cherrystudio/ui/haptics', () => ({ haptics: { light: () => mockHaptic() } }));
+jest.mock('react-native-worklets', () => ({
+  scheduleOnRN: (fn: (id: number) => void, id: number) => fn(id),
+}));
 
 jest.mock('@cherrystudio/app-icons/icons/x', () => {
   const React = jest.requireActual('react');
@@ -45,6 +64,23 @@ jest.mock('react-native-reanimated', () => {
     __esModule: true,
     default: { View },
     useAnimatedStyle: (read: () => object) => read(),
+    useSharedValue: (initial: number) => {
+      const { useRef } = jest.requireActual<typeof import('react')>('react');
+      return useRef(mockCreateSharedValue(initial)).current;
+    },
+    useReducedMotion: () => mockReducedMotion,
+    ReduceMotion: { System: 'system' },
+    Extrapolation: { CLAMP: 'clamp' },
+    interpolate: (value: number, input: number[], output: number[]) => {
+      const index = Math.max(
+        1,
+        input.findIndex((bound) => value <= bound),
+      );
+      const fraction = (value - input[index - 1]) / (input[index] - input[index - 1]);
+      return output[index - 1] + fraction * (output[index] - output[index - 1]);
+    },
+    withTiming: (target: number, config: object, onFinish?: (finished: boolean) => void) =>
+      mockTiming(target, config, onFinish),
   };
 });
 
@@ -64,7 +100,7 @@ jest.mock('@cherrystudio/ui/components', () => {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
 const zeroAccessoryHeight = { get: () => 0 } as unknown as SharedValue<number>;
 
-function createMockSharedValue(initial: number): SharedValue<number> {
+function mockCreateSharedValue(initial: number): SharedValue<number> {
   let value = initial;
   return {
     get: () => value,
@@ -169,6 +205,9 @@ describe('ChatTurnDirectory', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockReducedMotion = false;
+    mockDeferExit = false;
+    mockExit = undefined;
     queryClient = new QueryClient({
       defaultOptions: { queries: { gcTime: 0, retry: false } },
     });
@@ -180,9 +219,82 @@ describe('ChatTurnDirectory', () => {
     queryClient.clear();
   });
 
+  test.each([false, true])(
+    'opens and retains only a noninteractive exit panel (reduced motion=%s)',
+    (reduced) => {
+      mockReducedMotion = reduced;
+      mockDeferExit = true;
+      act(() => {
+        renderer = create(
+          <QueryClientProvider client={queryClient}>
+            <ChatTurnDirectory
+              bottomAccessoryHeight={zeroAccessoryHeight}
+              contentBottomInset={16}
+              contentTopInset={96}
+              keyboardOffset={0}
+              navigator={createNavigator('local:motion')}
+              scrollProgress={mockCreateSharedValue(1)}
+              scrollToMessage={async () => true}
+            />
+          </QueryClientProvider>,
+        );
+      });
+      const press = (name: string) =>
+        act(() =>
+          renderer!.root.findByProps({ testID: `chat-turn-directory-${name}` }).props.onPress(),
+        );
+      const layer = () => renderer!.root.findByProps({ testID: 'chat-turn-directory-layer' });
+      press('trigger');
+      expect(mockHaptic).toHaveBeenCalledTimes(1);
+      if (!reduced)
+        expect(mockTiming.mock.lastCall?.slice(0, 2)).toEqual([
+          1,
+          { duration: 350, easing: 'overshoot', reduceMotion: 'system' },
+        ]);
+      expect(
+        layer().findAll(
+          (node) => StyleSheet.flatten(node.props.style)?.transformOrigin === 'right center',
+        )[0],
+      ).toBeDefined();
+
+      press('close');
+      if (reduced) {
+        expect(mockTiming).not.toHaveBeenCalled();
+        expect(renderer!.root.findAllByProps({ testID: 'chat-turn-directory-layer' })).toHaveLength(
+          0,
+        );
+        return;
+      }
+      expect(mockTiming).toHaveBeenLastCalledWith(
+        0,
+        {
+          duration: 250,
+          easing: 'settle',
+          reduceMotion: 'system',
+        },
+        expect.any(Function),
+      );
+      expect(layer().props).toMatchObject({
+        pointerEvents: 'none',
+        accessibilityElementsHidden: true,
+      });
+
+      const oldExit = mockExit;
+      press('trigger');
+      act(() => oldExit?.(true));
+      expect(layer().props.pointerEvents).toBe('box-none');
+
+      press('close');
+      act(() => mockExit?.(true));
+      expect(renderer!.root.findAllByProps({ testID: 'chat-turn-directory-layer' })).toHaveLength(
+        0,
+      );
+    },
+  );
+
   test('tracks scroll progress across the tick count as the number of turns changes', () => {
     const navigator = createNavigator('local:s1');
-    const scrollProgress = createMockSharedValue(1);
+    const scrollProgress = mockCreateSharedValue(1);
     const scrollToMessage = jest.fn(async () => true);
     const renderDirectory = (turnCount: number) => (
       <QueryClientProvider client={queryClient}>
@@ -232,7 +344,7 @@ describe('ChatTurnDirectory', () => {
     const dismissSpy = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => undefined);
     const jump = jest.fn(async () => 'restored' as const);
     const scrollToMessage = jest.fn(async () => true);
-    const scrollProgress = createMockSharedValue(1);
+    const scrollProgress = mockCreateSharedValue(1);
     const navigator = createNavigator('local:s1', jump);
 
     const renderDirectory = () => (
@@ -288,9 +400,12 @@ describe('ChatTurnDirectory', () => {
     await act(settle);
 
     expect(dismissSpy).toHaveBeenCalledTimes(1);
-    expect(renderer!.root.findAllByProps({ testID: 'chat-turn-directory-trigger' })).toHaveLength(
-      0,
-    );
+    const hiddenLayer = renderer!.root
+      .findAllByProps({ accessibilityElementsHidden: true })
+      .find((node) =>
+        node.findAllByProps({ testID: 'chat-turn-directory-trigger' }).includes(trigger),
+      );
+    expect(hiddenLayer?.props.pointerEvents).toBe('none');
     expect(renderer!.root.findByProps({ testID: 'chat-turn-directory' })).toBeDefined();
     expect(renderer!.root.findByProps({ testID: 'chat-turn-directory-close' })).toBeDefined();
 
@@ -323,7 +438,7 @@ describe('ChatTurnDirectory', () => {
 
   test('restores previous scrollProgress when jump fails and closes via close button or backdrop', async () => {
     const jump = jest.fn(async () => 'retryable' as const);
-    const scrollProgress = createMockSharedValue(0.8);
+    const scrollProgress = mockCreateSharedValue(0.8);
     const navigator = createNavigator('local:s1', jump);
 
     act(() => {

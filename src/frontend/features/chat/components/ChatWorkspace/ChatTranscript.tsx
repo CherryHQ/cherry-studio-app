@@ -19,7 +19,7 @@ import { useMessageListInitialRenderGate } from './hooks/useMessageListInitialRe
 
 type ChatTranscriptProps = Omit<
   ComponentProps<typeof MessageList>,
-  'bottomAccessoryHeight' | 'contentTopInset'
+  'bottomAccessoryHeight' | 'contentTopInset' | 'visualBottomAccessoryHeight'
 > & {
   hasOlderMessages?: boolean;
   hiddenUserTurnCount?: number;
@@ -49,6 +49,11 @@ export function ChatTranscript({
   const { height: selectionFooterHeight } = useChatShareFooterHeight();
   const bottomAccessoryHeight = useDerivedValue(() =>
     isSelecting ? selectionFooterHeight : (composer?.meta.contentInset.get() ?? 0),
+  );
+  const liveDockHeight = composer?.meta.compactDockHeight;
+  const dockLift = composer?.meta.dockLift;
+  const visualBottomAccessoryHeight = useDerivedValue(
+    () => (liveDockHeight?.get() ?? 0) + (dockLift?.get() ?? 0),
   );
   const scrollProgress = useSharedValue(1);
   const reportedHeaderHeight = useHeaderHeight();
@@ -88,6 +93,9 @@ export function ChatTranscript({
           ref={listRef}
           bottomAccessoryHeight={bottomAccessoryHeight}
           contentTopInset={contentTopInset}
+          visualBottomAccessoryHeight={
+            composer && !isSelecting ? visualBottomAccessoryHeight : undefined
+          }
           rowInsets={isSelecting ? SELECTION_ROW_INSETS : undefined}
           scrollProgress={scrollProgress}
           onReady={() => {
@@ -99,9 +107,10 @@ export function ChatTranscript({
       {showTurnDirectory && turnNavigator ? (
         <ChatTurnDirectory
           key={turnNavigator.scope}
-          bottomAccessoryHeight={bottomAccessoryHeight}
+          bottomAccessoryHeight={liveDockHeight ?? bottomAccessoryHeight}
           contentBottomInset={list.contentBottomInset}
           contentTopInset={contentTopInset}
+          dockLift={dockLift}
           keyboardOffset={list.keyboardOffset}
           navigator={turnNavigator}
           scrollProgress={scrollProgress}

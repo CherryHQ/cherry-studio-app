@@ -16,6 +16,7 @@ import Animated, {
   interpolate,
   ReduceMotion,
   type SharedValue,
+  useAnimatedReaction,
   useAnimatedStyle,
   useDerivedValue,
   useSharedValue,
@@ -93,12 +94,13 @@ export function ComposerEditor({
   const activeProgress = useDerivedValue<number>(() =>
     withTiming(editingTarget.get() ? 1 : 0, activeTransitionMotion),
   );
-  // A rewrap during the width morph retargets the current height animation.
   const fieldFrameHeight = useDerivedValue(() =>
-    withTiming(
-      editingTarget.get() ? naturalFieldHeight.get() : restingInputHeight,
-      activeTransitionMotion,
-    ),
+    editingTarget.get() ? naturalFieldHeight.get() : restingInputHeight,
+  );
+  const editorMorphing = expansion?.meta.editorMorphing;
+  useAnimatedReaction(
+    () => activeProgress.get() !== (editingTarget.get() ? 1 : 0),
+    (morphing) => editorMorphing?.set(morphing),
   );
   const expansionHeight = expansion?.meta.extraHeight;
   const collapseEditor = expansion?.actions.collapse;
@@ -113,33 +115,25 @@ export function ComposerEditor({
   );
 
   useEffect(() => () => collapseEditor?.(), [collapseEditor]);
+  useEffect(() => () => editorMorphing?.set(false), [editorMorphing]);
 
   const morphFrameStyle = useAnimatedStyle(() => ({
     height:
-      fieldFrameHeight.get() +
-      activeProgress.get() * (activeToolbarGap + restingInputHeight) +
+      restingInputHeight +
+      activeProgress.get() * (naturalFieldHeight.get() + activeToolbarGap) +
       (expansionHeight?.get() ?? 0),
   }));
   const fieldFrameStyle = useAnimatedStyle(() => ({
     height: Math.max(restingInputHeight, fieldFrameHeight.get() + (expansionHeight?.get() ?? 0)),
-    left: interpolate(
-      activeProgress.get(),
-      [0, 1],
-      [restingActionSlotWidth * (hasCompactAccessory ? 2 : 1), 0],
-      Extrapolation.CLAMP,
-    ),
-    right: interpolate(
-      activeProgress.get(),
-      [0, 1],
-      [restingActionSlotWidth * restingTrailingActionCount, 0],
-      Extrapolation.CLAMP,
-    ),
+    // A width change rewraps the native field. Commit its target width once and clip the morph.
+    left: editingTarget.get() ? 0 : restingActionSlotWidth * (hasCompactAccessory ? 2 : 1),
+    right: editingTarget.get() ? 0 : restingActionSlotWidth * restingTrailingActionCount,
   }));
   const controlsRowStyle = useAnimatedStyle(() => ({
     transform: [
       {
         translateY:
-          activeProgress.get() * (fieldFrameHeight.get() + activeToolbarGap) +
+          activeProgress.get() * (naturalFieldHeight.get() + activeToolbarGap) +
           (expansionHeight?.get() ?? 0),
       },
     ],

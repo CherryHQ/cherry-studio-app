@@ -16,7 +16,7 @@ jest.mock('expo-router', () => ({
   usePathname: () => mockPathname,
   useRootNavigationState: () => mockNavigation,
   useRouter: () => mockRouter,
-  useSegments: () => ['(drawer)', '(main)', '(chat)'],
+  useSegments: () => ['(drawer)', '(content)', '(main)', '(chat)'],
 }));
 // The real controller keeps dismissal and decision semantics identical to the app's overlays.
 const { createOverlayNavigation } = jest.requireActual<

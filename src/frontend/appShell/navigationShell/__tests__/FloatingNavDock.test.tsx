@@ -28,6 +28,7 @@ let mockShellState = {
   dragState: null as NavDragState | null,
   isAtRoot: true,
   isDockVisible: true,
+  isOnboardingBlocking: false,
   navigateToDestination: jest.fn(),
   pinnedTabs: ['agents'] as (
     | 'agents'
@@ -146,6 +147,7 @@ describe('FloatingNavDock drag preview', () => {
       dragState: null,
       isAtRoot: true,
       isDockVisible: true,
+      isOnboardingBlocking: false,
       navigateToDestination: jest.fn(),
       pinnedTabs: ['agents'],
       registerDockRect: jest.fn(),
@@ -157,6 +159,22 @@ describe('FloatingNavDock drag preview', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+  });
+
+  test('mounts no dock or controls while first-use admission is blocked', () => {
+    mockShellState.isDockVisible = false;
+    mockShellState.isOnboardingBlocking = true;
+    act(() => {
+      renderer = create(<FloatingNavDock />);
+    });
+    expect(renderer!.toJSON()).toBeNull();
+
+    mockShellState.isDockVisible = true;
+    mockShellState.isOnboardingBlocking = false;
+    act(() => renderer!.update(<FloatingNavDock />));
+    expect(renderer!.root.findByProps({ testID: 'floating-nav-dock' }).props.pointerEvents).toBe(
+      'box-none',
+    );
   });
 
   test('shows a filled active tab without a capsule background and keeps the dashed drag preview', () => {
