@@ -270,6 +270,10 @@ export function createPiModelResolver(
                   : {}),
                 ...(adapter.api === 'openai-completions'
                   ? {
+                      ...(!isOpenRouter &&
+                      (isDeepSeekModel(model) || isDeepSeekModel({ ...model, modelId }))
+                        ? { requiresReasoningContentOnAssistantMessages: true }
+                        : {}),
                       ...(isOpenRouter
                         ? {
                             ...(modelId.startsWith('anthropic/')
