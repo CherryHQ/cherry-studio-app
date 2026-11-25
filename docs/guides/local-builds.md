@@ -45,6 +45,15 @@ can leak npm's package-selection settings into child tools. An explicit
 Keep both pinned packages compatible: EAS CLI 24.4.2 uses `@expo/eas-build-job` 24.3.0, which
 determines the local plugin version. Release workflows and `eas.json` require the same CLI version.
 
+For local Android production builds, the wrapper and release runner prepare the Sherpa ONNX
+offline voice libraries before EAS allocates the Android version code. On a cache miss they
+use `curl` to download the archive specified by the installed Sherpa package. They check its
+pinned SHA-256 before moving it into `$XDG_CACHE_HOME/cherry-studio-app/sherpa-onnx/`
+(under `~/.cache` by default). Later builds recheck the cached file and replace it if damaged.
+The worker receives the absolute path through `SITEED_SHERPA_ONNX_ARCHIVE`. The patched
+Sherpa installer verifies the archive bytes, extracts them and checks the required libraries.
+When upgrading Sherpa, pin the new upstream release asset digest in the package patch.
+
 ## App Variants
 
 `app.json` holds the production defaults. `app.config.ts` selects the app identity using `PROFILE`,

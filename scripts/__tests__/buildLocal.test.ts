@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
 
@@ -42,8 +43,7 @@ process.exit(plugin.status ?? 1);
       writeFileSync(pluginPath, `#!/usr/bin/env node\nconsole.log('${expectedPlugin}');\n`, {
         mode: 0o755,
       });
-      const wrapper = join(directory, 'buildLocal.ts');
-      copyFileSync(resolve('scripts/buildLocal.ts'), wrapper);
+      const wrapper = resolve('scripts/buildLocal.ts');
       const env: NodeJS.ProcessEnv = {
         ...process.env,
         PATH: `${globalBin}${delimiter}${process.env.PATH}`,
@@ -69,3 +69,77 @@ process.exit(plugin.status ?? 1);
     }
   },
 );
+
+test('Android production starts EAS only after preparing a verified Sherpa archive', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'cherry-sherpa-launcher-'));
+  try {
+    const pkg = join(directory, 'node_modules/@siteed/sherpa-onnx.rn');
+    const cli = join(directory, 'node_modules/eas-cli/bin');
+    mkdirSync(join(pkg, 'scripts'), { recursive: true });
+    mkdirSync(cli, { recursive: true });
+    const payload = 'verified native libraries';
+    writeFileSync(
+      join(pkg, 'package.json'),
+      JSON.stringify({
+        sherpaOnnxVersion: '1.13.0',
+        sherpaOnnxArchiveSha256: createHash('sha256').update(payload).digest('hex'),
+      }),
+    );
+    writeFileSync(
+      join(pkg, 'scripts/sherpa-prebuilt-contract.js'),
+      "exports.releaseAssetUrl = () => 'https://example.invalid/sherpa.zip';",
+    );
+    writeFileSync(
+      join(cli, 'run'),
+      "require('node:fs').appendFileSync('launches', process.env.SITEED_SHERPA_ONNX_ARCHIVE + '\\n');",
+    );
+    writeFileSync(
+      join(directory, 'curl'),
+      `#!/usr/bin/env node
+const fs = require('node:fs');
+fs.writeFileSync(process.argv[process.argv.indexOf('--output') + 1], process.env.DOWNLOAD_BYTES);
+fs.appendFileSync('downloads', 'x');
+`,
+      { mode: 0o755 },
+    );
+    const build = (bytes: string) =>
+      spawnSync(
+        process.execPath,
+        [
+          '--import',
+          require.resolve('tsx'),
+          resolve('scripts/buildLocal.ts'),
+          '-p',
+          'android',
+          '-e',
+          'production',
+        ],
+        {
+          cwd: directory,
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            XDG_CACHE_HOME: directory,
+            PATH: `${directory}${delimiter}${process.env.PATH}`,
+            DOWNLOAD_BYTES: bytes,
+            EAS_LOCAL_BUILD_PLUGIN_PATH: 'unused',
+          },
+        },
+      );
+
+    const launches = join(directory, 'launches');
+    expect(build('bad download').status).toBe(1);
+    expect(existsSync(launches)).toBe(false);
+    expect(build(payload).status).toBe(0);
+    const archive = readFileSync(launches, 'utf8').trim();
+    expect(readFileSync(archive, 'utf8')).toBe(payload);
+    expect(build('network should be unused').status).toBe(0);
+    expect(readFileSync(join(directory, 'downloads'), 'utf8')).toBe('xx');
+    writeFileSync(archive, 'damaged cache');
+    expect(build(payload).status).toBe(0);
+    expect(readFileSync(archive, 'utf8')).toBe(payload);
+    expect(readFileSync(launches, 'utf8').trim().split('\n')).toEqual([archive, archive, archive]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

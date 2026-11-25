@@ -53,8 +53,13 @@ test.each(patches)('$path cannot apply twice to its installed package', ({ spec,
     (entry) =>
       entry.startsWith(prefix) && hash?.startsWith(entry.slice(prefix.length).split('_')[0]),
   );
-  expect(store).toBeDefined();
-  const root = join('node_modules/.pnpm', store!, 'node_modules', name);
+  // Direct dependencies with shortened virtual-store names still have their active project link.
+  const root = store
+    ? join('node_modules/.pnpm', store, 'node_modules', name)
+    : join('node_modules', name);
+  expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version).toBe(
+    spec.slice(at + 1),
+  );
 
   const reapplicable = [...patchedFiles(readFileSync(path, 'utf8'))]
     .filter(([file, hunks]) => {

@@ -23,6 +23,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { parseArgs } from 'node:util';
 
+import { prepareSherpaArchive } from './prepareSherpaArchive';
 import { sanitizeDiagnostic } from './uploadIosSymbols';
 import { verifyIosSymbolPackage } from './verifyIosSymbolPackage';
 
@@ -1091,13 +1092,17 @@ export async function runLocalReleaseBuild(options: RunLocalReleaseBuildOptions)
   mkdirSync(stagingDir, { recursive: true });
 
   try {
+    const localEnv = { ...baseEnv };
+    if (target.platform === 'android') {
+      localEnv.SITEED_SHERPA_ONNX_ARCHIVE = await prepareSherpaArchive(projectDir, baseEnv);
+    }
     let buildProjectDir = projectDir;
     if (options.isolateGitRepo && existsSync(join(projectDir, '.git'))) {
       const isolatedDir = join(jobDir, 'src');
       await cloneIsolatedProjectDir({
         projectDir,
         isolatedDir,
-        env: baseEnv,
+        env: localEnv,
         run,
         secrets: secretValues,
       });
@@ -1113,7 +1118,7 @@ export async function runLocalReleaseBuild(options: RunLocalReleaseBuildOptions)
         : resolveProjectBinaries(binsProjectDir);
 
     const buildEnv: NodeJS.ProcessEnv = {
-      ...baseEnv,
+      ...localEnv,
       ...releaseSecrets,
       PNPM_CONFIG_VIRTUAL_STORE_DIR_MAX_LENGTH:
         baseEnv.PNPM_CONFIG_VIRTUAL_STORE_DIR_MAX_LENGTH ?? DEFAULT_PNPM_VIRTUAL_STORE_MAX_LENGTH,
