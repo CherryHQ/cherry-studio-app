@@ -42,17 +42,18 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   is `children`.
   - `canSend` — omit for "there is text or there is an attachment". Pass a
     boolean when the screen has its own conditions, as painting does.
+  - `allowFollowUp` — lets local chat queue messages during a reply. The button follows the
+    rendered draft, while keyboard submission uses the text captured by the native editor.
   - `getSendErrorLabel` — a message for a failure the caller recognises.
   - `dismissKeyboardOnSend` — defaults to blurring the input, ending editing, and dismissing the
     keyboard with its native transition when submitting. The dock follows that transition, just
     as it follows keyboard opening, then detaches when closing finishes. If the keyboard is
-    already hidden, it detaches immediately. Only a new field focus reconnects it. Chat enables
+    already hidden, it detaches immediately. A keyboard opening for this field reconnects it. Chat enables
     this behavior; its list does not dismiss the keyboard again.
 - `useComposerSubmit` — returns a guarded entry to that same send protocol for field Return
   submission with the native Markdown snapshot. It respects sendability and pending submissions, and never invokes Stop. Chat admits
   drafted follow-ups through the ordinary queue path while the current answer streams.
-- `ComposerField` — the text field, plus pasting images into attachments. Focus activates the
-  shared editing state. It forwards `layout`, `style`, `onLayout`, `onFocus`, and `onBlur`; native blur alone does not
+- `ComposerField` — the text field, plus pasting images into attachments. Focus registers the field for explicit blur. It forwards `layout`, `style`, `onLayout`, `onFocus`, and `onBlur`; native blur alone does not
   end editing, since a composer control may be taking over the interaction.
   It also forwards `submitOnReturn` and `onReturnSubmit`; `ComposerEditor` exposes the same props.
   When Return submits, it supplies the translated native-menu newline label. The action inserts
@@ -83,22 +84,16 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   input context. Field changes go through `editDraft`; `subscribeDraftEdits` announces user edits
   and accepted sends synchronously so operations such as dictation release ownership before the
   text changes. `setDraft` remains for owned updates such as live dictation and send recovery.
-- `useComposerPresentationState` — exposes `isEditing` independently of native field focus,
-  alongside dock keyboard tracking. Screens derive their expanded state from editing and content.
-  When a software keyboard is involved, `isEditing` commits only after that keyboard has started
-  moving. On iOS, a React commit in progress at the keyboard's start makes Reanimated hold back that
-  start event's writes, so the dock and transcript would otherwise jump to their final positions.
-- `useComposerPresentationActions` — activates editing on field focus, ends it on send or explicit
-  outside dismissal, and presents a Sheet or native picker while retaining the editing state. The model
-  pill and media menu already use the replacement action; caller-owned replacement buttons, such
-  as painting settings, use the same action. An alternative field passes its blur handle to
-  `activateInput` on focus so background dismissal targets that field; the ordinary field resumes
-  ownership on its next focus.
-- `ComposerEditor` and `ComposerEditorAccessories` connect CherryUI's shared compact-to-editing
-  layout and large-editor controls to the app field and translated labels. Callers compose the
-  toolbar and decide what activates editing: chat includes attachments, while painting keeps its
-  automatic reference compact until focus or draft text. The compact accessory is a preview only;
-  attachment preview and removal stay in `ComposerAttachmentStrip` above the active field.
+- `useComposerPresentationState` exposes the native keyboard target for the registered field.
+  `keyboardVisible` drives the chat frame on the UI thread and `isEditing` mirrors it for controls
+  and accessibility. `keyboardTracking` lasts through the closing animation.
+- `useComposerPresentationActions` registers the field and its blur handle. The send button and
+  background area can dismiss it once. A replacement action blurs the field, awaits keyboard
+  dismissal and presents the model, settings or media picker.
+- `ComposerEditor` and `ComposerEditorAccessories` connect the shared frame and large-editor
+  controls to the app field and translated labels. Chat uses its own software keyboard for the
+  ordinary one-row/two-row transition. The painting workspace opts into retained editing and can
+  also expand for draft text. Its compact reference preview and the attachment strip are separate.
 - `ComposerDock` — connects that input-context state to CherryUI's
   `Composer.Dock`. Chat uses `expandable-overlay`: the message list reserves the dock's measured
   height as a native content inset, leaving its viewport fixed through keyboard and editor motion.
@@ -154,7 +149,7 @@ walk to verify it.
   field-ref contexts, plus the input-presentation transition. Its contexts are
   split so dispatch-only components and the dock skip keystroke re-renders.
 - `hooks/useComposerPresentation.ts`: the shared editing state and keyboard handoff.
-  Native keyboard-hide notifications do not dispatch composer blur or end editing.
+  Native keyboard transitions update the frame without issuing another blur.
 - `components/ComposerDock.tsx`: pins or reconnects CherryUI's keyboard-tracking
   dock according to the current input context.
 - `utils/composerAttachments.ts`: attachment drafts and the message parts they
@@ -165,20 +160,15 @@ walk to verify it.
 - Each chat or painting screen's `Composer.Expansion` owns manual large-editor presentation separately from
   editing and draft state. Expand/collapse never moves the editor into a portal or requests native
   focus/blur. Sending and a newly mounted composer session collapse the large editor. Native
-  keyboard hiding and input replacements retain its size choice; only field focus reconnects
-  keyboard tracking. `Composer.ExpansionMeasure` accounts for accessory height changes so the
+  keyboard hiding and input replacements retain its size choice. `Composer.ExpansionMeasure` accounts for accessory height changes so the
   editor stays below the top safe area when attachments grow or disappear.
-- Input surfaces have two policies. An overlay (the ＋ menu or chat effort
-  slider) preserves field focus and the live keyboard. A replacement (model or
-  settings Sheet, camera, photo library, or file picker) first disables dock
-  keyboard tracking, retains the editing state, blurs the field, awaits keyboard dismissal, and leaves one
-  render frame for the closed UI to become inert before presenting. The dock
-  stays at its resting bottom position after the replacement closes; the next
-  real field focus reconnects keyboard tracking. Success and cancellation use
-  the same path. Keyboard events from a replacement's own search field cannot end composer editing.
-- Only an explicit composer dismissal ends editing. Native blur and keyboard-hide notifications
-  do not collapse the surface. Dismissal does not clear draft text or attachments.
-- The ＋ menu opens in a keyboard-preserving overlay, without changing the field's
+- Keyboard-preserving overlays keep the current layout. A replacement (the local chat tools
+  sheet, model or settings sheet, camera, photo library, or file picker) blurs the field and
+  waits for keyboard dismissal and one render frame before opening. A replacement's search
+  field has its own native tag. After dismissal the dock stays detached until the field takes
+  focus again, including when Android restores old keyboard coordinates. Dismissal
+  preserves both the draft and its attachments.
+- The shared `ComposerMenu` opens in a keyboard-preserving overlay, without changing the field's
   expanded/resting state or starting a keyboard transition. Cancelling only closes
   the menu. Its measured trigger remains mounted and its screen position is followed
   on the UI thread until dismissal completes, so opening during keyboard motion

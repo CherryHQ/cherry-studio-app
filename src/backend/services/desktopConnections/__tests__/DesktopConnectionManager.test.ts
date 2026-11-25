@@ -945,6 +945,39 @@ describe('DesktopConnectionManager ownership', () => {
     expect(connect).toHaveBeenCalledTimes(1);
   });
 
+  it.each(['before', 'during'] as const)(
+    'shares a speculative dial when notifications are enabled %s prewarm',
+    async (when) => {
+      const channel = session();
+      const opening = deferred<typeof channel>();
+      connect.mockReturnValueOnce(opening.promise as never);
+      const drawer = new AbortController();
+      if (when === 'before') manager.enablePersistentConnections();
+      const warm = await manager.prewarmAgent(row.id, drawer.signal);
+      if (when === 'during') manager.enablePersistentConnections();
+      expect(manager.getPersistentConnections()).toEqual([]);
+      const selected = await manager.retain(row.id, 'agent', signal());
+      drawer.abort();
+      opening.resolve(channel);
+      expect(await selected.ready(signal())).toBe(channel);
+      expect(warm?.signal.aborted).toBe(true);
+      expect(connect).toHaveBeenCalledTimes(1);
+      expect(manager.getPersistentConnections()).toHaveLength(1);
+      selected.release();
+    },
+  );
+
+  it('does not resume a manually disconnected desktop when the drawer opens', async () => {
+    const channel = session();
+    connect.mockResolvedValueOnce(channel as never);
+    const active = await manager.retain(row.id, 'agent', signal());
+    await active.ready(signal());
+    manager.disconnect(row.id);
+    await expect(manager.prewarmAgent(row.id, signal())).resolves.toBeUndefined();
+    expect(connect).toHaveBeenCalledTimes(1);
+    active.release();
+  });
+
   it('never holds a persistent connection for configuration-only requests', async () => {
     manager.enablePersistentConnections();
     const channel = session();

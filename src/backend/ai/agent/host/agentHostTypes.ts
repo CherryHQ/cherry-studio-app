@@ -45,6 +45,7 @@ export type MobileAgentHostPorts = {
   /** Screen-awake demand for user-visible generation; independent of background execution. */
   generationLease?(tag: string): { release(): void };
   shouldRecoverStorage?(): boolean;
+  isForeground?(): boolean;
   /** Supplied by data composition; the Host never imports SQLite or Pi storage. */
   durableStorage?: {
     open(): Promise<RuntimeSqlDatabase>;

@@ -5,6 +5,7 @@ import { deriveContextUsage } from '../utils/contextUsage';
 
 let mockEditing = false;
 let mockDraft = '';
+let mockAttachments: { status: 'importing' }[] = [];
 const mockStop = jest.fn();
 const mockSubmit = jest.fn();
 jest.mock('react-i18next', () => ({
@@ -18,26 +19,28 @@ jest.mock('@cherrystudio/ui/components', () => {
       return React.createElement(name, props, children);
     };
   return {
-    useComposerExpansion: () => null,
     Composer: {
+      Editor: component('Editor'),
       Send: component('Send'),
       Action: component('Action'),
       EditorSecondary: component('Secondary'),
     },
   };
 });
-jest.mock('@/frontend/components/Composer', () => {
-  const React = jest.requireActual('react');
-  return {
-    ComposerEditor: ({ children, compactAccessory, ...props }: any) =>
-      React.createElement('Editor', props, compactAccessory, children),
-    ComposerEditorAccessories: ({ children }: any) => children,
-    ComposerSurface: ({ children }: any) => children,
-    useComposerPresentationState: () => ({ isEditing: mockEditing }),
-    useComposerState: () => ({ draft: mockDraft, attachments: [] }),
-    useComposerSubmit: () => mockSubmit,
-  };
-});
+jest.mock('@/frontend/components/Composer/context/ComposerProvider', () => ({
+  useComposerPresentationState: () => ({ isEditing: mockEditing, keyboardVisible: mockKeyboard }),
+}));
+jest.mock('@/frontend/components/Composer/components/ComposerField', () => ({
+  ComposerField: () => null,
+}));
+const mockKeyboard = { get: () => mockEditing };
+jest.mock('@/frontend/components/Composer', () => ({
+  ...jest.requireActual('@/frontend/components/Composer/components/ComposerEditor'),
+  ComposerSurface: ({ children }: any) => children,
+  useComposerPresentationState: () => ({ isEditing: mockEditing }),
+  useComposerState: () => ({ draft: mockDraft, attachments: mockAttachments }),
+  useComposerSubmit: () => mockSubmit,
+}));
 jest.mock('../components/ContextUsageRing', () => {
   const React = jest.requireActual('react');
   return {
@@ -72,21 +75,29 @@ describe('ChatInputSurface', () => {
     />
   );
   const ring = () => renderer.root.findByType('Ring' as never);
+  const hasRingInsideSecondary = () =>
+    renderer.root
+      .findAllByType('Secondary' as never)
+      .some((node) => node.findAllByType('Ring' as never).length === 1);
   beforeEach(() => {
     mockEditing = false;
     mockDraft = '';
+    mockAttachments = [];
   });
   afterEach(() => act(() => renderer.unmount()));
-  test('keeps one right-side trigger and its open state while editing changes', () => {
+  test('keeps one right-side trigger inside secondary actions and preserves its open state while editing changes', () => {
     act(() => {
       renderer = create(render());
     });
+    expect(renderer.root.findByType('Editor' as never).props.restingTrailingActionCount).toBe(1);
+    expect(hasRingInsideSecondary()).toBe(true);
     expect(ring().props.testID).toBe('chat-context-usage-compact');
     act(() => ring().props.onPress());
     expect(ring().props.open).toBe(true);
     mockEditing = true;
     mockDraft = 'draft';
     act(() => renderer.update(render()));
+    expect(hasRingInsideSecondary()).toBe(true);
     expect(ring().props.testID).toBe('chat-context-usage-editing');
     expect(renderer.root.findAllByType('Ring' as never)).toHaveLength(1);
     expect(ring().props.open).toBe(true);
@@ -95,8 +106,27 @@ describe('ChatInputSurface', () => {
     );
     expect(renderer.root.findByProps({ testID: 'chat-composer-send' })).toBeTruthy();
     expect(renderer.root.findAllByType('Dictation' as never)).toHaveLength(1);
-    act(() => renderer.root.findByType('Editor' as never).props.onReturnSubmit('draft'));
+    act(() =>
+      renderer.root.findByType('Editor' as never).props.field.props.onReturnSubmit('draft'),
+    );
     expect(mockSubmit).toHaveBeenCalledWith('draft');
+  });
+  test('keeps restored text and a staged attachment compact until the chat keyboard opens', () => {
+    mockDraft = 'one\ntwo\nthree';
+    mockAttachments = [{ status: 'importing' }];
+    const frame = () => renderer.root.findByType('Editor' as never).props;
+    act(() => {
+      renderer = create(render());
+    });
+    expect(frame().active).toBe(false);
+    expect(frame().activeSignal.get()).toBe(false);
+    mockEditing = true;
+    act(() => renderer.update(render()));
+    expect(frame().active).toBe(true);
+    mockEditing = false;
+    act(() => renderer.update(render()));
+    expect(frame().active).toBe(false);
+    expect(frame().activeSignal.get()).toBe(false);
   });
   test('closes the old measurement when its owner changes, including returning to the old owner', () => {
     act(() => {

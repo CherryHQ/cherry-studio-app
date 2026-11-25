@@ -1,8 +1,16 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 import { gzipSync, strToU8, zipSync } from 'fflate';
 import { parse } from 'yaml';
@@ -11,6 +19,8 @@ import {
   REQUIRED_IDENTIFIERS,
   runCommand,
   resolveSentryCli,
+  sentryTargetFingerprint,
+  sentryTargetFromEnv,
   type CommandResult,
 } from '../uploadIosSymbols';
 import { readMachOSlices, verifyIosSymbolPackage } from '../verifyIosSymbolPackage';
@@ -248,52 +258,59 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-it.each(['success', 'wrong-build', 'missing-artifact', 'download-failed', 'missing-symbols'])(
-  'submission checks the downloaded artifact for the same build (%s)',
+it.each(['success', 'missing-symbols', 'verify-failed', 'submit-failed'])(
+  'submission checks the local symbol directory before eas submit --path (%s)',
   (scenario) => {
     const root = mkdtempSync(join(tmpdir(), 'cherry-workflow-test-'));
     roots.push(root);
     const log = join(root, 'calls');
+    const symbolsDir = join(root, 'ios-symbols');
+    const archiveDir = join(root, 'archive');
+    const ipaPath = join(archiveDir, 'cherry-studio-0.6.2-ios.ipa');
+    mkdirSync(archiveDir, { recursive: true });
+    writeFileSync(ipaPath, 'ipa-bytes');
+    if (scenario !== 'missing-symbols') {
+      mkdirSync(symbolsDir, { recursive: true });
+      writeFileSync(join(symbolsDir, 'package.complete'), '{"directory":"package-test"}');
+    }
     const stub = (name: string, script: string) =>
       writeFileSync(join(root, name), '#!/bin/bash\nset -eu\n' + script, { mode: 0o700 });
-    const build = {
-      id: scenario === 'wrong-build' ? otherUuid : buildId,
-      platform: 'IOS',
-      status: 'FINISHED',
-      artifacts: {
-        buildArtifactsUrl:
-          scenario === 'missing-artifact' ? null : 'https://example.test/symbols?token=synthetic',
-      },
-    };
-    stub(
-      'pnpm',
-      `[[ "$*" == "exec eas build:view ${buildId} --json" ]] || exit 2
-printf '%s' '${JSON.stringify(build)}'`,
-    );
-    stub(
-      'curl',
-      `echo download >> "$CALLS"
-if [[ "$SCENARIO" == download-failed ]]; then exit 22; fi
-while [[ "$1" != --output ]]; do shift; done
-printf 'package' > "$2"`,
-    );
     stub(
       'node',
-      `[[ "$1 $2 $3" == "--import tsx scripts/verifyIosSymbolPackage.ts" && "$(cat "$4")" == package && "$5" == "$BUILD_ID" ]] || exit 2
-echo verify >> "$CALLS"
-if [[ "$SCENARIO" == missing-symbols ]]; then exit 1; fi
-echo '{"slices":3,"thirdPartySymbols":[]}'`,
+      `if [[ "$1 $2" == "--import tsx" && "$3" == "scripts/verifyIosSymbolPackage.ts" ]]; then
+  echo verify >> "$CALLS"
+  if [[ "$SCENARIO" == missing-symbols && ! -d "$4" ]]; then exit 1; fi
+  if [[ "$SCENARIO" == verify-failed ]]; then exit 1; fi
+  echo '{"slices":3,"thirdPartySymbols":[]}'
+  exit 0
+fi
+if [[ "$1 $2" == "--import tsx" && "$3" == "scripts/releaseLocalBuild.ts" && "$4" == "record-submit" ]]; then
+  echo "record-\${10}" >> "$CALLS"
+  exit 0
+fi
+exit 2`,
     );
-    stub('eas', '[[ "$1" == submit && "$*" == *"--id $BUILD_ID "* ]]; echo submit >> "$CALLS"');
+    stub(
+      'pnpm',
+      `[[ "$1 $2 $3 $4 $5 $6 $7 $8" == "exec eas submit --platform ios --profile production --path" && "$9" == "$IOS_IPA_PATH" ]] || exit 2
+echo submit >> "$CALLS"
+if [[ "$SCENARIO" == submit-failed ]]; then exit 1; fi`,
+    );
     const repo = resolve(__dirname, '../..');
-    const workflow = parse(readFileSync(join(repo, '.github/workflows/ios-release.yml'), 'utf8'));
+    const workflow = parse(readFileSync(join(repo, '.github/workflows/release.yml'), 'utf8'));
+    expect(workflow.jobs['submit-ios']).toBeDefined();
+    const stepNames = workflow.jobs['submit-ios'].steps.map((step: { name: string }) => step.name);
+    expect(stepNames.indexOf('Verify archived iOS IPA integrity')).toBeGreaterThan(-1);
+    expect(stepNames.indexOf('Verify archived iOS IPA integrity')).toBeLessThan(
+      stepNames.indexOf('Verify local iOS symbols'),
+    );
     const steps = workflow.jobs['submit-ios'].steps.filter(
       (step: { run?: string }) =>
-        step.run?.includes('verifyEasIosSymbols.sh') ||
+        step.run?.includes('verifyIosSymbolPackage.ts') ||
         step.run?.includes('eas submit --platform ios'),
     );
     expect(steps.map((step: { name: string }) => step.name)).toEqual([
-      'Verify downloaded iOS symbols',
+      'Verify local iOS symbols',
       'Submit this build and wait for upload',
     ]);
     const result = spawnSync(
@@ -307,7 +324,9 @@ echo '{"slices":3,"thirdPartySymbols":[]}'`,
           PATH: root + ':' + process.env.PATH,
           RUNNER_TEMP: root,
           IOS_BUILD_ID: buildId,
-          BUILD_ID: buildId,
+          IOS_SYMBOLS_DIR: symbolsDir,
+          IOS_ARCHIVE_DIR: archiveDir,
+          IOS_IPA_PATH: ipaPath,
           GITHUB_STEP_SUMMARY: join(root, 'summary'),
           CALLS: log,
           SCENARIO: scenario,
@@ -318,14 +337,11 @@ echo '{"slices":3,"thirdPartySymbols":[]}'`,
     const calls = existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n') : [];
     expect(calls).toEqual(
       scenario === 'success'
-        ? ['download', 'verify', 'submit']
-        : scenario === 'missing-symbols'
-          ? ['download', 'verify']
-          : scenario === 'download-failed'
-            ? ['download']
-            : [],
+        ? ['verify', 'submit', 'record-succeeded']
+        : scenario === 'submit-failed'
+          ? ['verify', 'submit', 'record-failed']
+          : ['verify'],
     );
-    expect(result.stdout + result.stderr).not.toContain('token=synthetic');
   },
 );
 
@@ -781,4 +797,109 @@ it('rejects missing required target and remote evidence after download', async (
   f.manifest.bundles.pop();
   f.save();
   await expect(verifyIosSymbolPackage(f.deps)).rejects.toThrow(REQUIRED_IDENTIFIERS[2]);
+});
+
+it('verifies a local ios-symbols directory, rejects tampered files or symlinks, and repairs pending uploads', async () => {
+  const f = fixture();
+  const symbolsDir = join(f.root, 'local-ios-symbols');
+  const writeDirectoryFromArtifacts = () => {
+    rmSync(symbolsDir, { recursive: true, force: true });
+    for (const [entryPath, bytes] of Object.entries(f.artifacts)) {
+      const rel = entryPath.replace(/^ios\/build\/ios-symbols\//, '');
+      const fullPath = join(symbolsDir, rel);
+      mkdirSync(dirname(fullPath), { recursive: true });
+      writeFileSync(fullPath, bytes);
+    }
+  };
+  writeDirectoryFromArtifacts();
+
+  await expect(verifyIosSymbolPackage({ archivePath: symbolsDir, buildId })).resolves.toMatchObject(
+    {
+      status: 'download-verified',
+      buildId,
+      slices: 3,
+    },
+  );
+
+  // Tampering dsyms.zip on disk with identical byte size must fail checksum verification.
+  const origZip = readFileSync(join(symbolsDir, 'package-test', 'dsyms.zip'));
+  writeFileSync(join(symbolsDir, 'package-test', 'dsyms.zip'), Buffer.alloc(origZip.length, 0x41));
+  await expect(verifyIosSymbolPackage({ archivePath: symbolsDir, buildId })).rejects.toMatchObject({
+    code: 'PACKAGE_SYMBOLS_SHA256',
+  });
+
+  // Symlinks inside the local symbols directory are rejected.
+  writeDirectoryFromArtifacts();
+  symlinkSync('/etc/passwd', join(symbolsDir, 'package-test', 'escape-link'));
+  await expect(verifyIosSymbolPackage({ archivePath: symbolsDir, buildId })).rejects.toMatchObject({
+    code: 'PACKAGE_EXTRACTION',
+  });
+
+  // Pending directory upload can be repaired directly via --retry-upload semantics.
+  rmSync(symbolsDir, { recursive: true, force: true });
+  const pendingDir = join(symbolsDir, 'attempt-pending1');
+  mkdirSync(pendingDir, { recursive: true });
+  writeFileSync(
+    join(symbolsDir, 'upload.pending'),
+    JSON.stringify({ directory: 'attempt-pending1' }),
+  );
+  for (const name of ['dsyms.zip', 'archive-info.plist']) {
+    writeFileSync(join(pendingDir, name), f.artifacts[`${f.dir}/${name}`]!);
+  }
+  const previousEnv = process.env;
+  process.env = {
+    ...previousEnv,
+    SENTRY_URL: 'https://sentry.io/',
+    SENTRY_ORG: 'cherryai',
+    SENTRY_PROJECT: 'cherry-studio-app',
+    SENTRY_AUTH_TOKEN: 'synthetic-token',
+    EXPO_PUBLIC_SENTRY_DSN: 'https://public@ingest.example/1',
+  };
+  (f.manifest as Record<string, unknown>).sentryTarget = sentryTargetFingerprint(
+    sentryTargetFromEnv(process.env),
+  );
+  f.receipt.upload = { status: 'failed' };
+  f.receipt.remoteVerification = { status: 'pending' };
+  f.receipt.records = [];
+  f.save();
+  writeFileSync(join(pendingDir, 'manifest.json'), f.artifacts[`${f.dir}/manifest.json`]!);
+  writeFileSync(join(pendingDir, 'verification.json'), JSON.stringify(f.receipt));
+  const remoteFetch = jest.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith('/keys/')) {
+      return new Response(
+        JSON.stringify([{ isActive: true, dsn: { public: 'https://public@ingest.example/1' } }]),
+      );
+    }
+    const debugId = url.searchParams.get('debug_id');
+    if (debugId) {
+      return new Response(
+        JSON.stringify([
+          {
+            id: '789',
+            uuid: debugId,
+            debugId,
+            cpuName: 'arm64',
+            symbolType: 'macho',
+            objectName: 'Target',
+            codeId: null,
+            headers: {},
+            size: 100,
+            sha1: 'a'.repeat(40),
+            dateCreated: '2026-11-23T00:00:00Z',
+            data: { features: ['symtab', 'debug'] },
+          },
+        ]),
+      );
+    }
+    return new Response(JSON.stringify({ id: '1' }));
+  });
+  try {
+    await expect(
+      verifyIosSymbolPackage({ archivePath: symbolsDir, buildId, retryUpload: true, now: () => 0 }),
+    ).resolves.toMatchObject({ status: 'download-verified', slices: 3 });
+  } finally {
+    process.env = previousEnv;
+    remoteFetch.mockRestore();
+  }
 });

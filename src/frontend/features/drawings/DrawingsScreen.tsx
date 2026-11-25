@@ -1,4 +1,4 @@
-import { Composer } from '@cherrystudio/ui/components';
+import { Composer, useComposerExpansion } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,6 +6,7 @@ import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteHeader } from '@/frontend/appShell/header';
+import { useHideFloatingDock } from '@/frontend/appShell/navigationShell/state';
 import { ComposerDock, ComposerSessionProvider } from '@/frontend/components/Composer';
 import {
   PaintingInputProvider,
@@ -43,6 +44,9 @@ function DrawingsScreenBody() {
   const startGeneration = useStartPaintingGeneration();
   const [dockHeight, setDockHeight] = useState(0);
   const { isEditing } = useSelectionState();
+  const expansion = useComposerExpansion();
+  const isExpanded = Boolean(expansion?.state.isPresented);
+  useHideFloatingDock(isExpanded);
   const handleGenerate = useCallback(
     async (input: PaintingInputSubmission) => {
       const started = await startGeneration(paintingGenerationInput(input));
@@ -66,13 +70,15 @@ function DrawingsScreenBody() {
           style={{ opacity: isEditing ? 0 : 1 }}
         >
           <ComposerDock layoutMode="expandable" onHeightChange={setDockHeight}>
-            <PaintingWorkspaceInput
-              onCancel={noop}
-              onGenerate={handleGenerate}
-              onRatioChange={noop}
-              placeholder={t('painting.home.placeholder')}
-              status="idle"
-            />
+            <View className={isExpanded ? 'w-full' : 'mx-auto w-full max-w-[720px]'}>
+              <PaintingWorkspaceInput
+                onCancel={noop}
+                onGenerate={handleGenerate}
+                onRatioChange={noop}
+                placeholder={t('painting.home.placeholder')}
+                status="idle"
+              />
+            </View>
           </ComposerDock>
         </View>
       </View>

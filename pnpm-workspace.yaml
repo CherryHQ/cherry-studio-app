@@ -87,6 +87,7 @@ allowBuilds:
   dtrace-provider: false
 
 patchedDependencies:
+  '@siteed/sherpa-onnx.rn@1.3.1': patches/@siteed__sherpa-onnx.rn@1.3.1.patch
   expo@58.0.22: patches/expo@58.0.22.patch
   '@shopify/react-native-skia@2.14.0': patches/@shopify__react-native-skia@2.14.0.patch
   '@noble/hashes@1.8.0': patches/@noble__hashes@1.8.0.patch

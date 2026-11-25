@@ -39,14 +39,14 @@ export function ContextUsageRing({
   const targetRef = useRef<ViewInstance>(null);
   const [anchor, setAnchor] = useState<InfoPopoverAnchor>();
   const close = useCallback(() => setAnchor(undefined), []);
-  const [track, primary, warning, error] = useThemeColor([
+  const [track, normal, warning, error] = useThemeColor([
     'muted-foreground',
-    'primary',
+    'foreground',
     'warning',
     'error',
   ]);
-  const circumference = 2 * Math.PI * 8;
-  const color = severity === 'warning' ? warning : severity === 'error' ? error : primary;
+  const circumference = 2 * Math.PI * 7.5;
+  const color = severity === 'warning' ? warning : severity === 'error' ? error : normal;
   return (
     <View collapsable={false} ref={targetRef}>
       <Composer.Action
@@ -55,6 +55,7 @@ export function ContextUsageRing({
             ? t('chat.contextUsage.accessibilityUnavailable')
             : t('chat.contextUsage.accessibilityLabel', { percent })
         }
+        className="bg-transparent"
         onPress={() => {
           const target = targetRef.current;
           target?.measureInWindow((pageX, pageY, width, height) => {
@@ -63,16 +64,25 @@ export function ContextUsageRing({
         }}
         testID={testID}
       >
-        <Svg width={20} height={20} viewBox="0 0 20 20">
-          <Circle cx={10} cy={10} r={8} stroke={track} strokeWidth={2} fill="none" opacity={0.3} />
+        <Svg width={18} height={18} viewBox="0 0 20 20">
+          <Circle
+            cx={10}
+            cy={10}
+            r={7.5}
+            stroke={track}
+            strokeWidth={2}
+            fill="none"
+            opacity={0.28}
+          />
           {arcRatio !== undefined ? (
             <Circle
               cx={10}
               cy={10}
-              r={8}
+              r={7.5}
               stroke={color}
               strokeWidth={2}
               fill="none"
+              strokeLinecap="round"
               strokeDasharray={`${circumference} ${circumference}`}
               strokeDashoffset={circumference * (1 - arcRatio)}
               rotation={-90}

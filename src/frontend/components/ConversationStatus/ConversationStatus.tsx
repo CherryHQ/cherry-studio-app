@@ -1,4 +1,5 @@
 import { Button } from '@cherrystudio/ui/components';
+import { cn } from '@cherrystudio/ui/utils';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -15,11 +16,13 @@ const CONNECTION_MESSAGES: Partial<
 /** Source presentation only; action admission is checked by each bound action. */
 export function ConversationStatus({
   availability,
+  className,
   onRepair,
   onOpenDeviceSettings,
   onReconnect,
 }: {
   availability: Availability;
+  className?: string;
   onRepair(): void;
   onOpenDeviceSettings?: () => void;
   onReconnect?: () => void;
@@ -31,7 +34,7 @@ export function ConversationStatus({
   const openDeviceSettings =
     onOpenDeviceSettings && (connectionMessage || availability.reason === 'offline');
   return (
-    <View className="flex-row items-center gap-2 px-4 py-2">
+    <View className={cn('flex-row items-center gap-2 px-4 py-2', className)}>
       <Text className="flex-1 text-sm text-muted-foreground">
         {t(
           connectionMessage ??

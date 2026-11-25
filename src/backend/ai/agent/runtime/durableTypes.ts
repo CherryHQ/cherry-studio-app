@@ -105,6 +105,8 @@ export type RuntimeExecutionPorts = {
   ): Promise<RuntimeArtifact>;
   /** The shared storage session closed itself; reopen its working copies before accepting work. */
   onFailure?(error: RuntimeError): void;
+  /** Preserve an unreadable working copy while the Host isolates its Session before resume. */
+  onRecoveryFailure?(lane: RuntimeLane, error: unknown): Promise<void>;
   traceModel?(owner: RuntimeUsageOwner): Promise<TraceSpan | undefined>;
   assertExecutionAllowed(owner: RuntimeUsageOwner, signal: AbortSignal): Promise<void>;
   resolveTool(

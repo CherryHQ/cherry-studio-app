@@ -55,6 +55,7 @@ test.each([
       PROFILE: 'production',
       SENTRY_URL: 'https://sentry.io/',
       DOMESTIC_STORES_ENABLED: 'false',
+      GYM_ARCHIVE_PATH: './build/CherryStudio.xcarchive',
     },
   ],
   [
@@ -125,11 +126,12 @@ test.each([
   }
 });
 
-test('pins the same EAS CLI as the release workflows', () => {
-  for (const workflow of ['android-release', 'google-play-release', 'ios-release'])
-    expect(readFileSync(`.github/workflows/${workflow}.yml`, 'utf8')).toContain(
-      `EAS_CLI_VERSION: ${EAS_CLI_VERSION}\n`,
-    );
+test('pins the same EAS CLI as package.json and eas.json', () => {
+  const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as {
+    devDependencies?: Record<string, string>;
+  };
+  expect(pkg.devDependencies?.['eas-cli']).toBe(EAS_CLI_VERSION);
+  expect(eas.cli?.version).toBe(EAS_CLI_VERSION);
 });
 
 test('the OTA workflow offers exactly the release targets', () => {

@@ -26,10 +26,10 @@ const tools = [tool('web_search'), tool('web_fetch')];
 test.each(['deepseek-chat', 'deepseek-messages', 'deepseek-responses'] as const)(
   'declares only the permitted DeepSeek web capability for %s',
   (dialect) => {
-    const body = { tools: [{ type: 'function', name: 'read_file' }] };
+    const body = { tools: [], temperature: 0.3 };
     expect(applyPiWebTools(body, dialect, { search: 'none', fetch: 'server' })).toEqual({
+      ...body,
       tools: [
-        ...body.tools,
         {
           type: 'deepseek_read_url',
           ...(dialect === 'deepseek-messages' ? { name: 'deepseek_read_url' } : {}),
@@ -60,6 +60,30 @@ test('commits DeepSeek Chat native calls before answer text prevents credential 
 });
 
 describe('Pi web tool selection', () => {
+  test.each(['deepseek-chat', 'deepseek-messages', 'deepseek-responses'] as const)(
+    'selects compatible DeepSeek web routes before sending %s',
+    (dialect) => {
+      const deepseek = { ...native, dialect, functionToolMixing: false };
+      const standard = [...tools, tool('read_file')];
+      const external = resolvePiWebToolRoutes(policy, deepseek, standard);
+      expect(external).toEqual({ search: 'client', fetch: 'client' });
+      expect(selectPiClientTools(standard, external)).toEqual(standard);
+      expect(
+        resolvePiWebToolRoutes(
+          { ...policy, clientSearchAvailable: false, clientFetchAvailable: false },
+          deepseek,
+          standard,
+        ),
+      ).toEqual({ search: 'none', fetch: 'none' });
+
+      for (const declared of [tools, []]) {
+        const routes = resolvePiWebToolRoutes(policy, deepseek, declared);
+        expect(routes).toEqual({ search: 'server', fetch: 'server' });
+        expect(selectPiClientTools(declared, routes)).toEqual([]);
+      }
+    },
+  );
+
   test.each([
     ['preferred', { search: 'server', fetch: 'server' }],
     ['fallback', { search: 'client', fetch: 'client' }],

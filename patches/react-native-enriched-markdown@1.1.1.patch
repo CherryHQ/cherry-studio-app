@@ -1100,14 +1100,19 @@ diff --git a/ios/input/EnrichedMarkdownTextInput.mm b/ios/input/EnrichedMarkdown
      return;
    }
  
-@@ -1833,6 +1866,14 @@ - (void)manageSelectionBasedChanges
+@@ -1833,6 +1866,19 @@ - (void)manageSelectionBasedChanges
    }
  }
  
-+- (BOOL)submitFromKeyboard
++- (BOOL)canSubmitFromKeyboard
 +{
 +  const auto &viewProps = static_cast<const EnrichedMarkdownTextInputProps &>(*_props);
-+  if (!viewProps.submitOnReturn || _editSession.isComposing) return NO;
++  return viewProps.submitOnReturn && !_editSession.isComposing;
++}
++
++- (BOOL)submitFromKeyboard
++{
++  if (![self canSubmitFromKeyboard]) return NO;
 +  [_inputEventEmitter emitOnSubmit];
 +  return YES;
 +}
@@ -1827,7 +1832,7 @@ diff --git a/lib/typescript/src/EnrichedMarkdownTextInput.d.ts b/lib/typescript/
      markdownShortcuts?: boolean | MarkdownShortcutsConfig;
      autoCapitalize?: string;
      multiline?: boolean;
-+    /** Soft keyboard Send action; composition and explicit inserts remain edits. */
++    /** Submit on keyboard Return, including hardware Return on iOS. */
 +    submitOnReturn?: boolean;
 +    onSubmit?: (markdown: string) => void;
      cursorColor?: ColorValue;
@@ -1943,7 +1948,7 @@ diff --git a/src/EnrichedMarkdownTextInput.tsx b/src/EnrichedMarkdownTextInput.t
    markdownShortcuts?: boolean | MarkdownShortcutsConfig;
    autoCapitalize?: string;
    multiline?: boolean;
-+  /** Soft keyboard Send action; composition and explicit inserts remain edits. */
++  /** Submit on keyboard Return, including hardware Return on iOS. */
 +  submitOnReturn?: boolean;
 +  onSubmit?: (markdown: string) => void;
    cursorColor?: ColorValue;
@@ -2394,7 +2399,7 @@ index c937222bc213002b629c14093aecc80082cdb51b..1d41a58868d7cd8728e18c974ae49e2d
      updateAccessibilityLabel()
  
 diff --git a/ios/input/ENRMInputTextView.mm b/ios/input/ENRMInputTextView.mm
-index a5391c7e8..b46ac2cb6 100644
+index a5391c7e8..279bfec9d 100644
 --- a/ios/input/ENRMInputTextView.mm
 +++ b/ios/input/ENRMInputTextView.mm
 @@ -11,8 +11,71 @@
@@ -2469,7 +2474,7 @@ index a5391c7e8..b46ac2cb6 100644
  }
  
  - (void)copy:(id)sender
-@@ -40,29 +103,26 @@ - (void)cut:(id)sender
+@@ -40,33 +103,33 @@ - (void)cut:(id)sender
  
  - (void)paste:(id)sender
  {
@@ -2519,13 +2524,27 @@ index a5391c7e8..b46ac2cb6 100644
  }
  
  - (BOOL)canPerformAction:(SEL)action withSender:(id)sender
-@@ -103,11 +163,19 @@ - (void)deleteBackward
+ {
++  if (action == @selector(enrmHardwareReturn:)) {
++    return self.isFirstResponder && self.isEditable && [self.markdownTextInput canSubmitFromKeyboard];
++  }
+   if (action == @selector(paste:)) {
+     UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
+     if (pasteboard.hasStrings || [pasteboard containsPasteboardTypes:@[ kENRMMarkdownPasteboardType ]]) {
+@@ -102,12 +165,27 @@ - (void)deleteBackward
+ /// through the text-change delegate (see handleListKeyForReplacementRange:).
  - (NSArray<UIKeyCommand *> *)keyCommands
  {
++  UIKeyCommand *enter = [UIKeyCommand keyCommandWithInput:@"\r" modifierFlags:0 action:@selector(enrmHardwareReturn:)];
++  UIKeyCommand *shiftEnter = [UIKeyCommand keyCommandWithInput:@"\r"
++                                                 modifierFlags:UIKeyModifierShift
++                                                        action:@selector(enrmHardwareReturn:)];
++  // Handle the modifiers before UIKit converts either key to a newline.
++  enter.wantsPriorityOverSystemBehavior = YES;
++  shiftEnter.wantsPriorityOverSystemBehavior = YES;
    return @[
-+    // UIKeyCommand is hardware-only. Keep external Return as an editing action.
-+    [UIKeyCommand keyCommandWithInput:@"\r" modifierFlags:0 action:@selector(enrmHardwareReturn:)],
-+    [UIKeyCommand keyCommandWithInput:@"\r" modifierFlags:UIKeyModifierShift action:@selector(enrmHardwareReturn:)],
++    enter,
++    shiftEnter,
      [UIKeyCommand keyCommandWithInput:@"\t" modifierFlags:0 action:@selector(enrmIndentList:)],
      [UIKeyCommand keyCommandWithInput:@"\t" modifierFlags:UIKeyModifierShift action:@selector(enrmOutdentList:)],
    ];
@@ -2533,6 +2552,7 @@ index a5391c7e8..b46ac2cb6 100644
  
 +- (void)enrmHardwareReturn:(UIKeyCommand *)command
 +{
++  if (command.modifierFlags == 0 && [self.markdownTextInput submitFromKeyboard]) return;
 +  [super insertText:@"\n"];
 +}
 +
@@ -3534,14 +3554,15 @@ diff --git a/ios/input/ENRMInputEventEmitter.mm b/ios/input/ENRMInputEventEmitte
  {
    ENRM_GUARD_EMITTER(emitter);
 diff --git a/ios/input/EnrichedMarkdownTextInput.h b/ios/input/EnrichedMarkdownTextInput.h
-index 231d841f6..c569deaa2 100644
+index 231d841f6..053c04db1 100644
 --- a/ios/input/EnrichedMarkdownTextInput.h
 +++ b/ios/input/EnrichedMarkdownTextInput.h
-@@ -13,6 +13,9 @@ NS_ASSUME_NONNULL_BEGIN
+@@ -13,6 +13,10 @@ NS_ASSUME_NONNULL_BEGIN
  - (CGSize)measureSize:(CGFloat)maxWidth;
  - (nullable NSString *)markdownForSelectedRange;
  - (void)copyToClipboard;
 +#if !TARGET_OS_OSX
++- (BOOL)canSubmitFromKeyboard;
 +- (BOOL)submitFromKeyboard;
 +#endif
  - (void)pasteMarkdown:(NSString *)markdown;

@@ -8,6 +8,7 @@ import { Pressable } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useResolveClassNames, useUniwind } from 'uniwind';
 
+import { useOptionalNavigationShell } from '@/frontend/appShell/navigationShell/state';
 import { ProfileAvatarImage } from '@/frontend/components/Avatar';
 import { usePreference } from '@/frontend/data/hooks';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
@@ -52,6 +53,11 @@ export function SidebarFooter() {
     opacity: progress.get(),
     transform: [{ translateY: 8 * (1 - progress.get()) }],
   }));
+  const shell = useOptionalNavigationShell();
+
+  if (shell?.shellMode === 'wide-rail' && !isSelecting) {
+    return null;
+  }
 
   return (
     <View

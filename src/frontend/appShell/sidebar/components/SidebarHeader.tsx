@@ -1,5 +1,6 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import SearchIcon from '@cherrystudio/app-icons/icons/search';
+import XIcon from '@cherrystudio/app-icons/icons/x';
 import { ActionMenu, type MenuItem, Surface } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { type ReactNode, useState } from 'react';
@@ -14,7 +15,9 @@ import { useDesktopConnections } from '@/frontend/hooks/useDesktopConnections';
 import { appSidebar } from '@/frontend/utils/constants';
 
 import { useSidebarActions } from '../context';
+import { useSidebarDesktopPrewarm } from '../hooks/useSidebarDesktopPrewarm';
 import { useSidebarHeaderTop } from '../hooks/useSidebarHeaderTop';
+import { useSidebarColumn } from '../SidebarColumn';
 import { useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
 import { SidebarFade } from './SidebarFade/SidebarFade';
 import { SidebarTitle } from './SidebarTitle';
@@ -29,11 +32,13 @@ import { SidebarTitle } from './SidebarTitle';
  */
 export function SidebarHeader() {
   const { t } = useTranslation();
-  const { openSearch } = useSidebarActions('SidebarHeader');
+  const { closeDrawer, openSearch } = useSidebarActions('SidebarHeader');
+  const { column } = useSidebarColumn();
   const disabled = useSidebarSelectionSnapshot((state) => state.isSelecting || state.isDeleting);
   const insets = useSafeAreaInsets();
   const rowTop = useSidebarHeaderTop();
   const headerInset = rowTop + appSidebar.headerRowHeight + appSidebar.headerGapY;
+  const showCloseButton = column.kind === 'overlay';
 
   return (
     <View className="absolute top-0 right-0 left-0" pointerEvents="box-none">
@@ -70,6 +75,28 @@ export function SidebarHeader() {
             </Pressable>
           </Surface>
         ) : null}
+        {showCloseButton ? (
+          <Surface interactive shape="circle">
+            <Pressable
+              accessibilityLabel={t('navigation.closeSidebar')}
+              accessibilityRole="button"
+              accessibilityState={{ disabled }}
+              disabled={disabled}
+              hitSlop={4}
+              onPress={closeDrawer}
+              style={({ pressed }) => ({
+                alignItems: 'center',
+                height: appSidebar.headerRowHeight,
+                justifyContent: 'center',
+                opacity: disabled ? 0.4 : pressed ? 0.6 : 1,
+                width: appSidebar.headerRowHeight,
+              })}
+              testID="sidebar-close"
+            >
+              <XIcon className="size-5 text-sidebar-foreground" />
+            </Pressable>
+          </Surface>
+        ) : null}
       </View>
     </View>
   );
@@ -88,8 +115,13 @@ function SidebarDeviceTitle() {
   const router = useRouter();
   const { closeDrawer, prepareExternalNavigation, returnToChat } =
     useSidebarActions('SidebarDeviceTitle');
-  const { source, remoteTarget, selectDevice } = useChatSource();
+  const { source, remoteTarget, remoteViewMode, selectDevice } = useChatSource();
   const { connections } = useDesktopConnections();
+  useSidebarDesktopPrewarm(
+    connections,
+    remoteViewMode,
+    source === 'remote' ? remoteTarget.connectionId : undefined,
+  );
   const disabled = useSidebarSelectionSnapshot((state) => state.isSelecting || state.isDeleting);
   const current =
     source === 'remote'
@@ -143,7 +175,7 @@ function SidebarDeviceTitle() {
       label: t('navigation.manageDevices'),
       onPress: () => {
         closeDrawer();
-        router.push('/settings/device-connections');
+        router.push('/devices');
       },
     },
   ];

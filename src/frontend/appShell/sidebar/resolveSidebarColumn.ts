@@ -30,6 +30,8 @@ export type SidebarColumn =
 type SidebarColumnInput = {
   isWide: boolean;
   isChatFocused: boolean;
+  /** Compact roots like 「更多」 and pinned tabs can also open the overlay drawer. */
+  canOpenCompactDrawer?: boolean;
   /** The user hid the column; only a wide window has one to hide. */
   isCollapsed: boolean;
   /** The file pane is open beside a focused chat and holds the left column. */
@@ -48,18 +50,20 @@ type SidebarColumnInput = {
  * sidebar returns until the device lies flat again.
  */
 export function resolveSidebarColumn({
+  canOpenCompactDrawer,
   content,
   fold,
   insetLeft,
   insetRight,
   isChatFocused,
   isCollapsed,
-  isPaneInColumn,
   isWide,
   windowWidth,
 }: SidebarColumnInput): SidebarColumn {
-  if (!isWide) return { kind: isChatFocused ? 'overlay' : 'inactive' };
-  if (isPaneInColumn) return { kind: 'yielded' };
+  if (!isWide) {
+    return { kind: (canOpenCompactDrawer ?? isChatFocused) ? 'overlay' : 'inactive' };
+  }
+  if (!isChatFocused) return { kind: 'inactive' };
 
   if (fold && !isAcross(fold)) {
     const end = fold.x + fold.width;
@@ -77,8 +81,18 @@ export function resolveSidebarColumn({
   return { content, foldGap: 0, kind: 'permanent', width: insetLeft + contentWidth };
 }
 
-/** Keep an inactive sidebar mounted outside the content row without showing a scrim. */
-export function resolveSidebarDrawer(column: SidebarColumn, overlayWidth: number) {
+const MIN_OVERLAY_WIDTH = 280;
+
+/**
+ * Compact overlay drawers span the full available window width inside the trailing safe area
+ * (such as a foldable display's trailing OS bar), without leaving a reveal strip or width cap.
+ */
+export function resolveSidebarOverlayWidth(windowWidth: number, trailingInset = 0): number {
+  return Math.max(MIN_OVERLAY_WIDTH, windowWidth - trailingInset);
+}
+
+/** Keep an inactive sidebar mounted without flashing or flipping drawer modes on push/pop. */
+export function resolveSidebarDrawer(column: SidebarColumn, overlayWidth: number, isWide = true) {
   if (column.kind === 'overlay') {
     return {
       drawerType: 'front',
@@ -87,6 +101,14 @@ export function resolveSidebarDrawer(column: SidebarColumn, overlayWidth: number
   }
   if (column.kind === 'permanent') {
     return { drawerType: 'permanent', drawerStyle: { width: column.width } } as const;
+  }
+  if (!isWide) {
+    // Keep compact drawers in `front` mode across secondary routes so native drawer
+    // physics and gesture listeners never tear down on navigation transitions.
+    return {
+      drawerType: 'front',
+      drawerStyle: { pointerEvents: 'none', width: overlayWidth },
+    } as const;
   }
   // Keep the list laid out off the flex row, and the closed position ready for a narrower window.
   return {

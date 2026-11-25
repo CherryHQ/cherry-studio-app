@@ -20,6 +20,8 @@ function mockScope(lease: DesktopDomainLease) {
   const unsubscribe = jest.fn();
   const scope = {
     scope: 'scope',
+    draftScope: lease.scope,
+    listAgents: jest.fn(async () => ({ items: [] })),
     tasks: {
       list: jest.fn(async () => ({ items: [] })),
       listSessions: jest.fn(async () => ({ items: [] })),
@@ -76,14 +78,21 @@ const signal = () => new AbortController().signal;
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 let runtime: RemoteAgentRuntime;
 let retain: jest.Mock;
+let prewarmAgent: jest.Mock;
 let lease: DesktopDomainLease;
 beforeEach(async () => {
   mockScopes.length = 0;
-  lease = { release: jest.fn() } as unknown as DesktopDomainLease;
+  lease = { scope: 'binding', release: jest.fn() } as unknown as DesktopDomainLease;
   retain = jest.fn(async () => lease);
+  prewarmAgent = jest.fn();
   runtime = new RemoteAgentRuntime();
   runtime.configure({
-    connections: { retain, revoke: jest.fn(), subscribeInvalidation: () => () => undefined },
+    connections: {
+      retain,
+      prewarmAgent,
+      revoke: jest.fn(),
+      subscribeInvalidation: () => () => undefined,
+    },
     journal: {} as never,
   });
   await runtime._doInit();
@@ -92,6 +101,94 @@ afterEach(async () => {
   for (const scope of mockScopes) scope.finishDrain();
   await runtime._doStop();
   await runtime._doDestroy();
+});
+
+it('hands an in-flight first page to the selected binding without activating a speculative scope', async () => {
+  const pending = deferred<{ items: { agentId: string; name: string }[] }>();
+  const request = jest.fn(() => pending.promise);
+  prewarmAgent.mockResolvedValue({
+    scope: 'binding',
+    signal: signal(),
+    release: jest.fn(),
+    ready: async () => ({ request }),
+  });
+  const warming = runtime.prewarm('pc', 'agents', signal());
+  await settle();
+  expect(mockScopes).toHaveLength(0);
+  const source = await runtime.open('pc', signal());
+  const firstPage = source.listAgents(undefined, signal());
+  pending.resolve({ items: [{ agentId: 'a', name: 'Research' }] });
+  await warming;
+  await expect(firstPage).resolves.toMatchObject({ items: [{ id: 'a', name: 'Research' }] });
+  expect(request).toHaveBeenCalledTimes(1);
+  expect(mockScopes[0].listAgents).not.toHaveBeenCalled();
+  await source.listAgents(undefined, signal());
+  expect(mockScopes[0].listAgents).toHaveBeenCalledTimes(1);
+  source.dispose();
+});
+
+it('warms the transport alone for the sessions view', async () => {
+  const request = jest.fn();
+  const ready = jest.fn(async () => ({ request }));
+  prewarmAgent.mockResolvedValue({ scope: 'binding', signal: signal(), release: jest.fn(), ready });
+  await runtime.prewarm('pc', 'sessions', signal());
+  expect(prewarmAgent).toHaveBeenCalledTimes(1);
+  expect(ready).toHaveBeenCalledTimes(1);
+  expect(request).not.toHaveBeenCalled();
+  expect(mockScopes).toHaveLength(0);
+});
+
+it.each(['agents', 'sessions'] as const)(
+  'releases the speculative lease immediately in %s view when the desktop is offline',
+  async (view) => {
+    const release = jest.fn();
+    prewarmAgent.mockResolvedValue({
+      scope: 'binding',
+      signal: signal(),
+      release,
+      ready: async () => {
+        throw new Error('offline');
+      },
+    });
+    await expect(runtime.prewarm('pc', view, signal())).rejects.toThrow('offline');
+    expect(release).toHaveBeenCalledTimes(1);
+  },
+);
+
+it('does not send a speculative agent list request if selection starts while prewarm is acquiring', async () => {
+  const pendingLease = deferred<DesktopDomainLease>();
+  prewarmAgent.mockReturnValue(pendingLease.promise);
+  const dial = deferred<DesktopDomainLease>();
+  retain.mockReturnValue(dial.promise);
+  const request = jest.fn();
+  const warming = runtime.prewarm('pc', 'agents', signal());
+  const opening = runtime.open('pc', signal());
+  pendingLease.resolve({
+    scope: 'binding',
+    signal: signal(),
+    release: jest.fn(),
+    ready: async () => ({ request }),
+  } as unknown as DesktopDomainLease);
+  await warming;
+  expect(request).not.toHaveBeenCalled();
+  dial.resolve(lease);
+  const source = await opening;
+  source.dispose();
+});
+
+it('ignores a prepared catalog after the desktop binding changes', async () => {
+  prewarmAgent.mockResolvedValue({
+    scope: 'old-binding',
+    signal: signal(),
+    release: jest.fn(),
+    ready: async () => ({
+      request: async () => ({ items: [{ agentId: 'retired', name: 'Old' }] }),
+    }),
+  });
+  await runtime.prewarm('pc', 'agents', signal());
+  const source = await runtime.open('pc', signal());
+  await expect(source.listAgents(undefined, signal())).resolves.toEqual({ items: [] });
+  source.dispose();
 });
 
 it('one cancelled acquisition cannot release the scope awaited by another route', async () => {

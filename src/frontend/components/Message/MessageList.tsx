@@ -14,9 +14,10 @@ import {
 
 import { MessageListDisclosureProvider } from './list/MessageListDisclosureContext';
 import {
+  getMessageListScrollProgress,
   getMessageRowType,
-  isMessageListAtBottom,
   isMessageListLiveTailInView,
+  isScrollToBottomButtonHidden,
   MAINTAIN_VISIBLE_CONTENT_POSITION,
   MESSAGE_LIST_TOP_PADDING,
   messageKeyExtractor,
@@ -26,11 +27,12 @@ import { MessageListRow } from './list/MessageListRow';
 import { useMessageListScrollController } from './list/useMessageListScrollController';
 import type { MessageListItem, MessageListProps } from './types';
 
-const SCROLL_BUTTON_GAP_ABOVE_ACCESSORY = 5;
+const SCROLL_BUTTON_GAP_ABOVE_ACCESSORY = 12;
 const FULL_WIDTH = { width: '100%' } as const;
 
 export function MessageList({
   bottomAccessoryHeight,
+  visualBottomAccessoryHeight,
   contentBottomInset,
   contentTopInset,
   dataKey,
@@ -50,6 +52,7 @@ export function MessageList({
   renderMessage,
   ref,
   rowInsets,
+  scrollProgress,
 }: MessageListProps) {
   const { t } = useTranslation();
   const listRef = useRef<LegendListRef | null>(null);
@@ -66,6 +69,7 @@ export function MessageList({
     handleScrollToEnd,
     handleTouchStart,
     isFollowing,
+    isKeyboardTransitioning,
     scrollToMessage,
   } = useMessageListScrollController({
     contentTopInset,
@@ -85,7 +89,9 @@ export function MessageList({
     Math.max(0, -keyboardHeight.get() - keyboardProgress.get() * keyboardOffset),
   );
   const scrollButtonBottom = useDerivedValue(
-    () => (bottomAccessoryHeight?.get() ?? 0) + keyboardLift.get(),
+    () =>
+      visualBottomAccessoryHeight?.get() ??
+      (bottomAccessoryHeight?.get() ?? 0) + keyboardLift.get(),
   );
   const contentHeight = useSharedValue({ dataKey, height: 0 });
   const viewportHeight = useSharedValue(0);
@@ -143,6 +149,7 @@ export function MessageList({
 
   useAnimatedReaction(
     () => {
+      if (isKeyboardTransitioning.get()) return null;
       const content = contentHeight.get();
       const viewport = viewportHeight.get();
       // Match the keyboard adapter's capped inset, including short conversations
@@ -153,10 +160,11 @@ export function MessageList({
         isAtBottom:
           content.dataKey !== dataKey ||
           viewport <= 0 ||
-          isMessageListAtBottom(scrollOffset.get(), content.height + inset, viewport),
+          isScrollToBottomButtonHidden(scrollOffset.get(), content.height + inset, viewport),
       };
     },
     (current, previous) => {
+      if (!current) return;
       if (
         previous === null ||
         current.dataKey !== previous.dataKey ||
@@ -169,6 +177,7 @@ export function MessageList({
 
   useAnimatedReaction(
     () => {
+      if (isKeyboardTransitioning.get()) return null;
       const content = contentHeight.get();
       const viewport = viewportHeight.get();
       if (content.dataKey !== dataKey || viewport <= 0) {
@@ -187,6 +196,7 @@ export function MessageList({
       };
     },
     (current, previous) => {
+      if (!current) return;
       isLiveTailInView.set(current.isInView);
       if (
         previous === null ||
@@ -194,6 +204,31 @@ export function MessageList({
         current.isInView !== previous.isInView
       ) {
         runOnJS(syncLiveTailVisibility)(current.dataKey, current.isInView);
+      }
+    },
+  );
+
+  useAnimatedReaction(
+    () => {
+      if (!scrollProgress) {
+        return -1;
+      }
+      const content = contentHeight.get();
+      const viewport = viewportHeight.get();
+      if (content.dataKey !== dataKey || viewport <= 0) {
+        return -1;
+      }
+      const inset = Math.min(viewport, (bottomAccessoryHeight?.get() ?? 0) + keyboardLift.get());
+      return getMessageListScrollProgress(
+        scrollOffset.get(),
+        content.height + inset,
+        viewport,
+        hasNewerMessages,
+      );
+    },
+    (nextProgress, previousProgress) => {
+      if (scrollProgress && nextProgress >= 0 && nextProgress !== previousProgress) {
+        scrollProgress.set(nextProgress);
       }
     },
   );

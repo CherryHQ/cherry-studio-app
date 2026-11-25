@@ -1,8 +1,8 @@
 import { useComposerExpansion } from '@cherrystudio/ui/components';
 import { useHeaderHeight } from 'expo-router/react-navigation';
-import { type ComponentProps, useRef, useState } from 'react';
+import { type ComponentProps, useCallback, useRef, useState } from 'react';
 import { View } from 'react-native';
-import { useDerivedValue } from 'react-native-reanimated';
+import { useDerivedValue, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { mainHeaderRowHeight } from '@/frontend/appShell/header';
@@ -14,17 +14,25 @@ import { useChatShareFooterHeight, useIsChatShareSelecting } from '../../share/c
 import type { ChatTurnNavigator } from './chatTurns';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
-import { ChatTurnDirectory } from './components/ChatTurnDirectory';
+import { ChatTurnDirectory, MAX_TRIGGER_TICKS } from './components/ChatTurnDirectory';
 import { useMessageListInitialRenderGate } from './hooks/useMessageListInitialRenderGate';
 
 type ChatTranscriptProps = Omit<
   ComponentProps<typeof MessageList>,
-  'bottomAccessoryHeight' | 'contentTopInset'
-> & { requiresInitialLayout: boolean; isLoadingMore: boolean; turnNavigator?: ChatTurnNavigator };
+  'bottomAccessoryHeight' | 'contentTopInset' | 'visualBottomAccessoryHeight'
+> & {
+  hasOlderMessages?: boolean;
+  hiddenUserTurnCount?: number;
+  isLoadingMore: boolean;
+  requiresInitialLayout: boolean;
+  turnNavigator?: ChatTurnNavigator;
+};
 
 const SELECTION_ROW_INSETS = { horizontal: 8, user: 0, assistant: 0 };
 
 export function ChatTranscript({
+  hasOlderMessages = false,
+  hiddenUserTurnCount = 0,
   requiresInitialLayout,
   isLoadingMore,
   onReady,
@@ -33,11 +41,21 @@ export function ChatTranscript({
 }: ChatTranscriptProps) {
   const composer = useComposerExpansion();
   const listRef = useRef<MessageListHandle>(null);
+  const scrollToMessage = useCallback(
+    (messageId: string) => listRef.current?.scrollToMessage(messageId) ?? Promise.resolve(false),
+    [],
+  );
   const isSelecting = useIsChatShareSelecting();
   const { height: selectionFooterHeight } = useChatShareFooterHeight();
   const bottomAccessoryHeight = useDerivedValue(() =>
     isSelecting ? selectionFooterHeight : (composer?.meta.contentInset.get() ?? 0),
   );
+  const liveDockHeight = composer?.meta.compactDockHeight;
+  const dockLift = composer?.meta.dockLift;
+  const visualBottomAccessoryHeight = useDerivedValue(
+    () => (liveDockHeight?.get() ?? 0) + (dockLift?.get() ?? 0),
+  );
+  const scrollProgress = useSharedValue(1);
   const reportedHeaderHeight = useHeaderHeight();
   // A header hidden under a full-screen layer reports no height; keeping the last one leaves the
   // transcript where it was, so closing the layer lands back on the same content.
@@ -51,6 +69,17 @@ export function ChatTranscript({
     renderGateKey: list.dataKey,
     requiresInitialHistoryLayout: requiresInitialLayout,
   });
+  let userTurnCount = hiddenUserTurnCount;
+  for (const message of list.messages) {
+    if (message.role === 'user') userTurnCount += 1;
+  }
+  const showTurnDirectory = Boolean(
+    turnNavigator &&
+    (userTurnCount >= 2 || hasOlderMessages || list.hasNewerMessages) &&
+    !isSelecting &&
+    !isCoverVisible &&
+    !composer?.state.isPresented,
+  );
   return (
     <View className="min-h-0 flex-1 bg-chat-background">
       <ChatOlderMessagesIndicator isLoading={isLoadingMore} />
@@ -64,24 +93,29 @@ export function ChatTranscript({
           ref={listRef}
           bottomAccessoryHeight={bottomAccessoryHeight}
           contentTopInset={contentTopInset}
+          visualBottomAccessoryHeight={
+            composer && !isSelecting ? visualBottomAccessoryHeight : undefined
+          }
           rowInsets={isSelecting ? SELECTION_ROW_INSETS : undefined}
+          scrollProgress={scrollProgress}
           onReady={() => {
             markListLoaded();
             onReady?.();
           }}
         />
       </ChatShareDragSelection>
-      {turnNavigator && list.messages.length > 0 && !isSelecting && !isCoverVisible ? (
+      {showTurnDirectory && turnNavigator ? (
         <ChatTurnDirectory
           key={turnNavigator.scope}
-          bottomAccessoryHeight={bottomAccessoryHeight}
+          bottomAccessoryHeight={liveDockHeight ?? bottomAccessoryHeight}
           contentBottomInset={list.contentBottomInset}
           contentTopInset={contentTopInset}
+          dockLift={dockLift}
           keyboardOffset={list.keyboardOffset}
           navigator={turnNavigator}
-          scrollToMessage={(messageId) =>
-            listRef.current?.scrollToMessage(messageId) ?? Promise.resolve(false)
-          }
+          scrollProgress={scrollProgress}
+          scrollToMessage={scrollToMessage}
+          turnCount={hasOlderMessages || list.hasNewerMessages ? MAX_TRIGGER_TICKS : userTurnCount}
         />
       ) : null}
       <ChatInitialRenderCover isVisible={isCoverVisible} />

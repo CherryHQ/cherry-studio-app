@@ -126,6 +126,50 @@ describe('Pi durable model bridge', () => {
     },
   );
 
+  test.each([
+    ['openai-completions', { type: 'function', function: { name: 'read_file', parameters: {} } }],
+    ['openai-responses', { type: 'function', name: 'read_file', parameters: {} }],
+    ['anthropic-messages', { name: 'read_file', input_schema: { type: 'object' } }],
+  ] as const)(
+    'guards DeepSeek safety checks against outgoing client tools on %s',
+    async (api, clientTool) => {
+      const model = { ...wire, api, id: 'deepseek-flash' };
+      const nativeTools = [{ type: 'deepseek_web_search' }, { type: 'deepseek_read_url' }];
+      for (const tools of [
+        undefined,
+        [],
+        nativeTools,
+        [clientTool],
+        [...nativeTools, clientTool],
+      ]) {
+        const bridge = setup(undefined, preflight, model);
+        const resolved = await bridge.resolveModel();
+        const body = { model: model.id, ...(tools === undefined ? {} : { tools }) };
+        let sent: unknown;
+        bridge.resolveModel.mockResolvedValueOnce({
+          ...resolved,
+          deepseekSafetyCheck: true,
+          async streamFn(wire, _context, options) {
+            sent = await options?.onPayload?.({ model: wire.id }, wire);
+            return bridge.streamFn();
+          },
+        });
+        await bridge.registerModel(reference);
+        await bridge.models.completeSimple(
+          bridge.getModel(reference)!,
+          { messages: [] },
+          {
+            onPayload: () => body,
+          },
+        );
+        expect(sent).toEqual({
+          ...body,
+          ...(tools?.includes(clientTool) ? {} : { safety_check: { level: 'high' } }),
+        });
+      }
+    },
+  );
+
   test.each(['done', 'error'] as const)(
     'clears DeepSeek refusal content before persisting a %s event',
     async (terminal) => {

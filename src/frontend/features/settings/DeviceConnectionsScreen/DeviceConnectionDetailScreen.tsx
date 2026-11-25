@@ -7,6 +7,8 @@ import { Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import { remoteChatHref } from '@/frontend/appShell/navigation/chat';
+import { useOptionalNavigationShell } from '@/frontend/appShell/navigationShell/state';
+import { useCloseCoveredSidebar } from '@/frontend/appShell/sidebar';
 import { useUuRemoteAction } from '@/frontend/appShell/uuRemote';
 import { queryKeys, useBackendModule, useMutation } from '@/frontend/data';
 import {
@@ -23,6 +25,10 @@ export function DeviceConnectionDetailScreen() {
   const { connectionId } = useLocalSearchParams<{ connectionId?: string }>();
   const { t } = useTranslation();
   const router = useRouter();
+  const shell = useOptionalNavigationShell();
+  const closeCoveredSidebar = useCloseCoveredSidebar();
+  const baseRoute =
+    shell?.activeDestination === 'devices' ? '/devices' : '/settings/device-connections';
   const { alert } = useAlert();
   const { toast } = useToast();
   const { connection, error, isLoading, refetch } = useDesktopConnection(connectionId);
@@ -71,7 +77,7 @@ export function DeviceConnectionDetailScreen() {
       onConfirm: () => {
         void remove(connectionId)
           .then((removed) => {
-            if (removed) router.dismissTo('/settings/device-connections');
+            if (removed) router.dismissTo(baseRoute);
           })
           .catch((removeError) => {
             alert.show({ title: desktopConnectionErrorMessage(removeError, t) });
@@ -80,7 +86,7 @@ export function DeviceConnectionDetailScreen() {
       role: 'destructive',
       title: t('settings.deviceConnections.remove.title'),
     });
-  }, [alert, connection, connectionId, remove, router, t]);
+  }, [alert, baseRoute, connection, connectionId, remove, router, t]);
 
   if (isLoading) {
     return (
@@ -161,7 +167,14 @@ export function DeviceConnectionDetailScreen() {
           {canOpenHome ? (
             <Section.Item
               label={t('settings.deviceConnections.openHome')}
-              onPress={() => router.replace(remoteChatHref({ connectionId: connection.id }))}
+              onPress={() => {
+                const href = remoteChatHref({ connectionId: connection.id });
+                if (baseRoute === '/devices') router.replace(href);
+                else {
+                  closeCoveredSidebar();
+                  router.dismissTo(href);
+                }
+              }}
             />
           ) : null}
           {canSyncConfiguration ? (
@@ -172,7 +185,7 @@ export function DeviceConnectionDetailScreen() {
                 router.push({
                   params: {
                     connectionId: connection.id,
-                    returnTo: `/settings/device-connections/${encodeURIComponent(connection.id)}`,
+                    returnTo: `${baseRoute}/${encodeURIComponent(connection.id)}`,
                   },
                   pathname: '/settings/provider/desktop-sync',
                 })
@@ -192,7 +205,7 @@ export function DeviceConnectionDetailScreen() {
           onPress={() =>
             router.push({
               params: { connectionId: connection.id },
-              pathname: '/settings/device-connections/scan',
+              pathname: `${baseRoute}/scan`,
             })
           }
         />

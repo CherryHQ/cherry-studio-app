@@ -1,8 +1,8 @@
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import { Section, Spinner, Switch } from '@cherrystudio/ui/components';
+import { Section, Sortable, Spinner, Switch } from '@cherrystudio/ui/components';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { type AccessibilityProps, Text, View, type ViewProps } from 'react-native';
 
 import { ProviderAvatar } from '@/frontend/components/Avatar';
 import { withPolicy } from '@/frontend/components/Policy';
@@ -12,17 +12,21 @@ import type { Provider } from '@/shared/data/types/provider';
 import { ProviderAccountBadge } from './ProviderAccountBadge';
 
 const ProviderListRowView = memo(function ProviderListRow({
+  accessibilityActions,
   canSignIn = true,
   isEnabled,
   isPending,
+  onAccessibilityAction,
   onOpen,
   onToggle,
   provider,
 }: {
+  accessibilityActions?: AccessibilityProps['accessibilityActions'];
   /** Offers the provider's account sign-in where it has one. */
   canSignIn?: boolean;
   isEnabled: boolean;
   isPending: boolean;
+  onAccessibilityAction?: ViewProps['onAccessibilityAction'];
   onOpen: (provider: Provider) => void;
   onToggle: (provider: Provider, isEnabled: boolean) => void;
   provider: Provider;
@@ -36,6 +40,7 @@ const ProviderListRowView = memo(function ProviderListRow({
 
   return (
     <Section.Item
+      accessibilityActions={accessibilityActions}
       accessibilityLabel={[
         provider.name,
         statusLabel,
@@ -61,6 +66,7 @@ const ProviderListRowView = memo(function ProviderListRow({
           providerName={provider.name}
         />
       }
+      onAccessibilityAction={onAccessibilityAction}
       onPress={() => {
         if (!isPending) onOpen(provider);
       }}
@@ -68,18 +74,20 @@ const ProviderListRowView = memo(function ProviderListRow({
       testID={`provider-row-${provider.id}`}
       trailing={
         <View className="flex-row items-center gap-2">
-          <Switch
-            accessibilityLabel={t(
-              isEnabled
-                ? 'settings.provider.disableProviderNamed'
-                : 'settings.provider.enableProviderNamed',
-              { name: provider.name },
-            )}
-            disabled={isPending}
-            onValueChange={(value) => onToggle(provider, value)}
-            testID={`provider-enabled-switch-${provider.id}`}
-            value={isEnabled}
-          />
+          <Sortable.Exclusion>
+            <Switch
+              accessibilityLabel={t(
+                isEnabled
+                  ? 'settings.provider.disableProviderNamed'
+                  : 'settings.provider.enableProviderNamed',
+                { name: provider.name },
+              )}
+              disabled={isPending}
+              onValueChange={(value) => onToggle(provider, value)}
+              testID={`provider-enabled-switch-${provider.id}`}
+              value={isEnabled}
+            />
+          </Sortable.Exclusion>
           <View className="size-5 items-center justify-center">
             {isPending ? (
               <Spinner accessibilityLabel={t('settings.provider.status.updating')} size="sm" />

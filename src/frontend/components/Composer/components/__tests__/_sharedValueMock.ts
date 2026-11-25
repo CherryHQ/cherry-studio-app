@@ -1,6 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
-/** Reanimated's jest build needs native Worklets; the composer session only reads and writes a cell. */
+jest.mock('react-native-worklets', () => ({
+  scheduleOnRN: (callback: (...args: unknown[]) => void, ...args: unknown[]) => callback(...args),
+}));
+
+const reactions = new Set<() => void>();
+
 export function useSharedValue<T>(initial: T) {
   const [cell] = useState(() => ({
     value: initial,
@@ -9,7 +14,33 @@ export function useSharedValue<T>(initial: T) {
     },
     set(next: T) {
       this.value = next;
+      reactions.forEach((update) => update());
     },
   }));
   return cell;
+}
+
+export function useDerivedValue<T>(get: () => T) {
+  return { get };
+}
+
+export function useAnimatedReaction<T>(
+  read: () => T,
+  react: (current: T, previous: T | null) => void,
+) {
+  useEffect(() => {
+    let previous: T | null = null;
+    const update = () => {
+      const next = read();
+      if (Object.is(next, previous)) return;
+      const last = previous;
+      previous = next;
+      react(next, last);
+    };
+    reactions.add(update);
+    update();
+    return () => {
+      reactions.delete(update);
+    };
+  }, [read, react]);
 }

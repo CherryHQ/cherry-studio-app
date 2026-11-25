@@ -1,18 +1,24 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import {
   Button,
-  ContextMenu,
   LockedGroupSlice,
-  ScrollInteractionBoundary,
   type MenuItem,
+  ScrollInteractionBoundary,
+  Sortable,
+  useSortableScrollController,
 } from '@cherrystudio/ui/components';
-import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
+import {
+  LegendList,
+  type LegendListRef,
+  type LegendListRenderItemProps,
+} from '@legendapp/list/react-native';
 import { useRouter } from 'expo-router';
 import { type ReactElement, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { useListBottomInset } from '@/frontend/components/Selection';
+import { reorderLocally } from '@/frontend/data/utils/reorder';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -26,9 +32,11 @@ import {
   buildProviderModelListItems,
   type ProviderModelListItem,
 } from '../utils/providerModelListItems';
+import { filterProviderModelsByPurpose } from '../utils/providerModelPurpose';
 import { ProviderModelRow, providerModelRowEstimatedHeights } from './ProviderModelRow';
 
 export type ProviderModelListContentProps = {
+  canReorder?: boolean;
   groupByPurpose: boolean;
   supportedModelIds?: ReadonlySet<string>;
   management?: ReturnType<typeof useProviderModelManagement>;
@@ -38,20 +46,37 @@ export type ProviderModelListContentProps = {
   locked?: boolean;
   models: readonly Model[];
   onEndpointPress?: (model: Model) => void;
+  onReorderModels?: (newItems: readonly Model[]) => Promise<boolean>;
   provider: Provider | undefined;
   updatingModelId?: string;
 };
 
+type ModelSortablePosition = {
+  groupId: string;
+  groupIndex: number;
+  groupSize: number;
+};
+
+type ModelSortableGroup = {
+  groupId: string;
+  itemIds: string[];
+  models: Model[];
+};
+
 type ProviderModelListExtraData = {
+  canReorder: boolean;
   supportedModelIds?: ReadonlySet<string>;
   management?: ReturnType<typeof useProviderModelManagement>;
   isEndpointSelectionDisabled: boolean;
+  modelPositionById: ReadonlyMap<string, ModelSortablePosition>;
   onEndpointPress?: (model: Model) => void;
+  onReorderGroup: (groupId: string, fromIndex: number, toIndex: number) => void;
   provider: Provider | undefined;
   updatingModelId?: string;
 };
 
 export function ProviderModelListContent({
+  canReorder = false,
   groupByPurpose,
   management,
   supportedModelIds,
@@ -60,29 +85,81 @@ export function ProviderModelListContent({
   locked = false,
   models,
   onEndpointPress,
+  onReorderModels,
   provider,
   updatingModelId,
 }: ProviderModelListContentProps) {
   const { t } = useTranslation();
   const bottomInset = useListBottomInset();
+  const scroll = useSortableScrollController<LegendListRef>();
   const listItems = useMemo(
     () => buildProviderModelListItems(models, groupByPurpose),
     [groupByPurpose, models],
   );
+  const { groupById, modelPositionById, sortableGroups } = useMemo(() => {
+    const groups: ModelSortableGroup[] = [];
+    const byId = new Map<string, Model[]>();
+    const positions = new Map<string, ModelSortablePosition>();
+
+    if (groupByPurpose) {
+      for (const purpose of ['chat', 'painting'] as const) {
+        const purposeModels = filterProviderModelsByPurpose(models, purpose);
+        if (purposeModels.length === 0) continue;
+        groups.push({
+          groupId: purpose,
+          itemIds: purposeModels.map((model) => model.id),
+          models: purposeModels,
+        });
+      }
+    } else if (models.length > 0) {
+      groups.push({
+        groupId: 'models',
+        itemIds: models.map((model) => model.id),
+        models: [...models],
+      });
+    }
+
+    for (const group of groups) {
+      byId.set(group.groupId, group.models);
+      const groupSize = group.models.length;
+      group.models.forEach((model, groupIndex) => {
+        positions.set(model.id, { groupId: group.groupId, groupIndex, groupSize });
+      });
+    }
+
+    return { groupById: byId, modelPositionById: positions, sortableGroups: groups };
+  }, [groupByPurpose, models]);
+
+  const handleReorderGroup = useCallback(
+    (groupId: string, fromIndex: number, toIndex: number) => {
+      if (!canReorder || !onReorderModels) return;
+      const groupModels = groupById.get(groupId);
+      if (!groupModels) return;
+      void onReorderModels(reorderLocally(groupModels, fromIndex, toIndex));
+    },
+    [canReorder, groupById, onReorderModels],
+  );
+
   const extraData = useMemo<ProviderModelListExtraData>(
     () => ({
+      canReorder,
       management,
       supportedModelIds,
       isEndpointSelectionDisabled,
+      modelPositionById,
       onEndpointPress,
+      onReorderGroup: handleReorderGroup,
       provider,
       updatingModelId,
     }),
     [
+      canReorder,
       supportedModelIds,
       management,
       isEndpointSelectionDisabled,
+      modelPositionById,
       onEndpointPress,
+      handleReorderGroup,
       provider,
       updatingModelId,
     ],
@@ -91,29 +168,31 @@ export function ProviderModelListContent({
     ({ extraData: itemExtraData, item }: LegendListRenderItemProps<ProviderModelListItem>) => {
       if (item.type === 'section') {
         return (
-          <View
-            className={
-              item.isFirstSection
-                ? 'flex-row items-center justify-between px-4 pt-3 pb-2'
-                : 'flex-row items-center justify-between px-4 pt-5 pb-2'
-            }
-          >
-            <Text className="font-medium text-foreground-tertiary text-sm">
-              {t(
-                item.purpose === 'chat'
-                  ? 'settings.provider.models.section.chat'
-                  : 'settings.provider.models.section.painting',
-              )}
-            </Text>
-            <Text className="text-foreground-tertiary text-sm" style={styles.counter}>
-              {item.count}
-            </Text>
-          </View>
+          <Sortable.Chrome>
+            <View
+              className={
+                item.isFirstSection
+                  ? 'flex-row items-center justify-between px-4 pt-3 pb-2'
+                  : 'flex-row items-center justify-between px-4 pt-5 pb-2'
+              }
+            >
+              <Text className="font-medium text-foreground-tertiary text-sm">
+                {t(
+                  item.purpose === 'chat'
+                    ? 'settings.provider.models.section.chat'
+                    : 'settings.provider.models.section.painting',
+                )}
+              </Text>
+              <Text className="text-foreground-tertiary text-sm" style={styles.counter}>
+                {item.count}
+              </Text>
+            </View>
+          </Sortable.Chrome>
         );
       }
 
       const itemProvider = itemExtraData.provider;
-      const endpointButton =
+      const rawEndpointButton =
         itemProvider &&
         itemExtraData.onEndpointPress &&
         shouldShowProviderModelEndpointPicker({ model: item.model, provider: itemProvider }) ? (
@@ -126,18 +205,32 @@ export function ProviderModelListContent({
             provider={itemProvider}
           />
         ) : null;
+      const endpointButton = rawEndpointButton ? (
+        <Sortable.Exclusion>{rawEndpointButton}</Sortable.Exclusion>
+      ) : null;
 
       if (itemExtraData.management) {
+        const position = itemExtraData.modelPositionById.get(item.model.id) ?? {
+          groupId: 'models',
+          groupIndex: 0,
+          groupSize: 1,
+        };
         return (
           <ManagedModelRow
-            model={item.model}
-            provider={itemProvider}
-            isSelecting={itemExtraData.management.isSelecting}
+            canReorder={itemExtraData.canReorder}
+            endpointButton={endpointButton}
             isDeleting={itemExtraData.management.isDeleting}
             isSelected={itemExtraData.management.selectedIds.has(item.model.id)}
-            onSelect={itemExtraData.management.beginSelection}
+            isSelecting={itemExtraData.management.isSelecting}
+            model={item.model}
             onDelete={itemExtraData.management.requestDelete}
+            onMoveToTop={() =>
+              itemExtraData.onReorderGroup(position.groupId, position.groupIndex, 0)
+            }
+            onSelect={itemExtraData.management.beginSelection}
             onToggle={itemExtraData.management.toggleModel}
+            position={position}
+            provider={itemProvider}
             statusLabel={
               !item.model.isEnabled
                 ? t('settings.provider.models.management.disabled')
@@ -146,13 +239,12 @@ export function ProviderModelListContent({
                   ? t('settings.provider.models.management.unsupported')
                   : undefined
             }
-            endpointButton={endpointButton}
           />
         );
       }
       return (
         <DetailModelRow model={item.model} provider={itemProvider}>
-          {endpointButton}
+          {rawEndpointButton}
         </DetailModelRow>
       );
     },
@@ -174,29 +266,51 @@ export function ProviderModelListContent({
   );
 
   return (
-    <ScrollInteractionBoundary>
-      {(scrollHandlers) => (
-        <LegendList
-          {...scrollHandlers}
-          automaticallyAdjustsScrollIndicatorInsets
-          contentContainerStyle={[styles.contentContainer, { paddingBottom: bottomInset }]}
-          contentInsetAdjustmentBehavior="automatic"
-          data={listItems}
-          estimatedItemSize={providerModelRowEstimatedHeights.management}
-          extraData={extraData}
-          getItemType={getProviderModelListItemType}
-          keyboardDismissMode="on-drag"
-          keyboardShouldPersistTaps="handled"
-          keyExtractor={providerModelListKeyExtractor}
-          ListEmptyComponent={ListEmptyComponent}
-          maintainVisibleContentPosition={false}
-          recycleItems
-          renderItem={renderItem}
-          showsVerticalScrollIndicator={false}
-          style={styles.list}
-        />
+    <Sortable.Root scrollController={scroll.controller}>
+      {({ isDragging }) => (
+        <ScrollInteractionBoundary>
+          {(scrollHandlers) => (
+            <>
+              {canReorder
+                ? sortableGroups.map((group) => (
+                    <Sortable.Group
+                      estimatedItemHeight={providerModelRowEstimatedHeights.management}
+                      groupId={group.groupId}
+                      itemIds={group.itemIds}
+                      key={group.groupId}
+                      onReorder={({ fromIndex, groupId, toIndex }) =>
+                        handleReorderGroup(groupId, fromIndex, toIndex)
+                      }
+                    />
+                  ))
+                : null}
+              <LegendList
+                {...scrollHandlers}
+                automaticallyAdjustsScrollIndicatorInsets
+                contentContainerStyle={[styles.contentContainer, { paddingBottom: bottomInset }]}
+                contentInsetAdjustmentBehavior="automatic"
+                data={listItems}
+                estimatedItemSize={providerModelRowEstimatedHeights.management}
+                extraData={extraData}
+                getItemType={getProviderModelListItemType}
+                keyboardDismissMode="on-drag"
+                keyboardShouldPersistTaps="handled"
+                keyExtractor={providerModelListKeyExtractor}
+                ListEmptyComponent={ListEmptyComponent}
+                maintainVisibleContentPosition={false}
+                onScroll={scroll.onScroll}
+                recycleItems
+                ref={scroll.setRef}
+                renderItem={renderItem}
+                scrollEnabled={!isDragging}
+                showsVerticalScrollIndicator={false}
+                style={styles.list}
+              />
+            </>
+          )}
+        </ScrollInteractionBoundary>
       )}
-    </ScrollInteractionBoundary>
+    </Sortable.Root>
   );
 }
 
@@ -231,22 +345,28 @@ function openModelDetails(router: ReturnType<typeof useRouter>, model: Model) {
 }
 
 function ManagedModelRow({
+  canReorder,
   model,
+  position,
   provider,
   isSelecting,
   isDeleting,
   isSelected,
+  onMoveToTop,
   onSelect,
   onDelete,
   onToggle,
   statusLabel,
   endpointButton,
 }: {
+  canReorder: boolean;
   model: Model;
+  position: ModelSortablePosition;
   provider: Provider | undefined;
   isSelecting: boolean;
   isDeleting: boolean;
   isSelected: boolean;
+  onMoveToTop: () => void;
   onSelect: ReturnType<typeof useProviderModelManagement>['beginSelection'];
   onDelete: ReturnType<typeof useProviderModelManagement>['requestDelete'];
   onToggle: ReturnType<typeof useProviderModelManagement>['toggleModel'];
@@ -256,12 +376,22 @@ function ManagedModelRow({
   const { t } = useTranslation();
   const router = useRouter();
   const openModel = () => openModelDetails(router, model);
+  const canMove = canReorder && !isDeleting && position.groupSize > 1;
   const items: readonly MenuItem[] = [
     {
       id: 'detail',
       label: t('settings.provider.models.management.details'),
       onPress: () => openModel(),
     },
+    ...(canMove && position.groupIndex > 0
+      ? [
+          {
+            id: 'move-to-top',
+            label: t('common.moveToTop'),
+            onPress: onMoveToTop,
+          },
+        ]
+      : []),
     {
       id: 'select',
       label: t('settings.provider.models.management.select'),
@@ -290,7 +420,21 @@ function ManagedModelRow({
     );
   }
   return (
-    <ContextMenu items={isDeleting ? [] : items}>
+    <Sortable.Item
+      accessibilityLabels={{
+        moveDown: t('common.moveDown', { name: model.name }),
+        moveToTop: t('common.moveToTop'),
+        moveUp: t('common.moveUp', { name: model.name }),
+      }}
+      disabled={isDeleting}
+      estimatedHeight={providerModelRowEstimatedHeights.management}
+      groupId={position.groupId}
+      groupSize={position.groupSize}
+      id={model.id}
+      index={position.groupIndex}
+      menuItems={isDeleting ? [] : items}
+      movable={canMove}
+    >
       <ProviderModelRow
         model={model}
         provider={provider}
@@ -301,7 +445,7 @@ function ManagedModelRow({
       >
         {endpointButton}
       </ProviderModelRow>
-    </ContextMenu>
+    </Sortable.Item>
   );
 }
 

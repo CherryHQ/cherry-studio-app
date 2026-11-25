@@ -36,12 +36,13 @@ const mockDismissInput = jest.fn();
 jest.mock('@cherrystudio/ui/components', () => ({
   BackgroundPressArea: ({ children, ...props }: { children?: React.ReactNode }) =>
     jest.requireActual('react').createElement('BackgroundPressArea', props, children),
-  composerContentGap: 8,
+  composerContentGap: 24,
   Composer: { Expansion: ({ children }: { children?: React.ReactNode }) => children },
   useComposerExpansion: () => null,
   ContentState: {
     Error: () => null,
   },
+  getComposerBottomPadding: () => 38,
   getComposerKeyboardStickyOffset: () => 26,
 }));
 
@@ -74,6 +75,9 @@ jest.mock('react-i18next', () => ({
 }));
 
 jest.mock('@/frontend/components/Composer', () => ({
+  getComposerExtraBottomOffset: jest.requireActual(
+    '@/frontend/components/Composer/utils/composerDockOffset',
+  ).getComposerExtraBottomOffset,
   ComposerDismissArea: jest.requireActual(
     '@/frontend/components/Composer/components/ComposerDismissArea',
   ).ComposerDismissArea,
@@ -244,7 +248,7 @@ describe('ChatScreen composer dock wiring', () => {
     });
 
     expect(chatWorkspaceProps).toMatchObject({
-      contentBottomInset: 8,
+      contentBottomInset: 24,
       keyboardOffset: 26,
     });
     expect(dockProps).toMatchObject({
@@ -253,7 +257,7 @@ describe('ChatScreen composer dock wiring', () => {
     const onHeightChange = dockProps?.onHeightChange as (height: number) => void;
     act(() => onHeightChange(180));
     expect(chatWorkspaceProps).toMatchObject({
-      contentBottomInset: 8,
+      contentBottomInset: 24,
       keyboardOffset: 26,
     });
     expect((chatWorkspaceProps?.feedbackHintBottomOffset as { get(): number }).get()).toBe(180);

@@ -1,6 +1,6 @@
 import { Composer, type ComposerInputProps } from '@cherrystudio/ui/components';
 import type { PasteEventPayload } from 'expo-paste-input';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { findNodeHandle } from 'react-native';
 import { useUniwind } from 'uniwind';
@@ -52,7 +52,8 @@ export function ComposerField({
   const { t } = useTranslation();
   const { addAttachments } = useComposerActions();
   const { inputRef } = useComposerMeta();
-  const { activateInput, registerInputTag } = useComposerPresentationActions();
+  const nativeTag = useRef<number | null>(null);
+  const { registerInputTag, setFocusedInput } = useComposerPresentationActions();
   const linkColor = useThemeColor('link');
   const { theme } = useUniwind();
 
@@ -85,16 +86,32 @@ export function ComposerField({
   }, [linkColor, theme]);
 
   const handleFocus = useCallback<NonNullable<ComposerInputProps['onFocus']>>(() => {
-    // Focus is the only event that is allowed to reconnect the dock after a
-    // sheet or native picker has replaced the input context.
-    activateInput();
+    setFocusedInput(inputRef.current);
     onFocus?.();
-  }, [activateInput, onFocus]);
+  }, [inputRef, onFocus, setFocusedInput]);
+
+  const handleBlur = useCallback(() => {
+    setFocusedInput(null);
+    onBlur?.();
+  }, [onBlur, setFocusedInput]);
+
+  useLayoutEffect(
+    () => () => {
+      nativeTag.current = null;
+      registerInputTag(null);
+      setFocusedInput(null);
+    },
+    [registerInputTag, setFocusedInput],
+  );
 
   const handleLayout = useCallback<NonNullable<ComposerInputProps['onLayout']>>(
     (event) => {
       // The keyboard reports its focused field by native tag; this is the field's.
-      registerInputTag(findNodeHandle(event.currentTarget) ?? null);
+      const tag = findNodeHandle(event.currentTarget) ?? null;
+      if (tag !== nativeTag.current) {
+        nativeTag.current = tag;
+        registerInputTag(tag);
+      }
       onLayout?.(event);
     },
     [onLayout, registerInputTag],
@@ -105,7 +122,7 @@ export function ComposerField({
       insertNewlineLabel={t('chat.input.action.insertNewline')}
       layout={layout}
       markdownStyle={markdownStyle}
-      onBlur={onBlur}
+      onBlur={handleBlur}
       onFocus={handleFocus}
       onLayout={handleLayout}
       onLinkPress={onLinkPress}

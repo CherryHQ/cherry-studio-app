@@ -4,6 +4,8 @@ import { ScrollView, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useRootNavigationDockClearance } from '@/frontend/appShell/navigationShell/state';
+
 /** Plugin pages keep their primary action below the scrolling content and above the keyboard. */
 export function PluginPage({
   children,
@@ -16,6 +18,7 @@ export function PluginPage({
 }) {
   const headerHeight = useHeaderHeight();
   const { bottom } = useSafeAreaInsets();
+  const dockClearance = useRootNavigationDockClearance();
 
   return (
     <KeyboardAvoidingView
@@ -26,8 +29,10 @@ export function PluginPage({
       <View className="flex-1 bg-background">
         <ScrollView
           className="flex-1"
-          contentContainerClassName="gap-8 px-6 py-6"
-          contentContainerStyle={footer ? undefined : { paddingBottom: bottom + 24 }}
+          contentContainerClassName="mx-auto w-full max-w-[720px] gap-8 px-6 py-6"
+          contentContainerStyle={
+            footer ? undefined : { paddingBottom: bottom + dockClearance + 24 }
+          }
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
           testID={testID}

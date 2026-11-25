@@ -96,6 +96,10 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     return Platform.OS === 'android' && AppState.currentState === 'active';
   }
 
+  isForeground() {
+    return AppState.currentState === 'active';
+  }
+
   scriptSandbox() {
     const native = createJsSandbox();
     return native?.startBridge

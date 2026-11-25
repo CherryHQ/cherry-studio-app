@@ -905,6 +905,97 @@ describe('Pi model resolver', () => {
     },
   );
 
+  test.each<{
+    label: string;
+    model?: Partial<Model>;
+    provider?: Partial<Provider>;
+    endpoint?: EndpointType;
+    required: boolean;
+  }>([
+    {
+      label: 'custom relay with a DeepSeek model id',
+      model: { modelId: 'deepseek-reasoner' },
+      required: true,
+    },
+    {
+      label: 'New API relay with a DeepSeek wire id',
+      model: { apiModelId: 'deepseek-flash' },
+      provider: { presetProviderId: 'new-api' },
+      required: true,
+    },
+    {
+      label: 'normalized and namespaced DeepSeek ids',
+      model: { modelId: 'deepseek-v4-1-flash', apiModelId: 'vendor/DeepSeek-V4.1-Flash:free' },
+      required: true,
+    },
+    {
+      label: 'namespaced DeepSeek wire id only',
+      model: { apiModelId: 'deepseek-ai/DeepSeek-Reasoner' },
+      required: true,
+    },
+    { label: 'DeepSeek display name', model: { name: 'DeepSeek Flash' }, required: true },
+    { label: 'non-DeepSeek reasoning model', model: { apiModelId: 'qwen3' }, required: false },
+    {
+      label: 'OpenRouter provider id',
+      model: { apiModelId: 'deepseek/deepseek-reasoner' },
+      provider: { id: 'openrouter' },
+      required: false,
+    },
+    {
+      label: 'OpenRouter preset',
+      model: { modelId: 'deepseek-flash' },
+      provider: { presetProviderId: 'openrouter' },
+      required: false,
+    },
+    {
+      label: 'OpenRouter host',
+      model: { apiModelId: 'deepseek/deepseek-reasoner' },
+      required: false,
+      provider: {
+        endpointConfigs: {
+          [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+            adapterFamily: 'openai-compatible',
+            baseUrl: 'https://openrouter.ai/api/v1',
+          },
+        },
+      },
+    },
+    {
+      label: 'DeepSeek Responses',
+      endpoint: ENDPOINT_TYPE.OPENAI_RESPONSES,
+      model: { modelId: 'deepseek-flash' },
+      required: false,
+    },
+    {
+      label: 'DeepSeek Anthropic',
+      endpoint: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      model: { modelId: 'deepseek-flash' },
+      required: false,
+    },
+  ])(
+    'sets assistant reasoning compatibility only for DeepSeek completions: $label',
+    async ({ model, provider, endpoint = ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, required }) => {
+      mockGetProviderById.mockResolvedValue({
+        ...makeProvider(endpoint, 'https://relay.example.test/v1', 'openai-compatible'),
+        ...provider,
+      });
+      mockGetModelById.mockResolvedValue(makeModel(endpoint, model));
+
+      const resolution = await resolve(resolver);
+
+      if (required) {
+        expect(resolution.model.compat).toHaveProperty(
+          'requiresReasoningContentOnAssistantMessages',
+          true,
+        );
+      } else {
+        expect(resolution.model.compat ?? {}).not.toHaveProperty(
+          'requiresReasoningContentOnAssistantMessages',
+        );
+      }
+    },
+  );
+
   test.each([ENDPOINT_TYPE.OPENAI_RESPONSES, ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS])(
     'keeps system updates inline only for official DeepSeek %s endpoints',
     async (endpoint) => {
@@ -1281,6 +1372,27 @@ describe('Pi model resolver', () => {
     );
     expect(mockResolveApiKey).not.toHaveBeenCalled();
   });
+
+  test.each([
+    [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'deepseek-chat', 'openai-compatible'],
+    [ENDPOINT_TYPE.OPENAI_RESPONSES, 'deepseek-responses', 'openai'],
+    [ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'deepseek-messages', 'anthropic'],
+  ] as const)(
+    'keeps DeepSeek Flash native web tools exclusive of client functions on %s',
+    async (endpoint, dialect, family) => {
+      mockGetProviderById.mockResolvedValue({
+        ...makeProvider(endpoint, 'https://api.deepseek.com', family),
+        id: 'deepseek',
+      });
+      mockGetModelById.mockResolvedValue(
+        makeModel(endpoint, { apiModelId: 'deepseek-flash', modelId: 'deepseek-flash' }),
+      );
+      expect(
+        await resolver.nativeWebTools?.({ providerId: 'deepseek', modelId: 'deepseek-flash' }, {}),
+      ).toEqual({ dialect, search: true, fetch: true, functionToolMixing: false });
+      expect(mockResolveApiKey).not.toHaveBeenCalled();
+    },
+  );
 
   test.each([
     ['gemini-3-flash-preview', true],

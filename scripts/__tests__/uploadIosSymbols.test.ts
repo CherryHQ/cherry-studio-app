@@ -71,6 +71,10 @@ const full = (debugId = uuid, arch = 'arm64'): RemoteDebugRecord => ({
   data: { features: ['symtab', 'debug', 'unwind'] },
 });
 const fixtureRoots: string[] = [];
+const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')!;
+function stubPlatform(platform: NodeJS.Platform) {
+  Object.defineProperty(process, 'platform', { ...platformDescriptor, value: platform });
+}
 function put(path: string, value: string | Uint8Array) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, value);
@@ -272,6 +276,7 @@ function fixture() {
 }
 afterEach(() => {
   jest.restoreAllMocks();
+  Object.defineProperty(process, 'platform', platformDescriptor);
   for (const root of fixtureRoots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
@@ -555,6 +560,7 @@ function productionEnv(): NodeJS.ProcessEnv {
   };
 }
 it('claimed cloud production with missing or conflicting guards fails preflight', () => {
+  stubPlatform('darwin');
   for (const key of [
     'EAS_BUILD',
     'EAS_BUILD_RUNNER',
@@ -569,7 +575,7 @@ it('claimed cloud production with missing or conflicting guards fails preflight'
       if (key === 'EAS_BUILD_PLATFORM' && value) continue;
       expect(() => {
         validateBuildContext({ ...fixture().ctx, env: { ...productionEnv(), [key]: value } });
-      }).toThrow();
+      }).toThrow(key);
     }
   }
 });
@@ -836,8 +842,7 @@ it('staging produces the four recovery files before any remote verification', as
 
 it('active context requires macOS, enabled reporting, valid configuration and the pinned archive', () => {
   const f = fixture();
-  const descriptor = Object.getOwnPropertyDescriptor(process, 'platform')!;
-  Object.defineProperty(process, 'platform', { ...descriptor, value: 'darwin' });
+  stubPlatform('darwin');
   const previousCwd = process.cwd();
   process.chdir(f.project);
   put(
@@ -895,12 +900,11 @@ it('active context requires macOS, enabled reporting, valid configuration and th
     );
     put(reporting, JSON.stringify({ sentry: { enabled: true } }));
     const active = resolveCheckedContext(env) as ActiveContext;
-    Object.defineProperty(process, 'platform', { ...descriptor, value: 'linux' });
-    expect(() => validateBuildContext(active)).toThrow('macOS');
+    stubPlatform('linux');
+    expect(() => validateBuildContext(active)).toThrow('macOS (darwin)');
     rmSync(f.archivePath, { recursive: true });
     expect(() => resolveCheckedContext(env)).toThrow('archive path');
   } finally {
-    Object.defineProperty(process, 'platform', descriptor);
     process.chdir(previousCwd);
   }
 });
@@ -2214,4 +2218,66 @@ it('requires real source-line coverage from each Cherry target even if its debug
       : f.run(cmd, args, opts);
   await expect(runUploadIosSymbols({ ...f.deps, run })).rejects.toThrow(REQUIRED_IDENTIFIERS[1]);
   expect(f.commands.some(({ args }) => args.includes('upload'))).toBe(false);
+});
+
+it.each(['linux', 'darwin'] as const)(
+  'runs and records local-build-plugin runner when CHERRY_LOCAL_RELEASE_SYMBOL_GATE is enabled (ambient %s)',
+  async (ambientPlatform) => {
+    stubPlatform(ambientPlatform);
+    const f = fixture();
+    const localBuildId = '550e8400-e29b-41d4-a716-446655440000';
+    const sourceSha = '1e1bc7acbe0e23dbde016b0e97976f24651c487f';
+    const localEnv: NodeJS.ProcessEnv = {
+      ...productionEnv(),
+      EAS_BUILD_RUNNER: 'local-build-plugin',
+      CHERRY_LOCAL_RELEASE_SYMBOL_GATE: 'true',
+      CHERRY_LOCAL_BUILD_ID: localBuildId,
+      CHERRY_SOURCE_SHA: sourceSha,
+      EXPO_PUBLIC_SENTRY_DSN: f.ctx.dsn,
+      SENTRY_URL: f.ctx.sentryUrl,
+    };
+    delete localEnv.EAS_BUILD_ID;
+    delete localEnv.EAS_BUILD_GIT_COMMIT_HASH;
+
+    const cwd = process.cwd();
+    process.chdir(f.project);
+    let ctx: ReturnType<typeof resolveBuildContext>;
+    try {
+      ctx = resolveBuildContext(localEnv);
+    } finally {
+      process.chdir(cwd);
+    }
+    expect(ctx.kind).toBe('active');
+    if (ctx.kind !== 'active') throw new Error('expected active context');
+    expect(ctx.buildId).toBe(localBuildId);
+    expect(ctx.sourceSha).toBe(sourceSha);
+    expect(ctx.env).toEqual(localEnv);
+
+    if (ambientPlatform === 'linux')
+      expect(() => validateBuildContext(ctx)).toThrow('macOS (darwin)');
+    stubPlatform('darwin');
+    const result = await runUploadIosSymbols({ ...f.deps, ctx });
+    expect(result).toMatchObject({ kind: 'verified', executables: 3 });
+    expect(f.manifest().runner).toBe('local-build-plugin');
+    expect(f.manifest().buildId).toBe(localBuildId);
+    expect(f.manifest().sourceSha).toBe(sourceSha);
+  },
+);
+
+it.each([
+  { field: 'CHERRY_LOCAL_BUILD_ID', value: 'not-a-uuid' },
+  { field: 'CHERRY_SOURCE_SHA', value: 'short' },
+  { field: 'PROFILE', value: 'development' },
+])('local release symbol gate fails preflight when $field is invalid', ({ field, value }) => {
+  const localEnv: NodeJS.ProcessEnv = {
+    ...productionEnv(),
+    EAS_BUILD_RUNNER: 'local-build-plugin',
+    CHERRY_LOCAL_RELEASE_SYMBOL_GATE: 'true',
+    CHERRY_LOCAL_BUILD_ID: '550e8400-e29b-41d4-a716-446655440000',
+    CHERRY_SOURCE_SHA: '1e1bc7acbe0e23dbde016b0e97976f24651c487f',
+    [field]: value,
+  };
+  delete localEnv.EAS_BUILD_ID;
+  delete localEnv.EAS_BUILD_GIT_COMMIT_HASH;
+  expect(() => resolveBuildContext(localEnv)).toThrow();
 });

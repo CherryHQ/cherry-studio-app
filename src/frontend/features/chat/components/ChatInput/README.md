@@ -37,11 +37,11 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   composer; afterwards it stops the selected answer by its message and turn IDs. Switching to
   a completed answer restores the send control; it stays disabled until the other answers finish.
   A queued follow-up keeps its running ancestor as the stop target.
-- Local and remote chat rest in one row when empty and outside an editing interaction. Focusing
-  the field, draft text, or attachments expand the field above its action row. The model and
-  reasoning controls appear in that row where available. The field grows with its content up to
-  the shared composer cap.
-- Editing or a nonempty draft exposes a diagonal expand action. It opens a large opaque editing
+- In local and remote chat, the ordinary field and primary actions share one row while the
+  field's software keyboard is hidden. Its keyboard opening reveals the full-width text field
+  and the model and reasoning toolbar. Closing the keyboard restores the single row with the
+  existing draft. Staged attachments occupy their own row.
+- While the keyboard is open, the diagonal expand action is available. It opens a large opaque editing
   surface below the top safe area, with a collapse action and no heading. Its background fills
   both screen edges and extends through the footer and bottom safe area. Local and
   remote conversations share the same field and toolbar; large-editor layout never remounts the
@@ -62,17 +62,10 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   Native input,
   selection, keyboard continuity, both-theme appearance and performance still require device
   acceptance; source and unit coverage do not establish native conformance.
-- Editing belongs to the whole composer. Focusing the field starts it; opening or closing the ＋
-  menu, model picker, file picker, or effort slider preserves it, including with an empty draft.
-  Native field blur and keyboard-hide notifications do not end editing. A completed background
-  press outside the composer calls `dismiss`, blurring the field and ending editing. List scrolling
-  and handled child actions do not count as background presses. Draft text and attachments still keep
-  the surface expanded. Closing an overlay by its backdrop only closes that overlay. The original
-  editing state remains in place; see the [interaction contract](../../../../../../docs/references/chat/input-interaction.md).
-- Native media pickers and model/settings Sheets replace the live input context: the shared
-  composer retains editing, pins its dock, blurs the field, and settles keyboard dismissal before presenting them.
-  It reconnects keyboard tracking only when the field receives focus again. The local chat tools
-  sheet uses this replacement path; the effort overlay retains the existing keyboard context.
+- A completed background press or send blurs the field. The keyboard transition drives the
+  layout even when the system initiates dismissal. The local tools sheet, model picker and
+  native media pickers wait for dismissal before opening. The effort overlay preserves the
+  current keyboard. See the [interaction contract](../../../../../../docs/references/chat/input-interaction.md).
 - Single-model picks save the current Session's model. A draft saves its choice with the first
   submission. A later pick during that submission saves after the Session is created. A Session
   without a choice follows the Agent's default model.
@@ -178,7 +171,8 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   queue item available to retry. Pending and accepted actions stay locked until observation removes
   the item, so repeated taps cannot send it twice. Preview/take-back retains the existing edit flow.
 
-The chat-owned context usage action stays on the right of the composer at rest and while editing.
+The chat-owned context usage action stays on the right of the composer toolbar while editing or when
+the composer holds content, keeping the resting single-row capsule focused on input and dictation.
 Tapping it opens a keyboard-preserving anchored popover with one progress row: measured occupancy,
 percentage, and declared model capacity in `k token`. The action owns the popover and remounts when
 its Session or context answer changes, so an old measurement cannot reopen it. Usage comes from

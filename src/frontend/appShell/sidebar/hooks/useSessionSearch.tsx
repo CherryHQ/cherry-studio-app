@@ -1,6 +1,5 @@
 import MessageCircleIcon from '@cherrystudio/app-icons/icons/message-circle';
 import * as Crypto from 'expo-crypto';
-import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -69,16 +68,16 @@ export function sessionSearchResultHref(result: SessionSearchResult) {
   );
 }
 
-export function useSessionSearch() {
-  const router = useRouter();
-  const request = useSessionSearchRequest();
+export function useSessionSearch(
+  request: AppSearchRequest<SessionSearchResult>,
+  onSelect: (result: SessionSearchResult) => void,
+) {
   const { open } = useAppSearch();
-
   return useCallback(() => {
     void open(request).then((outcome) => {
-      if (outcome.type === 'selected') router.navigate(sessionSearchResultHref(outcome.item));
+      if (outcome.type === 'selected') onSelect(outcome.item);
     });
-  }, [open, request, router]);
+  }, [onSelect, open, request]);
 }
 
 function SessionSearchResultRow({ result }: { result: SessionSearchResult }) {

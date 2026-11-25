@@ -15,7 +15,9 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { isAcross, useFoldRegion, useWindowClass } from '@/frontend/appShell/layout';
 import { useFocusedBackPress } from '@/frontend/appShell/navigation';
+import { useRootNavigationDockClearance } from '@/frontend/appShell/navigationShell/state';
 import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import {
   orderedSelection,
@@ -80,6 +82,17 @@ export function PaintingBoardList({ bottomInset }: { bottomInset: number }) {
   const router = useRouter();
   const isFocused = useIsFocused();
   const { onLayout, width } = useLayoutWidth();
+  const windowClass = useWindowClass();
+  const fold = useFoldRegion();
+  const dockClearance = useRootNavigationDockClearance();
+  const effectiveBottomInset = Math.max(bottomInset, dockClearance);
+  const isWideUnfolded = windowClass === 'wide' && !(fold && !isAcross(fold));
+  const columns = isWideUnfolded ? 3 : 2;
+  const galleryWidth = Math.min(width, 880);
+  const horizontalInset =
+    width > galleryWidth ? Math.max(pageEdge, Math.floor((width - galleryWidth) / 2)) : pageEdge;
+  const contentWidth = Math.max(0, galleryWidth - pageEdge * 2);
+  const columnWidth = Math.max(1, (contentWidth - columnGap * (columns - 1)) / columns);
   const backgroundColor = useThemeColor('background');
   const boards = usePaintingBoards();
   const { cards } = usePaintingBoardCards(boards.boards);
@@ -92,8 +105,6 @@ export function PaintingBoardList({ bottomInset }: { bottomInset: number }) {
     (boardId: string) => router.push({ params: { boardId }, pathname: '/paintings' }),
     [router],
   );
-  const contentWidth = Math.max(0, width - pageEdge * 2);
-  const columnWidth = Math.max(1, (contentWidth - columnGap) / 2);
   const [latest, ...rest] = cards;
   const extraData = useMemo<BoardListExtraData>(
     () => ({
@@ -123,7 +134,7 @@ export function PaintingBoardList({ bottomInset }: { bottomInset: number }) {
   );
 
   const header = (
-    <View className="gap-8 pb-5 pt-2">
+    <View className="mx-auto w-full max-w-[880px] gap-8 pt-2 pb-5">
       <PaintingTemplateStrip />
       <View className="gap-3">
         <GallerySectionHeader
@@ -171,13 +182,14 @@ export function PaintingBoardList({ bottomInset }: { bottomInset: number }) {
       <ScrollShadow
         className="flex-1"
         color={backgroundColor}
-        size={bottomInset}
+        size={effectiveBottomInset}
         visibility="bottom"
       >
         <FlashList
+          key={columns}
           contentContainerStyle={{
-            paddingBottom: bottomInset + 16,
-            paddingHorizontal: pageEdge - columnGap / 2,
+            paddingBottom: effectiveBottomInset + 16,
+            paddingHorizontal: horizontalInset - columnGap / 2,
           }}
           contentInsetAdjustmentBehavior="automatic"
           data={rest}
@@ -194,8 +206,8 @@ export function PaintingBoardList({ bottomInset }: { bottomInset: number }) {
             ) : null
           }
           ListHeaderComponent={header}
-          ListHeaderComponentStyle={{ marginHorizontal: -(pageEdge - columnGap / 2) }}
-          numColumns={2}
+          ListHeaderComponentStyle={{ marginHorizontal: -(horizontalInset - columnGap / 2) }}
+          numColumns={columns}
           onEndReached={boards.loadMore}
           onEndReachedThreshold={0.7}
           onLayout={onLayout}

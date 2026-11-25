@@ -42,6 +42,7 @@ export const ChatMessageRow = memo(function ChatMessageRow({
         isMessageActionsEnabled={isMessageActionsEnabled}
         message={message}
         renderUsage={renderUsage}
+        shouldShowDisclaimer={row.showsDisclaimer}
         shouldShowTimestamp={row.showsTimestamp}
       />
     </ConversationMessageContent>

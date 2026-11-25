@@ -118,7 +118,8 @@ runs the same workflow on the tagged commit before building.
 - Root `pnpm test` runs the `ai-runtime` package suite, then root Jest.
 - Provider registry schemas and catalog generation are tested upstream in the published package.
   Root Jest covers Mobile registry loading, compatibility projections, and consumed behavior.
-- With `PRCI` set, Jest includes `scripts/__tests__/architectureBoundaries.test.ts` to protect
+- With `PRCI` set, Jest includes `scripts/__tests__/sherpaPrebuiltCache.test.ts` to guard the
+  Sherpa prebuilt archive cache patch. It also includes `scripts/__tests__/architectureBoundaries.test.ts` to protect
   dependency rules on every PR, `scripts/__tests__/reactNativeTextCache.test.ts` to guard the
   React Native text cache patch, and `scripts/__tests__/androidWindowCompatibility.test.ts` to guard
   the Screens Material dependency patch. `scripts/__tests__/expoFilePermissions.test.ts` guards
@@ -128,6 +129,7 @@ runs the same workflow on the tagged commit before building.
   compiler-memory patch delivery and shared C++ compilation graph.
   `enrichedMarkdownInlineMath.test.ts` compiles the patched md4c and checks the inline math it
   hands both platforms' renderers.
+  `enrichedMarkdownSubmit.test.ts` guards native keyboard submission in the editor dependency patch.
   `enrichedMarkdownInputMeasurement.test.ts` guards the iOS input measurement patch; its native
   regression requires an explicitly selected simulator
   as described in [Development](./development.md#enriched-markdown-patch). Other `scripts/__tests__/` suites, including
