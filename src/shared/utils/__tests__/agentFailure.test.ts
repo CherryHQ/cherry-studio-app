@@ -43,6 +43,67 @@ describe('classifyAgentFailureReason', () => {
       },
       'unknown',
     ],
+    [
+      {
+        code: 'billing_not_active',
+        message: '429',
+        responseBody:
+          '{"error":{"type":"rate_limit_error","code":"billing_not_active","message":"Your account is not active, please check your billing details."}}',
+        statusCode: 429,
+      },
+      'quota',
+    ],
+    [
+      {
+        code: 'insufficient_balance',
+        message: '429',
+        responseBody:
+          '{"error":{"type":"rate_limit_error","code":"insufficient_balance","message":"余额不足"}}',
+        statusCode: 429,
+      },
+      'quota',
+    ],
+    [
+      {
+        code: 'forbidden',
+        message: '403',
+        responseBody:
+          '{"error":{"code":"permission_denied","message":"Country, region, or territory not supported"}}',
+        statusCode: 403,
+      },
+      'region',
+    ],
+    [
+      {
+        code: 'invalid_request',
+        message: '400',
+        responseBody: JSON.stringify({
+          error: {
+            code: 'invalid_request',
+            param: '',
+            message: "Unsupported parameter: 'max_tokens' is not supported",
+          },
+        }),
+        statusCode: 400,
+      },
+      'invalid_input',
+    ],
+    [
+      {
+        code: 'invalid_request',
+        message: "422 Unsupported parameter: 'max_tokens'",
+        statusCode: 422,
+      },
+      'invalid_input',
+    ],
+    [
+      {
+        code: 'invalid_request',
+        message: "OpenAI API error (400): Unsupported parameter: 'max_output_tokens'",
+        statusCode: 400,
+      },
+      'invalid_input',
+    ],
     [{ message: 'HTTP 429', responseBody: '{"type":"insufficient_quota"}' }, 'quota'],
     [{ code: 'insufficient_user_quota', message: 'Request failed', statusCode: 403 }, 'quota'],
     [

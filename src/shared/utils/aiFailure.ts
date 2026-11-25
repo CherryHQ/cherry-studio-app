@@ -141,12 +141,32 @@ const FALLBACK_CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> 
   usage_not_included: 'quota',
 };
 
+const REFINABLE_PROVIDER_CODES = new Set([
+  'permission_denied',
+  'rate_limit_error',
+  'rate_limit_exceeded',
+]);
+
 function includesAny(text: string, values: readonly string[]): boolean {
   return values.some((value) => text.includes(value));
 }
 
 function reasonForCode(reasons: typeof CODE_REASONS, code?: string) {
   return code && Object.hasOwn(reasons, code) ? reasons[code] : undefined;
+}
+
+function providerCodeReason(
+  provider: ReturnType<typeof readProviderErrorDiagnostics>,
+  reasons: typeof CODE_REASONS,
+  skip?: ReadonlySet<string>,
+) {
+  for (const value of [provider.providerCode, provider.providerType]) {
+    const key = value?.toLowerCase();
+    if (!key || key === 'forbidden' || skip?.has(key)) continue;
+    const reason = reasonForCode(reasons, key);
+    if (reason) return reason;
+  }
+  return undefined;
 }
 
 /**
@@ -181,11 +201,8 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
   }
 
   const provider = readProviderErrorDiagnostics(facts.responseBody, facts.message);
-  for (const value of [provider.providerCode, provider.providerType]) {
-    const key = value?.toLowerCase();
-    const reason = reasonForCode(CODE_REASONS, key);
-    if (reason && key !== 'forbidden') return reason;
-  }
+  const providerReason = providerCodeReason(provider, CODE_REASONS, REFINABLE_PROVIDER_CODES);
+  if (providerReason) return providerReason;
   const text = [facts.name, facts.message, facts.responseBody]
     .filter((value): value is string => Boolean(value))
     .join('\n')
@@ -380,5 +397,10 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
   if (provider.parameter && (resolvedStatusCode === 400 || resolvedStatusCode === 422)) {
     return 'invalid_input';
   }
-  return reasonForCode(FALLBACK_CODE_REASONS, code) ?? 'unknown';
+  return (
+    reasonForCode(FALLBACK_CODE_REASONS, code) ??
+    providerCodeReason(provider, CODE_REASONS) ??
+    providerCodeReason(provider, FALLBACK_CODE_REASONS) ??
+    'unknown'
+  );
 }

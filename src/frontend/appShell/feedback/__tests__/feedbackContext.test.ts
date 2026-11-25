@@ -24,6 +24,37 @@ test('projects only machine rejection details from saved SDK and gateway error e
   expect(
     JSON.stringify(feedbackFailureContext({ context: { responseBody: JSON.stringify(unsafe) } })),
   ).not.toMatch(/providerCode|providerType|parameter|private|Bearer/);
+  expect(
+    feedbackFailureContext({
+      context: {
+        responseBody: JSON.stringify({
+          error: {
+            code: 'invalid_request',
+            param: '',
+            message: "Unsupported parameter: 'max_tokens'",
+          },
+        }),
+      },
+    }).error,
+  ).toMatchObject({ providerCode: 'invalid_request', parameter: 'max_tokens' });
+  expect(
+    feedbackFailureContext({
+      source: { layer: 'provider' },
+      message: "OpenAI API error (400): Unsupported parameter: 'max_output_tokens'",
+    }).error?.parameter,
+  ).toBe('max_output_tokens');
+  expect(
+    feedbackFailureContext({
+      source: { layer: 'host' },
+      message: "OpenAI API error (400): Unsupported parameter: 'max_output_tokens'",
+    }).error?.parameter,
+  ).toBeUndefined();
+  expect(
+    feedbackFailureContext({
+      source: { layer: 'provider' },
+      message: "OpenAI API error (400): Unsupported parameter: 'private_field'",
+    }).error?.parameter,
+  ).toBeUndefined();
 });
 
 test('projects failure metadata without copying provider text or request payloads', () => {

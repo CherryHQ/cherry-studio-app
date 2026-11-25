@@ -93,8 +93,8 @@ function record(value: unknown): Record<string, unknown> | undefined {
 function rejectedParameter(message: unknown): string | undefined {
   if (typeof message !== 'string') return undefined;
   const match =
-    /^(?:400\s+)?(?:unsupported|unrecognized|unknown|invalid) (?:parameter|argument):?\s+['"`]([a-z_]+)['"`]/i.exec(
-      message,
+    /^(?:(?:[\w.-]{1,64}\s+API error\s*\((?:400|422)\):|(?:400|422):?)\s+)?(?:unsupported|unrecognized|unknown|invalid) (?:parameter|argument):?\s+['"`]([a-z_]+)['"`]/i.exec(
+      message.trimStart(),
     );
   return diagnosticRequestParameter(match?.[1]);
 }
@@ -123,11 +123,12 @@ export function readProviderErrorDiagnostics(
   const providerType = diagnosticProviderCode(error?.type);
   // Report the public root of a path such as messages[3].content, never its arbitrary suffix.
   const parameter =
-    typeof error?.param === 'string'
+    (typeof error?.param === 'string'
       ? diagnosticRequestParameter(error.param.match(/^\w+(?=\.|\[|$)/)?.[0])
-      : (rejectedParameter(error?.message) ??
-        rejectedParameter(message) ??
-        rejectedParameter(responseBody));
+      : undefined) ??
+    rejectedParameter(error?.message) ??
+    rejectedParameter(message) ??
+    rejectedParameter(responseBody);
   return {
     ...(providerCode && { providerCode }),
     ...(providerType && { providerType }),
