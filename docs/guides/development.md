@@ -74,7 +74,7 @@ block leaves when upstream ships an equivalent.
 | iOS asynchronous clipboard paste keeping Markdown | Bug fix | #1467, #1476 | Not fixed in 1.1.1 | Upstream reads the clipboard asynchronously |
 | Table scrolling | Bug fix | #606 | Not upstream | Upstream scrolls wide tables |
 | iOS code text drawn only around the visible window | Bug fix | #1530 | Not fixed in 1.1.1; a full-size backing store leaves a code block of a few thousand lines blank | Upstream draws long code blocks without a full-size backing store |
-| Native soft-keyboard submit and Send label (TS/JS, generated props/events, iOS and Android) | Product feature | #1573, #1591 | Not upstream | Upstream supplies a submit event that preserves IME composition and explicit newlines |
+| Native soft-keyboard submit and Send label on iOS and Android, plus hardware Return on iOS | Product feature | #1573, #1591, #1879 | Not upstream | Upstream supplies a submit event that preserves IME composition and explicit newlines |
 | Native input custom edit actions at the caret and selection | Product feature | #1573, #1591 | 1.1.1 limits custom actions to nonempty selections | Upstream exposes custom actions in both insertion and selection menus |
 | Link variant `icon` and `iconTint` (codegen `Props.h`, TS, both platforms) | Product feature | #606 | Propose as an issue; upstream already has `icon` for context menus and admonitions | Upstream ships link icons |
 | Input link presses with local text-range bounds (native recognizers, emitters, JS and codegen declarations) | Product feature | Inline message quotes | Not upstream in 1.1.1 | Upstream exposes input link taps and their bounds |

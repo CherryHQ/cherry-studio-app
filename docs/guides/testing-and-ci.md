@@ -129,6 +129,7 @@ runs the same workflow on the tagged commit before building.
   compiler-memory patch delivery and shared C++ compilation graph.
   `enrichedMarkdownInlineMath.test.ts` compiles the patched md4c and checks the inline math it
   hands both platforms' renderers.
+  `enrichedMarkdownSubmit.test.ts` guards native keyboard submission in the editor dependency patch.
   `enrichedMarkdownInputMeasurement.test.ts` guards the iOS input measurement patch; its native
   regression requires an explicitly selected simulator
   as described in [Development](./development.md#enriched-markdown-patch). Other `scripts/__tests__/` suites, including
