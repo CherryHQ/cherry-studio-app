@@ -342,6 +342,7 @@ export function createPiModelResolver(
           : {}),
         cacheRetention: provider.settings.cacheControl?.enabled === false ? 'none' : 'short',
         sessionId,
+        isCloudGateway: provider.id === CLOUD_PROVIDER_ID,
         fetch: (provider.id === CLOUD_PROVIDER_ID
           ? application.get('CloudRuntime').createModelFetch(modelId, cloudUse)
           : isDevMock

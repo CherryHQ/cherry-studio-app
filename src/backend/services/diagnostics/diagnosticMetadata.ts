@@ -4,6 +4,12 @@ import { AiFailureReasonSchema } from '@/shared/contracts/aiFailure';
 import { TraceSpanRecordSchema } from '@/shared/data/types/trace';
 import { readKnownAiFinishReason } from '@/shared/utils/aiFailure';
 import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
+import {
+  diagnosticGatewayRequestId,
+  diagnosticMessageRoles,
+  diagnosticProviderCode,
+  diagnosticRequestParameter,
+} from '@/shared/utils/providerDiagnostics';
 
 const LOG_MESSAGES = new Set([
   'Startup stage',
@@ -98,6 +104,10 @@ const TRACE_FIELDS = new Set([
   'error.type',
   'error.code',
   'error.source.code',
+  'error.provider.code',
+  'error.provider.type',
+  'error.provider.param',
+  'cherry.gateway.request_id',
   'error.product_reason',
   'error.origin',
   'error.retryable',
@@ -112,6 +122,8 @@ const TRACE_FIELDS = new Set([
   'plugin.stage',
   'plugin.state',
   'gen_ai.request.model',
+  'gen_ai.request.model_omitted',
+  'gen_ai.request.message_roles',
   'gen_ai.request.estimate_source',
   'gen_ai.request.max_tokens_field',
   'gen_ai.provider.id',
@@ -135,6 +147,12 @@ const TRACE_FIELDS = new Set([
 ]);
 
 function metadataValue(key: string, value: unknown): string | number | boolean | undefined {
+  if (key === 'error.provider.code' || key === 'error.provider.type')
+    return diagnosticProviderCode(value);
+  if (key === 'error.provider.param') return diagnosticRequestParameter(value);
+  if (key === 'cherry.gateway.request_id') return diagnosticGatewayRequestId(value);
+  if (key === 'gen_ai.request.message_roles') return diagnosticMessageRoles(value);
+  if (key === 'gen_ai.request.model_omitted') return value === true ? true : undefined;
   if (key === 'gen_ai.response.raw_finish_reason') return readKnownAiFinishReason(value);
   if (TRACE_NUMBER_FIELDS.has(key))
     return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;

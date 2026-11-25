@@ -5,6 +5,8 @@ import { getCurrentTools } from '@earendil-works/pi-ai/utils/transcript';
 
 import type { AiFailureReason } from '@/shared/contracts/aiFailure';
 import { classifyAiFailureReason } from '@/shared/utils/aiFailure';
+import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
+import { summarizeMessageRoles } from '@/shared/utils/providerDiagnostics';
 
 import { traceErrorAttributes, type TraceAttributes } from '../../../observability';
 import { readPiTerminalError } from './piModelError';
@@ -38,7 +40,8 @@ export function piModelTerminalErrorAttributes(message: AssistantMessage): Trace
     ...traceErrorAttributes({
       name: error.name,
       code: error.code,
-      statusCode: error.context?.statusCode,
+      context: error.context,
+      message: error.message,
       // Use Pi's existing classifier, including its quota and cancellation rules.
       retryable: isRetryableAssistantError(message),
       origin: 'provider',
@@ -74,7 +77,7 @@ export function piModelRequestAttributes(
   }
 }
 
-/** Read only the output cap after all application payload transforms. Never retain the body. */
+/** Project bounded protocol facts after application payload transforms. */
 export function piModelPayloadAttributes(payload: unknown, api: Api): TraceAttributes {
   if (!payload || typeof payload !== 'object') return {};
   const body = payload as Record<string, unknown>;
@@ -91,7 +94,15 @@ export function piModelPayloadAttributes(payload: unknown, api: Api): TraceAttri
           ? 'max_completion_tokens'
           : 'max_tokens';
   const limit = field === 'config.maxOutputTokens' ? config?.maxOutputTokens : body[field];
+  const model = diagnosticIdentifier(body.model);
   return {
+    'gen_ai.request.message_roles': summarizeMessageRoles(
+      body.messages ?? body.contents ?? body.input,
+    ),
+    ...(typeof body.model === 'string' && {
+      'gen_ai.request.model': model,
+      'gen_ai.request.model_omitted': model === undefined ? true : undefined,
+    }),
     'gen_ai.request.max_tokens': typeof limit === 'number' ? limit : undefined,
     'gen_ai.request.max_tokens_field': limit === undefined ? 'omitted' : field,
   };

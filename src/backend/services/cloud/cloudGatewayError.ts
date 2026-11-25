@@ -47,6 +47,7 @@ export class CloudGatewayRequestError extends Error {
   constructor(
     readonly statusCode: number,
     readonly code: string,
+    readonly gatewayRequestId?: string,
   ) {
     super(`Cloud request failed (${statusCode}) ${code}`);
     this.name = 'CloudGatewayRequestError';

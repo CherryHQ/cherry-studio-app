@@ -1,5 +1,7 @@
 import type { AiFailureReason } from '@/shared/contracts/aiFailure';
 
+import { readProviderErrorDiagnostics } from './providerDiagnostics';
+
 export type AiFailureFacts = {
   code?: string;
   finishReason?: string;
@@ -117,6 +119,8 @@ const CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
   unsupported_input: 'invalid_input',
   unsupported_tool: 'invalid_input',
   unsupported_tools: 'invalid_input',
+  unsupported_parameter: 'invalid_input',
+  unsupported_value: 'invalid_input',
 };
 
 // These provider/transport codes fill an unknown cause without replacing the existing
@@ -141,6 +145,10 @@ function includesAny(text: string, values: readonly string[]): boolean {
   return values.some((value) => text.includes(value));
 }
 
+function reasonForCode(reasons: typeof CODE_REASONS, code?: string) {
+  return code && Object.hasOwn(reasons, code) ? reasons[code] : undefined;
+}
+
 /**
  * Stable product classification derived from allowlisted failure facts.
  * Specific source codes win; a generic `forbidden` code still yields to more
@@ -148,7 +156,7 @@ function includesAny(text: string, values: readonly string[]): boolean {
  */
 export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason {
   const code = facts.code?.trim().toLowerCase();
-  const codeReason = code ? CODE_REASONS[code] : undefined;
+  const codeReason = reasonForCode(CODE_REASONS, code);
   if (codeReason && code !== 'forbidden') {
     return codeReason;
   }
@@ -172,6 +180,12 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
     return 'content_filter';
   }
 
+  const provider = readProviderErrorDiagnostics(facts.responseBody, facts.message);
+  for (const value of [provider.providerCode, provider.providerType]) {
+    const key = value?.toLowerCase();
+    const reason = reasonForCode(CODE_REASONS, key);
+    if (reason && key !== 'forbidden') return reason;
+  }
   const text = [facts.name, facts.message, facts.responseBody]
     .filter((value): value is string => Boolean(value))
     .join('\n')
@@ -363,5 +377,8 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
   ) {
     return 'parse';
   }
-  return (code && FALLBACK_CODE_REASONS[code]) || 'unknown';
+  if (provider.parameter && (resolvedStatusCode === 400 || resolvedStatusCode === 422)) {
+    return 'invalid_input';
+  }
+  return reasonForCode(FALLBACK_CODE_REASONS, code) ?? 'unknown';
 }

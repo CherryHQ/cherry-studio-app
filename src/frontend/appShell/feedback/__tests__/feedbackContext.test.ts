@@ -4,6 +4,28 @@ import {
   feedbackTimestamp,
 } from '../feedbackContext';
 
+test('projects only machine rejection details from saved SDK and gateway error envelopes', () => {
+  const error = {
+    type: 'invalid_request_error',
+    code: 'invalid_value',
+    param: 'messages[3].private',
+    message: 'private prompt',
+  };
+  for (const body of [error, { error }, { detail: { error } }]) {
+    expect(
+      feedbackFailureContext({ context: { responseBody: JSON.stringify(body) } }).error,
+    ).toMatchObject({
+      providerType: 'invalid_request_error',
+      providerCode: 'invalid_value',
+      parameter: 'messages',
+    });
+  }
+  const unsafe = { ...error, type: 'Bearer secret', code: 'sk-private', param: 'private' };
+  expect(
+    JSON.stringify(feedbackFailureContext({ context: { responseBody: JSON.stringify(unsafe) } })),
+  ).not.toMatch(/providerCode|providerType|parameter|private|Bearer/);
+});
+
 test('projects failure metadata without copying provider text or request payloads', () => {
   const context = feedbackFailureContext({
     code: 'EXECUTION_FAILED',

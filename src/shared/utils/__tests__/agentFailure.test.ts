@@ -17,6 +17,32 @@ describe('classifyAgentFailureReason', () => {
     ],
     [{ message: 'The requested model is not supported.', statusCode: 400 }, 'model_not_found'],
     [{ code: 'invalid_request_error', message: 'Invalid request', statusCode: 400 }, 'unknown'],
+    [
+      {
+        code: 'invalid_request',
+        message: '400',
+        responseBody: '{"error":{"code":"unsupported_parameter","param":"reasoning_effort"}}',
+        statusCode: 400,
+      },
+      'invalid_input',
+    ],
+    [
+      {
+        code: 'invalid_request',
+        message: "400 Unsupported parameter: 'max_tokens'",
+        statusCode: 400,
+      },
+      'invalid_input',
+    ],
+    [
+      {
+        code: 'invalid_request',
+        message: 'Invalid request',
+        responseBody: '{"error":{"code":"constructor"}}',
+        statusCode: 400,
+      },
+      'unknown',
+    ],
     [{ message: 'HTTP 429', responseBody: '{"type":"insufficient_quota"}' }, 'quota'],
     [{ code: 'insufficient_user_quota', message: 'Request failed', statusCode: 403 }, 'quota'],
     [

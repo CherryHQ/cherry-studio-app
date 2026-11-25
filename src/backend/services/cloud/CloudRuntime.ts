@@ -33,6 +33,7 @@ import {
   type CloudState,
 } from '@/shared/contracts/cloud';
 import { isEnterpriseProfile } from '@/shared/data/activeProfile';
+import { readGatewayRequestId } from '@/shared/utils/providerDiagnostics';
 
 import { cloudActivationPath, CLOUD_AMD_STATUS_PATH, readCloudActivationEntry } from './cloudAmd';
 import { cloudClientSignatureHeaders } from './cloudClientSignature';
@@ -680,7 +681,11 @@ export class CloudRuntime extends BaseService implements CloudModule {
       await response.body?.cancel().catch(() => {});
       const failureCode =
         !session && status === 401 ? 'cloud_unavailable' : (code ?? 'RATE_LIMITED');
-      throw new CloudGatewayRequestError(status, failureCode);
+      throw new CloudGatewayRequestError(
+        status,
+        failureCode,
+        readGatewayRequestId(response.headers),
+      );
     }
   }
 

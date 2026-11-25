@@ -3,6 +3,7 @@ import { AiFailureReasonSchema } from '@/shared/contracts/aiFailure';
 import { PluginError } from '@/shared/contracts/plugins';
 import type { TraceContext, TraceSpanStatus } from '@/shared/data/types/trace';
 import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
+import { readProviderErrorDiagnostics } from '@/shared/utils/providerDiagnostics';
 
 export type TraceAttributes = Record<string, string | number | boolean | undefined>;
 export type TraceEndStatus = Exclude<TraceSpanStatus, 'running'>;
@@ -64,7 +65,7 @@ const PLUGIN_REASONS = new Set([
 
 const SENSITIVE_KEY =
   /authorization|cookie|credential|password|secret|api.?key|access.?token|refresh.?token|prompt|input|output|body|header/i;
-const MAX_TRACE_ATTRIBUTES = 24;
+const MAX_TRACE_ATTRIBUTES = 32;
 
 export function sanitizeTraceAttributes(
   attributes: TraceAttributes = {},
@@ -105,6 +106,10 @@ export function traceErrorAttributes(error: unknown): TraceAttributes {
     const context = record(source.context) ?? record(failure?.context);
     const name = wrapper.name ?? source.name ?? failureSource?.name;
     const origin = source.origin ?? failureSource?.layer;
+    const provider = readProviderErrorDiagnostics(
+      context?.responseBody,
+      origin === 'provider' ? source.message : undefined,
+    );
     return sanitizeTraceAttributes({
       'error.type': typeof name === 'string' ? name : undefined,
       'error.code':
@@ -112,6 +117,9 @@ export function traceErrorAttributes(error: unknown): TraceAttributes {
           ? source.code
           : undefined,
       'error.source.code': typeof failureSource?.code === 'string' ? failureSource.code : undefined,
+      'error.provider.code': provider.providerCode,
+      'error.provider.type': provider.providerType,
+      'error.provider.param': provider.parameter,
       'error.product_reason': productReason?.success ? productReason.data : undefined,
       'error.origin': typeof origin === 'string' ? origin : undefined,
       'error.retryable': typeof source.retryable === 'boolean' ? source.retryable : undefined,

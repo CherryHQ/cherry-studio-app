@@ -158,17 +158,17 @@ describe('TraceSession', () => {
 
   it('counts only retained attributes toward the limit and makes truncation visible', () => {
     const omitted = Object.fromEntries(
-      Array.from({ length: 24 }, (_, index) => [`prompt${index}`, 'private']),
+      Array.from({ length: 32 }, (_, index) => [`prompt${index}`, 'private']),
     );
     expect(sanitizeTraceAttributes({ ...omitted, 'http.status_code': 400 })).toEqual({
       'http.status_code': 400,
     });
     const attributes = Object.fromEntries(
-      Array.from({ length: 25 }, (_, index) => [`fact${index}`, index]),
+      Array.from({ length: 33 }, (_, index) => [`fact${index}`, index]),
     );
     const safe = sanitizeTraceAttributes(attributes);
-    expect(safe).toHaveProperty('fact23', 23);
-    expect(safe).not.toHaveProperty('fact24');
+    expect(safe).toHaveProperty('fact31', 31);
+    expect(safe).not.toHaveProperty('fact32');
     expect(safe['trace.attributes_truncated']).toBe(true);
     expect(sanitizeTraceAttributes(safe)).toEqual(safe);
   });
@@ -176,7 +176,7 @@ describe('TraceSession', () => {
   it('keeps terminal facts when request facts already fill the attribute limit', () => {
     const { root, records } = capture();
     root.setAttributes(
-      Object.fromEntries(Array.from({ length: 30 }, (_, index) => [`fact${index}`, index])),
+      Object.fromEntries(Array.from({ length: 35 }, (_, index) => [`fact${index}`, index])),
     );
     root.end('error', { 'error.category': 'network', 'error.retry_scope': 'automatic' });
     const attributes = records.at(-1)?.attributes;

@@ -3,6 +3,12 @@ import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { CacheRetention, FetchFunction, ProviderHeaders } from '@earendil-works/pi-ai';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
+import type { TraceSpan } from '@/backend/utils/diagnosticTrace';
+import {
+  diagnosticGatewayRequestId,
+  readGatewayRequestId,
+} from '@/shared/utils/providerDiagnostics';
+
 import { piModelPayloadAttributes } from './piModelDiagnostics';
 import type { PiStreamFn } from './piModelTypes';
 import {
@@ -133,6 +139,7 @@ export function resolvePiApiAdapter(
 }
 
 type PiStreamBinding = {
+  isCloudGateway?: boolean;
   accessToken?: string;
   vertex?: VertexAnthropicOptions['vertex'];
   apiKey?: string;
@@ -163,6 +170,7 @@ function withTransportCode(error: unknown, init: RequestInit | undefined, code: 
 function withRetryableBodyFailure(
   fetch: FetchFunction,
   reportFetchFailure: ((error: unknown) => void) | undefined,
+  gatewayTrace?: TraceSpan,
 ): FetchFunction {
   return async (input, init) => {
     reportFetchFailure?.(undefined);
@@ -170,9 +178,19 @@ function withRetryableBodyFailure(
     try {
       response = await fetch(input, init);
     } catch (error) {
+      gatewayTrace?.setAttributes({
+        'cherry.gateway.request_id': diagnosticGatewayRequestId(
+          error instanceof Error && 'gatewayRequestId' in error
+            ? error.gatewayRequestId
+            : undefined,
+        ),
+      });
       reportFetchFailure?.(error);
       throw withTransportCode(error, init, 'no_response');
     }
+    gatewayTrace?.setAttributes({
+      'cherry.gateway.request_id': readGatewayRequestId(response.headers),
+    });
     const source = response.ok ? response.body : null;
     if (!source) return response;
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
@@ -210,7 +228,11 @@ export async function bindPiStream(
   return (model, context, options) => {
     const { reportFetchFailure, trace, ...providerOptions } = options ?? {};
     const fetch = adapter.supportsCustomFetch
-      ? withRetryableBodyFailure(binding.fetch, reportFetchFailure)
+      ? withRetryableBodyFailure(
+          binding.fetch,
+          reportFetchFailure,
+          binding.isCloudGateway ? trace : undefined,
+        )
       : undefined;
     const maxTokens = options?.maxTokens ?? binding.maxTokens;
     const temperature = options?.temperature ?? binding.temperature;
