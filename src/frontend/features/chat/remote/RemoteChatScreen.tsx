@@ -35,6 +35,7 @@ import { MainHeaderView } from '@/frontend/appShell/header';
 import {
   parseRemoteChatRoute,
   type RemoteChatRouteParams,
+  type RemoteChatTarget,
   useChatSource,
 } from '@/frontend/appShell/navigation/chat';
 import { useNavigationDockClearance } from '@/frontend/appShell/navigationShell/state';
@@ -73,7 +74,7 @@ export function RemoteChatScreen() {
       source={{ kind: 'desktop', connectionId: target.connectionId }}
       fallback={(state) => <RemoteChatUnavailable state={state} />}
     >
-      <RemoteChatSession />
+      <RemoteChatRoute target={target} />
     </ConversationSourceBoundary>
   ) : (
     <RemoteChatUnavailable state="unpaired" />
@@ -115,29 +116,23 @@ function UnresolvedRemoteHeader({ blurTarget }: { blurTarget: RefObject<ViewInst
 
 const HeaderContext = createContext<{
   agent?: AgentSummary;
-  selectAgent(agentId: string): void;
-  startNewChat(agentId?: string): void;
+  agents: ReturnType<typeof useConversationAgents>;
+  navigation?: ReturnType<typeof useRemoteChatNavigation>;
 } | null>(null);
-function RemoteHeader({
-  blurTarget,
-  hidden,
-  selection,
-}: {
+function RemoteHeader(props: {
   blurTarget: RefObject<ViewInstance | null>;
   hidden?: boolean;
   selection?: { selectedCount: number; onExit(): void };
 }) {
-  const header = use(HeaderContext)!;
-  const catalog = useConversationAgents();
+  const { agent, agents, navigation } = use(HeaderContext)!;
   const [pickerOpen, setPickerOpen] = useState(false);
+  if (!navigation) return <MainHeaderView {...props} agent={agent} />;
   return (
     <>
       <MainHeaderView
-        agent={header.agent}
-        blurTarget={blurTarget}
-        hidden={hidden}
-        selection={selection}
-        onNewChat={() => header.startNewChat(header.agent?.id)}
+        {...props}
+        agent={agent}
+        onNewChat={() => navigation.startNewChat(agent?.id)}
         onAgentPress={() => {
           Keyboard.dismiss();
           setPickerOpen(true);
@@ -145,23 +140,37 @@ function RemoteHeader({
       />
       <AgentPickerSheet
         testID="main-header-agent-picker"
-        catalog={catalog}
-        currentAgentId={header.agent?.id}
+        catalog={agents}
+        currentAgentId={agent?.id}
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
-        onSelect={header.selectAgent}
+        onSelect={navigation.selectAgent}
       />
     </>
   );
 }
 const ignorePending = () => {};
-function RemoteChatSession() {
+function RemoteChatRoute({ target }: { target: RemoteChatTarget }) {
+  const source = useRemoteConversationSource();
+  const navigation = useRemoteChatNavigation(target, source);
+  const opened = useConversation(
+    target.sessionId ? { source: source.ref, sessionId: target.sessionId } : undefined,
+    source,
+  );
+  return <RemoteChatSession target={target} opened={opened} navigation={navigation} />;
+}
+
+type RemoteChatSessionProps = { opened: ReturnType<typeof useConversation> } & (
+  | { target: RemoteChatTarget; navigation: ReturnType<typeof useRemoteChatNavigation> }
+  | { target: RemoteChatTarget & { sessionId: string }; navigation?: never }
+);
+
+export function RemoteChatSession({ target, opened, navigation }: RemoteChatSessionProps) {
   const sidebarPresence = useSidebarPresence();
   const source = useRemoteConversationSource();
   const connectionId = source.ref.kind === 'desktop' ? source.ref.connectionId : undefined;
   const { availability } = useConversationSourceState();
   const desktopConnections = useBackendModule('desktopConnections');
-  const target = parseRemoteChatRoute(useLocalSearchParams<RemoteChatRouteParams>());
   const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
   const dockClearance = useNavigationDockClearance();
@@ -170,12 +179,6 @@ function RemoteChatSession() {
   const setComposerHeight = useCallback(
     (height: number) => composerHeight.set(height),
     [composerHeight],
-  );
-  const { draftId, identity, selectAgent, startNewChat, onSessionCreated } =
-    useRemoteChatNavigation(target, source);
-  const opened = useConversation(
-    target.sessionId ? { source: source.ref, sessionId: target.sessionId } : undefined,
-    source,
   );
   useBackgroundTaskNotifications(
     connectionId && target.sessionId
@@ -218,10 +221,12 @@ function RemoteChatSession() {
     if (agentId && !agent && agents.hasNextPage && !agents.isFetchingNextPage && !agents.isError)
       void agents.fetchNextPage();
   }, [agentId, agent, agents]);
-  const draftKey = `${source.draftScope}:${target.connectionId}:${target.sessionId ? `session:${target.sessionId}` : identity}`;
+  const sessionKey = `session:${target.sessionId}`;
+  const identity = navigation?.identity ?? sessionKey;
+  const draftKey = `${source.draftScope}:${target.connectionId}:${target.sessionId ? sessionKey : identity}`;
   return (
     // oxlint-disable-next-line react/jsx-no-constructed-context-values -- Preserve current header updates; memoization needs consumer-cost evidence.
-    <HeaderContext value={{ agent, selectAgent, startNewChat }}>
+    <HeaderContext value={{ agent, agents, navigation }}>
       <ChatScreenFrame header={RemoteHeader}>
         <ChatShareSelectionProvider target={shareTarget} messages={messages}>
           <ComposerSessionProvider
@@ -297,9 +302,9 @@ function RemoteChatSession() {
                     agent={agent}
                     session={opened.session}
                     snapshot={snapshot}
-                    draftId={target.sessionId ? undefined : draftId}
+                    draftId={target.sessionId ? undefined : navigation?.draftId}
                     draftKey={draftKey}
-                    onSessionCreated={onSessionCreated}
+                    onSessionCreated={navigation?.onSessionCreated}
                   />
                 </View>
               </ComposerDock>

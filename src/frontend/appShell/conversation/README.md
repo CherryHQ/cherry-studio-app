@@ -70,7 +70,7 @@ completion are prioritized in that order when several Sessions have different st
 
 `remote/` is the desktop-owned contract and its consumers. `remoteContracts.ts` adds what the
 authoritative-elsewhere case requires: `RemoteConversationSource` with `openSession` and a
-task-scoped read-only opener, drafts with
+task-scoped opener, drafts with
 idempotent starts and the operation journal; `RemoteConversationSession` with observation
 activation, `HistoryWindow` revisions and cursors, and `prepareSelection`; `pending`/`interrupted`
 outcomes; `RemoteConversationSnapshot` with `historyVersion`, send admission and terminal execution
@@ -92,8 +92,8 @@ Task metadata is a separate `RemoteTaskCatalogQueries` contract in `remote/remot
 exposed as `RemoteConversationSource.tasks`. It is not part of `RemoteConversationCatalog`.
 Task hooks consume only these reads and own their visible-list polling policy. Both catalogs share
 the retained source, binding-scoped metadata cache, cursor validation and read cancellation.
-The task-session opener composes backend task membership validation with the existing read-only
-conversation Session; it does not implement task queries itself.
+The task-session opener verifies membership through the backend task catalog before exposing the
+existing remote conversation Session and its actions.
 
 Retired catalogs, windows and deferred reads are cancelled and evicted from Query. Cursor and
 resource refs are bound to the source scope; a replacement pairing cannot reuse them. The desktop

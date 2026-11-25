@@ -2,7 +2,7 @@
 
 This page owns the desktop scheduled-task catalog. The Remote sidebar opens it for the current
 desktop connection. Task rows expand into paginated conversation summaries; selecting a conversation
-navigates to the chat-owned read-only transcript. Returning preserves expansion and selection.
+navigates to the existing desktop conversation for follow-ups. Returning preserves expansion and selection.
 
 ## Public interface
 

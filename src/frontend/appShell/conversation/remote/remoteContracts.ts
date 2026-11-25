@@ -162,7 +162,7 @@ export interface RemoteConversationSource extends ConversationSource {
   /** Whether the draft's input already belongs to a start; an undelivered one stays with the draft. */
   hasSubmission(draftId: DraftId): boolean;
   openSession(ref: ConversationRef, signal: AbortSignal): Promise<RemoteConversationSession>;
-  /** Task-scoped membership is verified before opening a capability-free reader. */
+  /** Verifies membership in the selected task before opening the existing conversation. */
   openTaskSession(
     taskId: string,
     ref: ConversationRef,

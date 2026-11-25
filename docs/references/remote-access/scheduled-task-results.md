@@ -2,7 +2,7 @@
 
 Remote has a separate **Scheduled tasks** destination for the selected desktop. Each task is a
 parent row showing its Agent and schedule. Expanding it lists the task's conversations, and selecting
-one opens a read-only transcript. Returning preserves the list's expansion and selection.
+one opens the existing desktop conversation for follow-up messages. Returning preserves the list's expansion and selection.
 Creation, editing, task controls and run-history management remain on desktop.
 
 Desktop [PR #24299](https://github.com/CherryHQ/cherry-studio/pull/24299) provides
@@ -18,10 +18,11 @@ capability is read-only and retires with its caller. Frontend task queries are s
 conversation catalog; the shared source still owns authorization, connection demand, cursor scope
 and cancellation. No separate task runtime or connection is created.
 
-The chat route confirms task membership before opening a Session. Its read model omits send,
-cancel, approval, attachment-upload and undelivered-message actions. The header has no new-chat or
-Agent-picker action, and no composer is mounted. Existing history, live result rendering, readable
-content, copying, speech and sharing use the shared chat components.
+The chat route confirms task membership before it mounts the remote chat and its composer.
+Follow-ups use the same Session and the desktop's current send permission. A busy Session can
+accept another message once the desktop reports it idle. The header keeps the task's Agent fixed.
+History, live results, attachments, approvals, command recovery and sharing use the ordinary remote
+chat components. Sending a follow-up changes the conversation history and preserves the task schedule.
 
 Task conversations are excluded from ordinary Remote catalogs using the same authoritative task
 association. The backend caches this association for 30 seconds within one authorized source; an
