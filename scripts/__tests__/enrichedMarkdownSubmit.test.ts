@@ -11,7 +11,7 @@ const additions = (path: string) =>
     .join('\n');
 
 // Upgrade guards for the maintained native boundary. These do not establish IME/device behavior.
-describe('native soft-keyboard submission', () => {
+describe('native keyboard submission', () => {
   test('exposes custom edit actions at an iOS caret without adding selection-only actions', () => {
     const menu = additions('ios/input/EnrichedMarkdownTextInput+ContextMenu.mm');
     expect(menu).toContain('range.length == 0 && [self contextMenuItemTexts].count == 0');
@@ -44,18 +44,36 @@ describe('native soft-keyboard submission', () => {
     );
   });
 
-  test('consumes iOS soft Return before text mutation while leaving composition and hardware Return as edits', () => {
+  test('consumes iOS soft Return before text mutation while leaving composition to the editor', () => {
     const keyboard = additions('ios/input/ENRMInputTextView.mm');
     expect(keyboard).toContain('- (void)insertText:(NSString *)text');
     expect(keyboard).toContain('self.markedTextRange == nil');
     expect(keyboard).toContain('[self.markdownTextInput submitFromKeyboard]');
     expect(keyboard).toContain('[super insertText:text];');
-    expect(keyboard).toContain('action:@selector(enrmHardwareReturn:)');
-    expect(keyboard).toContain('[super insertText:@"\\n"];');
     const input = additions('ios/input/EnrichedMarkdownTextInput.mm');
     expect(input).toContain('UIReturnKeySend : UIReturnKeyDefault');
-    expect(input).toContain('_editSession.isComposing');
+    expect(input).toContain('return viewProps.submitOnReturn && !_editSession.isComposing;');
+    expect(input).toContain('if (![self canSubmitFromKeyboard]) return NO;');
     expect(input).toContain('[_inputEventEmitter emitOnSubmit];');
+  });
+
+  test('routes only unmodified iOS hardware Return through the shared submit decision', () => {
+    const keyboard = additions('ios/input/ENRMInputTextView.mm')?.replace(/\s+/g, ' ');
+    for (const [key, modifiers] of [
+      ['enter', '0'],
+      ['shiftEnter', 'UIKeyModifierShift'],
+    ]) {
+      expect(keyboard).toContain(
+        `*${key} = [UIKeyCommand keyCommandWithInput:@"\\r" modifierFlags:${modifiers} action:@selector(enrmHardwareReturn:)`,
+      );
+      expect(keyboard).toContain(`${key}.wantsPriorityOverSystemBehavior = YES;`);
+    }
+    expect(keyboard).toContain(
+      'if (action == @selector(enrmHardwareReturn:)) { return self.isFirstResponder && self.isEditable && [self.markdownTextInput canSubmitFromKeyboard];',
+    );
+    expect(keyboard).toContain(
+      'if (command.modifierFlags == 0 && [self.markdownTextInput submitFromKeyboard]) return; [super insertText:@"\\n"];',
+    );
   });
 
   test('uses Android IME actions rather than text changes and ignores candidate confirmation', () => {
