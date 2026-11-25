@@ -3,11 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import {
-  buildDefaultGitcodeNotes,
-  publishGitcodeRelease,
-  verifyArchivedApk,
-} from '../publishGitcodeRelease';
+import { publishGitcodeRelease, verifyArchivedApk } from '../publishGitcodeRelease';
 
 const createdRoots: string[] = [];
 
@@ -26,6 +22,7 @@ function makeArchiveFixture(version = '0.6.2') {
   return {
     root,
     archiveDir,
+    notesText: `# Cherry Studio ${version}\n\n本版修复了会话显示问题。\n\n## 下载安装\n`,
     artifactName,
     apkBytes,
     apkSha256,
@@ -120,8 +117,7 @@ describe('publishGitcodeRelease', () => {
       commitSha,
       archiveDir: fixture.archiveDir,
       artifactName: fixture.artifactName,
-      buildId: 'build-uuid-1',
-      nativeBuildVersion: '128',
+      notesText: fixture.notesText,
       token,
       // Simulate GitHub Actions passing empty strings for unset optional vars.
       env: {
@@ -161,8 +157,7 @@ describe('publishGitcodeRelease', () => {
     const postPayload = JSON.parse(postCall.body!);
     expect(postPayload.release_status).toBe('pre');
     expect(postPayload.target_commitish).toBe(commitSha);
-    expect(postPayload.body).toMatch(/^# Cherry Studio 0\.6\.2\n/);
-    expect(postPayload.body).toContain('\n## 下载安装\n');
+    expect(postPayload.body).toBe(fixture.notesText);
 
     const patchIndex = calls.findIndex((call) => call.method === 'PATCH');
     const lastPutIndex = calls.map((call) => call.method).lastIndexOf('PUT');
@@ -204,6 +199,7 @@ describe('publishGitcodeRelease', () => {
         commitSha,
         archiveDir: fixture.archiveDir,
         artifactName: fixture.artifactName,
+        notesText: fixture.notesText,
         token,
         fetchImpl,
         sleep: async () => {},
@@ -257,6 +253,7 @@ describe('publishGitcodeRelease', () => {
       commitSha,
       archiveDir: fixture.archiveDir,
       artifactName: fixture.artifactName,
+      notesText: fixture.notesText,
       token,
       fetchImpl,
       sleep: async () => {},
@@ -281,7 +278,7 @@ describe('publishGitcodeRelease', () => {
         return new Response(
           JSON.stringify({
             tag_name: 'v0.6.2',
-            body: '# Cherry Studio 0.6.2\n\n手工整理中文说明\n\n## 下载安装\n',
+            body: '# Cherry Studio 0.6.2\n\n发布后补充的说明\n\n## 下载安装\n',
             release_status: 'latest',
             assets: [
               {
@@ -313,6 +310,7 @@ describe('publishGitcodeRelease', () => {
       commitSha,
       archiveDir: fixture.archiveDir,
       artifactName: fixture.artifactName,
+      notesText: fixture.notesText,
       token,
       fetchImpl,
       sleep: async () => {},
@@ -330,6 +328,7 @@ describe('publishGitcodeRelease', () => {
         commitSha,
         archiveDir: fixture.archiveDir,
         artifactName: fixture.artifactName,
+        notesText: fixture.notesText,
         token,
         fetchImpl,
         sleep: async () => {},
@@ -357,6 +356,7 @@ describe('publishGitcodeRelease', () => {
         commitSha,
         archiveDir: fixture.archiveDir,
         artifactName: fixture.artifactName,
+        notesText: fixture.notesText,
         token,
         fetchImpl,
       }),
@@ -382,7 +382,7 @@ describe('publishGitcodeRelease', () => {
           return new Response(
             JSON.stringify({
               tag_name: 'v0.6.2',
-              body: '# Cherry Studio 0.6.2\n\n## 下载安装\n',
+              body: fixture.notesText,
               release_status: 'pre',
               assets: [],
             }),
@@ -419,6 +419,7 @@ describe('publishGitcodeRelease', () => {
       commitSha,
       archiveDir: fixture.archiveDir,
       artifactName: fixture.artifactName,
+      notesText: fixture.notesText,
       token,
       fetchImpl,
       sleep: async () => {},
@@ -449,6 +450,7 @@ describe('publishGitcodeRelease', () => {
         commitSha,
         archiveDir: fixture.archiveDir,
         artifactName: fixture.artifactName,
+        notesText: fixture.notesText,
         token,
         fetchImpl: fetchSpy as unknown as typeof fetch,
       }),
@@ -468,6 +470,7 @@ describe('publishGitcodeRelease', () => {
         commitSha,
         archiveDir: fixture.archiveDir,
         artifactName: fixture.artifactName,
+        notesText: fixture.notesText,
         token,
         fetchImpl: errorFetch,
       });
@@ -478,17 +481,20 @@ describe('publishGitcodeRelease', () => {
     expect(errMessage).not.toContain(token);
   });
 
-  it('formats default Chinese release notes matching app update parser markers', () => {
-    const notes = buildDefaultGitcodeNotes({
-      releaseVersion: '0.6.2',
-      tag: 'v0.6.2',
-      commitSha,
-      buildId: 'id-1',
-      nativeBuildVersion: '128',
-      artifactName: 'cherry-studio-0.6.2-android.apk',
-      artifactSha256: 'a'.repeat(64),
-    });
-    expect(notes).toMatch(/^# Cherry Studio 0\.6\.2\n/);
-    expect(notes).toMatch(/^## 下载安装$/m);
+  it('rejects empty notes before contacting GitCode', async () => {
+    const fixture = makeArchiveFixture();
+    const fetchImpl = jest.fn();
+    await expect(
+      publishGitcodeRelease({
+        tag: 'v0.6.2',
+        commitSha,
+        archiveDir: fixture.archiveDir,
+        artifactName: fixture.artifactName,
+        notesText: '  ',
+        token,
+        fetchImpl,
+      }),
+    ).rejects.toThrow('GitCode release notes are empty');
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

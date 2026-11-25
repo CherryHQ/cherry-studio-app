@@ -39,9 +39,7 @@ export interface PublishGitcodeReleaseOptions {
   archiveDir: string;
   artifactName: string;
   releaseName?: string;
-  notesText?: string;
-  buildId?: string;
-  nativeBuildVersion?: string;
+  notesText: string;
   apiUrl?: string;
   owner?: string;
   repo?: string;
@@ -94,47 +92,6 @@ const defaultCreateFileBody = async (filePath: string): Promise<BodyInit> => ope
 
 function isAttachmentAsset(asset: GitcodeAsset): boolean {
   return asset.type === undefined || asset.type === 'attach';
-}
-
-export function buildDefaultGitcodeNotes({
-  releaseVersion,
-  tag,
-  commitSha,
-  buildId,
-  nativeBuildVersion,
-  artifactName,
-  artifactSha256,
-}: {
-  releaseVersion: string;
-  tag: string;
-  commitSha: string;
-  buildId?: string;
-  nativeBuildVersion?: string;
-  artifactName: string;
-  artifactSha256: string;
-}): string {
-  const lines = [
-    `# Cherry Studio ${releaseVersion}`,
-    '',
-    `版本 \`${tag}\` 的 Android 公开安装包已构建并校验完成。`,
-    `完整变更说明请查看 GitHub Release：https://github.com/CherryHQ/cherry-studio-app/releases/tag/${tag}`,
-    '',
-    '## 下载安装',
-    '',
-    `- Android：下载附件 \`${artifactName}\`（ARM64）并在设备上安装。`,
-    '- Google Play 与 iOS App Store 的上架进度取决于各自审核流程，与本页面安装包相互独立。',
-    '- 文件校验值已附在 `SHA256SUMS` 中。',
-    '',
-    `Source: ${commitSha}`,
-  ];
-  if (buildId) {
-    lines.push(`Local build ID: ${buildId}`);
-  }
-  if (nativeBuildVersion) {
-    lines.push(`Native versionCode: ${nativeBuildVersion}`);
-  }
-  lines.push(`SHA-256 (${artifactName}): ${artifactSha256}`);
-  return `${lines.join('\n')}\n`;
 }
 
 export async function verifyArchivedApk(
@@ -205,6 +162,7 @@ export async function publishGitcodeRelease(
 ): Promise<PublishGitcodeReleaseResult> {
   const env = options.env ?? process.env;
   const parsedTag = parseReleaseTag(options.tag);
+  if (!options.notesText.trim()) throw new Error('GitCode release notes are empty.');
   if (!SHA_RE.test(options.commitSha)) {
     throw new Error(`Invalid commit SHA: ${options.commitSha}`);
   }
@@ -239,16 +197,6 @@ export async function publishGitcodeRelease(
   const verified = await verifyArchivedApk(options.archiveDir, options.artifactName);
   const finalReleaseStatus: 'pre' | 'latest' = parsedTag.isPrerelease ? 'pre' : 'latest';
   const releaseName = options.releaseName?.trim() || parsedTag.tag;
-  const defaultBody = buildDefaultGitcodeNotes({
-    releaseVersion: parsedTag.releaseVersion,
-    tag: parsedTag.tag,
-    commitSha,
-    buildId: options.buildId,
-    nativeBuildVersion: options.nativeBuildVersion,
-    artifactName: options.artifactName,
-    artifactSha256: verified.hashes[options.artifactName]!,
-  });
-
   const repoBaseUrl = `${apiUrl}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
   const releasesBaseUrl = `${repoBaseUrl}/releases`;
   const tagReleaseUrl = `${releasesBaseUrl}/tags/${encodeURIComponent(parsedTag.tag)}`;
@@ -297,7 +245,7 @@ export async function publishGitcodeRelease(
   let promotedToLatest = false;
   let existingAssets: GitcodeAsset[] = [];
   let currentRemoteStatus: string | undefined;
-  let effectiveBody = options.notesText?.trim() ? options.notesText : defaultBody;
+  let releaseBody = options.notesText;
 
   const getResponse = await fetchImpl(tagReleaseUrl, {
     method: 'GET',
@@ -315,16 +263,9 @@ export async function publishGitcodeRelease(
     existingAssets = Array.isArray(existing.assets) ? existing.assets : [];
     currentRemoteStatus = existing.release_status;
 
-    const hasExplicitNotes = Boolean(options.notesText?.trim());
-    const existingBody = existing.body?.trim() ?? '';
-    effectiveBody = hasExplicitNotes
-      ? options.notesText!
-      : existingBody
-        ? existing.body!
-        : defaultBody;
-
-    // Keep an incomplete release out of /releases/latest until attachments are verified below.
-    if (hasExplicitNotes || !existingBody) {
+    if (existing.body?.trim()) {
+      releaseBody = existing.body;
+    } else {
       const metadataStatus = currentRemoteStatus === 'latest' ? 'latest' : 'pre';
       const patchResponse = await fetchImpl(
         `${releasesBaseUrl}/${encodeURIComponent(parsedTag.tag)}`,
@@ -336,7 +277,7 @@ export async function publishGitcodeRelease(
           },
           body: JSON.stringify({
             name: releaseName,
-            body: effectiveBody,
+            body: releaseBody,
             release_status: metadataStatus,
           }),
           signal: AbortSignal.timeout(60_000),
@@ -362,7 +303,7 @@ export async function publishGitcodeRelease(
       body: JSON.stringify({
         tag_name: parsedTag.tag,
         name: releaseName,
-        body: effectiveBody,
+        body: releaseBody,
         target_commitish: commitSha,
         release_status: 'pre',
       }),
@@ -545,7 +486,7 @@ export async function publishGitcodeRelease(
           },
           body: JSON.stringify({
             name: releaseName,
-            body: effectiveBody,
+            body: releaseBody,
             release_status: 'latest',
           }),
           signal: AbortSignal.timeout(60_000),
@@ -589,20 +530,22 @@ async function main() {
       'artifact-name': { type: 'string' },
       name: { type: 'string' },
       'notes-file': { type: 'string' },
-      'build-id': { type: 'string' },
-      'native-build-version': { type: 'string' },
       summary: { type: 'string' },
     },
     strict: true,
   });
 
-  if (!values.tag || !values.commit || !values['archive-dir'] || !values['artifact-name']) {
-    throw new Error('Missing required flags: --tag, --commit, --archive-dir, --artifact-name.');
+  if (
+    !values.tag ||
+    !values.commit ||
+    !values['archive-dir'] ||
+    !values['artifact-name'] ||
+    !values['notes-file']
+  ) {
+    throw new Error(
+      'Missing required flags: --tag, --commit, --archive-dir, --artifact-name, --notes-file.',
+    );
   }
-
-  const notesText = values['notes-file']
-    ? readFileSync(resolve(values['notes-file']), 'utf8')
-    : undefined;
 
   const result = await publishGitcodeRelease({
     tag: values.tag,
@@ -610,9 +553,7 @@ async function main() {
     archiveDir: values['archive-dir'],
     artifactName: values['artifact-name'],
     releaseName: values.name,
-    notesText,
-    buildId: values['build-id'],
-    nativeBuildVersion: values['native-build-version'],
+    notesText: readFileSync(resolve(values['notes-file']), 'utf8'),
   });
 
   if (values.summary) {
