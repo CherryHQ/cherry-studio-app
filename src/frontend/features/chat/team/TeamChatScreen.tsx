@@ -42,12 +42,16 @@ import {
   type TeamChatTarget,
   useChatSource,
 } from '@/frontend/appShell/navigation/chat';
-import { useRootNavigationDockClearance } from '@/frontend/appShell/navigationShell/state';
+import {
+  useNavigationDockClearance,
+  useRootNavigationDockClearance,
+} from '@/frontend/appShell/navigationShell/state';
 import { AgentPickerSheet } from '@/frontend/components/AgentPicker';
 import {
   ComposerDismissArea,
   ComposerDock,
   ComposerSessionProvider,
+  getComposerExtraBottomOffset,
 } from '@/frontend/components/Composer';
 import type { MessageListItem } from '@/frontend/components/Message';
 import {
@@ -209,6 +213,8 @@ function TeamChatContent({
   const portrait = useTeamAgentPortrait(module, agentId);
   const { bottom } = useSafeAreaInsets();
   const dockClearance = useRootNavigationDockClearance();
+  const navDockClearance = useNavigationDockClearance();
+  const extraBottomOffset = getComposerExtraBottomOffset(bottom, navDockClearance);
   const composerHeight = useSharedValue(0);
   const project = useMemo(() => createTeamConversationProjector(key), [key]);
   const snapshot = useMemo(
@@ -313,7 +319,7 @@ function TeamChatContent({
                   assistantAvatarUri={portrait}
                   isAssistantToolbarEnabled={false}
                   contentBottomInset={composerContentGap}
-                  keyboardOffset={getComposerKeyboardStickyOffset(bottom)}
+                  keyboardOffset={getComposerKeyboardStickyOffset(bottom) + extraBottomOffset}
                   feedbackHintBottomOffset={composerHeight}
                   onPendingSendDisplayed={ignore}
                   renderUsage={renderUsage}

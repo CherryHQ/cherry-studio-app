@@ -107,7 +107,8 @@ function SortableItemBase({
       menuItems,
       movable,
     };
-  }, [binding, buildOverlay, estimatedHeight, groupId, id, index, menuItems, movable]);
+    sortable?.notifyItemCommitted(groupId, id, index);
+  }, [binding, buildOverlay, estimatedHeight, groupId, id, index, menuItems, movable, sortable]);
 
   const handleItemRef = useCallback(
     (node: ViewInstance | null) => {
@@ -185,8 +186,9 @@ function SortableItemBase({
 
     const activeGroup = sortable.activeGroupIdSV.value;
     if (activeGroup === null) {
+      const instantOpacity = reducedMotion || sortable.lastSettledIdSV.value === id;
       return {
-        opacity: reducedMotion
+        opacity: instantOpacity
           ? 1
           : withTiming(1, { duration: duration.fast, easing: easing.settle }),
         transform: [{ translateY: 0 }],

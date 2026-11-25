@@ -45,7 +45,7 @@ export class ProviderSetupError extends Error {
 
 export interface ProvidersModule {
   readonly accounts: ProviderAccountsModule;
-  ensureRegistryReady(): Promise<void>;
+  ensureRegistryReady(options?: { force?: boolean }): Promise<void>;
   getSetupStatus(providerId: string): Promise<ProviderSetupStatus>;
   enable(providerId: string): Promise<Provider>;
   applyRegistryUpdate(): Promise<ProviderRegistryUpdateResult>;

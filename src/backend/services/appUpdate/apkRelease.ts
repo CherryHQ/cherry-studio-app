@@ -21,20 +21,34 @@ const ReleaseSchema = z.object({
 const sources = {
   gitcode: {
     api: createHttpClient({
+      serviceName: 'AppUpdate',
+      operation: 'apk.release',
       baseUrl: 'https://api.gitcode.com/api/v5',
       headers: { Accept: 'application/json' },
       timeoutMs: 10_000,
     }),
-    attachments: createHttpClient({ baseUrl: 'https://gitcode.com', timeoutMs: 15_000 }),
+    attachments: createHttpClient({
+      serviceName: 'AppUpdate',
+      operation: 'apk.checksum',
+      baseUrl: 'https://gitcode.com',
+      timeoutMs: 15_000,
+    }),
     origin: 'https://gitcode.com',
   },
   github: {
     api: createHttpClient({
+      serviceName: 'AppUpdate',
+      operation: 'apk.release',
       baseUrl: 'https://api.github.com',
       headers: { Accept: 'application/vnd.github+json' },
       timeoutMs: 10_000,
     }),
-    attachments: createHttpClient({ baseUrl: 'https://github.com', timeoutMs: 15_000 }),
+    attachments: createHttpClient({
+      serviceName: 'AppUpdate',
+      operation: 'apk.checksum',
+      baseUrl: 'https://github.com',
+      timeoutMs: 15_000,
+    }),
     origin: 'https://github.com',
   },
 } as const;

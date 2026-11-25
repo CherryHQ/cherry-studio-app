@@ -194,6 +194,122 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
+test('bounds a pending header wait even when the native fetch ignores abort', async () => {
+  let reject!: (error: Error) => void;
+  mockInference.mockImplementation(
+    () =>
+      new Promise<Response>((_resolve, fail) => {
+        reject = fail;
+      }),
+  );
+  const { runtime } = await setup();
+  try {
+    await runtime.refresh();
+    const pending = runtime.createModelFetch('cloud-model', 'agent')(
+      'https://cloud.example/v1/messages',
+      { method: 'POST', body: JSON.stringify({ model: 'cloud-model' }) },
+    );
+    let settled = false;
+    const failure = pending.catch((error: unknown) => {
+      settled = true;
+      return error;
+    });
+    await jest.advanceTimersByTimeAsync(59_999);
+    expect(settled).toBe(false);
+    expect(mockInference.mock.lastCall![1].signal.aborted).toBe(false);
+    await jest.advanceTimersByTimeAsync(1);
+    expect(settled).toBe(true);
+    expect(await failure).toMatchObject({
+      name: 'TimeoutError',
+      code: 'cloud_response_headers_timeout',
+      retryable: true,
+      timeoutMs: 60_000,
+    });
+    expect(mockInference.mock.lastCall![1].signal.aborted).toBe(true);
+    expect(jest.getTimerCount()).toBe(0);
+    reject(new Error('Late transport rejection'));
+    await jest.advanceTimersByTimeAsync(0);
+  } finally {
+    await runtime._doStop();
+  }
+});
+
+test.each(['before send', 'while waiting'])(
+  'honors caller cancellation %s without waiting for the header deadline',
+  async (when) => {
+    mockInference.mockImplementation(() => new Promise<Response>(() => {}));
+    const { runtime } = await setup();
+    try {
+      await runtime.refresh();
+      const controller = new AbortController();
+      const reason = new Error('Caller cancelled');
+      if (when === 'before send') controller.abort(reason);
+      const pending = runtime.createModelFetch('cloud-model', 'agent')(
+        'https://cloud.example/v1/messages',
+        {
+          method: 'POST',
+          body: JSON.stringify({ model: 'cloud-model' }),
+          signal: controller.signal,
+        },
+      );
+      const failure = expect(pending).rejects.toBe(reason);
+      await jest.advanceTimersByTimeAsync(0);
+      if (when === 'while waiting') {
+        expect(mockInference).toHaveBeenCalledTimes(1);
+        controller.abort(reason);
+      } else expect(mockInference).not.toHaveBeenCalled();
+      await failure;
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      await runtime._doStop();
+    }
+  },
+);
+
+test('clears the header deadline after a transport failure', async () => {
+  const failure = new Error('Connection failed');
+  mockInference.mockRejectedValue(failure);
+  const { runtime } = await setup();
+  try {
+    await runtime.refresh();
+    await expect(
+      runtime.createModelFetch('cloud-model', 'agent')('https://cloud.example/v1/messages', {
+        method: 'POST',
+        body: JSON.stringify({ model: 'cloud-model' }),
+      }),
+    ).rejects.toBe(failure);
+    expect(jest.getTimerCount()).toBe(0);
+  } finally {
+    await runtime._doStop();
+  }
+});
+
+test('does not apply the header deadline to a long reasoning or streaming response', async () => {
+  const upstream = inferenceResponse();
+  mockInference.mockResolvedValue(upstream.response);
+  const { runtime } = await setup();
+  try {
+    await runtime.refresh();
+    const response = await runtime.createModelFetch('cloud-model', 'agent')(
+      'https://cloud.example/v1/messages',
+      { method: 'POST', body: JSON.stringify({ model: 'cloud-model', stream: true }) },
+    );
+    expect(jest.getTimerCount()).toBe(0);
+    const reader = response.body!.getReader();
+    for (const chunk of ['reasoning', 'answer']) {
+      await jest.advanceTimersByTimeAsync(120_000);
+      expect(mockInference.mock.lastCall![1].signal.aborted).toBe(false);
+      upstream.push(chunk);
+      expect(new TextDecoder().decode((await reader.read()).value)).toBe(chunk);
+    }
+    upstream.close();
+    expect((await reader.read()).done).toBe(true);
+    reader.releaseLock();
+  } finally {
+    await runtime._doStop();
+  }
+});
+
 test('keeps Cloud cancellation linked after streaming headers arrive', async () => {
   const upstream = inferenceResponse();
   mockInference.mockResolvedValue(upstream.response);
@@ -901,7 +1017,80 @@ test('a free plan projects models only while its entitlement is active', async (
   await runtime._doStop();
 });
 
-test('forwards the server quota refusal even when the local snapshot already shows zero quota', async () => {
+test.each([
+  { body: null, retryAfter: undefined, cooldownMs: 30_000 },
+  { body: 'not JSON', retryAfter: 'invalid', cooldownMs: 30_000 },
+  {
+    body: JSON.stringify({ error: { code: 'UNKNOWN_CODE' } }),
+    retryAfter: '60',
+    cooldownMs: 60_000,
+  },
+  {
+    body: JSON.stringify({ error: { code: 'RATE_LIMITED' } }),
+    retryAfter: 'Thu, 01 Jan 2026 00:01:00 GMT',
+    cooldownMs: 60_000,
+  },
+])(
+  'terminalizes signed-in 429 and honors its cooldown: $retryAfter',
+  async ({ body, retryAfter, cooldownMs }) => {
+    jest.setSystemTime(Date.parse('2026-01-01T00:00:00Z'));
+    mockInference
+      .mockResolvedValueOnce(
+        new Response(body, {
+          status: 429,
+          headers: retryAfter === undefined ? {} : { 'retry-after': retryAfter },
+        }),
+      )
+      .mockResolvedValue(new Response(null, { status: 200 }));
+    const { runtime } = await setup();
+    try {
+      await runtime.refresh();
+      const send = () =>
+        runtime.createModelFetch('cloud-model', 'agent')('https://cloud.example/v1/messages', {
+          method: 'POST',
+          body: JSON.stringify({ model: 'cloud-model' }),
+        });
+      await expect(send()).rejects.toMatchObject({
+        statusCode: 429,
+        code: 'RATE_LIMITED',
+        retryable: false,
+      });
+      await jest.advanceTimersByTimeAsync(cooldownMs - 1);
+      await expect(send()).rejects.toMatchObject({ statusCode: 429, retryable: false });
+      expect(mockInference).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(1);
+      await expect(send()).resolves.toMatchObject({ status: 200 });
+      expect(mockInference).toHaveBeenCalledTimes(2);
+      expect(runtime.getState().phase).toBe('ready');
+      expect(runtime.getState().accountIssue).toBeUndefined();
+    } finally {
+      await runtime._doStop();
+    }
+  },
+);
+
+test.each([401, 500, 503])(
+  'preserves an uncoded signed-in HTTP %s response for Pi',
+  async (status) => {
+    const response = new Response(null, { status });
+    mockInference.mockResolvedValue(response);
+    const { runtime } = await setup();
+    try {
+      await runtime.refresh();
+      await expect(
+        runtime.createModelFetch('cloud-model', 'agent')('https://cloud.example/v1/messages', {
+          method: 'POST',
+          body: JSON.stringify({ model: 'cloud-model' }),
+        }),
+      ).resolves.toBe(response);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      await runtime._doStop();
+    }
+  },
+);
+
+test('surfaces the server quota refusal even when the local snapshot already shows zero quota', async () => {
   const refusal = new Response(JSON.stringify({ error: { message: 'Quota exhausted' } }), {
     status: 429,
   });
@@ -921,7 +1110,7 @@ test('forwards the server quota refusal even when the local snapshot already sho
       method: 'POST',
       body: JSON.stringify({ model: 'cloud-model' }),
     }),
-  ).resolves.toBe(refusal);
+  ).rejects.toMatchObject({ statusCode: 429, code: 'RATE_LIMITED', retryable: false });
   expect(runtime.getState().phase).toBe('ready');
   await runtime._doStop();
 });
@@ -1162,44 +1351,61 @@ test('a missing guest HMAC stops the catalog request', async () => {
   await runtime._doStop();
 });
 
-test('guest inference honors the gateway IP cooldown across model IDs', async () => {
-  const model = {
-    ...cloudSnapshot().models[0],
-    requires_login: false,
-    requires_plan: false,
-    standalone: true,
-    is_free: true,
-  };
-  mockClientSignatureHeaders.mockResolvedValue({ 'X-Signature': 'signed' });
-  mockPublicRequest.mockResolvedValue({ data: { data: [model, { ...model, id: 'another' }] } });
-  const { runtime } = await setup(null);
-  try {
-    await runtime.refresh();
-    const send = (id: string) =>
-      runtime.createModelFetch(id, 'agent')(service.apiOrigin + '/v1/messages', {
-        method: 'POST',
-        body: JSON.stringify({ model: id }),
+test.each([
+  { retryAfter: '60', cooldownMs: 60_000 },
+  { retryAfter: undefined, cooldownMs: 30_000 },
+  { retryAfter: 'invalid', cooldownMs: 30_000 },
+])(
+  'guest inference honors the gateway IP cooldown across model IDs: $retryAfter',
+  async ({ retryAfter, cooldownMs }) => {
+    const model = {
+      ...cloudSnapshot().models[0],
+      requires_login: false,
+      requires_plan: false,
+      standalone: true,
+      is_free: true,
+    };
+    mockClientSignatureHeaders.mockResolvedValue({ 'X-Signature': 'signed' });
+    mockPublicRequest.mockResolvedValue({ data: { data: [model, { ...model, id: 'another' }] } });
+    const { runtime } = await setup(null);
+    try {
+      await runtime.refresh();
+      const send = (id: string) =>
+        runtime.createModelFetch(id, 'agent')(service.apiOrigin + '/v1/messages', {
+          method: 'POST',
+          body: JSON.stringify({ model: id }),
+        });
+      mockInference.mockResolvedValueOnce(
+        new Response(null, {
+          status: 429,
+          headers: retryAfter === undefined ? {} : { 'retry-after': retryAfter },
+        }),
+      );
+      await expect(send(model.id)).rejects.toMatchObject({ statusCode: 429 });
+      await expect(send('another')).rejects.toMatchObject({ statusCode: 429 });
+      expect(mockInference).toHaveBeenCalledTimes(1);
+      const catalogCalls = mockPublicRequest.mock.calls.length;
+      const projectCalls = mockProject.mock.calls.length;
+      await expect(runtime.refresh()).rejects.toMatchObject({ statusCode: 429 });
+      expect(mockPublicRequest).toHaveBeenCalledTimes(catalogCalls);
+      expect(mockProject).toHaveBeenCalledTimes(projectCalls);
+      expect(runtime.getState()).toMatchObject({
+        guestCatalog: 'ready',
+        isRefreshing: false,
+        models: [model, { ...model, id: 'another' }],
       });
-    mockInference.mockResolvedValueOnce(
-      new Response(null, { status: 429, headers: { 'retry-after': '60' } }),
-    );
-    await expect(send(model.id)).rejects.toMatchObject({ statusCode: 429 });
-    await expect(send('another')).rejects.toMatchObject({ statusCode: 429 });
-    expect(mockInference).toHaveBeenCalledTimes(1);
-    const catalogCalls = mockPublicRequest.mock.calls.length;
-    const projectCalls = mockProject.mock.calls.length;
-    await expect(runtime.refresh()).rejects.toMatchObject({ statusCode: 429 });
-    expect(mockPublicRequest).toHaveBeenCalledTimes(catalogCalls);
-    expect(mockProject).toHaveBeenCalledTimes(projectCalls);
-    expect(runtime.getState()).toMatchObject({
-      guestCatalog: 'ready',
-      isRefreshing: false,
-      models: [model, { ...model, id: 'another' }],
-    });
-  } finally {
-    await runtime._doStop();
-  }
-});
+      mockInference.mockResolvedValue(new Response(null, { status: 200 }));
+      await jest.advanceTimersByTimeAsync(cooldownMs - 1);
+      await expect(send('another')).rejects.toMatchObject({ statusCode: 429 });
+      expect(mockInference).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(1);
+      await expect(send('another')).resolves.toMatchObject({ status: 200 });
+      expect(mockInference).toHaveBeenCalledTimes(2);
+    } finally {
+      await runtime._doStop();
+    }
+  },
+);
 
 test('a recognized plan refusal refreshes account entitlements, without signing out', async () => {
   const { runtime } = await setup();

@@ -1758,6 +1758,7 @@
   "remoteAgent.artifact": "Artifact",
   "remoteAgent.attachmentsUnavailable": "Desktop conversations don't support attachments yet",
   "remoteAgent.awaitingApproval": "Waiting for your response",
+  "remoteAgent.cachedCatalog": "Showing the last synced list.",
   "remoteAgent.configured": "Model configured",
   "remoteAgent.connected": "Connected to {{name}}",
   "remoteAgent.connecting": "Connecting to PC…",

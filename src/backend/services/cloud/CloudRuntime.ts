@@ -16,6 +16,7 @@ import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { DbService } from '@/backend/data/db/DbService';
 import { createHttpClient, isHttpError } from '@/backend/services/http';
 import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
+import { raceAbort } from '@/backend/utils/raceAbort';
 import {
   CLOUD_PROVIDER_ID,
   CloudAccessError,
@@ -46,6 +47,7 @@ import { CloudSession, type CloudIdentitySource } from './CloudSession';
 import { projectCloudModels } from './projectCloudModels';
 
 const MODEL_CATALOG_PATH = '/v1/models?limit=1000&catalog=full';
+const MODEL_RESPONSE_HEADERS_TIMEOUT_MS = 60_000;
 
 const EMPTY: CloudState = {
   phase: 'signed_out',
@@ -198,7 +200,12 @@ export class CloudRuntime extends BaseService implements CloudModule {
       const headers = await cloudClientSignatureHeaders('GET', path, '');
       signal.throwIfAborted();
       if (!headers['X-Signature']) throw new CloudAccessError('unavailable');
-      const http = createHttpClient({ baseUrl: origin, timeoutMs: 20_000 });
+      const http = createHttpClient({
+        serviceName: 'CloudRuntime',
+        operation: 'cloud.guestCatalog',
+        baseUrl: origin,
+        timeoutMs: 20_000,
+      });
       const { data } = await http.request({
         method: 'GET',
         path,
@@ -509,7 +516,8 @@ export class CloudRuntime extends BaseService implements CloudModule {
       const body = await request.text();
       if ((JSON.parse(body) as { model?: unknown }).model !== modelId)
         throw new CloudAccessError('not_entitled');
-      const linked = linkAbortSignals([lifetime, request.signal]);
+      const controller = new AbortController();
+      const linked = linkAbortSignals([lifetime, request.signal, controller.signal]);
       let completed = false;
       const complete = () => {
         if (completed) return;
@@ -536,15 +544,33 @@ export class CloudRuntime extends BaseService implements CloudModule {
           // Only protocol headers cross this boundary; SDK keys and arbitrary extra headers do not.
           const anthropicVersion = request.headers.get('anthropic-version');
           if (anthropicVersion) headers.set('anthropic-version', anthropicVersion);
-          const response = await expoFetch(url.toString(), {
-            method: 'POST',
-            headers,
-            body,
-            signal: linked.signal,
-            credentials: 'omit',
-            redirect: 'error',
-          });
-          return { response, authorization: signed.authorization };
+          const timer = setTimeout(() => {
+            controller.abort(
+              Object.assign(new Error('Cloud response headers timed out after 60 seconds.'), {
+                name: 'TimeoutError',
+                code: 'cloud_response_headers_timeout',
+                retryable: true,
+                timeoutMs: MODEL_RESPONSE_HEADERS_TIMEOUT_MS,
+              }),
+            );
+          }, MODEL_RESPONSE_HEADERS_TIMEOUT_MS);
+          try {
+            const response = await raceAbort(
+              expoFetch(url.toString(), {
+                method: 'POST',
+                headers,
+                body,
+                signal: linked.signal,
+                credentials: 'omit',
+                redirect: 'error',
+              }),
+              linked.signal,
+            );
+            return { response, authorization: signed.authorization };
+          } finally {
+            // Only waiting for headers is bounded here; Pi owns idle time during the body.
+            clearTimeout(timer);
+          }
         };
         const response = await this.sendModel(modelId, session, linked.signal, send);
         linked.signal.throwIfAborted();
@@ -650,7 +676,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
         code === 'AMD_ACTIVATION_REQUIRED'
       )
         void this.refreshState('admission').catch(() => {});
-      if (!code && (session || (status !== 401 && status !== 429))) return response;
+      if (!code && status !== 429 && (session || status !== 401)) return response;
       await response.body?.cancel().catch(() => {});
       const failureCode =
         !session && status === 401 ? 'cloud_unavailable' : (code ?? 'RATE_LIMITED');

@@ -1758,6 +1758,7 @@
   "remoteAgent.artifact": "Ergebnisdatei",
   "remoteAgent.attachmentsUnavailable": "Desktop-Unterhaltungen unterstützen noch keine Anhänge",
   "remoteAgent.awaitingApproval": "Warten auf Ihre Antwort",
+  "remoteAgent.cachedCatalog": "Zuletzt synchronisierte Liste wird angezeigt.",
   "remoteAgent.configured": "Modell konfiguriert",
   "remoteAgent.connected": "Mit {{name}} verbunden",
   "remoteAgent.connecting": "Verbindung zum PC…",

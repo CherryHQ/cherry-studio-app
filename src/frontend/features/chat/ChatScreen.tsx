@@ -19,11 +19,13 @@ import {
   parseChatRoute,
   getChatComposerHandoff,
 } from '@/frontend/appShell/navigation/chat';
+import { useNavigationDockClearance } from '@/frontend/appShell/navigationShell/state';
 import {
   ComposerDismissArea,
   ComposerDock,
   ComposerDropArea,
   ComposerSessionProvider,
+  getComposerExtraBottomOffset,
 } from '@/frontend/components/Composer';
 import { McpAppConversationProvider } from '@/frontend/components/McpApp';
 import type { MessageListItem } from '@/frontend/components/Message';
@@ -168,26 +170,31 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     Boolean(messages.findLast((message) => message.display.role === 'assistant')?.display.branch);
   const api = useApiClient();
   const { openTurn } = quoteNavigation;
-  const turnNavigator: ChatTurnNavigator | undefined =
-    sessionId && !isPreview
-      ? {
-          scope: `local:${sessionId}`,
-          queryKey: [...queryKeys.agentSessions.messages(sessionId), 'turns'],
-          async read(_, signal) {
-            const turns = await api.get(`/agent-sessions/${sessionId}/messages/turns`, { signal });
-            return {
-              items: turns.items.map((turn) => ({ ...turn, activeNodeId: turns.activeNodeId })),
-            };
-          },
-          async jump({ id: sourceMessageId, activeNodeId }, scrollToMessage) {
-            const result = await openTurn(
-              { sourceMessageId, requestId: uuidv7() },
-              activeNodeId ? { activeNodeId, scrollToMessage } : undefined,
-            );
-            return result.state;
-          },
-        }
-      : undefined;
+  const turnNavigator = useMemo<ChatTurnNavigator | undefined>(
+    () =>
+      sessionId && !isPreview
+        ? {
+            scope: `local:${sessionId}`,
+            queryKey: [...queryKeys.agentSessions.messages(sessionId), 'turns'],
+            async read(_, signal) {
+              const turns = await api.get(`/agent-sessions/${sessionId}/messages/turns`, {
+                signal,
+              });
+              return {
+                items: turns.items.map((turn) => ({ ...turn, activeNodeId: turns.activeNodeId })),
+              };
+            },
+            async jump({ id: sourceMessageId, activeNodeId }, scrollToMessage) {
+              const result = await openTurn(
+                { sourceMessageId, requestId: uuidv7() },
+                activeNodeId ? { activeNodeId, scrollToMessage } : undefined,
+              );
+              return result.state;
+            },
+          }
+        : undefined,
+    [api, isPreview, openTurn, sessionId],
+  );
   const readCitations = messageWindow.readCitations;
   const readCitationsRef = useRef(readCitations);
   useEffect(() => {
@@ -262,13 +269,17 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     }, [activeAgentId]),
   );
   const { bottom: bottomInset } = useSafeAreaInsets();
+  const dockClearance = useNavigationDockClearance();
+  const extraBottomOffset = getComposerExtraBottomOffset(bottomInset, dockClearance);
   const composerHeight = useSharedValue(0);
   const setComposerHeight = useCallback(
     (height: number) => composerHeight.set(height),
     [composerHeight],
   );
   const contentBottomInset = hasComposer ? composerContentGap : PREVIEW_CONTENT_BOTTOM_INSET;
-  const keyboardOffset = hasComposer ? getComposerKeyboardStickyOffset(bottomInset) : 0;
+  const keyboardOffset = hasComposer
+    ? getComposerKeyboardStickyOffset(bottomInset) + extraBottomOffset
+    : 0;
 
   if (sessionId && session.error && isNotFoundError(session.error)) {
     return <ChatRouteResolver />;

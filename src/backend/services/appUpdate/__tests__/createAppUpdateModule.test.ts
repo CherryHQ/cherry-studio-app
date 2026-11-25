@@ -2,6 +2,7 @@ import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import { Linking, Platform } from 'react-native';
 
+import { HttpError } from '@/backend/services/http';
 import type { NetworkRegion } from '@/backend/services/region';
 import type { ApkUpdateRelease, DomesticAppStore } from '@/shared/contracts/appUpdate';
 
@@ -213,12 +214,15 @@ test('cancelling while region is being resolved prevents update discovery', asyn
 });
 
 test('only successful discovery can clear a withdrawn package failure', async () => {
+  const now = Date.now();
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
   const updates = create();
   mockCheckApk.mockRejectedValueOnce(new Error('Offline'));
   await expect(updates.check()).rejects.toThrow('Offline');
   expect(mockDownload.clearObsoleteFailure).not.toHaveBeenCalled();
 
   const controller = new AbortController();
+  clock.mockReturnValue(now + 15 * 60 * 1000);
   mockCheckApk.mockImplementationOnce(async () => {
     controller.abort();
     return { status: 'available', ...apk };
@@ -406,4 +410,76 @@ test('disposing cancels an in-flight GitCode fallback query', async () => {
   });
   await expect(updates.check()).rejects.toMatchObject({ name: 'AbortError' });
   expect(mockNative.openDomesticStore).not.toHaveBeenCalled();
+});
+
+test.each([
+  new HttpError('Rate limited', { kind: 'http', status: 429 }),
+  new HttpError('Offline', { kind: 'network' }),
+])('cools down failed APK checks and recovers when the deadline expires: %s', async (error) => {
+  const now = Date.now();
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+  const updates = create();
+  mockCheckApk.mockRejectedValueOnce(error);
+  await expect(updates.check()).rejects.toBe(error);
+  for (let count = 0; count < 3; count++) await expect(updates.check()).rejects.toBe(error);
+  expect(mockCheckApk).toHaveBeenCalledTimes(1);
+  clock.mockReturnValue(now + 15 * 60 * 1000);
+  await expect(updates.check()).resolves.toMatchObject({ status: 'available' });
+  expect(mockCheckApk).toHaveBeenCalledTimes(2);
+  await updates.dispose();
+});
+
+test('does not cool down a check cancelled by its caller', async () => {
+  const updates = create();
+  const controller = new AbortController();
+  mockCheckApk.mockImplementationOnce(async () => {
+    controller.abort();
+    controller.signal.throwIfAborted();
+  });
+  await expect(updates.check(controller.signal)).rejects.toThrow();
+  await expect(updates.check()).resolves.toMatchObject({ status: 'available' });
+  expect(mockCheckApk).toHaveBeenCalledTimes(2);
+  await updates.dispose();
+});
+
+test('applies the same release failure cooldown to OPPO GitCode checks', async () => {
+  jest.replaceProperty(runningUpdate, 'channel', 'production-domestic-stores');
+  const updates = create();
+  const error = new HttpError('Rate limited', { kind: 'http', status: 429 });
+  mockCheckApk.mockRejectedValueOnce(error);
+  await expect(updates.check()).rejects.toBe(error);
+  await expect(updates.check()).rejects.toBe(error);
+  expect(mockCheckApk).toHaveBeenCalledTimes(1);
+  await updates.dispose();
+});
+
+test('allows manual forced checks to bypass failure cooldown and isolates cooldown per source', async () => {
+  const now = Date.now();
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+  let region: NetworkRegion = 'CN';
+  mockGetRegion.mockImplementation(async () => region);
+  const updates = create();
+  const error = new HttpError('Rate limited', { kind: 'http', status: 429 });
+  mockCheckApk.mockRejectedValueOnce(error);
+
+  await expect(updates.check()).rejects.toBe(error);
+  expect(mockCheckApk).toHaveBeenCalledWith('1.9.0', 'gitcode', undefined);
+
+  // Passive retry for the same source stays in cooldown, while switching region tries github.
+  await expect(updates.check()).rejects.toBe(error);
+  expect(mockCheckApk).toHaveBeenCalledTimes(1);
+  region = 'GLOBAL';
+  await expect(updates.check()).resolves.toMatchObject({ status: 'available' });
+  expect(mockCheckApk).toHaveBeenCalledTimes(2);
+  expect(mockCheckApk).toHaveBeenLastCalledWith('1.9.0', 'github', undefined);
+
+  // Switching back to CN recovers immediately when triggered manually with { force: true }.
+  region = 'CN';
+  await expect(updates.check()).rejects.toBe(error);
+  await expect(updates.check(undefined, { force: true })).resolves.toMatchObject({
+    status: 'available',
+  });
+  expect(mockCheckApk).toHaveBeenCalledTimes(3);
+  clock.mockRestore();
+  await updates.dispose();
 });

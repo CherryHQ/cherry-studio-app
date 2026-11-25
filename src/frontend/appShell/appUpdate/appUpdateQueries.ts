@@ -14,7 +14,8 @@ export function appUpdateQueryOptions(appUpdate: AppUpdateModule) {
     enabled: appUpdate.isEnabled,
     staleTime: 6 * 60 * 60 * 1000,
     gcTime: 6 * 60 * 60 * 1000,
-    retry: 1,
+    // The backend owns failure cooldowns; an immediate retry only consumes the same quota.
+    retry: false,
   });
 }
 

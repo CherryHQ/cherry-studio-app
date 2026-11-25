@@ -9,6 +9,12 @@ The `runningUpdate` leaf is a public early-boot entry for the running native upd
 diagnostic recording can read it without constructing update services.
 [EAS Update](../../../../docs/guides/app-updates.md) separately delivers compatible code/assets.
 
+APK release failures (including OPPO's GitCode fallback) impose a fifteen-minute cooldown per
+release source on the module instance. Passive calls during cooldown reject with the saved failure
+without another release request, while manual user checks (`force: true`) bypass cooldown;
+cancellation does not start a cooldown. The app-shell query keeps its six-hour success cache and
+performs no immediate retry. Cooldowns reset when the backend module is recreated.
+
 ## Distribution
 
 | Native channel | Release source | User action |

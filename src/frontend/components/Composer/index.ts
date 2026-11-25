@@ -33,3 +33,5 @@ export {
 
 export { useComposerSendError } from './hooks/useComposerSendError';
 export { ComposerDismissArea } from './components/ComposerDismissArea';
+
+export { getComposerExtraBottomOffset } from './utils/composerDockOffset';

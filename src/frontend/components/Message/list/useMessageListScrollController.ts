@@ -168,7 +168,11 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
   const saveScrollAnchor = useCallback(
     (immediate = false) => {
       const current = inputsRef.current;
-      if (suppressSaveRef.current || !current.dataKey) {
+      if (
+        suppressSaveRef.current ||
+        !current.dataKey ||
+        (!immediate && isKeyboardTransitioning.get())
+      ) {
         return;
       }
 
@@ -199,7 +203,7 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
       lastSaveAtRef.current = now;
       cacheService.set(cacheKeyFor(current.dataKey), anchor);
     },
-    [follow],
+    [follow, isKeyboardTransitioning],
   );
 
   useLayoutEffect(() => {
@@ -272,10 +276,12 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
     const pendingMessageId = pendingEnteringMessageIdRef.current;
     if (pendingMessageId && didRestoreRef.current) {
       scheduleLocalSendScroll(pendingMessageId);
-    } else {
+    } else if (follow.isFollowing()) {
       stickToBottomIfFollowing();
+    } else {
+      saveScrollAnchor(true);
     }
-  }, [scheduleLocalSendScroll, stickToBottomIfFollowing]);
+  }, [follow, saveScrollAnchor, scheduleLocalSendScroll, stickToBottomIfFollowing]);
 
   // The native keyboard adapter owns scrolling during its animation. A send
   // waiting for dismissal takes precedence over the ordinary layout correction.
@@ -645,6 +651,7 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
     handleScrollToEnd,
     handleTouchStart,
     isFollowing: isFollowingForRender,
+    isKeyboardTransitioning,
     scrollToMessage,
   };
 }

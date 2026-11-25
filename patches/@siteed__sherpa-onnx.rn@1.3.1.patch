@@ -1,0 +1,148 @@
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -2,6 +2,7 @@
+   "name": "@siteed/sherpa-onnx.rn",
+   "version": "1.3.1",
+   "sherpaOnnxVersion": "1.13.0",
++  "sherpaOnnxArchiveSha256": "338538dc1d7f49f23fc82e3c11df379f48e58d2ca212c9d8cba37f67f1684b01",
+   "description": "React Native wrapper for sherpa-onnx TTS and STT capabilities",
+   "source": "./src/index.tsx",
+   "main": "./lib/commonjs/index.js",
+diff --git a/install.js b/install.js
+--- a/install.js
++++ b/install.js
+@@ -14,7 +14,9 @@ const os = require('os');
+ const fetch = require('node-fetch');
+ const AdmZip = require('adm-zip');
+ const { existsSync, mkdirSync } = require('fs');
+-const { execSync } = require('child_process');
++const { createHash } = require('node:crypto');
++const { once } = require('node:events');
++const { execSync, spawn } = require('child_process');
+ const ProgressBar = require('progress');
+ const {
+   formatValidationReport,
+@@ -24,6 +26,7 @@ const {
+ 
+ // Configuration
+ const BINARY_VERSION = require('./package.json').sherpaOnnxVersion; // Matches the bundled sherpa-onnx upstream version
++const ARCHIVE_SHA256 = require('./package.json').sherpaOnnxArchiveSha256;
+ 
+ // URLs for precompiled binaries
+ const RELEASE_URL = releaseAssetUrl(BINARY_VERSION);
+@@ -146,12 +149,87 @@ async function downloadFile(url, destPath) {
+   });
+ }
+ 
++function readVerifiedArchive(filePath) {
++  let bytes;
++  try {
++    bytes = fs.readFileSync(filePath);
++  } catch (error) {
++    if (error.code === 'ENOENT') return null;
++    throw error;
++  }
++  return createHash('sha256').update(bytes).digest('hex') === ARCHIVE_SHA256 ? bytes : null;
++}
++
++async function downloadArchive(url, output) {
++  const curl = spawn(
++    'curl',
++    [
++      '--fail',
++      '--location',
++      '--proto',
++      '=https',
++      '--proto-redir',
++      '=https',
++      '--retry',
++      '3',
++      '--connect-timeout',
++      '20',
++      '--speed-limit',
++      '1',
++      '--speed-time',
++      '120',
++      '--output',
++      output,
++      url,
++    ],
++    { env: process.env, stdio: ['ignore', 'ignore', 'inherit'] }
++  );
++  try {
++    const [code, signal] = await once(curl, 'close');
++    if (code !== 0) {
++      throw new Error(`Sherpa ONNX download failed (${signal ?? code}).`);
++    }
++  } catch (error) {
++    if (error.code !== 'ENOENT') throw error;
++    await downloadFile(url, output);
++  }
++}
++
++async function loadVerifiedArchive() {
++  const cacheDir = path.resolve(
++    process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache'),
++    'cherry-studio-app',
++    'sherpa-onnx'
++  );
++  const cachePath = path.join(cacheDir, `sherpa-onnx-${BINARY_VERSION}-${ARCHIVE_SHA256}.zip`);
++  const cached = readVerifiedArchive(cachePath);
++  if (cached) {
++    console.log(`Using verified Sherpa ONNX ${BINARY_VERSION} archive from the local cache.`);
++    return cached;
++  }
++
++  fs.mkdirSync(cacheDir, { recursive: true });
++  const stagingDir = fs.mkdtempSync(path.join(cacheDir, '.download-'));
++  const stagedFile = path.join(stagingDir, 'archive.zip');
++  try {
++    await downloadArchive(RELEASE_URL, stagedFile);
++    const bytes = readVerifiedArchive(stagedFile);
++    if (!bytes) {
++      throw new Error(`Sherpa ONNX ${BINARY_VERSION} archive SHA-256 mismatch.`);
++    }
++    fs.renameSync(stagedFile, cachePath);
++    return bytes;
++  } finally {
++    fs.rmSync(stagingDir, { recursive: true, force: true });
++  }
++}
++
+ /**
+  * Extracts a zip file
+  */
+-function extractZip(zipPath, destDir) {
+-  console.log(`Extracting ${zipPath} to ${destDir}...`);
+-  const zip = new AdmZip(zipPath);
++function extractZip(bytes, destDir) {
++  console.log(`Extracting Sherpa ONNX ${BINARY_VERSION} archive to ${destDir}...`);
++  const zip = new AdmZip(bytes);
+   zip.extractAllTo(destDir, true);
+   console.log('Extraction completed!');
+ }
+@@ -208,12 +286,9 @@ async function install() {
+     return;
+   }
+ 
+-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sherpa-onnx-install-'));
+-  const downloadPath = path.join(tempDir, `sherpa-onnx-binaries-${BINARY_VERSION}.zip`);
+-
+   try {
+-    await downloadFile(RELEASE_URL, downloadPath);
+-    extractZip(downloadPath, SCRIPT_DIR);
++    const archiveBytes = await loadVerifiedArchive();
++    extractZip(archiveBytes, SCRIPT_DIR);
+     fixModulemapIfNeeded();
+ 
+     const extractedPrebuilts = validateExistingPrebuilts();
+@@ -229,8 +304,6 @@ async function install() {
+     console.log('Sherpa-onnx installation completed successfully!');
+   } catch (error) {
+     failOrWarn('Installation failed — could not install complete prebuilt binaries.', error);
+-  } finally {
+-    fs.rmSync(tempDir, { recursive: true, force: true });
+   }
+ }
+ 

@@ -2,9 +2,11 @@ import type { Api, AssistantMessage, Message, Model, Models } from '@earendil-wo
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
 import { createTraceRecorder } from '../../../../observability/__tests__/_traceRecorder';
+import { toAgentErrorView } from '../../../host/runtimeProjection';
 import type { RuntimeModelPreflight, RuntimeOptions } from '../../types';
 import { summarizePiCompaction } from '../piCompaction';
 import { createPiDurableModels } from '../piDurableModels';
+import { readPiTerminalError } from '../piModelError';
 import type { PiModelResolution } from '../piModelTypes';
 import { emptyAssistantMessage } from '../piStreamEvents';
 
@@ -78,6 +80,96 @@ function setup(
 }
 
 describe('Pi durable model bridge', () => {
+  test.each(['event', 'throw'] as const)(
+    'preserves a textless stream-stage 429 from a provider %s',
+    async (kind) => {
+      const bridge = setup();
+      const message = emptyAssistantMessage(wire);
+      const source = new AssistantMessageEventStream();
+      if (kind === 'event') {
+        source.push({
+          type: 'error',
+          reason: 'error',
+          error: {
+            ...message,
+            stopReason: 'error',
+            errorMessage: 'Too many requests',
+            diagnostics: [
+              {
+                type: 'provider_response_failure',
+                timestamp: 1,
+                error: { code: 'rate_limit_exceeded', message: 'Too many requests' },
+                details: { status: 429 },
+              },
+            ],
+          },
+        });
+      } else {
+        source[Symbol.asyncIterator] = async function* () {
+          yield { type: 'start', partial: message };
+          throw Object.assign(new Error('Too many requests'), {
+            code: 'rate_limit_exceeded',
+            status: 429,
+          });
+        };
+      }
+      bridge.streamFn.mockReturnValueOnce(source);
+      await bridge.registerModel(reference);
+      const result = await bridge.models.completeSimple(bridge.getModel(reference)!, {
+        messages: [],
+      });
+      expect(result).toMatchObject({ stopReason: 'error', content: [] });
+      expect(toAgentErrorView(readPiTerminalError(result)!)).toMatchObject({
+        retryable: true,
+        failure: { reasonCode: 'rate_limit', context: { statusCode: 429 } },
+      });
+    },
+  );
+
+  test.each([
+    ['openai-completions', { type: 'function', function: { name: 'read_file', parameters: {} } }],
+    ['openai-responses', { type: 'function', name: 'read_file', parameters: {} }],
+    ['anthropic-messages', { name: 'read_file', input_schema: { type: 'object' } }],
+  ] as const)(
+    'guards DeepSeek safety checks against outgoing client tools on %s',
+    async (api, clientTool) => {
+      const model = { ...wire, api, id: 'deepseek-flash' };
+      const nativeTools = [{ type: 'deepseek_web_search' }, { type: 'deepseek_read_url' }];
+      for (const tools of [
+        undefined,
+        [],
+        nativeTools,
+        [clientTool],
+        [...nativeTools, clientTool],
+      ]) {
+        const bridge = setup(undefined, preflight, model);
+        const resolved = await bridge.resolveModel();
+        const body = { model: model.id, ...(tools === undefined ? {} : { tools }) };
+        let sent: unknown;
+        bridge.resolveModel.mockResolvedValueOnce({
+          ...resolved,
+          deepseekSafetyCheck: true,
+          async streamFn(wire, _context, options) {
+            sent = await options?.onPayload?.({ model: wire.id }, wire);
+            return bridge.streamFn();
+          },
+        });
+        await bridge.registerModel(reference);
+        await bridge.models.completeSimple(
+          bridge.getModel(reference)!,
+          { messages: [] },
+          {
+            onPayload: () => body,
+          },
+        );
+        expect(sent).toEqual({
+          ...body,
+          ...(tools?.includes(clientTool) ? {} : { safety_check: { level: 'high' } }),
+        });
+      }
+    },
+  );
+
   test.each(['done', 'error'] as const)(
     'clears DeepSeek refusal content before persisting a %s event',
     async (terminal) => {

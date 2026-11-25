@@ -47,6 +47,8 @@ export class CloudSession {
     readonly signal: AbortSignal,
   ) {
     this.http = createHttpClient({
+      serviceName: 'CloudSession',
+      operation: 'cloud.session',
       baseUrl: origin,
       headers: defaultAppHeaders(),
       timeoutMs: 20_000,
@@ -94,7 +96,7 @@ export class CloudSession {
         if (!isHttpError(error)) throw error;
         if (attempt === 0 && this.recoverRequest(error.status, error.code, headers.authorization))
           continue;
-        if (error.status === 429 && error.retryAfter)
+        if (error.status === 429)
           this.retryUntil.set(path, cloudRetryDeadline(error.retryAfter, Date.now()));
         throw error;
       }

@@ -98,6 +98,7 @@ const CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
   input_too_long: 'context_length',
   invalid_api_key: 'auth',
   invalid_json: 'parse',
+  invalid_response: 'parse',
   image_too_large: 'payload_too_large',
   mcp_error: 'mcp',
   missing_terminal_event: 'internal',

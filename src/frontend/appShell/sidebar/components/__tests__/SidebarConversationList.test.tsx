@@ -100,6 +100,8 @@ jest.mock('../../SidebarSelectionProvider', () => ({
     mockUseSelectionProvider ? mockSelectionModule.useSidebarSelectionSnapshot(select) : false,
 }));
 jest.mock('@cherrystudio/ui/components', () => ({
+  DisclosureContent: ({ children }: { children?: ReactNode }) => children ?? null,
+  DisclosureChevron: () => null,
   ContentState: { Loading: () => null, Empty: () => null, Error: () => null },
   ContextMenu: { Trigger: jest.requireActual('react-native').Pressable },
   SelectionIndicator: () => null,

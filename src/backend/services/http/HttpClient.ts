@@ -33,7 +33,13 @@ export interface DecodedHttpError {
 
 export type HttpErrorDecoder = (response: HttpErrorResponse) => DecodedHttpError | undefined;
 
-interface HttpRequestBase {
+/** Static code-owned diagnostic identifiers only; never URLs, credentials or user input. */
+export interface HttpCallerMetadata {
+  readonly serviceName?: string;
+  readonly operation?: string;
+}
+
+interface HttpRequestBase extends HttpCallerMetadata {
   /** Public page downloads must not inherit the native cookie jar. */
   readonly credentials?: 'omit';
   /** Reject redirects, or let a domain inspect and validate each hop itself. */

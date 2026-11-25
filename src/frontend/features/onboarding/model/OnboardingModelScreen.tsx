@@ -1,6 +1,6 @@
 import { useQuery as useWorkflowQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 
@@ -45,10 +45,13 @@ function OnboardingModelSelection({
   const { t } = useTranslation();
   const router = useRouter();
   const providers = useBackendModule('providers');
+  const forceRetryRef = useRef(false);
   const registry = useWorkflowQuery({
     queryKey: queryKeys.providers.registryReady(),
     queryFn: async () => {
-      await providers.ensureRegistryReady();
+      const force = forceRetryRef.current;
+      forceRetryRef.current = false;
+      await providers.ensureRegistryReady(force ? { force: true } : undefined);
       return true;
     },
     retry: false,
@@ -169,7 +172,13 @@ function OnboardingModelSelection({
       {!registry.data && registry.isError ? (
         <View className="gap-4 px-6">
           <OnboardingMessage>{t('models.registry.failed')}</OnboardingMessage>
-          <OnboardingButton disabled={progress.isSaving} onPress={() => void registry.refetch()}>
+          <OnboardingButton
+            disabled={progress.isSaving}
+            onPress={() => {
+              forceRetryRef.current = true;
+              void registry.refetch();
+            }}
+          >
             {t('common.retry')}
           </OnboardingButton>
         </View>

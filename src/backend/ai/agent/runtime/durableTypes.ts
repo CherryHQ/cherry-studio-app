@@ -105,6 +105,8 @@ export type RuntimeExecutionPorts = {
   ): Promise<RuntimeArtifact>;
   /** The shared storage session closed itself; reopen its working copies before accepting work. */
   onFailure?(error: RuntimeError): void;
+  /** Preserve an unreadable working copy while the Host isolates its Session before resume. */
+  onRecoveryFailure?(lane: RuntimeLane, error: unknown): Promise<void>;
   traceModel?(owner: RuntimeUsageOwner): Promise<TraceSpan | undefined>;
   assertExecutionAllowed(owner: RuntimeUsageOwner, signal: AbortSignal): Promise<void>;
   resolveTool(
@@ -180,6 +182,8 @@ export type RuntimeDurableSubmission = {
   input: RuntimeInputPart[];
   /** Completed tool prefix imported into a replacement working copy; never execute it again. */
   resume?: RuntimeMessagePart[];
+  /** Host retained prior non-empty reply parts that are merged back at display projection. */
+  readonly hasRetainedOutput?: boolean;
   /** Original display parts and inference facts. Assistant/model/tool bodies belong to the engine. */
   metadata: { [key: string]: RuntimeJsonValue };
 };

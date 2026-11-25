@@ -45,6 +45,7 @@ import { RemoteAgentActions } from './RemoteAgentActions';
 import { RemoteAgentError } from './RemoteAgentError';
 import {
   createMessageViewCache,
+  projectAgentPage,
   projectMessage,
   projectSession,
   projectSnapshot,
@@ -548,15 +549,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
   }
   async listAgents(cursor: string | undefined, signal: AbortSignal) {
     const page = await this.request('agent.agents.list', { cursor }, signal);
-    return {
-      items: page.items.map((item) => ({
-        id: item.agentId,
-        name: item.name,
-        emoji: item.emoji,
-        ...(item.model !== undefined ? { model: item.model } : {}),
-      })),
-      next: page.nextCursor ?? undefined,
-    };
+    return projectAgentPage(page);
   }
   async listWorkspaces(agentId: string, cursor: string | undefined, signal: AbortSignal) {
     const page = await this.request('agent.workspaces.list', { agentId, cursor }, signal);

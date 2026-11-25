@@ -202,7 +202,9 @@ target device's decision. No settings row or switch is added.
 
 Explicitly started local conversations and immediate painting jobs request iOS 26+
 `BGContinuedProcessingTask` with progress milestones. The native launch callback confirms
-admission. System cancellation or revocation stops the owning session or job. Questions and
+admission. Native expiry does not distinguish system revocation from system-UI cancellation. The
+Agent Host suspends without aborting unfinished turns and resumes them on foreground return;
+explicit in-app stop remains terminal. Jobs retain their interruption policy. Questions and
 approvals retain the conversation lease until settlement. Restored or automatically retried work
 uses the existing finite UIKit allowance and consented audio fallback. The app preference governs
 fallback presentation independently of execution.

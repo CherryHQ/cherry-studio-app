@@ -44,6 +44,8 @@ export type ComposerSendPayload = {
 type ComposerSurfaceProps = PropsWithChildren<{
   /** Remote services can require confirmed admission before text leaves the field. */
   sendPolicy?: 'optimistic' | 'confirmed';
+  /** Chat can queue a follow-up while the current answer streams. */
+  allowFollowUp?: boolean;
   /** Omit for the default: there is text, or there is an attachment. */
   canSend?: boolean;
   dismissKeyboardOnSend?: boolean;
@@ -66,6 +68,7 @@ type ComposerSurfaceProps = PropsWithChildren<{
  */
 export function ComposerSurface({
   sendPolicy = 'optimistic',
+  allowFollowUp = false,
   canSend,
   children,
   dismissKeyboardOnSend = true,
@@ -108,15 +111,15 @@ export function ComposerSurface({
     setDraft,
   } = useComposerActions();
   const { dismissInput } = useComposerPresentationActions();
+  const hasContent = hasComposerSendableContent(draft, attachments);
+  const isStopOnly = streaming && !allowFollowUp;
   const isSendable =
-    !isSubmitting &&
-    !hasImportingComposerAttachments(attachments) &&
-    (canSend ?? hasComposerSendableContent(draft, attachments));
+    !isSubmitting && !hasImportingComposerAttachments(attachments) && (canSend ?? hasContent);
   // The composer's actions must not change with what was typed (see CherryUI's `Composer`), and
   // callers rebuild their handlers on every update, so the handlers read these when invoked.
-  const latest = useRef({ attachments, canSend, draft, isSubmitting, onSend, onStop, streaming });
+  const latest = useRef({ attachments, canSend, draft, isSubmitting, isStopOnly, onSend, onStop });
   useLayoutEffect(() => {
-    latest.current = { attachments, canSend, draft, isSubmitting, onSend, onStop, streaming };
+    latest.current = { attachments, canSend, draft, isSubmitting, isStopOnly, onSend, onStop };
   });
 
   const handleSend = useCallback(
@@ -185,9 +188,9 @@ export function ComposerSurface({
   );
   const handleReturnSubmit = useCallback(
     async (markdown: string) => {
-      const { attachments, canSend, isSubmitting, streaming } = latest.current;
+      const { attachments, canSend, isSubmitting, isStopOnly } = latest.current;
       if (
-        !streaming &&
+        !isStopOnly &&
         !isSubmitting &&
         !hasImportingComposerAttachments(attachments) &&
         (canSend ?? hasComposerSendableContent(markdown, attachments))
@@ -213,7 +216,7 @@ export function ComposerSurface({
         onChangeText={editDraft}
         onSend={handleSend}
         onStop={handleStop}
-        streaming={streaming}
+        streaming={isStopOnly || (streaming && !hasContent)}
         testID={testID}
         value={draft}
       >

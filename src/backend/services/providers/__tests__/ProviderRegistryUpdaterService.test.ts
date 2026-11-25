@@ -4,6 +4,7 @@ import {
   REGISTRY_SCHEMA_VERSION,
 } from '@/backend/data/services/MobileRegistryLoader';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
+import { HttpError } from '@/backend/services/http';
 import type { NetworkRegion } from '@/backend/services/region';
 
 import {
@@ -19,10 +20,10 @@ jest.mock('@/backend/core/application/Application', () => ({
   application: { get: () => ({ getRegion: mockGetRegion }) },
 }));
 jest.mock('@/backend/services/http', () => ({
+  ...jest.requireActual('@/backend/services/http'),
   createHttpClient: ({ baseUrl }: { baseUrl: string }) => ({
     request: (request: unknown) => mockRequest(baseUrl, request),
   }),
-  isHttpError: () => false,
 }));
 jest.mock('../providerRegistrySnapshot', () => ({
   readProviderRegistrySnapshots: jest.fn(),
@@ -82,6 +83,7 @@ beforeEach(() => {
 });
 afterEach(async () => {
   await updater.stop();
+  jest.restoreAllMocks();
 });
 
 it.each([
@@ -100,6 +102,7 @@ it('downloads every GitCode v4 file through the raw API with the registry branch
   mockGetRegion.mockResolvedValue('CN');
   serve(snapshot(1));
   await updater.ensureReady();
+  expect(mockRequest).toHaveBeenCalledTimes(3);
   for (const path of ['/v4%2Fmanifest.json', '/v4%2Fmodels.json', '/v4%2Fprovider-models.json']) {
     expect(mockRequest).toHaveBeenCalledWith(
       'https://api.gitcode.com/api/v5/repos/CherryHQ/cherry-studio/raw',
@@ -253,10 +256,13 @@ it('falls back to the previous complete snapshot when the newest payload is inva
   expect(mockRequest).not.toHaveBeenCalled();
 });
 
-it('keeps first download retryable after failure and uses the fallback host', async () => {
+it('keeps first download retryable after cooldown and uses the fallback host', async () => {
+  const now = Date.now();
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
   mockRequest.mockRejectedValue(new Error('Offline'));
   await expect(updater.ensureReady()).rejects.toThrow('Offline');
   expect(providerRegistryService.isReady()).toBe(false);
+  clock.mockReturnValue(now + 15 * 60 * 1000);
   const remote = snapshot(1);
   serve(remote);
   const success = mockRequest.getMockImplementation()!;
@@ -330,4 +336,86 @@ it('stops while region detection is still pending', async () => {
   await update;
   expect(mockRequest).not.toHaveBeenCalled();
   expect(providerRegistryService.isReady()).toBe(false);
+});
+
+it.each([
+  new HttpError('Rate limited', { kind: 'http', status: 429 }),
+  new HttpError('Offline', { kind: 'network' }),
+])(
+  'cools down failed sources across startup and repeated readiness checks: %s',
+  async (failure) => {
+    const now = Date.now();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+    mockRequest.mockRejectedValue(failure);
+    await updater.start();
+    await expect(updater.ensureReady()).rejects.toBe(failure);
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+    for (let count = 0; count < 3; count++) {
+      await expect(updater.ensureReady()).rejects.toBe(failure);
+      await expect(updater.applyUpdate()).rejects.toBe(failure);
+    }
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+    expect(writeProviderRegistrySnapshot).not.toHaveBeenCalled();
+    clock.mockReturnValue(now + 15 * 60 * 1000);
+    serve(snapshot(1));
+    await updater.ensureReady();
+    expect(providerRegistryService.isReady()).toBe(true);
+    expect(mockRequest).toHaveBeenCalledTimes(5);
+  },
+);
+
+it('does not revisit a rate-limited preferred source after downloading from fallback', async () => {
+  mockGetRegion.mockResolvedValue('CN');
+  serve(snapshot(1));
+  const success = mockRequest.getMockImplementation()!;
+  mockRequest.mockImplementation((source, request) =>
+    source.includes('gitcode')
+      ? Promise.reject(new HttpError('Rate limited', { kind: 'http', status: 429 }))
+      : success(source, request),
+  );
+  await updater.ensureReady();
+  await updater.applyUpdate();
+  expect(mockRequest.mock.calls.filter(([source]) => source.includes('gitcode'))).toHaveLength(1);
+  expect(
+    mockRequest.mock.calls.filter(
+      ([source, request]) => source.includes('github') && request.path === '/manifest.json',
+    ),
+  ).toHaveLength(2);
+  expect(providerRegistryService.isReady()).toBe(true);
+});
+
+it('cools down a source whose payload download fails without re-reading its manifest', async () => {
+  serve(snapshot(1));
+  const success = mockRequest.getMockImplementation()!;
+  const failure = new HttpError('Rate limited', { kind: 'http', status: 429 });
+  mockRequest.mockImplementation((source, request) =>
+    request.path.endsWith('manifest.json') ? success(source, request) : Promise.reject(failure),
+  );
+  await expect(updater.ensureReady()).rejects.toBe(failure);
+  const requests = mockRequest.mock.calls.length;
+  await expect(updater.ensureReady()).rejects.toBe(failure);
+  expect(mockRequest).toHaveBeenCalledTimes(requests);
+  expect(
+    mockRequest.mock.calls.filter(([, request]) => request.path.endsWith('manifest.json')),
+  ).toHaveLength(2);
+  expect(writeProviderRegistrySnapshot).not.toHaveBeenCalled();
+});
+
+it('lets explicit forced retry recover immediately after an offline cold-start cooldown', async () => {
+  const now = Date.now();
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+  const failure = new HttpError('Offline', { kind: 'network' });
+  mockRequest.mockRejectedValue(failure);
+
+  await expect(updater.ensureReady()).rejects.toBe(failure);
+  expect(mockRequest).toHaveBeenCalledTimes(2);
+
+  await expect(updater.ensureReady()).rejects.toBe(failure);
+  expect(mockRequest).toHaveBeenCalledTimes(2);
+
+  serve(snapshot(1));
+  await updater.ensureReady({ force: true });
+  expect(providerRegistryService.isReady()).toBe(true);
+  expect(mockRequest).toHaveBeenCalledTimes(5);
+  clock.mockRestore();
 });

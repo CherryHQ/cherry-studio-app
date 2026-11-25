@@ -39,6 +39,7 @@ import { DesktopUnreachableError, RemoteFailureError, WebSocketOpeningError } fr
 import { openWebSocketStream } from './remoteSocket';
 
 type LeaseEntry = {
+  purpose: 'active' | 'prewarm';
   backgroundRequired: boolean;
   domain: DesktopDomain;
   grantId: string;
@@ -69,6 +70,7 @@ class DesktopAuthorizationError extends RemoteFailureError {}
 
 const logger = loggerService.withContext('DesktopConnectionManager');
 const IDLE_GRACE_MS = 3000;
+const SIDEBAR_PREWARM_MS = 8000;
 const BACKGROUND_UNREACHABLE_MS = 60_000;
 const fingerprint = (row: DesktopConnectionRow) =>
   JSON.stringify([row.desktopIdentity, row.deviceId]);
@@ -113,7 +115,15 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
   enablePersistentConnections(): void {
     this.persistentConnectionsEnabled = true;
     for (const [id, entry] of this.entries) {
-      if (!entry.disconnected && [...entry.leases].some((lease) => lease.domain === 'agent')) {
+      if (
+        !entry.disconnected &&
+        [...entry.leases].some(
+          (lease) =>
+            lease.domain === 'agent' &&
+            lease.purpose === 'active' &&
+            !lease.controller.signal.aborted,
+        )
+      ) {
         entry.connectionToken ??= randomUUID();
         this.reconcileVisibility(id, entry);
       }
@@ -216,10 +226,29 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
     if (this.stopped || !this.store)
       throw new DOMException('Connection manager stopped', 'AbortError');
   }
-  async retain(
+  async prewarmAgent(id: string, signal: AbortSignal): Promise<DesktopDomainLease | undefined> {
+    if (
+      !this.foreground ||
+      signal.aborted ||
+      this.intents?.isDisconnected(id) ||
+      this.entries.get(id)?.disconnected
+    )
+      return;
+    // The normal Agent consumer adopts the same dial or authenticated channel. A speculative
+    // lease never starts command recovery, requests background time, or publishes a notification.
+    const budget = AbortSignal.any([signal, AbortSignal.timeout(SIDEBAR_PREWARM_MS)]);
+    return this.retainDomain(id, 'agent', budget, 'prewarm');
+  }
+
+  retain(id: string, domain: DesktopDomain, signal: AbortSignal): Promise<DesktopDomainLease> {
+    return this.retainDomain(id, domain, signal, 'active');
+  }
+
+  private async retainDomain(
     id: string,
     domain: DesktopDomain,
     signal: AbortSignal,
+    purpose: LeaseEntry['purpose'],
   ): Promise<DesktopDomainLease> {
     this.assertAvailable();
     signal.throwIfAborted();
@@ -263,9 +292,15 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
       throw new RemoteFailureError({ reason: 'GRANT_REVOKED', message: 'Domain grant revoked' });
     const retained = entry;
     clearTimeout(entry.idleTimer);
-    if (domain === 'agent' && this.persistentConnectionsEnabled && !entry.disconnected)
+    if (
+      purpose === 'active' &&
+      domain === 'agent' &&
+      this.persistentConnectionsEnabled &&
+      !entry.disconnected
+    )
       entry.connectionToken ??= randomUUID();
     const lease: LeaseEntry = {
+      purpose,
       backgroundRequired: false,
       domain,
       grantId: grant.grantId,

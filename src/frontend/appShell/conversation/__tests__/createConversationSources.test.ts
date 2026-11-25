@@ -13,6 +13,7 @@ test('shared catalog readers release connection demand only after the last consu
     api: {} as ApiClient,
     teamAgent: {} as TeamAgentModule,
     remoteAgent: {
+      prewarm: jest.fn(async () => undefined),
       open: async () => {
         const handle = {
           scope: generation,

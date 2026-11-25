@@ -11,10 +11,15 @@ import type { AgentSessionEntity } from '@/shared/data/api/schemas/agentSessions
 import type { ApiClient } from '@/shared/data/api/types';
 import type { PreferenceSchema } from '@/shared/data/preference';
 
+import { FirstUseAdmissionProvider } from '../../FirstUseAdmission';
 import { FirstUseGate } from '../FirstUseGate';
 
 let mockStatus: PreferenceSchema['app.onboarding.status'] = 'unseen';
 const mockSetStatus = jest.fn();
+const mockLoading = jest.fn(() => null);
+jest.mock('@/frontend/appShell/startup/useStartupReadyAfterFrames', () => ({
+  useStartupReadyAfterFrames: () => jest.fn(),
+}));
 
 jest.mock('@/frontend/data', () => ({
   ...jest.requireActual('@/frontend/data/hooks/useDataApi'),
@@ -24,7 +29,7 @@ jest.mock('@/frontend/hooks/agent', () =>
   jest.requireActual('@/frontend/hooks/agent/useAgentSessions'),
 );
 jest.mock('@cherrystudio/ui/components', () => ({
-  ContentState: { Error: () => null, Loading: () => null },
+  ContentState: { Error: () => null, Loading: () => mockLoading() },
 }));
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -66,9 +71,11 @@ describe('first-use admission and chat restoration', () => {
       const tree = (
         <QueryClientProvider client={queryClient}>
           <DataApiProvider dataApi={dataApi}>
-            <FirstUseGate>
-              <ChatRestoreProbe />
-            </FirstUseGate>
+            <FirstUseAdmissionProvider observe>
+              <FirstUseGate>
+                <ChatRestoreProbe />
+              </FirstUseGate>
+            </FirstUseAdmissionProvider>
           </DataApiProvider>
         </QueryClientProvider>
       );
@@ -144,6 +151,19 @@ describe('first-use admission and chat restoration', () => {
       expect(dataApi.get.mock.calls.some(([path]) => path === '/models')).toBe(false);
     },
   );
+
+  it('keeps the pending welcome write covered without rendering loading UI', async () => {
+    const write = Promise.withResolvers<void>();
+    mockSetStatus.mockReturnValueOnce(write.promise);
+    await renderGate();
+
+    expect(mockSetStatus).toHaveBeenCalledWith('welcome', { optimistic: false });
+    expect(renderer?.root.findAllByType(Redirect)).toHaveLength(0);
+    expect(chatMountCount).toBe(0);
+    expect(mockLoading).not.toHaveBeenCalled();
+    await act(async () => write.resolve());
+    expect(renderer?.root.findByType(Redirect).props.href).toBe('/onboarding');
+  });
 
   it('starts with the welcome stage before asking for privacy or permissions', async () => {
     await renderGate();

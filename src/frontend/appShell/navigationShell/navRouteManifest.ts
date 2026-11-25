@@ -24,7 +24,7 @@ export type NavRouteSpec = {
 };
 
 /**
- * Single source of truth for top-level destinations inside `(drawer)/(main)`:
+ * Single source of truth for top-level destinations in the drawer shell:
  * route names, hrefs, path prefixes, dock root detection, sidebar highlight mapping, and titles.
  */
 export const NAV_ROUTE_MANIFEST = {

@@ -1790,6 +1790,7 @@
   "remoteAgent.artifact": "Результат",
   "remoteAgent.attachmentsUnavailable": "Разговоры на компьютере пока не поддерживают вложения",
   "remoteAgent.awaitingApproval": "Ожидание вашего ответа",
+  "remoteAgent.cachedCatalog": "Показан список на момент последней синхронизации.",
   "remoteAgent.configured": "Модель настроена",
   "remoteAgent.connected": "Подключено к {{name}}",
   "remoteAgent.connecting": "Подключение к PC…",

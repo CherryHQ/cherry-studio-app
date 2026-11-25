@@ -1742,6 +1742,7 @@
   "remoteAgent.artifact": "产物",
   "remoteAgent.attachmentsUnavailable": "桌面端会话暂不支持添加附件",
   "remoteAgent.awaitingApproval": "等待你回应",
+  "remoteAgent.cachedCatalog": "正在显示上次同步的目录。",
   "remoteAgent.configured": "已配置模型",
   "remoteAgent.connected": "已连接 {{name}}",
   "remoteAgent.connecting": "正在连接 PC…",

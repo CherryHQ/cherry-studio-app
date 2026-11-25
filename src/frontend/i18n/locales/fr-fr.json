@@ -1774,6 +1774,7 @@
   "remoteAgent.artifact": "Fichier produit",
   "remoteAgent.attachmentsUnavailable": "Les conversations de bureau ne prennent pas encore en charge les pièces jointes",
   "remoteAgent.awaitingApproval": "En attente de votre réponse",
+  "remoteAgent.cachedCatalog": "Affichage de la dernière liste synchronisée.",
   "remoteAgent.configured": "Modèle configuré",
   "remoteAgent.connected": "Connecté à {{name}}",
   "remoteAgent.connecting": "Connexion au PC…",

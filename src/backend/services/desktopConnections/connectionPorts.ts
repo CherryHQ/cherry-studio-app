@@ -57,6 +57,7 @@ export type DesktopBindingInvalidation = {
   grantId?: string;
 };
 export interface DesktopConnections {
+  prewarmAgent(id: string, signal: AbortSignal): Promise<DesktopDomainLease | undefined>;
   subscribeInvalidation(listener: (event: DesktopBindingInvalidation) => void): () => void;
   retain(id: string, domain: DesktopDomain, signal: AbortSignal): Promise<DesktopDomainLease>;
   revoke(id: string, domain: DesktopDomain, grantId: string): Promise<void>;

@@ -5,6 +5,7 @@ import { useResolveClassNames } from 'uniwind';
 
 import { createFilledIcon } from '../create-filled-icon';
 import { createIcon } from '../create-icon';
+import SparkPenIcon from '../icons/spark-pen';
 
 jest.mock('react-native-svg', () => {
   const { createElement: createReactElement, forwardRef: forwardReactRef } =
@@ -146,6 +147,33 @@ describe('createFilledIcon', () => {
     expect(rect.props).toMatchObject({
       fill: '#112233',
       stroke: 'none',
+    });
+  });
+
+  test('renders SparkPenIcon with filled spark and stroked stylus using resolved token color', () => {
+    mockUseResolveClassNames.mockReturnValue({ color: '#6b7280' });
+    act(() => {
+      renderer = create(
+        <SparkPenIcon className="text-muted-foreground" size={20} strokeWidth={1.8} />,
+      );
+    });
+
+    const svg = renderer!.root.findByType('SvgRoot' as never);
+    expect(svg.props).toMatchObject({ accessible: false, height: 20, width: 20 });
+    expect(SparkPenIcon.displayName).toBe('SparkPenIcon');
+
+    const paths = renderer!.root.findAllByType('SvgPath' as never);
+    expect(paths).toHaveLength(2);
+    expect(paths[0].props).toMatchObject({
+      fill: '#6b7280',
+      stroke: 'none',
+    });
+    expect(paths[1].props).toMatchObject({
+      fill: 'none',
+      stroke: '#6b7280',
+      strokeLinecap: 'round',
+      strokeLinejoin: 'round',
+      strokeWidth: 1.8,
     });
   });
 });

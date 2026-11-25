@@ -1,7 +1,14 @@
 import { loggerService } from '@logger';
 import { AxiosError, isAxiosError, isCancel } from 'axios';
 
-import type { DecodedHttpError, HttpErrorDecoder, HttpErrorResponse } from './HttpClient';
+import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
+
+import type {
+  DecodedHttpError,
+  HttpCallerMetadata,
+  HttpErrorDecoder,
+  HttpErrorResponse,
+} from './HttpClient';
 import { HttpError, isHttpError } from './HttpError';
 import { toHttpHeaders } from './toHttpHeaders';
 
@@ -14,8 +21,14 @@ const MAX_PUBLIC_HEADER_LENGTH = 256;
  * bodies, and query values stay out of the log; the public `HttpError` stays
  * stable and desensitized.
  */
-function logTransportFailure(error: AxiosError, logPath?: string): void {
+function logTransportFailure(
+  error: AxiosError,
+  logPath?: string,
+  caller?: HttpCallerMetadata,
+): void {
   logger.warn('HTTP request failed.', {
+    serviceName: diagnosticIdentifier(caller?.serviceName),
+    operation: diagnosticIdentifier(caller?.operation),
     code: error.code,
     message: logPath ? undefined : error.message,
     method: error.config?.method,
@@ -76,16 +89,30 @@ export function mapAxiosError(
   error: unknown,
   decode?: HttpErrorDecoder,
   logPath?: string,
+  caller?: HttpCallerMetadata,
 ): HttpError {
   if (isHttpError(error)) {
     return error;
   }
 
   if (!isAxiosError(error)) {
-    logger.error(
-      'HTTP transport failed unexpectedly.',
-      logPath ? { path: logPath } : error instanceof Error ? error : { value: String(error) },
-    );
+    const callerContext = {
+      serviceName: diagnosticIdentifier(caller?.serviceName),
+      operation: diagnosticIdentifier(caller?.operation),
+    };
+    if (logPath) {
+      logger.error('HTTP transport failed unexpectedly.', {
+        ...callerContext,
+        path: logPath,
+      });
+    } else if (error instanceof Error) {
+      logger.error('HTTP transport failed unexpectedly.', error, callerContext);
+    } else {
+      logger.error('HTTP transport failed unexpectedly.', {
+        ...callerContext,
+        value: String(error),
+      });
+    }
     return new HttpError('HTTP request failed unexpectedly.', {
       code: 'HTTP_INTERNAL_ERROR',
       kind: 'internal',
@@ -99,7 +126,7 @@ export function mapAxiosError(
     });
   }
 
-  logTransportFailure(error, logPath);
+  logTransportFailure(error, logPath, caller);
 
   if (error.code === AxiosError.ECONNABORTED || error.code === AxiosError.ETIMEDOUT) {
     return new HttpError('HTTP request timed out.', {

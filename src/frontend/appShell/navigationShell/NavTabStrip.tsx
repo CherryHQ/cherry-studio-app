@@ -162,6 +162,42 @@ export function useMeasureNavBounds(
   return measureBounds;
 }
 
+type NavTabCapsuleProps = {
+  color: string;
+  filled: boolean;
+  id: NavTabId;
+  isActive: boolean;
+  isDragPreview?: boolean;
+  orientation: 'horizontal' | 'vertical';
+};
+
+function NavTabCapsule({
+  color,
+  filled,
+  id,
+  isActive,
+  isDragPreview = false,
+  orientation,
+}: NavTabCapsuleProps) {
+  const isHorizontal = orientation === 'horizontal';
+  const capsuleClassName = isHorizontal
+    ? 'h-9 w-14 items-center justify-center rounded-full'
+    : 'h-11 w-11 items-center justify-center rounded-full';
+  const stateClassName = isDragPreview
+    ? 'bg-secondary-active border-border-selected border border-dashed'
+    : isActive && !isHorizontal
+      ? 'bg-secondary-active'
+      : '';
+
+  return (
+    <View className={`${capsuleClassName} ${stateClassName}`}>
+      <View className={isHorizontal && !isActive && !isDragPreview ? 'opacity-75' : undefined}>
+        <NavIcon color={color} filled={filled} id={id} size={isHorizontal ? 20 : 22} />
+      </View>
+    </View>
+  );
+}
+
 type NavMiddleTabButtonProps = {
   accessibilityLabel: string;
   buttonSizeClass: string;
@@ -171,6 +207,7 @@ type NavMiddleTabButtonProps = {
   isDraggingOut: boolean;
   mutedForegroundColor: string;
   onPress: () => void;
+  orientation: 'horizontal' | 'vertical';
   tabId: NavigationPinTabId;
   testIDPrefix: string;
 };
@@ -184,6 +221,7 @@ function NavMiddleTabButton({
   isDraggingOut,
   mutedForegroundColor,
   onPress,
+  orientation,
   tabId,
   testIDPrefix,
 }: NavMiddleTabButtonProps) {
@@ -196,20 +234,18 @@ function NavMiddleTabButton({
         accessibilityRole="tab"
         accessibilityState={{ selected: isActive }}
         className={`${buttonSizeClass} items-center justify-center rounded-full ${
-          isDragPreview
-            ? 'bg-secondary-active border-border-selected border border-dashed'
-            : isActive
-              ? 'bg-secondary-active'
-              : ''
-        } ${isDraggingOut ? 'opacity-35' : ''}`}
+          isDraggingOut ? 'opacity-35' : ''
+        }`}
         onPress={onPress}
         testID={`${testIDPrefix}-tab-${tabId}`}
       >
-        <NavIcon
+        <NavTabCapsule
           color={isActive || isDragPreview ? foregroundColor : mutedForegroundColor}
           filled={isActive || isDragPreview}
           id={tabId}
-          size={22}
+          isActive={isActive}
+          isDragPreview={isDragPreview}
+          orientation={orientation}
         />
       </Pressable>
     </GestureDetector>
@@ -280,10 +316,15 @@ export function NavTabStrip({
               style={itemWrapperStyle}
               testID={`${testIDPrefix}-preview-${tabId}`}
             >
-              <View
-                className={`${buttonSizeClass} bg-secondary-active border-border-selected items-center justify-center rounded-full border border-dashed`}
-              >
-                <NavIcon color={foregroundColor} filled id={tabId} size={22} />
+              <View className={`${buttonSizeClass} items-center justify-center`}>
+                <NavTabCapsule
+                  color={foregroundColor}
+                  filled
+                  id={tabId}
+                  isActive
+                  isDragPreview
+                  orientation={orientation}
+                />
               </View>
             </Animated.View>
           );
@@ -301,17 +342,16 @@ export function NavTabStrip({
                 accessibilityLabel={label}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: isActive }}
-                className={`${buttonSizeClass} items-center justify-center rounded-full ${
-                  isActive ? 'bg-secondary-active' : ''
-                }`}
+                className={`${buttonSizeClass} items-center justify-center rounded-full`}
                 onPress={handlePress}
                 testID={`${testIDPrefix}-tab-${tabId}`}
               >
-                <NavIcon
+                <NavTabCapsule
                   color={isActive ? foregroundColor : mutedForegroundColor}
                   filled={isActive}
                   id={tabId}
-                  size={22}
+                  isActive={isActive}
+                  orientation={orientation}
                 />
               </Pressable>
             </Animated.View>
@@ -341,6 +381,7 @@ export function NavTabStrip({
               isDraggingOut={detached}
               mutedForegroundColor={mutedForegroundColor}
               onPress={detached ? NOOP : handlePress}
+              orientation={orientation}
               tabId={tabId}
               testIDPrefix={testIDPrefix}
             />

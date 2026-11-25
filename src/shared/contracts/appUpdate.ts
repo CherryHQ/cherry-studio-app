@@ -49,7 +49,7 @@ export type AppUpdateDownload =
 export interface AppUpdateModule {
   readonly channel: AppUpdateChannel | null;
   readonly isEnabled: boolean;
-  check(signal?: AbortSignal): Promise<AppUpdateResult>;
+  check(signal?: AbortSignal, options?: { force?: boolean }): Promise<AppUpdateResult>;
   openStore(release: AppUpdateRelease): Promise<void>;
   /** One app-owned transfer, shared by every screen. Completion never installs automatically. */
   download(release: ApkUpdateRelease): Promise<void>;

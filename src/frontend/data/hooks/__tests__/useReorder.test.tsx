@@ -219,4 +219,74 @@ describe('useReorder', () => {
       ])?.items,
     ).toEqual(initial);
   });
+
+  it('updates matching caches before an idle reorder returns and restores them if the write fails', async () => {
+    const [a, b] = ['a', 'b'].map((id) => ({ id, name: id }));
+    const initial = [a, b];
+    const next = [b, a];
+    const counted = { items: initial, page: 1, total: 2 };
+    const flatKey = ['/agents'];
+    const countedKey = ['/agents', { limit: 100 }];
+    queryClient.setQueryData(flatKey, initial);
+    queryClient.setQueryData(countedKey, counted);
+    dataApi.patch.mockRejectedValueOnce(new Error('write failed'));
+    const getHook = renderHookHarness<Row>({
+      getId: (item) => item.id,
+      queryFilters: [dataApiCollectionFilters('/agents'), { exact: true, queryKey: countedKey }],
+      resource: '/agents',
+    });
+
+    let immediate: unknown[] = [];
+    await act(async () => {
+      const result = getHook().reorder(initial, next);
+      immediate = [queryClient.getQueryData(flatKey), queryClient.getQueryData(countedKey)];
+      await expect(result).resolves.toBe(false);
+    });
+
+    expect(immediate).toEqual([next, { ...counted, items: next }]);
+    expect(queryClient.getQueryData(flatKey)).toEqual(initial);
+    expect(queryClient.getQueryData(countedKey)).toEqual(counted);
+  });
+
+  it('unwinds overlapping filter snapshots in reverse order when a queued reorder fails', async () => {
+    const [a, b] = ['a', 'b'].map((id) => ({ id, name: id }));
+    const initial = [a, b];
+    const afterFirst = [b, a];
+    const countedInitial = { items: initial, page: 1, total: 2 };
+    const countedAfterFirst = { items: afterFirst, page: 1, total: 2 };
+    const flatKey = ['/agents'];
+    const countedKey = ['/agents', { limit: 100 }];
+    queryClient.setQueryData(flatKey, initial);
+    queryClient.setQueryData(countedKey, countedInitial);
+
+    const firstStarted = Promise.withResolvers<void>();
+    const firstWrite = Promise.withResolvers<void>();
+    dataApi.patch
+      .mockImplementationOnce(() => {
+        firstStarted.resolve();
+        return firstWrite.promise as never;
+      })
+      .mockRejectedValueOnce(new Error('queued write failed'));
+
+    const onError = jest.fn();
+    const getHook = renderHookHarness<Row>({
+      getId: (item) => item.id,
+      onError,
+      queryFilters: [dataApiCollectionFilters('/agents'), { exact: true, queryKey: countedKey }],
+      resource: '/agents',
+    });
+
+    await act(async () => {
+      const first = getHook().reorder(initial, afterFirst);
+      await firstStarted.promise;
+      // Second reorder enters the queued (non-idle) branch while the first write is in flight.
+      const second = getHook().reorder(afterFirst, initial);
+      firstWrite.resolve();
+      expect(await Promise.all([first, second])).toEqual([true, false]);
+    });
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(queryClient.getQueryData(flatKey)).toEqual(afterFirst);
+    expect(queryClient.getQueryData(countedKey)).toEqual(countedAfterFirst);
+  });
 });

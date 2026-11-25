@@ -696,6 +696,16 @@ compatible `Input` props. Its `style` prop targets the composed field container.
 also disables its visibility action. Plain inputs default to `type="text"`, and their `style` prop
 continues to target the native field.
 
+`useFieldText(value, onChangeText)` is exported from `@cherrystudio/ui/components` for
+feature-specific native text editors that need their own presentation. Pass its returned
+`[text, changeText]` to the native input's `value` and `onChangeText`. Call the hook inside the
+component rendered within a sheet's portal, rather than in the component supplying the sheet's
+children. It keeps native edits local while the caller's value echoes through the portal, avoiding
+stale text writes that disrupt Android composition and move the caret on deletion. The caller still
+owns the draft and persistence; update its value synchronously, outside a transition. Changed
+external values and rewritten or rejected edits still reconcile to the caller's value. `Input`
+and `SearchField` already use this hook internally.
+
 `InfoPopover` presents caller-owned text next to a tap trigger, with bounded scrolling. Its
 `children` are presentation-only; the component owns the tap and exposes the caller's
 `accessibilityLabel`, which names the action rather than repeating `text`. Callers supply `text`; the panel displays only that content.
@@ -898,8 +908,8 @@ who contributed a button to it.
 keyboard shows Send and a native submit event supplies the current Markdown without inserting a
 newline or blurring the field. The caller connects that snapshot to its normal guarded submission
 path. IME composition, paste and `inputRef.current.insertText('\n')` stay on the native editing
-path; they never infer submission from text changes. With the preference off, Return keeps its
-ordinary newline and list-editing behavior. Hardware keyboard Return remains an editing action.
+path. On iOS and iPadOS, hardware Return follows the same preference, and Shift+Return inserts
+a newline. With the preference off, Return keeps its ordinary newline and list-editing behavior.
 While Return submits, the native text menu offers an action labelled by `insertNewlineLabel`.
 It inserts at the caret or after selected text without replacing that text or submitting.
 The native menu retains the system editing actions and works without a nonempty selection.
@@ -950,8 +960,8 @@ while editing changes. The existing leading `compactAccessory` remains independe
 `Composer.EditorAccessories` places translated collapse controls beside caller-owned attachments.
 The isolated frame changes shape on a 90ms settle, deliberately shorter than the keyboard: it
 finishes early in the keyboard's travel, so content behind the dock moves once with a small early
-growth instead of following two overlapping motions. An optional `activeSignal` raises `active` on
-the UI thread, letting the shape start inside the keyboard's first frame. The motion stays
+growth instead of following two overlapping motions. An optional `activeSignal` supplies both animation targets on
+the UI thread. The `active` prop then mirrors that signal for hit testing and accessibility. The motion stays
 interruptible, respects system Reduce Motion, and never fades ancestors of native glass controls.
 
 For custom arrangements, compose `Composer.ExpansionMeasure` around accessories that change height

@@ -28,6 +28,7 @@ const BranchViewportContext = createContext<{
   offset: SharedValue<number>;
   register(id: string, ref: RefObject<ViewInstance | null>, depth: number): () => void;
   refresh(): void;
+  setDisclosureAnimating(animating: boolean): void;
 } | null>(null);
 
 /** One vertical scroll owner; horizontal movement is a derived transform, never a pan gesture. */
@@ -44,7 +45,8 @@ export function SidebarBranchScrollView({
   const registrations = useRef(new Map<string, RowRegistration>());
   const generation = useRef(0);
   const active = useRef(true);
-  const measureFrame = useRef<number | undefined>(undefined);
+  const activeTransitions = useRef(0);
+  const measureTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const rows = useSharedValue<SidebarBranchRowLayout[]>([]);
   const scrollY = useSharedValue(0);
   const nearEnd = useSharedValue(false);
@@ -53,21 +55,19 @@ export function SidebarBranchScrollView({
   );
 
   const refresh = useCallback(() => {
-    if (!active.current) return;
+    if (!active.current || activeTransitions.current > 0) return;
     generation.current++;
-    if (measureFrame.current !== undefined) return;
-    measureFrame.current = requestAnimationFrame(() => {
-      measureFrame.current = undefined;
+    clearTimeout(measureTimer.current);
+    if (!registrations.current.size) return;
+    // During a reveal, sibling positions change every frame. Measure once the layout settles.
+    measureTimer.current = setTimeout(() => {
+      measureTimer.current = undefined;
       const content = scrollRef.current?.getInnerViewRef();
       if (!content) return;
       const currentGeneration = generation.current;
       const entries = [...registrations.current.entries()];
       const measured: SidebarBranchRowLayout[] = [];
       let remaining = entries.length;
-      if (!remaining) {
-        rows.set([]);
-        return;
-      }
       const finish = () => {
         remaining--;
         if (!remaining && active.current && generation.current === currentGeneration)
@@ -90,8 +90,23 @@ export function SidebarBranchScrollView({
           finish,
         );
       }
-    });
+    }, 32);
   }, [rows]);
+  const setDisclosureAnimating = useCallback(
+    (animating: boolean) => {
+      if (animating) {
+        activeTransitions.current++;
+        generation.current++;
+        clearTimeout(measureTimer.current);
+        measureTimer.current = undefined;
+        return;
+      }
+      if (!activeTransitions.current) return;
+      activeTransitions.current--;
+      if (activeTransitions.current === 0) refresh();
+    },
+    [refresh],
+  );
   const register = useCallback(
     (id: string, ref: RefObject<ViewInstance | null>, depth: number) => {
       const entry = { ref, depth };
@@ -100,10 +115,11 @@ export function SidebarBranchScrollView({
       return () => {
         if (registrations.current.get(id) !== entry) return;
         registrations.current.delete(id);
+        if (!registrations.current.size) rows.set([]);
         refresh();
       };
     },
-    [refresh],
+    [refresh, rows],
   );
   useLayoutEffect(() => {
     const registeredRows = registrations.current;
@@ -111,8 +127,9 @@ export function SidebarBranchScrollView({
     refresh();
     return () => {
       active.current = false;
-      if (measureFrame.current !== undefined) cancelAnimationFrame(measureFrame.current);
-      measureFrame.current = undefined;
+      activeTransitions.current = 0;
+      clearTimeout(measureTimer.current);
+      measureTimer.current = undefined;
       registeredRows.clear();
     };
   }, [refresh]);
@@ -128,7 +145,10 @@ export function SidebarBranchScrollView({
       if (current && !previous) scheduleOnRN(onEndReached);
     },
   );
-  const viewport = useMemo(() => ({ offset, register, refresh }), [offset, register, refresh]);
+  const viewport = useMemo(
+    () => ({ offset, register, refresh, setDisclosureAnimating }),
+    [offset, register, refresh, setDisclosureAnimating],
+  );
 
   return (
     <BranchViewportContext value={viewport}>
@@ -148,6 +168,11 @@ export function SidebarBranchScrollView({
 /** Parent groups can move a whole set of rows without changing each row's local layout. */
 export function useSidebarBranchLayoutRefresh() {
   return use(BranchViewportContext)?.refresh;
+}
+
+/** Suppresses intermediate row measurement while a disclosure height transition is running. */
+export function useSidebarBranchTransition() {
+  return use(BranchViewportContext)?.setDisclosureAnimating;
 }
 
 export function useSidebarBranchRow(depth: number) {

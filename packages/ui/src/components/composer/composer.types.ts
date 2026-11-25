@@ -79,13 +79,7 @@ export type ComposerPillProps = {
   testID?: string;
 };
 
-export type ComposerCollapsibleProps = {
-  /** Render `null` to collapse. The last non-empty frame stays up until the collapse lands. */
-  children?: ReactNode;
-  /** Applied to the measured content, not the clip — pass padding here and the row animates to include it. */
-  style?: StyleProp<ViewStyle>;
-  testID?: string;
-};
+export type { DisclosureContentProps as ComposerCollapsibleProps } from '../disclosure/disclosure-content';
 
 /**
  * The field's imperative half — what a caller needs to insert an entity the
@@ -105,7 +99,7 @@ export type ComposerInputLinkPress = {
 
 export type ComposerInputProps = {
   autoFocus?: boolean;
-  /** Native edit-menu action available while the soft keyboard Return submits. */
+  /** Native edit-menu action available while Return submits. */
   insertNewlineLabel?: string;
   /** Fills a bounded editing viewport while retaining native content measurement. */
   layout?: 'content' | 'fill';
@@ -124,7 +118,7 @@ export type ComposerInputProps = {
    * too, already handled by the field. Callers filter for what they want.
    */
   onPaste?: (payload: PasteEventPayload) => void;
-  /** Use native soft-keyboard submission; composition, paste and insertText remain edits. */
+  /** Submit on keyboard Return, including hardware Return on iOS. */
   submitOnReturn?: boolean;
   onReturnSubmit?: (markdown: string) => void;
   placeholder?: string;

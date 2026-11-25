@@ -37,12 +37,14 @@ import {
   type RemoteChatRouteParams,
   useChatSource,
 } from '@/frontend/appShell/navigation/chat';
+import { useNavigationDockClearance } from '@/frontend/appShell/navigationShell/state';
 import { useSidebarPresence } from '@/frontend/appShell/sidebar';
 import { AgentPickerSheet } from '@/frontend/components/AgentPicker';
 import {
   ComposerDismissArea,
   ComposerDock,
   ComposerSessionProvider,
+  getComposerExtraBottomOffset,
 } from '@/frontend/components/Composer';
 import { ConversationStatus } from '@/frontend/components/ConversationStatus';
 import type { MessageListItem } from '@/frontend/components/Message';
@@ -162,6 +164,8 @@ function RemoteChatSession() {
   const target = parseRemoteChatRoute(useLocalSearchParams<RemoteChatRouteParams>());
   const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
+  const dockClearance = useNavigationDockClearance();
+  const extraBottomOffset = getComposerExtraBottomOffset(bottom, dockClearance);
   const composerHeight = useSharedValue(0);
   const setComposerHeight = useCallback(
     (height: number) => composerHeight.set(height),
@@ -247,7 +251,7 @@ function RemoteChatSession() {
                   assistantName={agent?.name}
                   isAssistantToolbarEnabled
                   contentBottomInset={composerContentGap}
-                  keyboardOffset={getComposerKeyboardStickyOffset(bottom)}
+                  keyboardOffset={getComposerKeyboardStickyOffset(bottom) + extraBottomOffset}
                   onPendingSendDisplayed={ignorePending}
                 />
               )}

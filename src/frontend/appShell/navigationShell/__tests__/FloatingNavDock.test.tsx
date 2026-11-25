@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
+import { View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { FloatingNavDock } from '../FloatingNavDock';
+import { NavIcon } from '../NavIcon';
 import type { NavDragState } from '../state';
 
 const createMockSharedValue = <T,>(initialValue: T) => {
@@ -26,6 +28,7 @@ let mockShellState = {
   dragState: null as NavDragState | null,
   isAtRoot: true,
   isDockVisible: true,
+  isOnboardingBlocking: false,
   navigateToDestination: jest.fn(),
   pinnedTabs: ['agents'] as (
     | 'agents'
@@ -144,6 +147,7 @@ describe('FloatingNavDock drag preview', () => {
       dragState: null,
       isAtRoot: true,
       isDockVisible: true,
+      isOnboardingBlocking: false,
       navigateToDestination: jest.fn(),
       pinnedTabs: ['agents'],
       registerDockRect: jest.fn(),
@@ -155,6 +159,51 @@ describe('FloatingNavDock drag preview', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+  });
+
+  test('mounts no dock or controls while first-use admission is blocked', () => {
+    mockShellState.isDockVisible = false;
+    mockShellState.isOnboardingBlocking = true;
+    act(() => {
+      renderer = create(<FloatingNavDock />);
+    });
+    expect(renderer!.toJSON()).toBeNull();
+
+    mockShellState.isDockVisible = true;
+    mockShellState.isOnboardingBlocking = false;
+    act(() => renderer!.update(<FloatingNavDock />));
+    expect(renderer!.root.findByProps({ testID: 'floating-nav-dock' }).props.pointerEvents).toBe(
+      'box-none',
+    );
+  });
+
+  test('shows a filled active tab without a capsule background and keeps the dashed drag preview', () => {
+    mockShellState.dragState = {
+      draggingOut: false,
+      id: 'drawings',
+      insertIndex: 0,
+      overDock: true,
+      source: 'more',
+    };
+    act(() => {
+      renderer = create(<FloatingNavDock />);
+    });
+
+    const activeTab = renderer!.root.findByProps({ testID: 'floating-nav-tab-more' });
+    expect(activeTab.findByType(NavIcon).props.filled).toBe(true);
+    const activeCapsule = activeTab
+      .findAllByType(View)
+      .find((view) => view.props.className?.split(' ').includes('h-9'));
+    expect(activeCapsule).toBeDefined();
+    expect(activeCapsule!.props.className).not.toMatch(/bg-secondary|border-border-subtle/);
+
+    const preview = renderer!.root.findByProps({ testID: 'floating-nav-preview-drawings' });
+    const previewCapsule = preview
+      .findAllByType(View)
+      .find((view) => view.props.className?.split(' ').includes('h-9'));
+    expect(previewCapsule?.props.className.split(' ')).toEqual(
+      expect.arrayContaining(['bg-secondary-active', 'border-border-selected', 'border-dashed']),
+    );
   });
 
   test('inserts live dashed preview slot inside the middle band and shows drop banner when dragging from More', () => {
@@ -258,7 +307,7 @@ describe('FloatingNavDock drag preview', () => {
     expect(detached.findByProps({ testID: 'floating-nav-tab-drawings' })).toBeTruthy();
 
     const row = renderer!.root.findByProps({
-      className: 'flex-row items-center justify-center gap-2.5 px-4',
+      testID: 'floating-nav-row',
     });
     act(() => {
       row.props.onLayout({ nativeEvent: { layout: { height: 44 } } });

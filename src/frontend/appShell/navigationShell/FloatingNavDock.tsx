@@ -18,14 +18,26 @@ import {
 import { resolveFloatingDockBottomPadding } from './shellMode';
 import { useNavigationShell, useNavigationShellInteraction } from './state';
 
+const DOCK_FADE_START = { x: 0.5, y: 0 } as const;
+const DOCK_FADE_END = { x: 0.5, y: 1 } as const;
+const DOCK_FADE_LOCATIONS = [0, 0.38, 1] as const;
+const DOCK_FADE_STYLE = {
+  bottom: 0,
+  left: 0,
+  position: 'absolute',
+  right: 0,
+  top: -18,
+} as const;
+const DOCK_TRAY_STYLE = {
+  bottom: -6,
+  left: 12,
+  position: 'absolute',
+  right: 12,
+  top: -6,
+} as const;
+
 function toColor(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback;
-}
-
-function resolveTabMaxWidth(totalCount: number): number {
-  if (totalCount <= 3) return 100;
-  if (totalCount === 4) return 80;
-  return 66;
 }
 
 /** Borderless ChatGPT-style bottom floating navigation dock for compact windows. */
@@ -35,6 +47,7 @@ export function FloatingNavDock() {
     activeDestination,
     activeDockTab,
     isAtRoot,
+    isOnboardingBlocking,
     isDockVisible,
     navigateToDestination,
     pinnedTabs,
@@ -44,15 +57,18 @@ export function FloatingNavDock() {
   } = useNavigationShell();
   const { dragState } = useNavigationShellInteraction();
 
-  const [chatSurfaceColor, defaultSurfaceColor, foregroundColor, mutedForegroundColor] =
-    useThemeColor(['chat-background', 'background', 'foreground', 'muted-foreground']);
-  const transparentChatSurface = toColor(
-    useResolveClassNames('bg-chat-background/0').backgroundColor,
-    chatSurfaceColor,
-  );
+  const [defaultSurfaceColor, foregroundColor, mutedForegroundColor] = useThemeColor([
+    'background',
+    'foreground',
+    'muted-foreground',
+  ]);
   const transparentDefaultSurface = toColor(
     useResolveClassNames('bg-background/0').backgroundColor,
     defaultSurfaceColor,
+  );
+  const defaultFadeColors = useMemo(
+    () => [transparentDefaultSurface, defaultSurfaceColor, defaultSurfaceColor] as const,
+    [defaultSurfaceColor, transparentDefaultSurface],
   );
 
   const rowRef = useRef<ViewInstance>(null);
@@ -61,8 +77,6 @@ export function FloatingNavDock() {
     [dragState, pinnedTabs],
   );
   const isChatSurface = activeDestination === 'chat';
-  const fadeStartColor = isChatSurface ? transparentChatSurface : transparentDefaultSurface;
-  const fadeEndColor = isChatSurface ? chatSurfaceColor : defaultSurfaceColor;
 
   const animatedContainerStyle = useAnimatedStyle(() => ({
     opacity: withTiming(isDockVisible ? 1 : 0, navChromeTimingConfig),
@@ -85,11 +99,10 @@ export function FloatingNavDock() {
     [measureDockBounds, reportDockHeight],
   );
 
-  if (shellMode !== 'compact-dock') {
+  if (isOnboardingBlocking || shellMode !== 'compact-dock') {
     return null;
   }
 
-  const maxWidth = resolveTabMaxWidth(preview.tabs.length);
   const bottomPadding = resolveFloatingDockBottomPadding(insets.bottom, Platform?.OS ?? 'ios');
 
   const trayClassName = !dragState
@@ -112,20 +125,18 @@ export function FloatingNavDock() {
       style={[animatedContainerStyle, { paddingBottom: bottomPadding }]}
       testID="floating-nav-dock"
     >
-      <LinearGradient
-        colors={[fadeStartColor, fadeEndColor, fadeEndColor]}
-        end={{ x: 0.5, y: 1 }}
-        locations={isChatSurface ? [0, 0.25, 1] : [0, 0.38, 1]}
-        pointerEvents="none"
-        start={{ x: 0.5, y: 0 }}
-        style={{
-          bottom: 0,
-          left: 0,
-          position: 'absolute',
-          right: 0,
-          top: isChatSurface ? 0 : -18,
-        }}
-      />
+      {isChatSurface ? (
+        <View className="absolute inset-0 bg-chat-background" pointerEvents="none" />
+      ) : (
+        <LinearGradient
+          colors={defaultFadeColors}
+          end={DOCK_FADE_END}
+          locations={DOCK_FADE_LOCATIONS}
+          pointerEvents="none"
+          start={DOCK_FADE_START}
+          style={DOCK_FADE_STYLE}
+        />
+      )}
       <NavDragStatusPill
         containerClassName="items-center"
         dragState={dragState}
@@ -135,10 +146,7 @@ export function FloatingNavDock() {
       />
       <View className="relative" pointerEvents="box-none">
         {trayClassName ? (
-          <View
-            pointerEvents="none"
-            style={{ bottom: -6, left: 12, position: 'absolute', right: 12, top: -6 }}
-          >
+          <View pointerEvents="none" style={DOCK_TRAY_STYLE}>
             <Surface shape="pill">
               <View className={trayClassName} testID="floating-dock-drop-tray" />
             </Surface>
@@ -146,15 +154,15 @@ export function FloatingNavDock() {
         ) : null}
         <View
           ref={rowRef}
-          className="flex-row items-center justify-center gap-2.5 px-4"
+          className="flex-row items-center justify-center px-4"
           onLayout={handleRowLayout}
           pointerEvents={isDockVisible ? 'auto' : 'none'}
+          testID="floating-nav-row"
         >
           <NavTabStrip
             activeDockTab={activeDockTab}
             dragState={dragState}
             foregroundColor={foregroundColor}
-            maxItemWidth={maxWidth}
             mutedForegroundColor={mutedForegroundColor}
             onSelectDestination={navigateToDestination}
             orientation="horizontal"

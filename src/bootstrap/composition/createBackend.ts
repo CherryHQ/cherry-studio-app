@@ -345,7 +345,7 @@ export function createBackend(
       list: () => services.provider.list(),
     },
     registryUpdates: {
-      ensureReady: () => infrastructure.providerRegistryUpdater.ensureReady(),
+      ensureReady: (options) => infrastructure.providerRegistryUpdater.ensureReady(options),
       apply: () => infrastructure.providerRegistryUpdater.applyUpdate(),
       subscribe: (listener) => providerRegistryUpdates.subscribe(listener),
     },

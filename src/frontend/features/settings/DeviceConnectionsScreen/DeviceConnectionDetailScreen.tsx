@@ -8,6 +8,7 @@ import { Text, View } from 'react-native';
 import { RouteHeader } from '@/frontend/appShell/header';
 import { remoteChatHref } from '@/frontend/appShell/navigation/chat';
 import { useOptionalNavigationShell } from '@/frontend/appShell/navigationShell/state';
+import { useCloseCoveredSidebar } from '@/frontend/appShell/sidebar';
 import { useUuRemoteAction } from '@/frontend/appShell/uuRemote';
 import { queryKeys, useBackendModule, useMutation } from '@/frontend/data';
 import {
@@ -25,6 +26,7 @@ export function DeviceConnectionDetailScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const shell = useOptionalNavigationShell();
+  const closeCoveredSidebar = useCloseCoveredSidebar();
   const baseRoute =
     shell?.activeDestination === 'devices' ? '/devices' : '/settings/device-connections';
   const { alert } = useAlert();
@@ -165,7 +167,14 @@ export function DeviceConnectionDetailScreen() {
           {canOpenHome ? (
             <Section.Item
               label={t('settings.deviceConnections.openHome')}
-              onPress={() => router.replace(remoteChatHref({ connectionId: connection.id }))}
+              onPress={() => {
+                const href = remoteChatHref({ connectionId: connection.id });
+                if (baseRoute === '/devices') router.replace(href);
+                else {
+                  closeCoveredSidebar();
+                  router.dismissTo(href);
+                }
+              }}
             />
           ) : null}
           {canSyncConfiguration ? (

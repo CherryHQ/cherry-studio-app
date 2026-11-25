@@ -1,7 +1,11 @@
-import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
-import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import ClockIcon from '@cherrystudio/app-icons/icons/clock';
-import { Button, ContentState, ScrollInteractionBoundary } from '@cherrystudio/ui/components';
+import {
+  Button,
+  ContentState,
+  DisclosureChevron,
+  DisclosureContent,
+  ScrollInteractionBoundary,
+} from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import { Link, router, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -170,7 +174,6 @@ function TaskGroup({
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const sessions = useRemoteTaskSessions(task.id, expanded && focused);
-  const ChevronIcon = expanded ? ChevronDownIcon : ChevronRightIcon;
   return (
     <View testID={`remote-task-${task.id}`}>
       <Pressable
@@ -199,85 +202,87 @@ function TaskGroup({
                 {t('remoteTasks.subtitle', { agent: agentName, schedule })}
               </Text>
             </View>
-            <ChevronIcon className="size-4 text-muted-foreground" />
+            <DisclosureChevron expanded={expanded} />
           </View>
         )}
       </Pressable>
-      {expanded ? (
-        <View>
-          {sessions.isLoading ? (
-            <View className="py-4 pl-[52px]">
-              <ContentState.Loading title={t('session.list.loading')} />
-            </View>
-          ) : null}
-          {sessions.isError && !sessions.data ? (
-            <View className="py-4 pl-[52px]">
-              <ContentState.Error
-                title={t('session.list.loadFailed')}
-                primaryAction={{
-                  children: t('common.retry'),
-                  onPress: () => void sessions.refetch(),
+      <DisclosureContent>
+        {expanded ? (
+          <View>
+            {sessions.isLoading ? (
+              <View className="py-4 pl-[52px]">
+                <ContentState.Loading title={t('session.list.loading')} />
+              </View>
+            ) : null}
+            {sessions.isError && !sessions.data ? (
+              <View className="py-4 pl-[52px]">
+                <ContentState.Error
+                  title={t('session.list.loadFailed')}
+                  primaryAction={{
+                    children: t('common.retry'),
+                    onPress: () => void sessions.refetch(),
+                  }}
+                />
+              </View>
+            ) : null}
+            {sessions.isSuccess && !sessions.items.length && !sessions.hasNextPage ? (
+              <Text className="py-4 pl-[52px] text-muted-foreground text-sm">
+                {t('remoteTasks.noSessions')}
+              </Text>
+            ) : null}
+            {sessions.items.map((session) => (
+              <Link
+                key={session.ref.sessionId}
+                asChild
+                href={{
+                  pathname: '/scheduled-tasks/[connectionId]/[taskId]/[sessionId]',
+                  params: { connectionId, taskId: task.id, sessionId: session.ref.sessionId },
                 }}
-              />
-            </View>
-          ) : null}
-          {sessions.isSuccess && !sessions.items.length && !sessions.hasNextPage ? (
-            <Text className="py-4 pl-[52px] text-muted-foreground text-sm">
-              {t('remoteTasks.noSessions')}
-            </Text>
-          ) : null}
-          {sessions.items.map((session) => (
-            <Link
-              key={session.ref.sessionId}
-              asChild
-              href={{
-                pathname: '/scheduled-tasks/[connectionId]/[taskId]/[sessionId]',
-                params: { connectionId, taskId: task.id, sessionId: session.ref.sessionId },
-              }}
-            >
-              <Pressable
-                accessibilityRole="link"
-                accessibilityHint={t('remoteTasks.openSession')}
-                accessibilityState={{ selected: selectedSession === session.ref.sessionId }}
-                onPress={() => onSelect(session.ref.sessionId)}
-                testID={`remote-task-session-${session.ref.sessionId}`}
               >
-                {({ pressed }) => (
-                  <View
-                    className={cn(
-                      'flex-row items-center gap-3 rounded-xl px-3 py-2.5',
-                      (pressed || selectedSession === session.ref.sessionId) && 'bg-secondary',
-                    )}
-                  >
-                    <View className="w-7" />
-                    <Text className="min-w-0 flex-1 text-base text-foreground" numberOfLines={1}>
-                      {session.title || t('session.list.untitled')}
-                    </Text>
-                    {session.updatedAt ? (
-                      <Text className="text-muted-foreground text-xs">
-                        {dates.format(new Date(session.updatedAt))}
+                <Pressable
+                  accessibilityRole="link"
+                  accessibilityHint={t('remoteTasks.openSession')}
+                  accessibilityState={{ selected: selectedSession === session.ref.sessionId }}
+                  onPress={() => onSelect(session.ref.sessionId)}
+                  testID={`remote-task-session-${session.ref.sessionId}`}
+                >
+                  {({ pressed }) => (
+                    <View
+                      className={cn(
+                        'flex-row items-center gap-3 rounded-xl px-3 py-2.5',
+                        (pressed || selectedSession === session.ref.sessionId) && 'bg-secondary',
+                      )}
+                    >
+                      <View className="w-7" />
+                      <Text className="min-w-0 flex-1 text-base text-foreground" numberOfLines={1}>
+                        {session.title || t('session.list.untitled')}
                       </Text>
-                    ) : null}
-                  </View>
-                )}
-              </Pressable>
-            </Link>
-          ))}
-          {sessions.isError && sessions.data ? (
-            <Button variant="ghost" onPress={() => void sessions.refetch()}>
-              {t('common.retry')}
-            </Button>
-          ) : sessions.hasNextPage ? (
-            <Button
-              variant="ghost"
-              loading={sessions.isFetchingNextPage}
-              onPress={() => void sessions.fetchNextPage()}
-            >
-              {t('remoteTasks.loadMore')}
-            </Button>
-          ) : null}
-        </View>
-      ) : null}
+                      {session.updatedAt ? (
+                        <Text className="text-muted-foreground text-xs">
+                          {dates.format(new Date(session.updatedAt))}
+                        </Text>
+                      ) : null}
+                    </View>
+                  )}
+                </Pressable>
+              </Link>
+            ))}
+            {sessions.isError && sessions.data ? (
+              <Button variant="ghost" onPress={() => void sessions.refetch()}>
+                {t('common.retry')}
+              </Button>
+            ) : sessions.hasNextPage ? (
+              <Button
+                variant="ghost"
+                loading={sessions.isFetchingNextPage}
+                onPress={() => void sessions.fetchNextPage()}
+              >
+                {t('remoteTasks.loadMore')}
+              </Button>
+            ) : null}
+          </View>
+        ) : null}
+      </DisclosureContent>
     </View>
   );
 }

@@ -1,6 +1,6 @@
 import { ContentState } from '@cherrystudio/ui/components';
 import { useQuery } from '@tanstack/react-query';
-import type { PropsWithChildren, ReactNode } from 'react';
+import { useRef, type PropsWithChildren, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -15,10 +15,13 @@ import { queryKeys, useBackendModule } from '@/frontend/data';
 export function ModelRegistryGate({ children, header }: PropsWithChildren<{ header?: ReactNode }>) {
   const { t } = useTranslation();
   const providers = useBackendModule('providers');
+  const forceRetryRef = useRef(false);
   const ready = useQuery({
     queryKey: queryKeys.providers.registryReady(),
     queryFn: async () => {
-      await providers.ensureRegistryReady();
+      const force = forceRetryRef.current;
+      forceRetryRef.current = false;
+      await providers.ensureRegistryReady(force ? { force: true } : undefined);
       return true;
     },
     retry: false,
@@ -37,7 +40,13 @@ export function ModelRegistryGate({ children, header }: PropsWithChildren<{ head
           <ContentState.Error
             title={t('models.registry.failed')}
             description={t('models.registry.downloadRequired')}
-            primaryAction={{ children: t('common.retry'), onPress: () => void ready.refetch() }}
+            primaryAction={{
+              children: t('common.retry'),
+              onPress: () => {
+                forceRetryRef.current = true;
+                void ready.refetch();
+              },
+            }}
           />
         )}
       </View>

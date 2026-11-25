@@ -1742,6 +1742,7 @@
   "remoteAgent.artifact": "成果物",
   "remoteAgent.attachmentsUnavailable": "デスクトップの会話では添付ファイルはまだサポートされていません",
   "remoteAgent.awaitingApproval": "応答を待っています",
+  "remoteAgent.cachedCatalog": "前回同期した一覧を表示しています。",
   "remoteAgent.configured": "モデル設定済み",
   "remoteAgent.connected": "{{name}} に接続済み",
   "remoteAgent.connecting": "PC に接続中…",

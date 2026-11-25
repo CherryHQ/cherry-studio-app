@@ -2121,6 +2121,197 @@ describe('durable tool diagnostics', () => {
 });
 
 describe('Cherry-owned transcript and disposable execution recovery', () => {
+  test('isolates configuration restore failures reported before startup observation', async () => {
+    const state = fixture();
+    const unreadable = await state.reserve('running');
+    const original = await state.store.getMessage(state.sessionId, unreadable.assistantMessageId);
+    const initialize = jest.mocked(state.conversations.initialize).getMockImplementation()!;
+    jest
+      .spyOn(state.conversations, 'initialize')
+      .mockImplementation(async (database, ports, signal) => {
+        await initialize(database, ports, signal);
+        await ports.onRecoveryFailure!(runtimeLane(state.sessionId), new ZodError([]));
+      });
+    const observe = jest.spyOn(state.conversations, 'observe');
+    try {
+      await state.host.initialize();
+      expect(state.host.isReady).toBe(true);
+      expect(observe).not.toHaveBeenCalled();
+      expect(state.conversations.discardConversation).not.toHaveBeenCalled();
+      expect(await state.store.getMessage(state.sessionId, unreadable.assistantMessageId)).toEqual(
+        original,
+      );
+      await expect(state.host.observeSession(state.sessionId, () => {})).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED' },
+      });
+      await state.host.startSession({
+        sessionId: uuid(),
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Synthetic healthy input' }],
+      });
+      expect(state.conversations.submit).toHaveBeenCalledTimes(1);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('isolates an idle observation failure without changing history or blocking other Sessions', async () => {
+    const state = fixture();
+    const completed = await state.reserve();
+    await state.host.initialize();
+    const original = await state.store.getMessage(state.sessionId, completed.assistantMessageId);
+    const observe = jest
+      .spyOn(state.conversations, 'observe')
+      .mockRejectedValueOnce(new ZodError([]));
+    try {
+      const observations = await Promise.allSettled([
+        state.host.observeSession(state.sessionId, () => {}),
+        state.host.observeSession(state.sessionId, () => {}),
+      ]);
+      for (const observed of observations)
+        expect(observed).toMatchObject({
+          status: 'rejected',
+          reason: { view: { code: 'SESSION_RECOVERY_FAILED' } },
+        });
+      await expect(state.host.observeSession(state.sessionId, () => {})).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED' },
+      });
+      await expect(async () =>
+        state.host.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'Must stay unreserved' }],
+        }),
+      ).rejects.toMatchObject({ view: { code: 'SESSION_RECOVERY_FAILED' } });
+      expect(observe).toHaveBeenCalledTimes(1);
+      expect(state.host.isReady).toBe(true);
+      expect(state.host.hasPendingStorageWork()).toBe(true);
+      expect(state.conversations.abort).not.toHaveBeenCalled();
+      expect(state.conversations.discardConversation).not.toHaveBeenCalled();
+      expect(await state.store.getMessage(state.sessionId, completed.assistantMessageId)).toEqual(
+        original,
+      );
+      await state.host.startSession({
+        sessionId: uuid(),
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Synthetic healthy input' }],
+      });
+      expect(state.conversations.submit).toHaveBeenCalledTimes(1);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('keeps an idle storage failure retryable without isolating its Session', async () => {
+    const state = fixture();
+    await state.reserve();
+    await state.host.initialize();
+    jest
+      .spyOn(state.conversations, 'observe')
+      .mockRejectedValueOnce(new Error('Storage unavailable'));
+    try {
+      await expect(state.host.observeSession(state.sessionId, () => {})).rejects.toThrow(
+        'Storage unavailable',
+      );
+      const observation = await state.host.observeSession(state.sessionId, () => {});
+      observation.unsubscribe();
+      expect(state.host.isReady).toBe(true);
+      expect(state.host.hasPendingStorageWork()).toBe(false);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('seals in-flight admission and concurrent sibling attach when observation hits ZodError', async () => {
+    const state = fixture();
+    await state.reserve();
+    await state.host.initialize();
+    let releasePreflight!: () => void;
+    let enteredPreflight!: () => void;
+    const preflightGate = new Promise<void>((resolve) => {
+      releasePreflight = resolve;
+    });
+    const preflightStarted = new Promise<void>((resolve) => {
+      enteredPreflight = resolve;
+    });
+    jest.spyOn(state.conversations, 'preflightModel').mockImplementationOnce(async () => {
+      enteredPreflight();
+      await preflightGate;
+      return {
+        contextWindow: 32768,
+        maxInputTokens: 28672,
+        maxOutputTokens: 4096,
+        inputModalities: ['text'],
+        supportsTools: true,
+      };
+    });
+    const siblingUnsubscribe = jest.fn(async () => {});
+    let releaseSiblingObserve!: () => void;
+    let enteredSiblingObserve!: () => void;
+    const siblingGate = new Promise<void>((resolve) => {
+      releaseSiblingObserve = resolve;
+    });
+    const siblingStarted = new Promise<void>((resolve) => {
+      enteredSiblingObserve = resolve;
+    });
+    jest.spyOn(state.conversations, 'observe').mockImplementation(async (lane) => {
+      if (lane.slot === 1) {
+        enteredSiblingObserve();
+        await siblingGate;
+        return {
+          snapshot: { activeTurn: null, queue: [], contextStatus: null, contextUsage: null },
+          unsubscribe: siblingUnsubscribe,
+        };
+      }
+      throw new ZodError([]);
+    });
+
+    try {
+      const pendingAdmission = state.host.submitMessage({
+        sessionId: state.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Must fail safely' }],
+      });
+      await preflightStarted;
+      const messagesBefore = await state.store.listMessages(state.sessionId);
+
+      // Start an in-flight sibling lane attach that settles only after slot 0 isolates the session.
+      const attachHost = state.host as unknown as {
+        attach: (lane: ReturnType<typeof runtimeLane>) => Promise<unknown>;
+        live: Map<string, unknown>;
+      };
+      const pendingSibling = attachHost.attach(runtimeLane(state.sessionId, 1));
+      await siblingStarted;
+
+      await expect(state.host.observeSession(state.sessionId, () => {})).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED' },
+      });
+
+      releaseSiblingObserve();
+      await expect(pendingSibling).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED' },
+      });
+      expect(siblingUnsubscribe).toHaveBeenCalledTimes(1);
+      expect(attachHost.live.has(laneKey(runtimeLane(state.sessionId, 1)))).toBe(false);
+
+      releasePreflight();
+      await expect(pendingAdmission).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED' },
+      });
+      expect(await state.store.listMessages(state.sessionId)).toEqual(messagesBefore);
+    } finally {
+      releaseSiblingObserve?.();
+      releasePreflight?.();
+      await state.host.close();
+    }
+  });
+
   test('isolates an unreadable observer before resuming unrelated work and denies its execution', async () => {
     const state = fixture();
     const unreadable = await state.reserve('running');
@@ -3156,6 +3347,116 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       ]);
       expect(messages[1]).toMatchObject({ status: 'pending' });
       expect(messages[1].turnId).not.toBe(failed.identity.turnId);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test.each(
+    ['startup', 'live'].flatMap((delivery) =>
+      ['empty', 'whitespace', 'rate-limit'].map((kind) => ({ delivery, kind })),
+    ),
+  )(
+    'persists textless $kind failures and retries the same leaf ($delivery)',
+    async ({ delivery, kind }) => {
+      const state = fixture();
+      const original = await state.reserve('running');
+      const terminal: RuntimeDurableTurn = {
+        ...original,
+        status: 'failed',
+        parts:
+          kind === 'whitespace'
+            ? [{ id: 'blank', type: 'text', text: ' \n\t', state: 'done' }]
+            : [],
+        error: {
+          code: kind === 'rate-limit' ? 'provider_error' : 'invalid_response',
+          message:
+            kind === 'rate-limit'
+              ? 'Too many requests'
+              : 'The model returned an invalid response with no content.',
+          retryable: true,
+          origin: 'provider',
+        },
+      };
+      if (delivery === 'live') await state.host.initialize();
+      state.emit(terminal);
+      if (delivery === 'startup') await state.host.initialize();
+      try {
+        await settle();
+        const saved = await state.store.getMessage(state.sessionId, original.assistantMessageId);
+        expect(saved).toMatchObject({
+          status: 'error',
+          parts: expect.arrayContaining([
+            expect.objectContaining({
+              type: 'data-error',
+              data: expect.objectContaining({
+                code: 'EXECUTION_FAILED',
+                retryable: true,
+                failure: expect.objectContaining({
+                  reasonCode: kind === 'rate-limit' ? 'rate_limit' : 'parse',
+                  source: expect.objectContaining({
+                    code: kind === 'rate-limit' ? 'provider_error' : 'invalid_response',
+                  }),
+                }),
+              }),
+            }),
+          ]),
+        });
+        await state.host.retryMessage({
+          sessionId: state.sessionId,
+          messageId: original.assistantMessageId,
+        });
+        const messages = await state.store.listMessages(state.sessionId);
+        expect(messages.map(({ id }) => id)).toEqual([
+          original.userMessageId,
+          original.assistantMessageId,
+        ]);
+        expect(messages[1]).toMatchObject({ status: 'pending', parts: [] });
+        expect(messages[1].turnId).not.toBe(original.identity.turnId);
+      } finally {
+        await state.host.close();
+      }
+    },
+  );
+
+  test('marks resumed retry submissions with hasRetainedOutput when retaining prior tool output', async () => {
+    const state = fixture();
+    const original = await state.reserve('failed');
+    await state.store.finalizeAssistantMessage({
+      assistantMessageId: original.assistantMessageId,
+      status: 'error',
+      parts: [
+        {
+          id: 'tool-1',
+          type: 'dynamic-tool',
+          toolCallId: 'call-1',
+          toolRef: { source: 'builtin', capabilityId: 'load_workflow' },
+          toolName: 'load_workflow',
+          title: 'Load workflow',
+          state: 'output-available',
+          input: { workflow_id: 'plugin:feishu-1' },
+          output: { value: { status: 'ok', workflow_id: 'plugin:feishu-1' }, artifacts: [] },
+        },
+      ],
+      usage: null,
+      error: { code: 'INTERRUPTED', message: 'The app stopped.', retryable: true },
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+    });
+    const submit = jest.spyOn(state.conversations, 'submit');
+    await state.host.initialize();
+    try {
+      await state.host.retryMessage({
+        sessionId: state.sessionId,
+        messageId: original.assistantMessageId,
+      });
+      expect(submit).toHaveBeenCalledWith(
+        { sessionId: state.sessionId, slot: 0 },
+        expect.objectContaining({
+          assistantMessageId: original.assistantMessageId,
+          hasRetainedOutput: true,
+        }),
+      );
     } finally {
       await state.host.close();
     }
@@ -4494,7 +4795,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
-  test('continued processing revocation cancels its execution owner independently of reply presentation', async () => {
+  test('continued processing expiry suspends parallel replies and foreground recovery completes them', async () => {
     const protection = executionProtection();
     const state = fixture({ executionLease: protection.acquire });
     await state.reserve('completed');
@@ -4503,18 +4804,115 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       await askTwoModels(state);
       await settle();
       const running = runningTurns(state);
-      const before = [...state.steps];
       await protection.acquire.mock.calls[0]![0](
         new KeepAliveInterruptionError('continued-processing-expired'),
       );
       await settle();
-      expect(state.conversations.abort).toHaveBeenCalledTimes(running.length);
-      expect(runningTurns(state)).toHaveLength(0);
+      expect(state.conversations.abort).not.toHaveBeenCalled();
+      expect(state.conversations.close).toHaveBeenCalledTimes(1);
+      expect(protection.lease.release).toHaveBeenCalledTimes(1);
+      expect(protection.lease.release).toHaveBeenCalledWith();
+      expect(runningTurns(state)).toEqual(running);
+      expect(await state.conversations.unfinishedLanes()).toHaveLength(running.length);
+      for (const turn of running)
+        expect(
+          (await state.store.getMessage(state.sessionId, turn.assistantMessageId))?.status,
+        ).toBe('pending');
+
       await state.host.resumeSuspended();
-      expect(state.steps.filter((step) => step === 'close' || step === 'open')).toEqual(
-        before.filter((step) => step === 'close' || step === 'open'),
-      );
+      expect(state.steps.filter((step) => ['close', 'open', 'resume'].includes(step))).toEqual([
+        'open',
+        'resume',
+        'close',
+        'open',
+        'resume',
+      ]);
+      const observation = await state.host.observeSession(state.sessionId, () => {});
+      expect(observation.snapshot.activeTurn).toMatchObject({
+        id: running[0]!.identity.turnId,
+        status: 'running',
+      });
+      observation.unsubscribe();
+      for (const turn of running)
+        state.emit({ ...turn, status: 'completed', answerBoundary: 'pi:3' });
+      await settle();
+      expect(state.conversations.abort).not.toHaveBeenCalled();
+      expect(await state.conversations.unfinishedLanes()).toEqual([]);
+      for (const turn of running)
+        expect(
+          (await state.store.getMessage(state.sessionId, turn.assistantMessageId))?.status,
+        ).toBe('success');
     } finally {
+      await state.host.close();
+    }
+  });
+
+  test('reopens after foreground continued processing expiry so cancel and completion work cleanly', async () => {
+    const protection = executionProtection();
+    const state = fixture({ executionLease: protection.acquire, isForeground: () => true });
+    const events: AgentEvent[] = [];
+    await state.reserve('completed');
+    await state.host.initialize();
+    const observation = await state.host.observeSession(state.sessionId, (event) =>
+      events.push(event),
+    );
+    try {
+      await askTwoModels(state);
+      await settle();
+      const running = runningTurns(state);
+      await protection.acquire.mock.calls[0]![0](
+        new KeepAliveInterruptionError('continued-processing-expired'),
+      );
+      await settle();
+      expect(events).toContainEqual({ type: 'runtime.recovered' });
+      expect(state.steps.filter((step) => ['close', 'open', 'resume'].includes(step))).toEqual([
+        'open',
+        'resume',
+        'close',
+        'open',
+        'resume',
+      ]);
+      await state.host.cancelTurn({
+        sessionId: state.sessionId,
+        turnId: running[0]!.identity.turnId,
+      });
+      expect(state.conversations.abort).toHaveBeenCalledTimes(running.length);
+      for (const turn of running)
+        state.emit({ ...turn, status: 'cancelled', answerBoundary: null });
+      await settle();
+      expect(await state.conversations.unfinishedLanes()).toEqual([]);
+      for (const turn of running)
+        expect(
+          (await state.store.getMessage(state.sessionId, turn.assistantMessageId))?.status,
+        ).toBe('cancelled');
+    } finally {
+      observation.unsubscribe();
+      await state.host.close();
+    }
+  });
+
+  test('publishes runtime.failed when foreground lease expiration cannot reopen the runtime', async () => {
+    const protection = executionProtection();
+    const state = fixture({ executionLease: protection.acquire, isForeground: () => true });
+    const events: AgentEvent[] = [];
+    await state.reserve('completed');
+    await state.host.initialize();
+    const observation = await state.host.observeSession(state.sessionId, (event) =>
+      events.push(event),
+    );
+    jest
+      .spyOn(state.conversations, 'initialize')
+      .mockRejectedValueOnce(new Error('Storage unavailable'));
+    try {
+      await askTwoModels(state);
+      await settle();
+      await protection.acquire.mock.calls[0]![0](
+        new KeepAliveInterruptionError('continued-processing-expired'),
+      );
+      await settle();
+      expect(events).toContainEqual({ type: 'runtime.failed' });
+    } finally {
+      observation.unsubscribe();
       await state.host.close();
     }
   });

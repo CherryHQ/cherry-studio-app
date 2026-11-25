@@ -218,6 +218,8 @@ export type ConversationHistoryView = {
   isLoadingNewer: boolean;
   hasNewerMessages: boolean;
   hasOlderMessages: boolean;
+  hasUnfetchedOlderMessages?: boolean;
+  hiddenUserTurnCount?: number;
   initialScrollTarget?: 'end' | { messageId: string };
   loadOlder(): Promise<void>;
   loadNewer(): Promise<void>;

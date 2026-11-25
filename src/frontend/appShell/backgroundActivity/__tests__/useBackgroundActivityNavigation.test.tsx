@@ -8,7 +8,8 @@ import { useBackgroundActivityNavigation } from '../useBackgroundActivityNavigat
 
 let mockResponse: NotificationResponse | null;
 let mockNavigationKey: string | undefined;
-const mockRouter = { navigate: jest.fn() };
+let mockPathname: string;
+const mockRouter = { dismissTo: jest.fn(), navigate: jest.fn() };
 const mockClear = jest.fn(() => {
   mockResponse = null;
 });
@@ -24,6 +25,7 @@ jest.mock('expo-notifications', () => ({
 }));
 jest.mock('expo-router', () => ({
   useRouter: () => mockRouter,
+  usePathname: () => mockPathname,
   useRootNavigationState: () => ({ key: mockNavigationKey }),
 }));
 
@@ -35,6 +37,7 @@ function Probe() {
 beforeEach(() => {
   jest.clearAllMocks();
   mockNavigationKey = 'root';
+  mockPathname = '/';
   mockResponse = response('cherrystudio://paintings/p');
 });
 afterEach(() => {
@@ -58,6 +61,18 @@ test('retains a cold-start response until navigation mounts, then opens the task
   expect(mockDismiss).toHaveBeenCalledWith('notice');
   await act(async () => renderer?.update(<Probe />));
   expect(mockRouter.navigate).toHaveBeenCalledTimes(1);
+});
+
+test('dismisses Settings to the existing content scene when a notification opens a task', async () => {
+  mockPathname = '/settings/profile';
+  await act(async () => {
+    renderer = create(<Probe />);
+  });
+  expect(mockRouter.dismissTo).toHaveBeenCalledWith({
+    pathname: '/paintings',
+    params: { paintingId: 'p' },
+  });
+  expect(mockRouter.navigate).not.toHaveBeenCalled();
 });
 
 test('consumes a tap for the already visible task without adding navigation history', async () => {

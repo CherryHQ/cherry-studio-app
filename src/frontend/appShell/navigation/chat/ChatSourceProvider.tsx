@@ -40,6 +40,7 @@ type ChatSourceNavigation = {
   teamTarget: TeamChatTarget;
   openTeam(target: TeamChatTarget): void;
   viewMode: 'sessions' | 'agents';
+  remoteViewMode: 'sessions' | 'agents';
   setViewMode(mode: 'sessions' | 'agents'): Promise<void>;
   /** Opens the phone's own chats, or a paired desktop's when an id is given. */
   selectDevice(connectionId?: string): void;
@@ -164,6 +165,7 @@ export function ChatSourceProvider({ children }: PropsWithChildren) {
       openRemote,
       startRemoteChat,
       viewMode: source === 'local' ? localViewMode : remoteViewMode,
+      remoteViewMode,
       setViewMode,
     }),
     [

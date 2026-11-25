@@ -10,6 +10,7 @@ import { DURABLE_IMAGE_TOOL_NAME } from '../../durableTypes';
 import type { RuntimeError } from '../../types';
 import {
   PiConfigurationSchema,
+  piSubmissionMetadata,
   piToolBlueprint,
   projectPiTurn,
   serializePiConfiguration,
@@ -119,6 +120,330 @@ test('stored tool blueprints keep deferred discovery across restarts', () => {
 });
 
 describe('Pi turn projection', () => {
+  function projectTerminal(
+    message: AssistantMessage,
+    overrides: Partial<Parameters<typeof projectPiTurn>[0]> = {},
+  ) {
+    return projectPiTurn({
+      lane: { sessionId: 'session', slot: 0 },
+      metadata,
+      record: { id: 1, type: 'input', status: 'done', entry: 1, answer: 2 } as SubmissionRecord,
+      entries: [
+        { id: 2, conversationId: 1, kind: 'pi.assistant', model: [message] },
+      ] as unknown as EntryRecord[],
+      ...overrides,
+    });
+  }
+
+  test.each<{ content: AssistantMessage['content'] }>([
+    { content: [] },
+    { content: [{ type: 'text', text: ' \n\t' }] },
+    { content: [{ type: 'thinking', thinking: ' \n\t', thinkingSignature: 'opaque-replay' }] },
+  ])('rejects an empty completed reply: %j', ({ content }) => {
+    const message: AssistantMessage = { ...call('', 2_000), content, stopReason: 'stop' };
+    for (const continued of [false, true]) {
+      const turn = projectTerminal(message, { continued });
+      expect(turn).toMatchObject({ status: 'failed', hasAssistant: true });
+      expect(toAgentErrorView(turn.error!)).toMatchObject({
+        code: 'EXECUTION_FAILED',
+        retryable: true,
+        failure: { reasonCode: 'parse', source: { code: 'invalid_response' } },
+      });
+      expect(message.stopReason).toBe('stop');
+    }
+  });
+
+  test('keeps coalesced input placeholders without an answer entry completed', () => {
+    const turn = projectPiTurn({
+      lane: { sessionId: 'session', slot: 0 },
+      metadata,
+      continued: true,
+      record: { id: 1, type: 'input', status: 'done', entry: 1, answer: 4 } as SubmissionRecord,
+      entries: [{ id: 1, conversationId: 1, kind: 'pi.user' }] as unknown as EntryRecord[],
+    });
+    expect(turn).toMatchObject({ status: 'completed', hasAssistant: true, parts: [], error: null });
+  });
+
+  test('keeps a resumed retry completed when the host retained prior output', () => {
+    const retained = piSubmissionMetadata(
+      {
+        requestId: 'request-1',
+        turnId: 'turn-1',
+        userMessageId: 'user-1',
+        assistantMessageId: 'assistant-1',
+        createdAt: 1_000,
+        input: [{ type: 'text', text: 'Question' }],
+        hasRetainedOutput: true,
+        metadata: {
+          userParts: [{ id: 'part-1', type: 'text', text: 'Question', state: 'done' }],
+          inferenceSnapshot: {
+            version: 1,
+            model: {
+              uniqueModelId: 'provider::model',
+              providerId: 'provider',
+              modelId: 'model',
+              name: 'Model',
+            },
+            parameters: {},
+            tools: [],
+          },
+          referencedFileEntryIds: [],
+        },
+      },
+      [],
+    );
+    const turn = projectTerminal(
+      { ...call('', 2_000), content: [], stopReason: 'stop' },
+      { metadata: retained },
+    );
+    expect(turn).toMatchObject({ status: 'completed', parts: [], error: null });
+  });
+
+  test('keeps a legacy resumed retry completed when metadata.retainedParts is present', () => {
+    const legacy = piSubmissionMetadata(
+      {
+        requestId: 'request-1',
+        turnId: 'turn-1',
+        userMessageId: 'user-1',
+        assistantMessageId: 'assistant-1',
+        createdAt: 1_000,
+        input: [{ type: 'text', text: 'Question' }],
+        metadata: {
+          retainedParts: [
+            {
+              id: 'tool-1',
+              type: 'dynamic-tool',
+              toolCallId: 'call-1',
+              toolRef: { source: 'builtin', capabilityId: 'load_workflow' },
+              toolName: 'load_workflow',
+              title: 'Load workflow',
+              state: 'output-available',
+              input: { workflow_id: 'plugin:feishu-1' },
+              output: { value: { status: 'ok' }, artifacts: [] },
+            },
+          ],
+          userParts: [{ id: 'part-1', type: 'text', text: 'Question', state: 'done' }],
+          inferenceSnapshot: {
+            version: 1,
+            model: {
+              uniqueModelId: 'provider::model',
+              providerId: 'provider',
+              modelId: 'model',
+              name: 'Model',
+            },
+            parameters: {},
+            tools: [],
+          },
+          referencedFileEntryIds: [],
+        },
+      },
+      [],
+    );
+    const turn = projectTerminal(
+      { ...call('', 2_000), content: [], stopReason: 'stop' },
+      { metadata: legacy },
+    );
+    expect(turn).toMatchObject({ status: 'completed', parts: [], error: null });
+  });
+
+  test('still fails legacy submissions when metadata.retainedParts only contains errors or blank text', () => {
+    const errorOnly = piSubmissionMetadata(
+      {
+        requestId: 'request-1',
+        turnId: 'turn-1',
+        userMessageId: 'user-1',
+        assistantMessageId: 'assistant-1',
+        createdAt: 1_000,
+        input: [{ type: 'text', text: 'Question' }],
+        metadata: {
+          retainedParts: [
+            { id: 'err-1', type: 'data-error', errorText: 'Previous error' },
+            { id: 'blank-1', type: 'text', text: '   ', state: 'done' },
+          ],
+          userParts: [{ id: 'part-1', type: 'text', text: 'Question', state: 'done' }],
+          inferenceSnapshot: {
+            version: 1,
+            model: {
+              uniqueModelId: 'provider::model',
+              providerId: 'provider',
+              modelId: 'model',
+              name: 'Model',
+            },
+            parameters: {},
+            tools: [],
+          },
+          referencedFileEntryIds: [],
+        },
+      },
+      [],
+    );
+    const turn = projectTerminal(
+      { ...call('', 2_000), content: [], stopReason: 'stop' },
+      { metadata: errorOnly },
+    );
+    expect(turn).toMatchObject({
+      status: 'failed',
+      parts: [],
+      error: { code: 'invalid_response', retryable: true },
+    });
+  });
+
+  test.each<{ content: AssistantMessage['content'] }>([
+    { content: [{ type: 'text', text: 'Answer' }] },
+    { content: [{ type: 'thinking', thinking: 'Reasoning' }] },
+    { content: call('', 2_000).content },
+  ])('keeps meaningful terminal content: %j', ({ content }) => {
+    const turn = projectTerminal({ ...call('', 2_000), content, stopReason: 'stop' });
+    expect(turn).toMatchObject({ status: 'completed', error: null });
+  });
+
+  test.each(['source', 'suggestions'])('keeps a reply containing only web %s', (kind) => {
+    const turn = projectTerminal({
+      ...call('', 2_000),
+      content: [],
+      stopReason: 'stop',
+      diagnostics: [
+        {
+          type: 'cherry.web',
+          timestamp: 2_000,
+          details: {
+            version: 1,
+            sources: kind === 'source' ? [{ sourceId: 'source', url: 'https://example.com' }] : [],
+            ...(kind === 'suggestions' ? { suggestions: '<p>Search suggestions</p>' } : {}),
+            texts: [],
+            failed: false,
+          },
+        },
+      ],
+    });
+    expect(turn).toMatchObject({ status: 'completed', error: null });
+    expect(turn.parts).toHaveLength(1);
+  });
+
+  test.each(['image/png', 'text/plain'])(
+    'keeps a tool result and its %s artifact when the final model response is empty',
+    (mediaType) => {
+      const message: AssistantMessage = { ...call('', 2_000), content: [], stopReason: 'stop' };
+      const turn = projectTerminal(message, {
+        record: { id: 1, type: 'input', status: 'done', entry: 1, answer: 4 } as SubmissionRecord,
+        entries: [
+          { id: 2, conversationId: 1, kind: 'pi.assistant', model: [call('body', 2_000)] },
+          {
+            id: 3,
+            conversationId: 1,
+            kind: 'pi.tool-result',
+            data: { diagnostics: [] },
+            model: [
+              {
+                role: 'toolResult',
+                toolCallId: 'call',
+                toolName: 'write_file',
+                content: [],
+                isError: false,
+                timestamp: 3_000,
+                details: {
+                  kind: 'cherry.tool-result',
+                  ref: writeFile.ref,
+                  providerName: writeFile.providerName,
+                  displayName: writeFile.displayName,
+                  output: {
+                    value: 'saved',
+                    artifacts: [
+                      {
+                        ref: { kind: 'managed-file', fileEntryId: 'file' },
+                        mediaType,
+                        name: 'output',
+                        kind: 'created',
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+          { id: 4, conversationId: 1, kind: 'pi.assistant', model: [message] },
+        ] as unknown as EntryRecord[],
+      });
+      expect(turn).toMatchObject({ status: 'completed', error: null });
+      expect(turn.parts).toEqual([
+        expect.objectContaining({ type: 'tool', state: 'output-available' }),
+        expect.objectContaining({ type: 'file', mediaType }),
+      ]);
+    },
+  );
+
+  test.each(['aborted', 'interrupted'])('preserves an empty %s stop', (reason) => {
+    const turn = projectTerminal(
+      { ...call('', 2_000), content: [], stopReason: 'aborted' },
+      {
+        record: {
+          id: 1,
+          type: 'input',
+          status: 'unanswered',
+          entry: 1,
+          reason,
+        } as SubmissionRecord,
+      },
+    );
+    expect(turn.status).toBe(reason === 'aborted' ? 'cancelled' : 'interrupted');
+    expect(turn.error?.code).not.toBe('invalid_response');
+  });
+
+  test('keeps empty live replies running until they settle', () => {
+    expect(projectTerminal({ ...call('', 2_000), content: [] }, { active: true }).status).toBe(
+      'running',
+    );
+  });
+
+  test('retains a terminal 429 even when Pi has an answer boundary', () => {
+    const turn = projectTerminal({
+      ...call('', 2_000),
+      content: [],
+      stopReason: 'error',
+      errorMessage: 'Too many requests',
+      diagnostics: [
+        {
+          type: 'provider_response_failure',
+          timestamp: 2_000,
+          error: { code: 'rate_limit_exceeded', message: 'Too many requests' },
+          details: { status: 429 },
+        },
+      ],
+    });
+    expect(turn.status).toBe('failed');
+    expect(toAgentErrorView(turn.error!)).toMatchObject({
+      failure: { reasonCode: 'rate_limit', context: { statusCode: 429 } },
+    });
+  });
+
+  test('a successful retry clears the earlier model failure', () => {
+    const recovered: AssistantMessage = {
+      ...call('', 3_000),
+      content: [{ type: 'text', text: 'Recovered answer' }],
+      stopReason: 'stop',
+    };
+    const turn = projectTerminal(recovered, {
+      record: { id: 1, type: 'input', status: 'done', entry: 1, answer: 3 } as SubmissionRecord,
+      entries: [
+        {
+          id: 2,
+          conversationId: 1,
+          kind: 'pi.assistant',
+          model: [
+            {
+              ...recovered,
+              content: [],
+              stopReason: 'error',
+              errorMessage: 'Too many requests',
+            },
+          ],
+        },
+        { id: 3, conversationId: 1, kind: 'pi.assistant', model: [recovered] },
+      ] as unknown as EntryRecord[],
+    });
+    expect(turn).toMatchObject({ status: 'completed', error: null });
+  });
+
   test.each([
     { raw: undefined, code: 'stream_disconnected', category: 'network' },
     { raw: undefined, code: 'no_response', category: 'network' },

@@ -340,6 +340,10 @@ export function ChatWorkspace({
                     initialLayoutReady={!requiresInitialHistoryLayout || !isLoadingInitial}
                     initialScrollTarget={initialScrollTarget}
                     hasNewerMessages={hasNewerMessages}
+                    hasOlderMessages={
+                      messageWindow.hasUnfetchedOlderMessages ?? messageWindow.hasOlderMessages
+                    }
+                    hiddenUserTurnCount={messageWindow.hiddenUserTurnCount ?? 0}
                     keyboardOffset={keyboardOffset}
                     // ChatScreen owns background presses so blur also ends composer editing.
                     keyboardShouldPersistTaps="always"
