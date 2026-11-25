@@ -13,14 +13,24 @@ export type MarketplaceEntry = {
   title: string;
 };
 
-/** One flat catalog entry: mark, name and one-line purpose, opening the entry's page. */
-export function MarketplaceRow({ entry }: { entry: MarketplaceEntry }) {
+/** One catalog entry: card in multi-column wide grids, or flat list row on phones. */
+export function MarketplaceRow({
+  entry,
+  isCard = false,
+}: {
+  entry: MarketplaceEntry;
+  isCard?: boolean;
+}) {
   return (
     <Pressable
       accessibilityHint={entry.description}
       accessibilityLabel={entry.title}
       accessibilityRole="link"
-      className="flex-row items-center gap-4 py-3 active:opacity-60"
+      className={
+        isCard
+          ? 'bg-card border-border-subtle flex-row items-center gap-3.5 rounded-2xl border px-3.5 py-3 active:opacity-80'
+          : 'flex-row items-center gap-4 py-3 active:opacity-60'
+      }
       onPress={entry.onPress}
       testID={entry.testID}
     >

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useRootNavigationDockClearance } from '@/frontend/appShell/navigationShell/state';
 import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import { useAgentTemplateCatalog } from '@/frontend/data/agentTemplates';
 import { matchesSearchKeywords, toSearchKeywords } from '@/frontend/utils/search';
@@ -25,6 +26,7 @@ export function AgentTemplateCatalog({
   const { t, i18n } = useTranslation();
   const router = useRouter();
   const { bottom } = useSafeAreaInsets();
+  const dockClearance = useRootNavigationDockClearance();
   const language = i18n.resolvedLanguage ?? i18n.language;
   const { catalog, error, isLoading, refetch } = useAgentTemplateCatalog(language);
   const toEntry = useTemplateEntries(language);
@@ -80,7 +82,7 @@ export function AgentTemplateCatalog({
     <ScrollView
       className="flex-1"
       contentContainerClassName="gap-4 pt-2"
-      contentContainerStyle={{ paddingBottom: bottom + 24 }}
+      contentContainerStyle={{ paddingBottom: bottom + dockClearance + 24 }}
       contentInsetAdjustmentBehavior="never"
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"

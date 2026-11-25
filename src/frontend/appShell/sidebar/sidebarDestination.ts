@@ -1,22 +1,22 @@
+import {
+  NAV_DESTINATION_IDS,
+  NAV_ROUTE_MANIFEST,
+  type NavRouteSpec,
+  type SidebarNavDestination,
+} from '@/frontend/appShell/navigationShell/navRouteManifest';
+
 /** Sidebar entries that open a page in the content region instead of a conversation. */
-export type SidebarDestination =
-  | 'agents'
-  | 'library'
-  | 'paintings'
-  | 'plugins'
-  | 'settings'
-  | 'scheduled-tasks'
-  | 'skills';
+export type SidebarDestination = SidebarNavDestination | 'scheduled-tasks';
+
+const manifestRoots: readonly [string, SidebarDestination][] = NAV_DESTINATION_IDS.flatMap((id) => {
+  const entry: NavRouteSpec = NAV_ROUTE_MANIFEST[id];
+  if (!entry.sidebarDestination) return [];
+  const destination: SidebarDestination = entry.sidebarDestination;
+  return entry.pathPrefixes.map((prefix): [string, SidebarDestination] => [prefix, destination]);
+});
 
 const destinationRoots: readonly [string, SidebarDestination][] = [
-  ['/agents', 'agents'],
-  ['/drawings', 'paintings'],
-  ['/paintings', 'paintings'],
-  ['/plugins', 'plugins'],
-  ['/skills', 'skills'],
-  ['/library', 'library'],
-  ['/trash', 'library'],
-  ['/settings', 'settings'],
+  ...manifestRoots,
   ['/scheduled-tasks', 'scheduled-tasks'],
 ];
 

@@ -2,7 +2,10 @@ import AtSignIcon from '@cherrystudio/app-icons/icons/at-sign';
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import CopyIcon from '@cherrystudio/app-icons/icons/copy';
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
+import LanguagesIcon from '@cherrystudio/app-icons/icons/languages';
+import PencilIcon from '@cherrystudio/app-icons/icons/pencil';
 import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
+import ShareIcon from '@cherrystudio/app-icons/icons/share';
 import SplitIcon from '@cherrystudio/app-icons/icons/split';
 import SquareIcon from '@cherrystudio/app-icons/icons/square';
 import Volume2Icon from '@cherrystudio/app-icons/icons/volume-2';
@@ -12,11 +15,12 @@ import {
   OptionPickerBottomSheet,
   type MenuItem,
 } from '@cherrystudio/ui/components';
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo, useState, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, View } from 'react-native';
 
 import type { MessageListItem } from '@/frontend/components/Message';
+import type { AssistantMessageActionId } from '@/shared/data/types/assistantMessageToolbar';
 import { APP_LANGUAGES, type AppLanguage } from '@/shared/utils/languages';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 
@@ -33,8 +37,7 @@ type AssistantMessageToolbarProps = {
 };
 
 /**
- * Frequent actions stay one tap away; translation, sharing and deletion share
- * one short menu.
+ * The shared preference chooses placement; each message still owns action availability.
  */
 export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   message,
@@ -50,6 +53,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
     retryableMessageIds,
     editableAnswerIds,
     isEditAnswerDisabled,
+    toolbarConfig,
   } = useAssistantMessageActionsState();
   const {
     answerWithModel,
@@ -59,6 +63,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
     forkFromAssistantMessage,
     retryAssistantMessage,
     shareAssistantMessage,
+    openToolbarManager,
   } = useAssistantMessageActions();
   const translation = useMessageTranslation(message);
   const isSettled = isAssistantToolbarEnabled && message.status !== 'pending';
@@ -83,20 +88,94 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   }
 
   const hasTranslation = translation ? translation.state.status !== 'idle' : false;
-  const menuItems: MenuItem[] = [
+  const actions: Partial<
+    Record<
+      AssistantMessageActionId,
+      Omit<MenuItem, 'icon'> & { icon?: ReactElement<{ className?: string }>; testID?: string }
+    >
+  > = {
+    ...(copyText
+      ? {
+          copy: {
+            id: 'copy',
+            label: t(isCopied ? 'chat.messageActions.copied' : 'common.copy'),
+            icon: isCopied ? (
+              <CheckIcon className="text-success" size={15} />
+            ) : (
+              <CopyIcon className="text-muted-foreground" size={15} />
+            ),
+            onPress: () => copyAssistantMessage({ messageId: message.id, text: copyText }),
+            testID: 'assistant-message-copy',
+          },
+        }
+      : {}),
+    ...(speechText
+      ? {
+          readAloud: {
+            id: 'readAloud',
+            label: t(speech.isSpeaking ? 'voice.speech.stop' : 'voice.speech.start'),
+            icon: speech.isSpeaking ? (
+              <SquareIcon className="text-foreground" size={15} />
+            ) : (
+              <Volume2Icon className="text-muted-foreground" size={15} />
+            ),
+            onPress: speech.toggle,
+            testID: 'assistant-message-read-aloud',
+          },
+        }
+      : {}),
+    ...(retryAssistantMessage && retryableMessageIds.has(message.id)
+      ? {
+          retry: {
+            id: 'retry',
+            label: t(
+              message.status === 'success' ? 'chat.messageActions.regenerate' : 'common.retry',
+            ),
+            disabled: isRetryDisabled,
+            icon: <RotateCcwIcon className="text-muted-foreground" size={15} />,
+            onPress: () => retryAssistantMessage({ messageId: message.id }),
+            testID: 'assistant-message-retry',
+          },
+        }
+      : {}),
+    ...(answerWithModel && answerableMessageIds.has(message.id)
+      ? {
+          answerWith: {
+            id: 'answerWith',
+            label: t('chat.messageActions.answerWith'),
+            disabled: isRetryDisabled,
+            icon: <AtSignIcon className="text-muted-foreground" size={15} />,
+            onPress: () => answerWithModel({ messageId: message.id }),
+            testID: 'assistant-message-answer-with',
+          },
+        }
+      : {}),
+    ...(forkFromAssistantMessage
+      ? {
+          fork: {
+            id: 'fork',
+            label: t('chat.messageActions.fork'),
+            icon: <SplitIcon className="text-muted-foreground" size={15} />,
+            onPress: () => forkFromAssistantMessage({ messageId: message.id }),
+            testID: 'assistant-message-fork',
+          },
+        }
+      : {}),
     ...(editAnswer && editableAnswerIds.has(message.id)
-      ? [
-          {
+      ? {
+          edit: {
             id: 'edit',
             label: t('chat.messageActions.editAnswerAction'),
             disabled: isEditAnswerDisabled,
+            icon: <PencilIcon className="text-muted-foreground" size={15} />,
             onPress: () => editAnswer({ messageId: message.id }),
+            testID: 'assistant-message-edit',
           },
-        ]
-      : []),
+        }
+      : {}),
     ...(translation
-      ? [
-          {
+      ? {
+          translate: {
             id: 'translate',
             label: t(
               hasTranslation
@@ -104,6 +183,16 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
                   ? 'chat.translation.hide'
                   : 'chat.translation.show'
                 : 'chat.translation.translate',
+            ),
+            icon: (
+              <LanguagesIcon
+                className={
+                  hasTranslation && translation.state.visible
+                    ? 'text-foreground'
+                    : 'text-muted-foreground'
+                }
+                size={15}
+              />
             ),
             onPress: () => {
               if (hasTranslation) {
@@ -113,95 +202,71 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
                 setIsTranslationLanguagePickerOpen(true);
               }
             },
+            testID: 'assistant-message-translate',
           },
-        ]
-      : []),
-    {
+        }
+      : {}),
+    share: {
       id: 'share',
       label: t('chat.messageActions.share'),
+      icon: <ShareIcon className="text-muted-foreground" size={15} />,
       onPress: () => shareAssistantMessage({ messageId: message.id }),
+      testID: 'assistant-message-share',
     },
     ...(deleteMessageTurn && turnId
-      ? [
-          {
+      ? {
+          delete: {
+            id: 'delete',
             destructive: true,
             disabled: isDeleteDisabled,
-            id: 'delete',
             label: t('common.delete'),
             onPress: () => deleteMessageTurn({ turnId, messageId: message.id }),
           },
-        ]
-      : []),
-  ];
+        }
+      : {}),
+  };
+  const menuItems: MenuItem[] = toolbarConfig.overflow.flatMap((id) => {
+    const action = actions[id];
+    if (!action) return [];
+    const { icon: _icon, testID: _testID, ...item } = action;
+    return [
+      {
+        ...item,
+        group: 'actions',
+        onPress:
+          id === 'copy'
+            ? () =>
+                copyAssistantMessage({ messageId: message.id, text: copyText, notifySuccess: true })
+            : item.onPress,
+      },
+    ];
+  });
+  if (openToolbarManager) {
+    menuItems.push({
+      group: 'manage',
+      id: 'manage',
+      label: t('chat.messageActions.manage'),
+      onPress: openToolbarManager,
+    });
+  }
 
   return (
     <View className="min-h-7 flex-row items-center gap-1" testID="assistant-message-toolbar">
-      {copyText ? (
-        <Button
-          accessibilityLabel={t(isCopied ? 'chat.messageActions.copied' : 'common.copy')}
-          icon={
-            isCopied ? (
-              <CheckIcon className="text-success" size={15} />
-            ) : (
-              <CopyIcon className="text-muted-foreground" size={15} />
-            )
-          }
-          onPress={() => copyAssistantMessage({ messageId: message.id, text: copyText })}
-          size="xs"
-          testID="assistant-message-copy"
-          variant="ghost"
-        />
-      ) : null}
-      {speechText ? (
-        <Button
-          accessibilityLabel={t(speech.isSpeaking ? 'voice.speech.stop' : 'voice.speech.start')}
-          icon={
-            speech.isSpeaking ? (
-              <SquareIcon className="text-foreground" size={15} />
-            ) : (
-              <Volume2Icon className="text-muted-foreground" size={15} />
-            )
-          }
-          onPress={speech.toggle}
-          size="xs"
-          testID="assistant-message-read-aloud"
-          variant="ghost"
-        />
-      ) : null}
-      {retryAssistantMessage && retryableMessageIds.has(message.id) ? (
-        <Button
-          accessibilityLabel={t(
-            message.status === 'success' ? 'chat.messageActions.regenerate' : 'common.retry',
-          )}
-          disabled={isRetryDisabled}
-          icon={<RotateCcwIcon className="text-muted-foreground" size={15} />}
-          onPress={() => retryAssistantMessage({ messageId: message.id })}
-          size="xs"
-          testID="assistant-message-retry"
-          variant="ghost"
-        />
-      ) : null}
-      {answerWithModel && answerableMessageIds.has(message.id) ? (
-        <Button
-          accessibilityLabel={t('chat.messageActions.answerWith')}
-          disabled={isRetryDisabled}
-          icon={<AtSignIcon className="text-muted-foreground" size={15} />}
-          onPress={() => answerWithModel({ messageId: message.id })}
-          size="xs"
-          testID="assistant-message-answer-with"
-          variant="ghost"
-        />
-      ) : null}
-      {forkFromAssistantMessage ? (
-        <Button
-          accessibilityLabel={t('chat.messageActions.fork')}
-          icon={<SplitIcon className="text-muted-foreground" size={15} />}
-          onPress={() => forkFromAssistantMessage({ messageId: message.id })}
-          size="xs"
-          testID="assistant-message-fork"
-          variant="ghost"
-        />
-      ) : null}
+      {toolbarConfig.pinned.map((id) => {
+        const action = actions[id];
+        return action ? (
+          <Button
+            key={id}
+            accessibilityLabel={action.label}
+            disabled={action.disabled}
+            icon={action.icon}
+            onPress={action.onPress}
+            size="xs"
+            testID={action.testID}
+            variant="ghost"
+          />
+        ) : null;
+      })}
       <ActionMenu items={menuItems}>
         <Button
           accessibilityLabel={t('common.more')}

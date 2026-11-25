@@ -158,6 +158,13 @@ export function ChatWorkspace({
     () => getTimestampMessageIds(projectedMessages),
     [projectedMessages],
   );
+  const latestProjectedMessage = projectedMessages.at(-1);
+  const disclaimerMessageId =
+    !hasNewerMessages &&
+    latestProjectedMessage?.role === 'assistant' &&
+    (latestProjectedMessage.status === 'success' || latestProjectedMessage.status === 'paused')
+      ? latestProjectedMessage.id
+      : undefined;
   // Pagination may not have loaded the persisted boundary yet. Rendering no
   // divider is more accurate than attaching it to the current page edge.
   const forkBoundaryIndex =
@@ -309,6 +316,7 @@ export function ChatWorkspace({
         >
           <ChatMessageRowProvider
             breakAfterMessageId={forkBoundary?.id}
+            disclaimerMessageId={disclaimerMessageId}
             editingMessageId={editing?.messageId}
             messages={mergedMessages}
             timestampMessageIds={timestampMessageIds}
@@ -332,6 +340,10 @@ export function ChatWorkspace({
                     initialLayoutReady={!requiresInitialHistoryLayout || !isLoadingInitial}
                     initialScrollTarget={initialScrollTarget}
                     hasNewerMessages={hasNewerMessages}
+                    hasOlderMessages={
+                      messageWindow.hasUnfetchedOlderMessages ?? messageWindow.hasOlderMessages
+                    }
+                    hiddenUserTurnCount={messageWindow.hiddenUserTurnCount ?? 0}
                     keyboardOffset={keyboardOffset}
                     // ChatScreen owns background presses so blur also ends composer editing.
                     keyboardShouldPersistTaps="always"

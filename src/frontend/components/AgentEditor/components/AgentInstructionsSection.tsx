@@ -1,4 +1,4 @@
-import { BottomSheet, Button, Section } from '@cherrystudio/ui/components';
+import { BottomSheet, Button, Section, useFieldText } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -71,7 +71,6 @@ function AgentInstructionsSheet({
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(true);
-  const mutedForegroundColor = useThemeColor('muted-foreground');
   const close = () => {
     Keyboard.dismiss();
     onBlur();
@@ -102,25 +101,35 @@ function AgentInstructionsSheet({
       testID="agent-instructions-sheet"
       title={t('agent.form.instructions')}
     >
-      <View className="min-h-0 flex-1 pb-6">
-        <TextInput
-          accessibilityLabel={t('agent.form.instructions')}
-          autoCorrect
-          autoFocus
-          className="min-h-0 flex-1 px-6 pt-4 pb-6 text-base text-foreground"
-          cursorColor={mutedForegroundColor}
-          multiline
-          onBlur={onBlur}
-          onChangeText={onChangeText}
-          placeholder={t('agent.form.instructionsPlaceholder')}
-          placeholderTextColor={mutedForegroundColor}
-          scrollEnabled
-          selectionColor={mutedForegroundColor}
-          testID="agent-instructions-input"
-          textAlignVertical="top"
-          value={value}
-        />
-      </View>
+      <AgentInstructionsInput onBlur={onBlur} onChangeText={onChangeText} value={value} />
     </BottomSheet>
+  );
+}
+
+function AgentInstructionsInput({ onBlur, onChangeText, value }: AgentInstructionsSectionProps) {
+  const { t } = useTranslation();
+  const mutedForegroundColor = useThemeColor('muted-foreground');
+  const [text, changeText] = useFieldText(value, onChangeText);
+
+  return (
+    <View className="min-h-0 flex-1 pb-6">
+      <TextInput
+        accessibilityLabel={t('agent.form.instructions')}
+        autoCorrect
+        autoFocus
+        className="min-h-0 flex-1 px-6 pt-4 pb-6 text-base text-foreground"
+        cursorColor={mutedForegroundColor}
+        multiline
+        onBlur={onBlur}
+        onChangeText={changeText}
+        placeholder={t('agent.form.instructionsPlaceholder')}
+        placeholderTextColor={mutedForegroundColor}
+        scrollEnabled
+        selectionColor={mutedForegroundColor}
+        testID="agent-instructions-input"
+        textAlignVertical="top"
+        value={text}
+      />
+    </View>
   );
 }

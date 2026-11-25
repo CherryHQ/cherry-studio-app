@@ -17,3 +17,5 @@ export {
 export { useFocusedBackPress } from './useFocusedBackPress';
 export { useFirstUseEligibility } from './useFirstUseEligibility';
 export { useOpenProviderSetup } from './useOpenProviderSetup';
+
+export { FirstUseAdmissionProvider, useFirstUseAdmission } from './FirstUseAdmission';

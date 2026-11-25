@@ -89,7 +89,9 @@ function ComposerRoot({
     <View style={style} testID={testID}>
       <SurfaceFrame
         className={
-          isExpansionPresented ? 'bg-popover' : 'bg-card ios:shadow-field android:shadow-sm'
+          isExpansionPresented
+            ? 'bg-popover'
+            : 'border border-border bg-card ios:shadow-field android:shadow-sm'
         }
         cornerRadius={surfaceRadius}
         style={surfaceStyle}

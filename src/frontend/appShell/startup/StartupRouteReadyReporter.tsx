@@ -2,15 +2,29 @@ import { useSegments } from 'expo-router';
 import { type PropsWithChildren, useCallback, useEffect, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { FirstUseAdmissionProvider, useFirstUseAdmission } from '@/frontend/appShell/navigation';
+
 import { useStartupReadyAfterFrames } from './useStartupReadyAfterFrames';
 
 export function StartupRouteReadyReporter({ children }: PropsWithChildren) {
   const segments = useSegments();
+  const route = segments[0];
+  return (
+    <FirstUseAdmissionProvider observe={route === '(drawer)'}>
+      <RouteReadiness route={route}>{children}</RouteReadiness>
+    </FirstUseAdmissionProvider>
+  );
+}
+
+function RouteReadiness({ children, route }: PropsWithChildren<{ route?: string }>) {
+  const admission = useFirstUseAdmission();
   const reportReadyAfterFrames = useStartupReadyAfterFrames();
   const hasLayoutRef = useRef(false);
   // Keep the UU callback placeholder covered until the validated target replaces it.
-  // Ordinary routes, including an empty chat, are ready after their root layout.
-  const shouldReportRouteReady = segments.length > 0 && segments[0] !== 'uu-remote';
+  // The drawer is ready only when admission keeps it as the visible destination.
+  const shouldReportRouteReady = Boolean(
+    route && route !== 'uu-remote' && (route !== '(drawer)' || admission === 'admitted'),
+  );
 
   useEffect(() => {
     if (hasLayoutRef.current && shouldReportRouteReady) {

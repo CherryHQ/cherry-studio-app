@@ -4,7 +4,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { ComposerCollapsible } from '../composer-collapsible';
 
 const mockReducedMotion = { value: false };
-const mockWithTiming = jest.fn((value: number) => value);
+const mockWithTiming = jest.fn(
+  (value: number, _config?: object, _finish?: (completed: boolean) => void) => value,
+);
+jest.mock('react-native-worklets', () => ({ scheduleOnRN: (callback: () => void) => callback() }));
 
 jest.mock('react-native-reanimated', () => {
   const { View } = jest.requireActual('react-native');
@@ -79,6 +82,21 @@ describe('Composer.Collapsible', () => {
     expect(row(tree).props.pointerEvents).toBe('none');
   });
 
+  it('releases the closing tree only if that collapse is still current', () => {
+    const tree = render(<Text>First</Text>);
+    update(tree, null);
+    const firstClose = mockWithTiming.mock.calls.at(-1)?.[2];
+    expect(firstClose).toBeDefined();
+    update(tree, <Text>Second</Text>);
+    act(() => firstClose!(true));
+    expect(tree.root.findByType(Text).props.children).toBe('Second');
+
+    update(tree, null);
+    const secondClose = mockWithTiming.mock.calls.at(-1)?.[2];
+    act(() => secondClose!(true));
+    expect(tree.root.findAllByType(Text)).toHaveLength(0);
+  });
+
   it('treats a false child as collapsed, not as content', () => {
     // `{cond && <x />}` yields false rather than null, and a row that renders it
     // as content would sit there at full height showing nothing.
@@ -107,6 +125,48 @@ describe('Composer.Collapsible', () => {
     const measured = tree.root.findAll((node) => typeof node.props.onLayout === 'function');
 
     expect(measured[measured.length - 1]?.props.className).toContain('absolute');
+  });
+
+  it('waits for measured content height before animating opacity or height', () => {
+    const tree = render(<Text>Delayed</Text>);
+    expect(mockWithTiming).not.toHaveBeenCalled();
+
+    const measured = tree.root.findAll((node) => typeof node.props.onLayout === 'function').at(-1);
+    act(() => measured!.props.onLayout({ nativeEvent: { layout: { height: 48 } } }));
+
+    expect(mockWithTiming.mock.calls.map(([value]) => value)).toEqual([1, 48]);
+  });
+
+  it('reports active transition state until completion or unmount', () => {
+    const onAnimatingChange = jest.fn();
+    act(() => {
+      renderer = create(
+        <ComposerCollapsible onAnimatingChange={onAnimatingChange} testID="row">
+          <Text>Body</Text>
+        </ComposerCollapsible>,
+      );
+    });
+    const measured = renderer!.root
+      .findAll((node) => typeof node.props.onLayout === 'function')
+      .at(-1);
+    act(() => measured!.props.onLayout({ nativeEvent: { layout: { height: 48 } } }));
+    expect(onAnimatingChange).toHaveBeenNthCalledWith(1, true);
+
+    const finishOpen = mockWithTiming.mock.calls.at(-1)?.[2];
+    act(() => finishOpen!(true));
+    expect(onAnimatingChange).toHaveBeenNthCalledWith(2, false);
+
+    act(() => {
+      renderer!.update(
+        <ComposerCollapsible onAnimatingChange={onAnimatingChange} testID="row">
+          {null}
+        </ComposerCollapsible>,
+      );
+    });
+    expect(onAnimatingChange).toHaveBeenNthCalledWith(3, true);
+    act(() => renderer!.unmount());
+    renderer = undefined;
+    expect(onAnimatingChange).toHaveBeenNthCalledWith(4, false);
   });
 
   it('lands on the final size instead of animating when motion is reduced', () => {

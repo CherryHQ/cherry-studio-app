@@ -3,8 +3,9 @@
 This App Shell module owns the drawer navigation surface, recent Agent Sessions, and bottom dock.
 It is app-wide navigation infrastructure rather than a route page.
 
-In compact windows the drawer is a temporary overlay, with its width capped at 400 logical points
-and at least 64 points of chat left visible. Wide windows (see [layout](../layout/README.md)) make
+In compact windows the drawer is a temporary overlay spanning the full available window width
+inside any trailing safe area (with a 280-point minimum), and is dismissed via the header close
+button or swipe gesture. Wide windows (see [layout](../layout/README.md)) make
 it a permanent column beside the content region, divided by a hairline. `useSidebarColumn` resolves
 that column through the pure `resolveSidebarColumn`: 280 points for the sidebar, the file pane width
 for search, the leading half of the window when an iPhone Duo is partly folded, yielded entirely
@@ -19,7 +20,7 @@ exported from `@/frontend/appShell/sidebar/toggle` so headers do not load the si
 for the overlay, `hide` or `show` for a wide column, and nothing while the file pane or a fold holds
 it. Wide windows keep the drawer in permanent mode. A hidden sidebar stays mounted outside the
 layout row, so opening or closing Files exchanges the left column in one layout change. Swiping
-opens the overlay in compact windows. Navigation state reports a permanent drawer as closed, so visibility comes from
+opens the front overlay in compact windows over the stationary content and scrim. Navigation state reports a permanent drawer as closed, so visibility comes from
 `useSidebarPresence`: `persistent`, `open`, or `closed`. Selection mode, the title marquee, and read
 receipts use it instead of the raw drawer status.
 
@@ -169,6 +170,13 @@ list request; it never delays data. Normal connecting/reconnecting states do not
 above the list. Pending queries do not render empty rows, and cached lists remain
 visible if a background refresh fails. Device discovery must finish before showing the unpaired
 empty state.
+
+Opening the compact sidebar briefly prepares the most recently selected eligible desktop, or the only eligible
+paired desktop. The eight-second foreground lease shares the normal connection manager and cannot
+create an Android notification or override a manual disconnect. Agent mode can prepare one metadata
+page for that authorization binding. Session mode prepares only the channel because proving task
+membership can require multiple catalog pages. Closing the sidebar or backgrounding releases the
+speculative demand; an actual selection retains its own lease.
 
 Both catalogs use appShell/conversation hooks and ConversationSourceBoundary. Rows receive
 Agent summaries and ConversationRefs, and navigation uses the common conversation address helper.

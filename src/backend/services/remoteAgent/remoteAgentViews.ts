@@ -3,6 +3,7 @@ import type {
   AgentMessageListItem,
   AgentPart,
   AgentProjection,
+  AgentResult,
   AgentSession,
 } from '@cherrystudio/remote-protocol/agent';
 
@@ -14,6 +15,18 @@ import type {
 } from '@/shared/contracts/remoteAgent';
 
 import { readPresentationPart } from './remotePresentation';
+
+export function projectAgentPage(page: AgentResult<'agent.agents.list'>) {
+  return {
+    items: page.items.map((item) => ({
+      id: item.agentId,
+      name: item.name,
+      emoji: item.emoji,
+      ...(item.model !== undefined ? { model: item.model } : {}),
+    })),
+    next: page.nextCursor ?? undefined,
+  };
+}
 
 export const projectSession = (session: AgentSession): RemoteSessionView => ({
   id: session.sessionId,

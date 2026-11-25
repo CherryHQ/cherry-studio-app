@@ -35,6 +35,7 @@ type ChatMessageProps = {
   assistantPresentation: AssistantMessagePresentation;
   isMessageActionsEnabled: boolean;
   message: MessageListItem;
+  shouldShowDisclaimer?: boolean;
   shouldShowTimestamp: boolean;
   attachments?: ReactNode;
   accessories?: ReactNode;
@@ -143,13 +144,16 @@ function AssistantChatMessage({
   message,
   presentation,
   renderUsage,
+  shouldShowDisclaimer = false,
 }: {
   accessories: ReactNode;
   attachments: ReactNode;
   message: MessageListItem;
   presentation: AssistantMessagePresentation;
   renderUsage: ((message: MessageListItem) => ReactNode) | undefined;
+  shouldShowDisclaimer?: boolean;
 }) {
+  const { t } = useTranslation();
   const { selectBranch } = useAssistantMessageActions();
   const isSelecting = useIsChatShareSelecting();
   const isGrouped = Boolean(message.branch && selectBranch && !isSelecting);
@@ -167,6 +171,11 @@ function AssistantChatMessage({
         </BackgroundPressExclusion>
       ) : null}
       <MessageTranslationContent message={message} />
+      {shouldShowDisclaimer && message.status !== 'pending' && !isSelecting ? (
+        <Text className="text-xs text-foreground-tertiary" testID="assistant-message-disclaimer">
+          {t('chat.input.disclaimer')}
+        </Text>
+      ) : null}
     </>
   );
 
@@ -284,6 +293,7 @@ export const ChatMessage = memo(function ChatMessage({
   assistantPresentation,
   isMessageActionsEnabled,
   message,
+  shouldShowDisclaimer = false,
   shouldShowTimestamp,
   attachments,
   accessories,
@@ -318,6 +328,7 @@ export const ChatMessage = memo(function ChatMessage({
         message={message}
         presentation={assistantPresentation}
         renderUsage={renderUsage}
+        shouldShowDisclaimer={shouldShowDisclaimer}
       />
     );
 

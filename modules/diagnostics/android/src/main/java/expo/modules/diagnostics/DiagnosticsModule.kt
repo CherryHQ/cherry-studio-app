@@ -15,7 +15,7 @@ import java.io.File
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
-private const val SECRET_SUFFIX = "GvI6I5ZrEHcGOWjO5AKhJKGmnwwGfM62XKpWqkjhvzRU2NZIinM77aTGIqhqys0g"
+private const val SIGNING_SALT = "GvI6I5ZrEHcGOWjO5AKhJKGmnwwGfM62XKpWqkjhvzRU2NZIinM77aTGIqhqys0g"
 
 class DiagnosticsModule : Module() {
   @Volatile private var upload: DiagnosticUpload? = null
@@ -93,7 +93,7 @@ class DiagnosticsModule : Module() {
       val secret = if (id == 0) "" else context.getString(id)
       check(secret.isNotEmpty()) { "CherryAI client secret is not configured" }
       val hmac = Mac.getInstance("HmacSHA256")
-      hmac.init(SecretKeySpec("$secret.$SECRET_SUFFIX".toByteArray(Charsets.UTF_8), "HmacSHA256"))
+      hmac.init(SecretKeySpec("$secret.$SIGNING_SALT".toByteArray(Charsets.UTF_8), "HmacSHA256"))
       hmac.doFinal(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
     }
 

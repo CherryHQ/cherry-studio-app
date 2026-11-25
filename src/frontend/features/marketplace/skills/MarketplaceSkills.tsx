@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useRootNavigationDockClearance } from '@/frontend/appShell/navigationShell/state';
 import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 
 import { MarketplaceList } from '../components/MarketplaceList';
@@ -31,6 +32,7 @@ export function MarketplaceSkills({
 }) {
   const router = useRouter();
   const { bottom } = useSafeAreaInsets();
+  const dockClearance = useRootNavigationDockClearance();
   const search = useSettledQuery(query);
   const isSettling = query.trim() !== search;
   const isLink = isSkillLink(search);
@@ -52,7 +54,7 @@ export function MarketplaceSkills({
     <ScrollView
       className="flex-1"
       contentContainerClassName="gap-4 pt-2"
-      contentContainerStyle={{ paddingBottom: bottom + 24 }}
+      contentContainerStyle={{ paddingBottom: bottom + dockClearance + 24 }}
       contentInsetAdjustmentBehavior="never"
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"

@@ -1,16 +1,24 @@
 import type { ModelService } from '@/backend/data/services/ModelService';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import type { OrderRequest } from '@/shared/data/api/schemas/endpointHelpers';
 import {
   BulkUpdateModelsSchema,
   CreateModelsSchema,
   DeleteModelsQuerySchema,
   ListModelsQuerySchema,
   type ModelSchemas,
+  OrderBatchRequestSchema,
+  OrderRequestSchema,
   ResolveProviderModelsQuerySchema,
   UpdateModelSchema,
 } from '@/shared/data/api/schemas/models';
 import type { HandlersFor } from '@/shared/data/api/types';
-import { isUniqueModelId, type Model, parseUniqueModelId } from '@/shared/data/types/model';
+import {
+  isUniqueModelId,
+  type Model,
+  parseUniqueModelId,
+  type UniqueModelId,
+} from '@/shared/data/types/model';
 
 export type SystemModelSupportFilter = {
   filter(models: readonly Model[]): Promise<Model[]>;
@@ -23,6 +31,14 @@ function parseUniqueId(uniqueModelId: string) {
     });
   }
   return parseUniqueModelId(uniqueModelId);
+}
+
+function validateModelOrderAnchor(anchor: OrderRequest) {
+  if ('before' in anchor) {
+    parseUniqueId(anchor.before);
+  } else if ('after' in anchor) {
+    parseUniqueId(anchor.after);
+  }
 }
 
 export function createModelHandlers(
@@ -72,6 +88,24 @@ export function createModelHandlers(
       PATCH: async ({ body, params }) => {
         const { modelId, providerId } = parseUniqueId(params.uniqueModelId);
         return service.update(providerId, modelId, UpdateModelSchema.parse(body));
+      },
+    },
+    '/model-orders/:uniqueModelId*': {
+      PATCH: async ({ body, params }) => {
+        parseUniqueId(params.uniqueModelId);
+        const anchor = OrderRequestSchema.parse(body);
+        validateModelOrderAnchor(anchor);
+        await service.reorder(params.uniqueModelId as UniqueModelId, anchor);
+      },
+    },
+    '/models/order:batch': {
+      PATCH: async ({ body }) => {
+        const { moves } = OrderBatchRequestSchema.parse(body);
+        for (const move of moves) {
+          parseUniqueId(move.id);
+          validateModelOrderAnchor(move.anchor);
+        }
+        await service.reorderBatch(moves as { anchor: OrderRequest; id: UniqueModelId }[]);
       },
     },
     '/providers/:providerId/models:resolve': {

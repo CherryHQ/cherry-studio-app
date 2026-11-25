@@ -19,6 +19,18 @@ function compileTimeContract(client: ApiClient, sessionId: string) {
   );
   const painting: Promise<Painting> = client.get('/paintings/painting-1');
   const removed: Promise<void> = client.delete('/models/provider::org/model');
+  const modelReordered: Promise<void> = client.patch('/model-orders/provider::org/model', {
+    body: { position: 'first' },
+  });
+  const modelsBatchReordered: Promise<void> = client.patch('/models/order:batch', {
+    body: { moves: [{ id: 'provider::m', anchor: { position: 'last' } }] },
+  });
+  const providerReordered: Promise<void> = client.patch('/providers/openai/order', {
+    body: { after: 'anthropic' },
+  });
+  const providersBatchReordered: Promise<void> = client.patch('/providers/order:batch', {
+    body: { moves: [{ id: 'openai', anchor: { position: 'first' } }] },
+  });
   const imageSupport: Promise<ImageGenerationSupport | null> = client.get(
     '/providers/provider/models/org/model/image-generation-support',
   );
@@ -32,7 +44,18 @@ function compileTimeContract(client: ApiClient, sessionId: string) {
   // @ts-expect-error model creation requires an array body
   void client.post('/models', { body: { modelId: 'm', providerId: 'p' } });
 
-  return { imageSupport, messages, painting, removed, session, sessions };
+  return {
+    imageSupport,
+    messages,
+    modelReordered,
+    modelsBatchReordered,
+    painting,
+    providerReordered,
+    providersBatchReordered,
+    removed,
+    session,
+    sessions,
+  };
 }
 
 describe('ApiClient endpoint inference', () => {

@@ -357,14 +357,50 @@ describe('ChatMessage', () => {
     expect(renderer!.root.findAllByType('MessageAnswerCards' as never)).toHaveLength(0);
     expect(renderer!.root.findAllByType('AssistantMessage' as never)).toHaveLength(1);
   });
+
+  test('shows disclaimer only when shouldShowDisclaimer is true on a settled reply outside selection', () => {
+    const findDisclaimers = () =>
+      renderer!.root
+        .findAllByType('Text' as never)
+        .filter((node) => node.props.testID === 'assistant-message-disclaimer');
+
+    act(() => {
+      renderer = create(renderMessage(createMessage('success'), true, false));
+    });
+    expect(findDisclaimers()).toHaveLength(0);
+
+    act(() => {
+      renderer!.update(renderMessage(createMessage('pending'), true, true));
+    });
+    expect(findDisclaimers()).toHaveLength(0);
+
+    mockIsShareSelecting = true;
+    act(() => {
+      renderer!.update(renderMessage(createMessage('success'), true, true));
+    });
+    expect(findDisclaimers()).toHaveLength(0);
+
+    mockIsShareSelecting = false;
+    act(() => {
+      renderer!.update(renderMessage(createMessage('success'), true, true));
+    });
+    const disclaimers = findDisclaimers();
+    expect(disclaimers).toHaveLength(1);
+    expect(disclaimers[0].props.children).toBe('chat.input.disclaimer');
+  });
 });
 
-function renderMessage(message: MessageListItem, isMessageActionsEnabled = true) {
+function renderMessage(
+  message: MessageListItem,
+  isMessageActionsEnabled = true,
+  shouldShowDisclaimer = false,
+) {
   return (
     <ChatMessage
       assistantPresentation={{ name: 'Assistant' }}
       isMessageActionsEnabled={isMessageActionsEnabled}
       message={message}
+      shouldShowDisclaimer={shouldShowDisclaimer}
       shouldShowTimestamp
     />
   );

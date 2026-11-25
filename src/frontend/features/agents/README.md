@@ -15,11 +15,13 @@ surfaces.
   and emoji, inherits the normal default model and settings, and offers a fixed, keyboard-aware
   Create and start chatting footer. Template identity and source language are retained through
   provider setup; subsequent form edits are never reseeded by a cache or language refresh.
-- Tapping a list row opens that Agent's editor.
-- Long-pressing a row enters multi-selection and selects that Agent. Rows keep one press target
-  across the mode change, so releasing the long press cannot open the editor or toggle it again.
-  The shared selection toolbar selects all current search results or confirms batch deletion;
-  back and Done exit selection. Changing the search clears selection. Agents have no detail screen.
+- Tapping a list row starts a draft chat with that Agent, and the row's edit button opens its editor.
+- Long-pressing a row lifts it with CherryUI `Sortable`: sliding enters direct drag to reorder the
+  list immediately (disabled while searching or multi-selecting), while releasing in place opens a
+  contextual menu (Edit agent, Move to top, Select agents, Delete). Choosing Select agents enters
+  multi-selection; the shared selection toolbar selects all current search results or confirms batch
+  deletion, and back or Done exits selection. Changing the search clears selection. Agents have no
+  detail screen.
 - The editor's model row opens the shared model-picker bottom sheet for text and image models. New agents seed the global
   default Agent model; an agent saved without a model cannot start a session until one is assigned.
 - The editor exposes the Agent definition fields (avatar, name, default model, and instructions),

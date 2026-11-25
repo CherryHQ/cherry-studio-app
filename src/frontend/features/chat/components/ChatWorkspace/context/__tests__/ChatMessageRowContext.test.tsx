@@ -46,6 +46,7 @@ describe('ChatMessageRowContext', () => {
     timestamps: ReadonlySet<string>,
     breakAfterMessageId?: string,
     editingMessageId?: string,
+    disclaimerMessageId?: string,
   ) => {
     const element = (
       <ChatMessageRowProvider
@@ -53,6 +54,7 @@ describe('ChatMessageRowContext', () => {
         timestampMessageIds={timestamps}
         breakAfterMessageId={breakAfterMessageId}
         editingMessageId={editingMessageId}
+        disclaimerMessageId={disclaimerMessageId}
       >
         {probes}
       </ChatMessageRowProvider>
@@ -142,5 +144,23 @@ describe('ChatMessageRowContext', () => {
     render(messages, new Set(), 'a');
     expect(latest('a')?.nextMessageId).toBeUndefined();
     expect(latest('b')?.previousMessageId).toBeUndefined();
+  });
+
+  test('tracks disclaimerMessageId and wakes only rows whose flag changed', () => {
+    const rows = [message('a'), message('b'), message('pending')];
+    render(rows, new Set(), undefined, undefined, 'a');
+    expect(latest('a')?.showsDisclaimer).toBe(true);
+    expect(latest('b')?.showsDisclaimer).toBe(false);
+    expect(seen.get('a')).toHaveLength(1);
+    expect(seen.get('b')).toHaveLength(1);
+    expect(seen.get('pending')).toHaveLength(1);
+
+    render(rows, new Set(), undefined, undefined, 'pending');
+    expect(latest('a')?.showsDisclaimer).toBe(false);
+    expect(latest('b')?.showsDisclaimer).toBe(false);
+    expect(latest('pending')?.showsDisclaimer).toBe(true);
+    expect(seen.get('a')).toHaveLength(2);
+    expect(seen.get('b')).toHaveLength(1);
+    expect(seen.get('pending')).toHaveLength(2);
   });
 });

@@ -28,10 +28,11 @@ export function ChatInputEffortGauge({ accessibilityLabel, onPress }: ChatInputE
     <View ref={footprintRef} collapsable={false} style={gaugeFootprintStyle}>
       <Composer.Action
         accessibilityLabel={accessibilityLabel}
+        className="bg-transparent"
         onPress={handlePress}
         testID="chat-input-effort-gauge"
       >
-        <GaugeIcon className="size-3.5 text-foreground" />
+        <GaugeIcon className="size-4.5 text-muted-foreground" />
       </Composer.Action>
     </View>
   );
