@@ -171,4 +171,80 @@ describe('useCloudModelBrowser', () => {
     expect(mockRefresh).not.toHaveBeenCalled();
     expect(mockRefreshAmd).not.toHaveBeenCalled();
   });
+
+  it('re-probes AMD status when reopening the picker after unsupported without looping while open', () => {
+    mockCloudState = readyAccountState;
+
+    act(() => {
+      renderer = create(<Probe enabled />);
+    });
+    expect(mockRefreshAmd).toHaveBeenCalledTimes(1);
+
+    mockCloudState = { ...readyAccountState, amd: { phase: 'unsupported' } };
+    act(() => {
+      renderer!.update(<Probe enabled />);
+    });
+    expect(mockRefreshAmd).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      renderer!.update(<Probe enabled={false} />);
+    });
+    act(() => {
+      renderer!.update(<Probe enabled />);
+    });
+    expect(mockRefreshAmd).toHaveBeenCalledTimes(2);
+  });
+
+  it('probes AMD status on mount when starting in unsupported state', () => {
+    mockCloudState = { ...readyAccountState, amd: { phase: 'unsupported' } };
+
+    act(() => {
+      renderer = create(<Probe enabled />);
+    });
+
+    expect(mockRefreshAmd).toHaveBeenCalledTimes(1);
+  });
+
+  it.each<{ label: string; state: CloudState }>([
+    {
+      label: 'account status is disabled',
+      state: {
+        ...readyAccountState,
+        account: {
+          ...readyAccountState.account!,
+          account: { id: 'account-1', status: 'disabled' },
+        },
+      },
+    },
+    {
+      label: 'accountIssue is set',
+      state: {
+        ...readyAccountState,
+        accountIssue: 'reauth_required',
+      },
+    },
+    {
+      label: 'activation_endpoint is null',
+      state: {
+        ...readyAccountState,
+        models: [{ ...lockedAmdModel, activation_endpoint: null }],
+      },
+    },
+    {
+      label: 'model requires a plan without entitlement',
+      state: {
+        ...readyAccountState,
+        models: [{ ...lockedAmdModel, requires_plan: true }],
+      },
+    },
+  ])('does not refresh AMD status when $label', ({ state }) => {
+    mockCloudState = state;
+
+    act(() => {
+      renderer = create(<Probe enabled />);
+    });
+
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+    expect(mockRefreshAmd).not.toHaveBeenCalled();
+  });
 });
