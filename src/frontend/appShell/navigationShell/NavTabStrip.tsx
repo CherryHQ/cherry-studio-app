@@ -190,7 +190,10 @@ function NavTabCapsule({
       : '';
 
   return (
-    <View className={stateClassName ? `${capsuleClassName} ${stateClassName}` : capsuleClassName}>
+    <View
+      className={stateClassName ? `${capsuleClassName} ${stateClassName}` : capsuleClassName}
+      collapsable={false}
+    >
       <View className={isHorizontal && !isActive && !isDragPreview ? 'opacity-75' : undefined}>
         <NavIcon color={color} filled={filled} id={id} size={isHorizontal ? 20 : 22} />
       </View>

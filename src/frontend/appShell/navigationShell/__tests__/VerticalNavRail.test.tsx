@@ -173,6 +173,7 @@ describe('VerticalNavRail', () => {
       .findAllByType(View)
       .find((view) => !view.props.testID && view.props.className?.split(' ').includes('h-11'));
     expect(activeCapsule).toBeDefined();
+    expect(activeCapsule!.props.collapsable).toBe(false);
     expect(activeCapsule!.props.className.split(' ')).toEqual(
       expect.arrayContaining(['rounded-full', 'bg-secondary-active']),
     );
@@ -182,6 +183,7 @@ describe('VerticalNavRail', () => {
       .findAllByType(View)
       .find((view) => !view.props.testID && view.props.className?.split(' ').includes('h-11'));
     expect(inactiveCapsule).toBeDefined();
+    expect(inactiveCapsule!.props.collapsable).toBe(false);
     expect(inactiveCapsule!.props.className.split(' ')).toContain('rounded-full');
     expect(inactiveCapsule!.props.className.split(' ')).not.toContain('bg-secondary-active');
   });
