@@ -19,5 +19,6 @@ export {
   type RemoteConversationHistoryView,
 } from './useConversationHistory';
 export { useConversationDraft } from './useConversationDraft';
+export { useRemoteModels } from './useRemoteModelCatalog';
 export { useRemoteConversationSource } from './useRemoteConversationSource';
 export { useRemoteTasks, useRemoteTaskSessions } from './useRemoteTaskCatalog';

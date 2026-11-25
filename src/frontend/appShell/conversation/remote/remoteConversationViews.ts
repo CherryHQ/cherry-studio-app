@@ -1,6 +1,5 @@
 import type {
   RemoteCommand,
-  RemoteModelSelection,
   RemoteMessagePart,
   RemoteMessageView,
   RemoteSourceState,
@@ -43,6 +42,8 @@ function classifyRemoteFailure(error: unknown): ConversationFailure {
       return { code: 'cancelled', retry: 'none' };
     case 'TARGET_UNAVAILABLE':
       return { code: 'target-unavailable', retry: 'revise-input' };
+    case 'MODEL_UNAVAILABLE':
+      return { code: 'model-unavailable', retry: 'revise-input' };
     case 'UPGRADE_REQUIRED':
       return { code: 'upgrade-required', retry: 'none' };
     case 'CLOSED':
@@ -77,10 +78,7 @@ function classifyRemoteFailure(error: unknown): ConversationFailure {
 }
 /** A final send or start outcome the user still has to resolve; resending through `action` replaces it. */
 export function undeliveredMessage(
-  operation: Pick<
-    RemoteCommand,
-    'status' | 'text' | 'error' | 'errorMessage' | 'attachments' | 'sessionId'
-  > & { model?: RemoteModelSelection },
+  operation: Pick<RemoteCommand, 'status' | 'text' | 'error' | 'errorMessage' | 'attachments'>,
   id: OperationId,
   action: ConversationAction<ConversationInput, Submission>,
   discard: () => void,
@@ -105,13 +103,10 @@ export function undeliveredMessage(
     state: status,
     ...(status === 'rejected' && operation.error
       ? {
-          failure:
-            operation.error === 'TARGET_UNAVAILABLE' && operation.model && !operation.sessionId
-              ? { code: 'model-unavailable', retry: 'revise-input' }
-              : remoteConversationFailure({
-                  code: operation.error,
-                  detail: operation.errorMessage,
-                }),
+          failure: remoteConversationFailure({
+            code: operation.error,
+            detail: operation.errorMessage,
+          }),
         }
       : {}),
     resend: { availability: action.availability, execute: () => action.execute(input) },

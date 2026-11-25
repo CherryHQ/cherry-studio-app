@@ -2,11 +2,14 @@ import type { AgentSubmitMessageInput } from '@/shared/contracts/agent';
 import type {
   RemoteAttachment,
   RemoteAttachmentDraftView,
+  RemoteModelOption,
   RemoteModelSelection,
 } from '@/shared/contracts/remoteAgent';
 
 import type {
   AgentRef,
+  CatalogCursor,
+  CatalogPage,
   ConversationAction,
   ConversationCatalog,
   ConversationCitationReader,
@@ -143,6 +146,8 @@ export interface ConversationDraft {
   readonly id: DraftId;
   readonly state: Readable<{
     inputPolicy: InputPolicy;
+    /** Whether the desktop accepts a model chosen for the Session this draft creates. */
+    sessionModelSelection: boolean;
     start: ConversationAction<ConversationInput, Submission>;
     /** The Session this draft's start created; the route hands off to it, then releases the start. */
     created?: { conversation: ConversationRef; release(): void };
@@ -153,6 +158,13 @@ export interface ConversationDraft {
   dispose(): void;
 }
 export interface RemoteConversationCatalog extends ConversationCatalog {
+  /** Models the desktop lets this Agent's new Sessions select. */
+  listModels(
+    agent: AgentRef,
+    search: string,
+    cursor: CatalogCursor | undefined,
+    signal: AbortSignal,
+  ): Promise<CatalogPage<RemoteModelOption>>;
   prepareDraft(
     input: {
       agent: AgentRef;

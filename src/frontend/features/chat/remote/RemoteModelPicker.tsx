@@ -9,7 +9,8 @@ import { useDeferredValue, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
-import { type AgentSummary, useConversationModels } from '@/frontend/appShell/conversation';
+import type { AgentSummary } from '@/frontend/appShell/conversation';
+import { useRemoteModels } from '@/frontend/appShell/conversation/remote';
 import type { RemoteModelOption } from '@/shared/contracts/remoteAgent';
 
 export function RemoteModelPicker({
@@ -26,7 +27,7 @@ export function RemoteModelPicker({
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const query = useDeferredValue(search.trim());
-  const models = useConversationModels(agent.ref, query);
+  const models = useRemoteModels(agent.ref, query);
   const groups = new Map<string, RemoteModelOption[]>();
   for (const model of models.items) {
     const group = groups.get(model.providerId);

@@ -88,7 +88,7 @@ export function RemoteComposer({
       void workspaces.fetchNextPage();
   }, [snapshot.workspaceId, snapshot.workspaceKind, selectedWorkspace, workspaces]);
   const draft = useConversationDraft(agent?.ref, selectedWorkspace?.ref, draftId, selectedModel);
-  const canSelectModel = !existing && draft.state?.inputPolicy.modelSelection === true;
+  const canSelectModel = !existing && draft.state?.sessionModelSelection === true;
   const created = draft.state?.created;
   useEffect(() => {
     if (!session && created && onSessionCreated(created.conversation)) created.release();

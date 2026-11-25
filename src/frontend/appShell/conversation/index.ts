@@ -48,6 +48,5 @@ export {
   useConversationPreview,
   useConversationAgentStatus,
   useConversationSummary,
-  useConversationModels,
   useConversationWorkspaces,
 } from './useConversationCatalog';

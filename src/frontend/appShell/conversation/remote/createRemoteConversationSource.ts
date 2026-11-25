@@ -376,9 +376,9 @@ export function createRemoteConversationSource(
           return {
             inputPolicy: {
               ...REMOTE_INPUT_POLICY,
-              modelSelection: remote.getState().sessionModelSelection === true,
               attachments: remote.getState().attachments === true,
             },
+            sessionModelSelection: remote.getState().sessionModelSelection === true,
             attachmentPreparation:
               workspace && remote.getState().preupload && remote.stageAttachments
                 ? {

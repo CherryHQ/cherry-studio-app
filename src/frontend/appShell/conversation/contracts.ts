@@ -8,7 +8,6 @@ import type {
 } from '@/shared/contracts/agent';
 import type { ExecutionFailure } from '@/shared/contracts/aiFailure';
 import type { InteractionResponse, InteractionQuestion } from '@/shared/contracts/interaction';
-import type { RemoteModelOption } from '@/shared/contracts/remoteAgent';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 /**
@@ -300,12 +299,6 @@ export interface ConversationCatalog {
     cursor: CatalogCursor | undefined,
     signal: AbortSignal,
   ): Promise<CatalogPage<ConversationSummary>>;
-  listModels?: (
-    agent: AgentRef,
-    search: string,
-    cursor: CatalogCursor | undefined,
-    signal: AbortSignal,
-  ) => Promise<CatalogPage<RemoteModelOption>>;
   listWorkspaces?: (
     agent: AgentRef,
     cursor: CatalogCursor | undefined,
