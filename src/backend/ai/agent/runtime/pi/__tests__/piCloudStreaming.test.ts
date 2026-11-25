@@ -14,8 +14,10 @@ import { projectDiagnosticTrace } from '@/backend/services/diagnostics/diagnosti
 import { CLOUD_PROVIDER_ID, type CloudModel } from '@/shared/contracts/cloud';
 
 import { createTraceRecorder } from '../../../../observability/__tests__/_traceRecorder';
+import { toAgentErrorView } from '../../../host/runtimeProjection';
 import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from '../piApiAdapters';
 import { piModelTerminalErrorAttributes } from '../piModelDiagnostics';
+import { readPiTerminalError } from '../piModelError';
 import type { PiStreamFn } from '../piModelTypes';
 import { withPiStreamIdleTimeout } from '../piStreamIdleTimeout';
 
@@ -368,3 +370,87 @@ test.each([
     }
   },
 );
+
+test('preserves upstream quota codes from a Cloud 429 response in trace and failure projection', async () => {
+  const gatewayId = 'fedcba98765432100123456789abcdef';
+  const modelSnapshot = cloudSnapshot().models[0]!;
+  mockInference.mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        error: {
+          code: 'insufficient_quota',
+          type: 'rate_limit_error',
+          message: 'private quota text',
+        },
+      }),
+      {
+        status: 429,
+        headers: { 'content-type': 'application/json', 'X-Request-ID': gatewayId },
+      },
+    ),
+  );
+  const runtime = await setup();
+  try {
+    await runtime.refresh();
+    const adapter = resolvePiApiAdapter(modelSnapshot.endpoint_type);
+    jest
+      .spyOn(adapter, 'loadStreamSimple')
+      .mockResolvedValue(streamSimpleAnthropic as unknown as PiStreamFn);
+    const stream = withPiStreamIdleTimeout(
+      await bindPiStream(adapter, {
+        apiKey: '',
+        isCloudGateway: true,
+        fetch: runtime.createModelFetch(modelSnapshot.id, 'agent'),
+        headers: {},
+        maxRetries: 0,
+        maxTokens: 64,
+      }),
+    );
+    const model: PiModel<SupportedPiApi> = {
+      api: adapter.api,
+      provider: CLOUD_PROVIDER_ID,
+      id: modelSnapshot.id,
+      name: modelSnapshot.display_name,
+      baseUrl: adapter.formatBaseUrl(service.apiOrigin),
+      contextWindow: modelSnapshot.context_window,
+      maxTokens: 64,
+      input: ['text'],
+      reasoning: false,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    };
+    const { traces, records } = createTraceRecorder();
+    const trace = traces.startTrace('pi.generate_content');
+    const source = await stream(
+      model,
+      normalizeContext({ messages: [{ role: 'user', content: '你好', timestamp: Date.now() }] }),
+      { trace },
+    );
+    const result = await source.result();
+    expect(result.stopReason).toBe('error');
+    expect(isRetryableAssistantError(result)).toBe(false);
+    trace?.end('error', piModelTerminalErrorAttributes(result));
+    const attributes = projectDiagnosticTrace(records.at(-1))?.attributes;
+    expect(attributes).toMatchObject({
+      'cherry.gateway.request_id': gatewayId,
+      'error.provider.code': 'insufficient_quota',
+      'error.provider.type': 'rate_limit_error',
+      'error.category': 'quota',
+      'error.retryable': false,
+    });
+    expect(JSON.stringify(attributes)).not.toContain('private');
+    const view = toAgentErrorView(readPiTerminalError(result)!);
+    expect(view.failure).toMatchObject({
+      reasonCode: 'quota',
+      source: { layer: 'provider', code: 'RATE_LIMITED' },
+      context: {
+        statusCode: 429,
+        responseBody: JSON.stringify({
+          error: { code: 'insufficient_quota', type: 'rate_limit_error' },
+        }),
+      },
+    });
+    expect(JSON.stringify(view)).not.toContain('private');
+  } finally {
+    await runtime._doStop();
+  }
+});

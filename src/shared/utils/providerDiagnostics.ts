@@ -93,10 +93,31 @@ function record(value: unknown): Record<string, unknown> | undefined {
 function rejectedParameter(message: unknown): string | undefined {
   if (typeof message !== 'string') return undefined;
   const match =
-    /^(?:(?:[\w.-]{1,64}\s+API error\s*\((?:400|422)\):|(?:400|422):?)\s+)?(?:unsupported|unrecognized|unknown|invalid) (?:parameter|argument):?\s+['"`]([a-z_]+)['"`]/i.exec(
+    /^(?:[\w.-]{1,64}(?:\s+[\w.-]{1,32}){0,3}\s+API error\s*\((?:400|422)\):\s+)?(?:(?:400|422):?\s+)?(?:unsupported|unrecognized|unknown|invalid) (?:parameter|argument):?\s+['"`]([a-z_]+)['"`]/i.exec(
       message.trimStart(),
     );
   return diagnosticRequestParameter(match?.[1]);
+}
+
+function envelopeRecord(value: unknown): Record<string, unknown> | undefined {
+  return Array.isArray(value) && value.length === 1 ? record(value[0]) : record(value);
+}
+
+function parseJsonRecord(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== 'string') return envelopeRecord(value);
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 16_384) return undefined;
+  let json = trimmed;
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+    const wrapped = /^got status:\s*[\w .-]{1,64}\.\s+([[{][\s\S]*)$/i.exec(trimmed);
+    if (!wrapped?.[1]) return undefined;
+    json = wrapped[1];
+  }
+  try {
+    return envelopeRecord(JSON.parse(json));
+  } catch {
+    return undefined;
+  }
 }
 
 /** Both the saved failure and the live request expose the SDK's bounded provider response. */
@@ -108,19 +129,15 @@ export function readProviderErrorDiagnostics(
   providerType?: string;
   parameter?: string;
 } {
-  let body = responseBody;
-  if (typeof body === 'string') {
-    try {
-      body = body.length <= 16_384 ? JSON.parse(body) : undefined;
-    } catch {
-      body = undefined;
-    }
-  }
-  const root = record(body);
+  const root = parseJsonRecord(responseBody) ?? parseJsonRecord(message);
   const detail = record(root?.detail);
-  const error = record(root?.error) ?? record(detail?.error) ?? detail ?? root;
+  const nestedError = record(root?.error) ?? record(detail?.error);
+  const error = nestedError ?? detail ?? root;
   const providerCode = diagnosticProviderCode(error?.code);
-  const providerType = diagnosticProviderCode(error?.type);
+  const providerType = diagnosticProviderCode(
+    error?.type ??
+      (nestedError && typeof nestedError.status === 'string' ? nestedError.status : undefined),
+  );
   // Report the public root of a path such as messages[3].content, never its arbitrary suffix.
   const parameter =
     (typeof error?.param === 'string'

@@ -55,6 +55,26 @@ describe('classifyAgentFailureReason', () => {
     ],
     [
       {
+        code: 'provider_error',
+        message: '429',
+        responseBody:
+          '{"error":{"code":"billing_not_active","type":"rate_limited","message":"Your account is not active"}}',
+        statusCode: 429,
+      },
+      'quota',
+    ],
+    [
+      {
+        code: 'RATE_LIMITED',
+        message: 'Cloud request failed (429) RATE_LIMITED',
+        responseBody: '{"error":{"code":"insufficient_quota"}}',
+        statusCode: 429,
+      },
+      'quota',
+    ],
+    [{ code: 'RATE_LIMITED', message: 'Request failed' }, 'rate_limit'],
+    [
+      {
         code: 'insufficient_balance',
         message: '429',
         responseBody:
@@ -100,6 +120,31 @@ describe('classifyAgentFailureReason', () => {
       {
         code: 'invalid_request',
         message: "OpenAI API error (400): Unsupported parameter: 'max_output_tokens'",
+        statusCode: 400,
+      },
+      'invalid_input',
+    ],
+    [
+      {
+        code: 'invalid_request',
+        message: "OpenAI API error (400): 400 Unsupported parameter: 'max_output_tokens'",
+        statusCode: 400,
+      },
+      'invalid_input',
+    ],
+    [
+      {
+        code: 'invalid_request',
+        message: "Azure OpenAI API error (400): 400 Unsupported parameter: 'max_output_tokens'",
+        statusCode: 400,
+      },
+      'invalid_input',
+    ],
+    [
+      {
+        code: 'provider_error',
+        message:
+          '{"error":{"code":400,"message":"Unsupported parameter: \'maxOutputTokens\'","status":"INVALID_ARGUMENT"}}',
         statusCode: 400,
       },
       'invalid_input',

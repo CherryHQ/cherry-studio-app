@@ -43,6 +43,7 @@ import {
   cloudRetryDeadline,
   cloudSessionIssue,
   readCloudGatewayCode,
+  readCloudUpstreamErrorBody,
 } from './cloudGatewayError';
 import { CloudSession, type CloudIdentitySource } from './CloudSession';
 import { projectCloudModels } from './projectCloudModels';
@@ -642,12 +643,11 @@ export class CloudRuntime extends BaseService implements CloudModule {
       signal.throwIfAborted();
       if (response.ok) return response;
       // Preserve the original error response for the protocol SDK when the gateway forwards an upstream error.
-      const code = readCloudGatewayCode(
-        await response
-          .clone()
-          .json()
-          .catch(() => undefined),
-      );
+      const payload = await response
+        .clone()
+        .json()
+        .catch(() => undefined);
+      const code = readCloudGatewayCode(payload);
       signal.throwIfAborted();
       if (attempt === 0 && session?.recoverRequest(response.status, code, authorization)) {
         await response.body?.cancel().catch(() => {});
@@ -685,6 +685,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
         status,
         failureCode,
         readGatewayRequestId(response.headers),
+        !code && status === 429 ? readCloudUpstreamErrorBody(payload) : undefined,
       );
     }
   }

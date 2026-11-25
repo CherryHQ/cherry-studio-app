@@ -1,5 +1,7 @@
 import * as z from 'zod';
 
+import { readProviderErrorDiagnostics } from '@/shared/utils/providerDiagnostics';
+
 const gatewayCodeSchema = z.enum([
   'ACCOUNT_DISABLED',
   'ENTITLEMENT_INACTIVE',
@@ -41,6 +43,18 @@ export function cloudRetryDeadline(retryAfter: string | null | undefined, now: n
   return Number.isFinite(deadline) ? Math.max(deadline, now) : fallback;
 }
 
+export function readCloudUpstreamErrorBody(body: unknown): string | undefined {
+  const { providerCode, providerType, parameter } = readProviderErrorDiagnostics(body);
+  if (!providerCode && !providerType && !parameter) return undefined;
+  return JSON.stringify({
+    error: {
+      ...(providerCode ? { code: providerCode } : {}),
+      ...(providerType ? { type: providerType } : {}),
+      ...(parameter ? { param: parameter } : {}),
+    },
+  });
+}
+
 export class CloudGatewayRequestError extends Error {
   readonly retryable = false;
 
@@ -48,6 +62,7 @@ export class CloudGatewayRequestError extends Error {
     readonly statusCode: number,
     readonly code: string,
     readonly gatewayRequestId?: string,
+    readonly body?: string,
   ) {
     super(`Cloud request failed (${statusCode}) ${code}`);
     this.name = 'CloudGatewayRequestError';

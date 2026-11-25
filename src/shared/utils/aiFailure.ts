@@ -145,6 +145,7 @@ const REFINABLE_PROVIDER_CODES = new Set([
   'permission_denied',
   'rate_limit_error',
   'rate_limit_exceeded',
+  'rate_limited',
 ]);
 
 function includesAny(text: string, values: readonly string[]): boolean {
@@ -171,13 +172,14 @@ function providerCodeReason(
 
 /**
  * Stable product classification derived from allowlisted failure facts.
- * Specific source codes win; a generic `forbidden` code still yields to more
- * precise region, authentication, model, or quota evidence in the payload.
+ * Specific source codes win; generic `forbidden`, `permission_denied`, and
+ * rate-limit codes still yield to more precise region, authentication, model,
+ * or quota evidence in the payload.
  */
 export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason {
   const code = facts.code?.trim().toLowerCase();
   const codeReason = reasonForCode(CODE_REASONS, code);
-  if (codeReason && code !== 'forbidden') {
+  if (code && codeReason && code !== 'forbidden' && !REFINABLE_PROVIDER_CODES.has(code)) {
     return codeReason;
   }
 
@@ -399,6 +401,7 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
   }
   return (
     reasonForCode(FALLBACK_CODE_REASONS, code) ??
+    (code && code !== 'forbidden' ? reasonForCode(CODE_REASONS, code) : undefined) ??
     providerCodeReason(provider, CODE_REASONS) ??
     providerCodeReason(provider, FALLBACK_CODE_REASONS) ??
     'unknown'
