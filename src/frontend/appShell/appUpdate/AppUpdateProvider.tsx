@@ -106,6 +106,7 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
       try {
         const result = await queryClient.fetchQuery({
           ...appUpdateQueryOptions(appUpdate),
+          queryFn: ({ signal }) => appUpdate.check(signal, { force: true }),
           staleTime: 0,
         });
         if (result.status === 'available') {
@@ -148,7 +149,11 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
       }
       toast.show({ label: t('appUpdate.checking') });
       try {
-        const result = await queryClient.fetchQuery({ ...options, staleTime: 0 });
+        const result = await queryClient.fetchQuery({
+          ...options,
+          staleTime: 0,
+          queryFn: ({ signal }) => appUpdate.check(signal, { force: true }),
+        });
         if (result.status === 'available') open(result);
         else if (result.status === 'upToDate') {
           toast.show({ label: t('appUpdate.upToDate', { version: result.currentVersion }) });

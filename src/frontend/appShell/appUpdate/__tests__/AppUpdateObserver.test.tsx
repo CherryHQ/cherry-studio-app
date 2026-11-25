@@ -141,3 +141,19 @@ test('privacy consent prevents starting a vendor query', async () => {
   expect(mockUpdate.check).not.toHaveBeenCalled();
   expect(mockOpen).not.toHaveBeenCalled();
 });
+
+test('a failed cold-start check ends this launch reminder even after returning to foreground', async () => {
+  mockUpdate.check.mockRejectedValueOnce(new Error('Rate limited'));
+  const listener = jest.spyOn(AppState, 'addEventListener');
+  try {
+    await launch();
+    expect(mockUpdate.check).toHaveBeenCalledTimes(1);
+    const onChange = listener.mock.calls.find(([type]) => type === 'change')![1];
+    await act(async () => onChange('background'));
+    await act(async () => onChange('active'));
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(mockOpen).not.toHaveBeenCalled();
+  } finally {
+    listener.mockRestore();
+  }
+});

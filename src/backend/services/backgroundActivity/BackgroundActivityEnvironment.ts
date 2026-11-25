@@ -5,7 +5,13 @@ import {
 } from '@cherrystudio/ui/background-activity';
 import { File } from 'expo-file-system';
 
-import { BaseService, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
+import {
+  BaseService,
+  ErrorHandling,
+  Injectable,
+  Phase,
+  ServicePhase,
+} from '@/backend/core/lifecycle';
 import type { BackgroundActivityActionResponse } from '@/shared/backgroundActivity/actions';
 import type { ForegroundActivityAttention } from '@/shared/backgroundActivity/attention';
 import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivity/chatReply';
@@ -62,7 +68,8 @@ const noSubscription = () => () => {};
  * tests. The defaults make unsupported platforms a no-op capability.
  */
 @Injectable('BackgroundActivityEnvironment')
-@ServicePhase(Phase.PostReady)
+@ServicePhase(Phase.Gate)
+@ErrorHandling('graceful')
 export class BackgroundActivityEnvironment extends BaseService {
   private config: BackgroundActivityEnvironmentConfig = defaultConfig();
   private readonly actionListeners = new Set<

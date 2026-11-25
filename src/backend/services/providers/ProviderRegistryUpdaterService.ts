@@ -41,16 +41,21 @@ const REGISTRY_SOURCES = {
 } as const;
 
 const REQUEST_TIMEOUT_MS = 15_000;
+const FAILURE_COOLDOWN_MS = 15 * 60 * 1000;
 const MAX_MANIFEST_BYTES = 64 * 1024;
 const MAX_REGISTRY_FILE_BYTES = 5 * 1024 * 1024;
 
 const REGISTRY_HTTP_CLIENTS = {
   gitcode: createHttpClient({
+    serviceName: 'ProviderRegistryUpdaterService',
+    operation: 'registry.update',
     baseUrl: REGISTRY_SOURCES.gitcode,
     headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
     timeoutMs: REQUEST_TIMEOUT_MS,
   }),
   github: createHttpClient({
+    serviceName: 'ProviderRegistryUpdaterService',
+    operation: 'registry.update',
     baseUrl: REGISTRY_SOURCES.github,
     headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
     timeoutMs: REQUEST_TIMEOUT_MS,
@@ -78,6 +83,10 @@ type StagedSnapshot = {
 @ServicePhase(Phase.PostReady)
 @AppStatePolicy('not-applicable')
 export class ProviderRegistryUpdaterService extends BaseService {
+  private readonly failedSources = new Map<
+    RegistryNetworkSource,
+    { error: Error; retryAt: number }
+  >();
   private activeManifest: CatalogManifest | undefined;
   private activeSlot: ProviderRegistrySnapshot['slot'] | undefined;
   private applyInFlight: Promise<ProviderRegistryUpdateResult> | undefined;
@@ -113,10 +122,10 @@ export class ProviderRegistryUpdaterService extends BaseService {
   }
 
   /** Shared by model-selection surfaces so first download is deduplicated and retryable. */
-  public async ensureReady(): Promise<void> {
+  public async ensureReady(options?: { force?: boolean }): Promise<void> {
     await this.restoreSnapshot();
     if (!providerRegistryService.isReady()) {
-      await this.applyUpdate();
+      await this.applyUpdate(options);
     }
     if (!providerRegistryService.isReady()) {
       throw new Error('No compatible model registry is available');
@@ -131,7 +140,10 @@ export class ProviderRegistryUpdaterService extends BaseService {
   }
 
   /** Download and activate a newer compatible registry snapshot when the remote lane has one. */
-  public applyUpdate(): Promise<ProviderRegistryUpdateResult> {
+  public applyUpdate(options?: { force?: boolean }): Promise<ProviderRegistryUpdateResult> {
+    if (options?.force) {
+      this.failedSources.clear();
+    }
     if (this.applyInFlight) {
       return this.applyInFlight;
     }
@@ -190,77 +202,44 @@ export class ProviderRegistryUpdaterService extends BaseService {
     }
   }
 
-  /** The first reachable source whose manifest is newer than the active snapshot. */
-  private async findAvailableUpdate(): Promise<RegistryNetworkSource | undefined> {
+  private async runApplyUpdate(): Promise<ProviderRegistryUpdateResult> {
+    await this.restoreSnapshot();
     let reachedSource = false;
+    let foundUpdate = false;
     let lastError: Error | undefined;
 
     for (const source of await this.getSourceOrder()) {
-      if (this.stopped) {
-        return undefined;
+      if (this.stopped) return this.getCurrentUpdateStatus();
+      const failure = this.failedSources.get(source);
+      if (failure && Date.now() < failure.retryAt) {
+        lastError = failure.error;
+        continue;
       }
 
       try {
         const manifest = await this.fetchManifest(source);
+        this.failedSources.delete(source);
         reachedSource = true;
-        if (!manifest) {
-          continue;
-        }
-        if (this.isUpdateAvailable(manifest)) {
-          return source;
-        }
-      } catch (error) {
-        lastError = toError(error);
-        if (!this.stopped) {
-          logger.warn('Registry update check failed; trying the fallback source', lastError, {
-            source,
-          });
-        }
-      }
-    }
+        if (!manifest || !this.isUpdateAvailable(manifest)) continue;
 
-    if ((!reachedSource || !providerRegistryService.isReady()) && !this.stopped) {
-      throw lastError ?? new Error('No provider registry source is available');
-    }
-    return undefined;
-  }
-
-  private async runApplyUpdate(): Promise<ProviderRegistryUpdateResult> {
-    await this.restoreSnapshot();
-    const preferredSource = await this.findAvailableUpdate();
-    if (!preferredSource) {
-      return this.getCurrentUpdateStatus();
-    }
-
-    const sources = [
-      preferredSource,
-      ...(await this.getSourceOrder()).filter((source) => source !== preferredSource),
-    ];
-    let lastError: Error | undefined;
-
-    for (const source of sources) {
-      if (this.stopped) {
-        return this.getCurrentUpdateStatus();
-      }
-
-      try {
-        const staged = await this.fetchAndValidate(source);
-        if (!staged) {
-          continue;
-        }
-
+        foundUpdate = true;
+        const staged = await this.fetchAndValidate(source, manifest);
         await this.applySnapshot(staged, source);
         return { status: 'updated' };
       } catch (error) {
         lastError = toError(error);
         if (!this.stopped) {
+          this.failedSources.set(source, {
+            error: lastError,
+            retryAt: Date.now() + FAILURE_COOLDOWN_MS,
+          });
           logger.warn('Registry update failed; trying the fallback source', lastError, { source });
         }
       }
     }
 
-    if (lastError && !this.stopped) {
-      throw lastError;
+    if ((!reachedSource || !providerRegistryService.isReady() || foundUpdate) && !this.stopped) {
+      throw lastError ?? new Error('No provider registry source is available');
     }
     return this.getCurrentUpdateStatus();
   }
@@ -289,12 +268,10 @@ export class ProviderRegistryUpdaterService extends BaseService {
     });
   }
 
-  private async fetchAndValidate(source: RegistryNetworkSource): Promise<StagedSnapshot | null> {
-    const manifest = await this.fetchManifest(source);
-    if (!manifest || !this.isUpdateAvailable(manifest)) {
-      return null;
-    }
-
+  private async fetchAndValidate(
+    source: RegistryNetworkSource,
+    manifest: CatalogManifest,
+  ): Promise<StagedSnapshot> {
     const [models, providerModels] = await Promise.all([
       this.fetchText(source, 'models.json', MAX_REGISTRY_FILE_BYTES),
       this.fetchText(source, 'provider-models.json', MAX_REGISTRY_FILE_BYTES),
@@ -389,6 +366,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
           message: `${name} returned HTTP ${status}`,
         }),
         maxResponseBytes: maxBytes,
+        operation: name === 'manifest.json' ? 'registry.manifest' : 'registry.payload',
         method: 'GET',
         path:
           source === 'gitcode' ? `/${encodeURIComponent(`${REMOTE_SUBPATH}/${name}`)}` : `/${name}`,

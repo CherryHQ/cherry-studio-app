@@ -5,6 +5,7 @@ import {
   AppStatePolicy,
   BaseService,
   DependsOn,
+  ErrorHandling,
   Injectable,
   Phase,
   ServicePhase,
@@ -71,7 +72,8 @@ type ConnectionNotificationRecord = RemoteConnectionNotification & {
 
 /** Owns execution demand and conversation cards; background-actions owns the native service. */
 @Injectable('AndroidBackgroundActivityRuntime')
-@ServicePhase(Phase.PostReady)
+@ServicePhase(Phase.Gate)
+@ErrorHandling('graceful')
 @DependsOn(['BackgroundActivityEnvironment'])
 @AppStatePolicy('background-presentation')
 export class AndroidBackgroundActivityRuntime

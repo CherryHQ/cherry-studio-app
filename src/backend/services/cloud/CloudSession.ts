@@ -47,6 +47,8 @@ export class CloudSession {
     readonly signal: AbortSignal,
   ) {
     this.http = createHttpClient({
+      serviceName: 'CloudSession',
+      operation: 'cloud.session',
       baseUrl: origin,
       headers: defaultAppHeaders(),
       timeoutMs: 20_000,
