@@ -128,3 +128,29 @@ test('activation follows the advertised endpoint and the availability of the AMD
     reason: 'activation_required',
   });
 });
+
+test('attaches ready AMD status only to AMD offers', () => {
+  const readyStatus = {
+    status: 'unregistered' as const,
+    action: 'register' as const,
+    activated: false,
+    registration_enabled: true,
+    environment: 'production' as const,
+  };
+  const readyOffers = getCloudModelOffers(
+    { ...user, amd: { phase: 'ready', status: readyStatus } },
+    'agent',
+  );
+  expect(readyOffers.get(amd.id)?.amdStatus).toEqual(readyStatus);
+  expect(readyOffers.get(model.id)?.amdStatus).toBeUndefined();
+
+  for (const amdState of [
+    undefined,
+    { phase: 'loading' as const },
+    { phase: 'error' as const },
+    { phase: 'unsupported' as const },
+  ]) {
+    const offers = getCloudModelOffers({ ...user, amd: amdState }, 'agent');
+    expect(offers.get(amd.id)?.amdStatus).toBeUndefined();
+  }
+});

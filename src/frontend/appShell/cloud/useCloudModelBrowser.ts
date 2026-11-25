@@ -25,6 +25,18 @@ export function useCloudModelBrowser(enabled: boolean, use?: CloudModelUse) {
     if (canBrowse) void cloud.refresh().catch(() => {});
   }, [canBrowse, cloud]);
   const offers = useMemo(() => getCloudModelOffers(state, use), [state, use]);
+  const hasLockedAmdOffer = useMemo(
+    () =>
+      Array.from(offers.values()).some(
+        (offer) => offer.isAmd && offer.reason === 'activation_required',
+      ),
+    [offers],
+  );
+  useEffect(() => {
+    if (canBrowse && state.phase === 'ready' && hasLockedAmdOffer) {
+      void cloud.refreshAmd().catch(() => {});
+    }
+  }, [canBrowse, cloud, hasLockedAmdOffer, state.phase]);
 
   const signInAgain = useCallback(
     (destination: string) => {

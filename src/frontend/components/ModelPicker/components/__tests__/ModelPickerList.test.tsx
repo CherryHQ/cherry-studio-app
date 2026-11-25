@@ -82,14 +82,48 @@ describe('ModelPickerList', () => {
   });
 
   test.each([
-    ['signed_out', 'account.login.signIn'],
-    ['activation_required', 'cloud.amd.shortName'],
-    ['subscription_required', 'cloud.subscription'],
+    ['signed_out non-AMD', { reason: 'signed_out', isAmd: false }, 'account.login.signIn'],
+    ['signed_out AMD', { reason: 'signed_out', isAmd: true }, 'cloud.amd.tag'],
+    [
+      'activation_required without status',
+      { reason: 'activation_required', isAmd: true },
+      'cloud.amd.tag',
+    ],
+    [
+      'activation_required with register action',
+      {
+        reason: 'activation_required',
+        isAmd: true,
+        amdStatus: {
+          status: 'unregistered' as const,
+          action: 'register' as const,
+          activated: false,
+          registration_enabled: true,
+          environment: 'production' as const,
+        },
+      },
+      'cloud.amd.action.register',
+    ],
+    [
+      'subscription_required',
+      { reason: 'subscription_required', isAmd: false },
+      'cloud.subscription',
+    ],
   ] as const)(
     'a free model with %s shows the free badge and handles access on tap',
-    (reason, lockLabel) => {
+    (_label, config, lockLabel) => {
       const provider = { id: CLOUD_PROVIDER_ID, name: CLOUD_PROVIDER_NAME };
-      const isAmd = reason === 'activation_required';
+      const { amdStatus, isAmd, reason } = config as {
+        reason: 'signed_out' | 'activation_required' | 'subscription_required';
+        isAmd: boolean;
+        amdStatus?: {
+          status: 'unregistered';
+          action: 'register';
+          activated: boolean;
+          registration_enabled: boolean;
+          environment: 'production';
+        };
+      };
       const modelId = isAmd ? 'amd/gpt-oss' : 'gpt-oss';
       const id = createUniqueModelId(provider.id, modelId);
       const onCloudOffer = jest.fn();
@@ -121,6 +155,7 @@ describe('ModelPickerList', () => {
                   provider,
                   offer: {
                     isAmd,
+                    amdStatus,
                     reason,
                     canViewUsage: false,
                     model: {

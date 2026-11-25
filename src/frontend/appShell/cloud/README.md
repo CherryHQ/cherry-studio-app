@@ -1,8 +1,9 @@
 # CherryAI entry
 
 Settings and the chat model picker display the full server model directory and resolve actions against the current account.
-The catalog's `is_free` flag drives the Free badge and filter. The lock label shows whether the
-model requires sign-in, a subscription, or AMD setup. Guest models with anonymous access use signed
+The catalog's `is_free` flag drives the Free badge and filter. Locked rows display an amber lock
+tag naming whether the model requires sign-in, a subscription, or AMD authorization / the next
+AMD setup step (AMD rows show AMD authorization even before sign-in). Guest models with anonymous access use signed
 inference. A sign-in-required tap opens the existing login route and can resume the tapped model
 on return. A missing plan entitlement shows an informational alert on the current screen.
 Models requiring activation expose an action only when the directory supplies an entry endpoint.
