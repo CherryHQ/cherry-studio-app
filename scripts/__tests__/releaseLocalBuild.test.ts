@@ -39,10 +39,6 @@ import {
   type RunLocalCommand,
 } from '../releaseLocalBuild';
 
-jest.mock('../prepareSherpaArchive', () => ({
-  prepareSherpaArchive: async () => '/verified/sherpa.zip',
-}));
-
 const createdRoots: string[] = [];
 
 function makeTempDir(prefix = 'cherry-release-test-'): string {
@@ -329,7 +325,6 @@ describe('runLocalReleaseBuild', () => {
       DEFAULT_PNPM_VIRTUAL_STORE_MAX_LENGTH,
     );
     expect(capturedBuildEnv?.GRADLE_OPTS).toBe(DEFAULT_ANDROID_GRADLE_OPTS);
-    expect(capturedBuildEnv?.SITEED_SHERPA_ONNX_ARCHIVE).toBe('/verified/sherpa.zip');
     expect(capturedBuildEnv?.CHERRY_CLOUD_CLIENT_SECRET).toBe(baseEnv.CHERRY_CLOUD_CLIENT_SECRET);
 
     expect(result.nativeBuildVersion).toBe('128');

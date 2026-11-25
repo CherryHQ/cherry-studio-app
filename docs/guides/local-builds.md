@@ -45,14 +45,12 @@ can leak npm's package-selection settings into child tools. An explicit
 Keep both pinned packages compatible: EAS CLI 24.4.2 uses `@expo/eas-build-job` 24.3.0, which
 determines the local plugin version. Release workflows and `eas.json` require the same CLI version.
 
-Sherpa's installation script and both Android production build entry points use the same cache.
-A clean `pnpm install` downloads the offline voice archive once, verifies its pinned SHA-256 and
-stores it under `$XDG_CACHE_HOME/cherry-studio-app/sherpa-onnx/` (`~/.cache` by default).
-When Android is selected, the build rechecks the archive before EAS allocates a version code,
-replacing a damaged copy if needed. The worker receives the verified path through
-`SITEED_SHERPA_ONNX_ARCHIVE` and rechecks the bytes before extraction. The `curl` downloader
-retries stalled transfers after two minutes below one byte per second.
-When upgrading Sherpa, pin the new upstream release asset digest in the package patch.
+`@siteed/sherpa-onnx.rn`'s patched installation script verifies the pinned SHA-256 of the
+prebuilt voice archive and caches it under `$XDG_CACHE_HOME/cherry-studio-app/sherpa-onnx/`
+(`~/.cache` by default), replacing damaged files automatically. `pnpm install`, local EAS builds,
+and release checkouts reuse that cache; `curl` retries stalled transfers after two minutes below
+one byte per second. When upgrading Sherpa, update the pinned archive digest in
+[the Sherpa patch](../../patches/@siteed__sherpa-onnx.rn@1.3.1.patch).
 
 ## App Variants
 
