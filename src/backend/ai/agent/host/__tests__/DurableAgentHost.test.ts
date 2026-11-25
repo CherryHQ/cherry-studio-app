@@ -3352,6 +3352,116 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test.each(
+    ['startup', 'live'].flatMap((delivery) =>
+      ['empty', 'whitespace', 'rate-limit'].map((kind) => ({ delivery, kind })),
+    ),
+  )(
+    'persists textless $kind failures and retries the same leaf ($delivery)',
+    async ({ delivery, kind }) => {
+      const state = fixture();
+      const original = await state.reserve('running');
+      const terminal: RuntimeDurableTurn = {
+        ...original,
+        status: 'failed',
+        parts:
+          kind === 'whitespace'
+            ? [{ id: 'blank', type: 'text', text: ' \n\t', state: 'done' }]
+            : [],
+        error: {
+          code: kind === 'rate-limit' ? 'provider_error' : 'invalid_response',
+          message:
+            kind === 'rate-limit'
+              ? 'Too many requests'
+              : 'The model returned an invalid response with no content.',
+          retryable: true,
+          origin: 'provider',
+        },
+      };
+      if (delivery === 'live') await state.host.initialize();
+      state.emit(terminal);
+      if (delivery === 'startup') await state.host.initialize();
+      try {
+        await settle();
+        const saved = await state.store.getMessage(state.sessionId, original.assistantMessageId);
+        expect(saved).toMatchObject({
+          status: 'error',
+          parts: expect.arrayContaining([
+            expect.objectContaining({
+              type: 'data-error',
+              data: expect.objectContaining({
+                code: 'EXECUTION_FAILED',
+                retryable: true,
+                failure: expect.objectContaining({
+                  reasonCode: kind === 'rate-limit' ? 'rate_limit' : 'parse',
+                  source: expect.objectContaining({
+                    code: kind === 'rate-limit' ? 'provider_error' : 'invalid_response',
+                  }),
+                }),
+              }),
+            }),
+          ]),
+        });
+        await state.host.retryMessage({
+          sessionId: state.sessionId,
+          messageId: original.assistantMessageId,
+        });
+        const messages = await state.store.listMessages(state.sessionId);
+        expect(messages.map(({ id }) => id)).toEqual([
+          original.userMessageId,
+          original.assistantMessageId,
+        ]);
+        expect(messages[1]).toMatchObject({ status: 'pending', parts: [] });
+        expect(messages[1].turnId).not.toBe(original.identity.turnId);
+      } finally {
+        await state.host.close();
+      }
+    },
+  );
+
+  test('marks resumed retry submissions with hasRetainedOutput when retaining prior tool output', async () => {
+    const state = fixture();
+    const original = await state.reserve('failed');
+    await state.store.finalizeAssistantMessage({
+      assistantMessageId: original.assistantMessageId,
+      status: 'error',
+      parts: [
+        {
+          id: 'tool-1',
+          type: 'dynamic-tool',
+          toolCallId: 'call-1',
+          toolRef: { source: 'builtin', capabilityId: 'load_workflow' },
+          toolName: 'load_workflow',
+          title: 'Load workflow',
+          state: 'output-available',
+          input: { workflow_id: 'plugin:feishu-1' },
+          output: { value: { status: 'ok', workflow_id: 'plugin:feishu-1' }, artifacts: [] },
+        },
+      ],
+      usage: null,
+      error: { code: 'INTERRUPTED', message: 'The app stopped.', retryable: true },
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+    });
+    const submit = jest.spyOn(state.conversations, 'submit');
+    await state.host.initialize();
+    try {
+      await state.host.retryMessage({
+        sessionId: state.sessionId,
+        messageId: original.assistantMessageId,
+      });
+      expect(submit).toHaveBeenCalledWith(
+        { sessionId: state.sessionId, slot: 0 },
+        expect.objectContaining({
+          assistantMessageId: original.assistantMessageId,
+          hasRetainedOutput: true,
+        }),
+      );
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test('regenerating a completed answer adds a selected sibling in the same Session', async () => {
     const state = fixture();
     const original = await state.reserve('completed');
