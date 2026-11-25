@@ -42,6 +42,8 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   is `children`.
   - `canSend` — omit for "there is text or there is an attachment". Pass a
     boolean when the screen has its own conditions, as painting does.
+  - `allowFollowUp` — lets local chat queue messages during a reply. The button follows the
+    rendered draft, while keyboard submission uses the text captured by the native editor.
   - `getSendErrorLabel` — a message for a failure the caller recognises.
   - `dismissKeyboardOnSend` — defaults to blurring the input, ending editing, and dismissing the
     keyboard with its native transition when submitting. The dock follows that transition, just

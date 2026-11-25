@@ -18,6 +18,7 @@ import { readKnownAiFinishReason } from '@/shared/utils/aiFailure';
 
 import type { TraceSpan } from '../../../observability';
 import type { RuntimeModel, RuntimeOptions, RuntimeUsageReport } from '../types';
+import { projectPiReasoningHistory } from './modelMessages';
 import { resolvePiCompactionPolicy } from './piCompaction';
 import { imageModelStream } from './piDurableImageModel';
 import { piDurableUsage, withPiContinuationUsage } from './piDurableProjection';
@@ -135,6 +136,7 @@ export function createPiDurableModels(
             undefined,
             options?.signal,
           );
+          const requestContext = projectPiReasoningHistory(context, resolved.model, model.id);
           trace?.setAttributes({
             'gen_ai.request.model': resolved.model.id,
             'gen_ai.provider.id': resolved.model.provider,
@@ -188,8 +190,8 @@ export function createPiDurableModels(
               resolved.model.contextWindow,
               explicitMaxTokens,
             );
-            trace?.setAttributes(piModelRequestAttributes(resolved, context, maxTokens));
-            const stream = await resolved.streamFn(resolved.model, context, {
+            trace?.setAttributes(piModelRequestAttributes(resolved, requestContext, maxTokens));
+            const stream = await resolved.streamFn(resolved.model, requestContext, {
               ...options,
               trace,
               onPayload: async (payload: unknown, wire: Model<Api>) => {
@@ -213,7 +215,7 @@ export function createPiDurableModels(
                 const prepared = applyPiWebReplay(
                   applyPiWebTools(sent, native?.dialect, routes),
                   wire,
-                  context.messages,
+                  requestContext.messages,
                 );
                 if (!continuedContent) return prepared;
                 const body = prepared as { messages: unknown[] };

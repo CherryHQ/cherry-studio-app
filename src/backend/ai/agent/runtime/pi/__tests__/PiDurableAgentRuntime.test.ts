@@ -21,13 +21,15 @@ import {
 import { ZodError } from 'zod';
 
 import { AgentProtocolError } from '@/shared/contracts/agent';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
+import { createUniqueModelId } from '@/shared/data/types/model';
 
 import {
   buildAgentSystemPrompt,
   buildInitialSkillInstructions,
 } from '../../../host/agentSystemPrompt';
 import type { SkillTurnEntry, SkillTurnScope } from '../../../host/skillScope';
-import { formatMessageQuote } from '../../../host/turnRuntimeInput';
+import { formatMessageQuote, toRuntimeHistory } from '../../../host/turnRuntimeInput';
 import { createSkillTools } from '../../../tools/skill/skillTools';
 import { createLoadWorkflowTool, getPluginWorkflows } from '../../../tools/workflowTool';
 import type {
@@ -83,6 +85,27 @@ function input(id: string): RuntimeDurableSubmission {
     input: [{ type: 'text', text: `Question ${id}` }],
     metadata: { originalText: `Question ${id}` },
   };
+}
+
+function cherryHistory(modelId: string, reasoning: string) {
+  return toRuntimeHistory([
+    {
+      id: 'answer',
+      sessionId: lane.sessionId,
+      turnId: 'past',
+      role: 'assistant',
+      status: 'success',
+      modelId: createUniqueModelId(CLOUD_PROVIDER_ID, modelId),
+      parts: [
+        { type: 'reasoning', id: 'thought', text: reasoning, state: 'done' },
+        { type: 'text', id: 'answer-text', text: 'Saved answer.', state: 'done' },
+      ],
+      createdAt: '2026-11-25T00:00:00Z',
+      updatedAt: '2026-11-25T00:00:00Z',
+      inferenceSnapshot: null,
+      stats: null,
+    },
+  ]);
 }
 
 function deferred<Value>() {
@@ -191,6 +214,170 @@ async function submitAndWait(
 }
 
 describe('Persistent Agent facade', () => {
+  test.each(['storage', 'cancellation', 'unhandled-validation'] as const)(
+    'does not isolate %s failures during configuration restore',
+    async (source) => {
+      const state = fixture();
+      const runtime = state.create();
+      const controller = new AbortController();
+      const failure =
+        source === 'unhandled-validation'
+          ? new ZodError([])
+          : new Error(source === 'storage' ? 'Storage unavailable' : 'Host replaced');
+      jest.spyOn(runtime, 'unfinishedLanes').mockResolvedValue([lane]);
+      const configuration = jest
+        .spyOn(PiDurableRuntime.prototype, 'configuration')
+        .mockImplementation(async () => {
+          if (source === 'cancellation') controller.abort(failure);
+          else throw failure;
+          return undefined;
+        });
+      const onRecoveryFailure = jest.fn(async () => {});
+      if (source !== 'unhandled-validation') state.ports.onRecoveryFailure = onRecoveryFailure;
+      try {
+        await expect(
+          runtime.initialize(state.database, state.ports, controller.signal),
+        ).rejects.toBe(failure);
+        expect(onRecoveryFailure).not.toHaveBeenCalled();
+      } finally {
+        configuration.mockRestore();
+        await runtime.close();
+      }
+    },
+  );
+
+  test.each(['unfinished', 'idle'] as const)(
+    'isolates corrupt %s configuration while restoring and running a healthy owner',
+    async (status) => {
+      const state = fixture();
+      let runtime = state.create();
+      const healthy = runtimeLane('healthy-session');
+      await runtime.initialize(state.database, state.ports);
+      await runtime.ensureConversation(seed);
+      await runtime.ensureConversation({ ...seed, lane: healthy });
+      await runtime.close();
+      const inspection = await PiDurableRuntime.open(state.storage, {
+        models: createModels({
+          authContext: { env: async () => undefined, fileExists: async () => false },
+        }),
+        registry: createRegistry(),
+      });
+      const configuration = defineDocFamily<{ value: JsonObject }, JsonObject>({
+        kind: 'cherry.configuration',
+        version: 1,
+        scope: 'session',
+        checkpointWhen: () => false,
+        family: true,
+        initial: (value) => ({ value }),
+      });
+      const metadata = defineDocFamily<{ value: JsonObject }, JsonObject>({
+        kind: 'cherry.submission',
+        version: 1,
+        scope: 'session',
+        checkpointWhen: () => false,
+        family: true,
+        initial: (value) => ({ value }),
+      });
+      try {
+        for (const target of [lane, healthy]) {
+          const conversation = (await inspection.conversation(target.sessionId))!;
+          const submission = input(target.sessionId);
+          await conversation.commit(async (tx) => {
+            if (target === lane) {
+              (await tx.doc(configuration, target.sessionId, {})).value = {};
+              if (status === 'idle') return;
+            }
+            await tx.doc(
+              metadata,
+              `${conversation.id}:${submission.requestId}`,
+              piSubmissionMetadata(submission, []),
+            );
+            const live = await tx.doc(LiveDoc, conversation.id);
+            const entry = await tx.appendEntry(UserEntry, conversation.id, {
+              model: [{ role: 'user', content: 'Synthetic unfinished input', timestamp: 1 }],
+            });
+            const record = await tx.createSubmission({
+              conversationId: conversation.id,
+              type: 'input',
+              status: 'placed',
+              requestId: submission.requestId,
+              entry: entry.id,
+            });
+            const taskId = await tx.createTask(
+              GenerationTask,
+              {},
+              {
+                ownership: { kind: 'conversation' },
+                conversationId: conversation.id,
+              },
+            );
+            live.run = { taskId, inputs: [record.id], turns: 0 };
+          }, BACKGROUND_CONTEXT);
+        }
+      } finally {
+        await inspection.close();
+      }
+      const failure = jest.fn(async () => {});
+      state.ports.onRecoveryFailure = failure;
+      runtime = state.create();
+      try {
+        await runtime.initialize(state.database, state.ports);
+        if (status === 'unfinished')
+          expect(failure).toHaveBeenCalledWith(lane, expect.any(ZodError));
+        expect(failure).toHaveBeenCalledTimes(status === 'unfinished' ? 1 : 0);
+        expect((await runtime.configuration(healthy)).model).toEqual(reference);
+        const completed = deferred<void>();
+        const observed = await runtime.observe(healthy, (event) => {
+          if (event.type === 'turn.updated' && event.turn.status === 'completed')
+            completed.resolve();
+        });
+        runtime.resume();
+        await completed.promise;
+        await observed.unsubscribe();
+        expect(state.requests).toHaveLength(1);
+        expect((await runtime.history(healthy, { limit: 1 })).turns[0]?.status).toBe('completed');
+        await expect(runtime.configuration(lane)).rejects.toBeInstanceOf(ZodError);
+        await expect(runtime.observe(lane, () => {})).rejects.toBeInstanceOf(ZodError);
+      } finally {
+        await runtime.close();
+      }
+    },
+  );
+
+  test('observing an inherited answer survives retiring its parent working copy and reopening', async () => {
+    const state = fixture();
+    let runtime = state.create();
+    const child = runtimeLane('child-session');
+    await runtime.initialize(state.database, state.ports);
+    try {
+      await runtime.ensureConversation(seed);
+      await submitAndWait(runtime, input('parent'));
+      const parent = (await runtime.message(lane, 'answer-parent'))!.turn;
+      await runtime.forkConversation({
+        ...seed,
+        lane: child,
+        from: { lane, boundary: parent.answerBoundary! },
+        referencedFileEntryIds: [],
+      });
+      await runtime.discardConversation(lane);
+      await runtime.close();
+      runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      const observed = await runtime.observe(child, () => {});
+      await observed.unsubscribe();
+      expect((await runtime.message(child, 'answer-parent'))?.turn).toMatchObject({
+        userMessageId: 'user-parent',
+        assistantMessageId: 'answer-parent',
+        status: 'completed',
+      });
+      await runtime.configure(child, seed.configuration);
+      await submitAndWait(runtime, input('child'), 'completed', child);
+      expect(state.requests).toHaveLength(2);
+    } finally {
+      await runtime.close();
+    }
+  });
+
   test('an isolated execution owner reaches no provider while another Session can answer', async () => {
     const state = fixture();
     state.ports.assertExecutionAllowed = jest.fn(async (owner) => {
@@ -1892,6 +2079,107 @@ describe('Persistent Agent facade', () => {
     } finally {
       await runtime.close();
     }
+  });
+
+  test('a DeepSeek fork sends its own reasoning from history rebuilt by Claude', async () => {
+    const state = fixture();
+    const deepseekRef = { providerId: CLOUD_PROVIDER_ID, modelId: 'deepseek-v4-flash' };
+    const claudeRef = { providerId: CLOUD_PROVIDER_ID, modelId: 'claude-sonnet-4-5' };
+    const lookup: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'lookup' },
+      providerName: 'lookup',
+      displayName: 'Lookup',
+      description: 'Look up an item',
+      approval: 'auto',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => ({ value: null, artifacts: [] }),
+    };
+    const deepseek: Model<'openai-completions'> = {
+      ...wire,
+      api: 'openai-completions',
+      provider: deepseekRef.providerId,
+      id: deepseekRef.modelId,
+      baseUrl: 'https://cloud.example/v1',
+      reasoning: true,
+      compat: { requiresReasoningContentOnAssistantMessages: true },
+    };
+    const payloads: {
+      messages: { role: string; content: unknown; reasoning_content?: string }[];
+      tools?: unknown[];
+    }[] = [];
+    const original = state.dependencies.resolveModel;
+    state.dependencies.resolveModel = async (...args) => ({
+      ...(await original(...args)),
+      model: deepseek,
+      streamFn: (_model, context, options) =>
+        streamCompletions(deepseek, context, {
+          ...options,
+          apiKey: 'fixture',
+          maxRetries: 0,
+          fetch: async (_url, init) => {
+            payloads.push(JSON.parse(String(init?.body)));
+            return new Response(
+              'data: {"choices":[{"index":0,"delta":{"reasoning":"Native thought."}}]}\n\n' +
+                'data: {"choices":[{"index":0,"delta":{"content":"OK"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+              { headers: { 'Content-Type': 'text/event-stream' } },
+            );
+          },
+        }),
+    });
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    const fork = runtimeLane('session', 1);
+    try {
+      const boundary = await runtime.ensureConversation({
+        ...seed,
+        configuration: { ...seed.configuration, model: claudeRef },
+        history: {
+          history: [
+            ...cherryHistory(deepseekRef.modelId, 'A original thought.'),
+            ...cherryHistory(claudeRef.modelId, 'B private thought.'),
+          ],
+          contextCheckpoint: null,
+          referencedFileEntryIds: [],
+        },
+      });
+      await runtime.forkConversation({
+        ...seed,
+        lane: fork,
+        from: { lane, boundary: boundary! },
+        configuration: { ...seed.configuration, model: deepseekRef, tools: [lookup] },
+        referencedFileEntryIds: [],
+      });
+      await submitAndWait(runtime, input('forked-deepseek'), 'completed', fork);
+      expect(payloads).toHaveLength(1);
+      expect(payloads[0]!.tools?.length).toBeGreaterThan(0);
+      expect(
+        payloads[0]!.messages
+          .filter((item) => item.role === 'assistant')
+          .map((item) => item.reasoning_content),
+      ).toEqual(['A original thought.', '']);
+      expect(JSON.stringify(payloads[0])).not.toContain('B private thought.');
+      await submitAndWait(runtime, input('follow-up'), 'completed', fork);
+      expect(payloads[1]!.messages).toContainEqual({
+        role: 'assistant',
+        content: 'OK',
+        reasoning_content: 'Native thought.',
+      });
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('restored Claude context usage excludes reasoning omitted by its protocol', () => {
+    const runtime = fixture().create();
+    const model = { providerId: CLOUD_PROVIDER_ID, modelId: 'claude-sonnet-4-5' };
+    const estimate = (reasoning: string) =>
+      runtime.estimateStoredContextUsage({
+        model,
+        instructions: 'Help.',
+        contextCheckpoint: null,
+        history: cherryHistory(model.modelId, reasoning),
+      });
+    expect(estimate('x'.repeat(35000))).toBe(estimate(''));
   });
 
   test('reads a Session slot bindings once until a binding changes', async () => {

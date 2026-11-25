@@ -1,5 +1,6 @@
 import {
   ENDPOINT_TYPE,
+  MODEL_CAPABILITY,
   REASONING_FORMAT_PROFILES,
   selectFormatWire,
 } from '@cherrystudio/provider-registry';
@@ -7,12 +8,14 @@ import type { AssistantMessage, FetchFunction, Model as PiModel } from '@earendi
 import { KIMI_CODING_MODELS } from '@earendil-works/pi-ai/providers/kimi-coding.models';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
-import type { AgentMessageView } from '@/shared/contracts/agent';
-import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
-import { createUniqueModelId, type Model } from '@/shared/data/types/model';
+import { modelService } from '@/backend/data/services/ModelService';
+import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
+import { providerService } from '@/backend/data/services/ProviderService';
+import type { Model } from '@/shared/data/types/model';
+import { DEFAULT_API_FEATURES, type Provider } from '@/shared/data/types/provider';
 
 import { createTraceRecorder } from '../../../../observability/__tests__/_traceRecorder';
-import { formatMessageQuote, toRuntimeHistory } from '../../../host/turnRuntimeInput';
+import { formatMessageQuote } from '../../../host/turnRuntimeInput';
 import { toPiConversation } from '../modelMessages';
 import {
   bindPiStream,
@@ -20,9 +23,23 @@ import {
   type PiLanguageEndpointType,
   type SupportedPiApi,
 } from '../piApiAdapters';
+import { createPiModelResolver } from '../piModelResolver';
 import type { PiStreamFn } from '../piModelTypes';
 import { emptyAssistantMessage } from '../piStreamEvents';
 import { applyPiWebReplay } from '../PiWebResponse';
+
+const mockExpoFetch = jest.fn();
+
+jest.mock('expo/fetch', () => ({ fetch: (...args: unknown[]) => mockExpoFetch(...args) }));
+jest.mock('@/backend/data/services/ModelService', () => ({
+  modelService: { getById: jest.fn() },
+}));
+jest.mock('@/backend/data/services/ProviderService', () => ({
+  providerService: {
+    getByProviderId: jest.fn(),
+    resolveApiKey: jest.fn(),
+  },
+}));
 
 const mockAnthropicStreamSimple = jest.fn();
 const mockGoogleStreamSimple = jest.fn();
@@ -202,6 +219,144 @@ describe('Pi API adapters', () => {
     expect(wire).toContain('Tool result text');
     expect(wire).toContain('data:image/png;base64,cGl4ZWxz');
   });
+
+  test.each([
+    {
+      providerId: 'custom-relay',
+      apiModelId: 'deepseek-reasoner',
+      baseUrl: 'https://relay.example.test/v1',
+      required: true,
+    },
+    {
+      providerId: 'new-api',
+      apiModelId: 'deepseek-flash',
+      baseUrl: 'https://newapi.example.test/v1',
+      required: true,
+    },
+    {
+      providerId: 'custom-relay',
+      apiModelId: 'qwen3',
+      baseUrl: 'https://relay.example.test/v1',
+      required: false,
+    },
+    {
+      providerId: 'openrouter',
+      apiModelId: 'deepseek/deepseek-reasoner',
+      baseUrl: 'https://relay.example.test/v1',
+      required: false,
+    },
+    {
+      providerId: 'custom-openrouter',
+      apiModelId: 'deepseek/deepseek-flash',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      required: false,
+    },
+  ])(
+    'real $providerId $apiModelId payload fills missing assistant reasoning only when required',
+    async ({ providerId, apiModelId, baseUrl, required }) => {
+      installProviderRegistryTestSnapshot();
+      const endpoint = ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
+      const adapter = resolvePiApiAdapter(endpoint);
+      const { streamSimple } = jest.requireActual<{ streamSimple: PiStreamFn }>(
+        '@earendil-works/pi-ai/api/openai-completions',
+      );
+      jest.spyOn(adapter, 'loadStreamSimple').mockResolvedValue(streamSimple);
+      const payloads: Record<string, unknown>[] = [];
+      mockExpoFetch.mockImplementation(async (_url: unknown, init?: RequestInit) => {
+        payloads.push(JSON.parse(String(init?.body)));
+        return new Response(JSON.stringify({ error: { message: 'captured' } }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      });
+      const provider: Provider = {
+        id: providerId,
+        name: 'Relay',
+        isEnabled: true,
+        authType: 'api-key',
+        authMethods: ['api-key'],
+        apiKeys: [],
+        apiFeatures: { ...DEFAULT_API_FEATURES },
+        defaultChatEndpoint: endpoint,
+        endpointConfigs: { [endpoint]: { adapterFamily: 'openai-compatible', baseUrl } },
+        settings: {},
+      };
+      const model: Model = {
+        id: `${providerId}::saved-model`,
+        modelId: 'saved-model',
+        apiModelId,
+        name: 'Saved model',
+        providerId,
+        isEnabled: true,
+        isHidden: false,
+        capabilities: [MODEL_CAPABILITY.REASONING, MODEL_CAPABILITY.FUNCTION_CALL],
+        endpointTypes: [endpoint],
+        reasoning: { defaultEffort: 'high', selectableEfforts: ['high'] },
+        supportsStreaming: true,
+      };
+      jest.mocked(modelService.getById).mockResolvedValue(model);
+      jest.mocked(providerService.getByProviderId).mockResolvedValue(provider);
+      jest.mocked(providerService.resolveApiKey).mockResolvedValue({
+        value: 'test-key',
+        apiKeySelection: { attribution: 'unknown' },
+      });
+      const resolution = await createPiModelResolver().resolveModel(
+        { modelId: model.modelId, providerId },
+        { reasoningEffort: 'high' },
+        'session',
+      );
+      expect(resolution.model.reasoning).toBe(true);
+      const historicalAssistant = emptyAssistantMessage(resolution.model);
+      const source = await resolution.streamFn(
+        resolution.model,
+        normalizeContext({
+          systemPrompt: 'Use lookup when needed.',
+          tools: [
+            {
+              name: 'lookup',
+              description: 'Look up data',
+              parameters: { type: 'object', properties: {} },
+            },
+          ],
+          messages: [
+            { role: 'user', content: 'Look up data.', timestamp: 1 },
+            { ...historicalAssistant, content: [{ type: 'text', text: 'I will look it up.' }] },
+            {
+              ...historicalAssistant,
+              stopReason: 'toolUse',
+              content: [{ type: 'toolCall', id: 'call', name: 'lookup', arguments: {} }],
+            },
+            {
+              role: 'toolResult',
+              toolCallId: 'call',
+              toolName: 'lookup',
+              content: [{ type: 'text', text: 'Found' }],
+              isError: false,
+              timestamp: 2,
+            },
+            { role: 'user', content: 'Continue.', timestamp: 3 },
+          ],
+        }),
+        { reasoning: 'high' },
+      );
+      expect((await source.result()).errorMessage).toContain('captured');
+      expect(payloads).toHaveLength(1);
+      expect(payloads[0]).toMatchObject({
+        model: apiModelId,
+        tools: [{ type: 'function', function: { name: 'lookup' } }],
+      });
+      const assistants = (payloads[0]!.messages as Record<string, unknown>[]).filter(
+        (message) => message.role === 'assistant',
+      );
+      expect(assistants).toHaveLength(2);
+      expect(assistants[0]).toMatchObject({ content: 'I will look it up.' });
+      expect(assistants[1]).toMatchObject({ tool_calls: [{ id: 'call' }] });
+      for (const assistant of assistants) {
+        if (required) expect(assistant).toHaveProperty('reasoning_content', '');
+        else expect(assistant).not.toHaveProperty('reasoning_content');
+      }
+    },
+  );
 
   test.each(CASES)('binds $endpointType to $api', async (testCase) => {
     const adapter = resolvePiApiAdapter(testCase.endpointType);
@@ -646,141 +801,6 @@ describe('Pi API adapters', () => {
         omitCompletedThinking ? [expected[2]] : expected,
       );
       expect(JSON.stringify(payloads[2])).toContain('Found it.');
-    },
-  );
-
-  test.each([
-    { id: 'deepseek-v4-flash', reasoning: true, field: 'reasoning' },
-    { id: 'deepseek-v4-flash', reasoning: false, field: 'reasoning_text' },
-    { id: 'cloud-alias', reasoning: false, field: 'reasoning_content' },
-  ])(
-    'replays same-model CherryAI tool history for $id with saved field $field',
-    async ({ id, reasoning, field }) => {
-      const adapter = resolvePiApiAdapter(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS);
-      const { streamSimple } = jest.requireActual<{ streamSimple: PiStreamFn }>(
-        '@earendil-works/pi-ai/api/openai-completions',
-      );
-      jest.spyOn(adapter, 'loadStreamSimple').mockResolvedValue(streamSimple);
-      const model: PiModel<'openai-completions'> = {
-        api: 'openai-completions',
-        provider: CLOUD_PROVIDER_ID,
-        id,
-        name: id,
-        baseUrl: 'https://cloud.example/v1',
-        input: ['text'],
-        reasoning,
-        contextWindow: 4096,
-        maxTokens: 256,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      };
-      const uniqueId = createUniqueModelId(model.provider, model.id);
-      const stored: AgentMessageView = {
-        id: 'answer',
-        sessionId: 'session',
-        turnId: 'earlier',
-        role: 'assistant',
-        status: 'success',
-        modelId: uniqueId,
-        inferenceSnapshot: null,
-        stats: null,
-        createdAt: '2026-11-25T00:00:00Z',
-        updatedAt: '2026-11-25T00:00:00Z',
-        parts: [
-          { type: 'reasoning', id: 'thought', text: 'Compare the results.', state: 'done' },
-          { type: 'text', id: 'text', text: 'Done.', state: 'done' },
-        ],
-      };
-      const rebuilt = toPiConversation(
-        {
-          instructions: '',
-          input: [],
-          history: toRuntimeHistory([
-            stored,
-            { ...stored, modelId: createUniqueModelId('other', model.id) },
-          ]),
-        },
-        { ...model, api: 'cherry' },
-      );
-      const toolCall: AssistantMessage = {
-        ...emptyAssistantMessage(model),
-        stopReason: 'toolUse',
-        content: [
-          { type: 'thinking', thinking: 'Read the result.', thinkingSignature: field },
-          { type: 'toolCall', id: 'call', name: 'lookup', arguments: {} },
-        ],
-      };
-      const fetch = jest.fn(
-        async (_url: unknown, _init?: RequestInit) =>
-          new Response(
-            'data: {"choices":[{"index":0,"delta":{"content":"OK"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
-            {
-              headers: { 'Content-Type': 'text/event-stream' },
-            },
-          ),
-      );
-      const stream = await bindPiStream(adapter, {
-        apiKey: 'fixture',
-        fetch,
-        headers: {},
-        maxRetries: 0,
-        maxTokens: 256,
-        requestParameters: {
-          model: {
-            id: uniqueId,
-            providerId: model.provider,
-            modelId: model.id,
-            name: model.name,
-            capabilities: [],
-            isEnabled: true,
-            isHidden: false,
-            supportsStreaming: true,
-            reasoning: reasoning
-              ? { selectableEfforts: ['high'], defaultEffort: 'high' }
-              : undefined,
-          },
-          profile: REASONING_FORMAT_PROFILES['openai-chat'].wire,
-          selection: 'default',
-        },
-      });
-      const response = await stream(
-        model,
-        normalizeContext({
-          tools: [
-            {
-              name: 'lookup',
-              description: 'Look up an item',
-              parameters: { type: 'object', properties: {} },
-            },
-          ],
-          messages: [
-            ...rebuilt.history,
-            toolCall,
-            {
-              role: 'toolResult',
-              toolCallId: 'call',
-              toolName: 'lookup',
-              content: [{ type: 'text', text: 'Found.' }],
-              isError: false,
-              timestamp: 1,
-            },
-          ],
-        }),
-      );
-      expect((await response.result()).stopReason).toBe('stop');
-      const sent = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
-      expect(sent.tools).toHaveLength(1);
-      expect(sent.messages.filter((item: { role: string }) => item.role === 'assistant')).toEqual([
-        { role: 'assistant', content: 'Done.', reasoning_content: 'Compare the results.' },
-        { role: 'assistant', content: 'Done.', reasoning_content: '' },
-        {
-          role: 'assistant',
-          content: null,
-          reasoning_content: 'Read the result.',
-          tool_calls: [
-            { id: 'call', type: 'function', function: { name: 'lookup', arguments: '{}' } },
-          ],
-        },
-      ]);
     },
   );
 

@@ -1,15 +1,7 @@
 import { formatApiHost, withoutTrailingApiVersion } from '@cherrystudio/ai-runtime/provider';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import { isDeepSeekModel } from '@cherrystudio/universal/utils/model';
-import type {
-  CacheRetention,
-  FetchFunction,
-  Message,
-  ProviderHeaders,
-} from '@earendil-works/pi-ai';
+import type { CacheRetention, FetchFunction, ProviderHeaders } from '@earendil-works/pi-ai';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
-
-import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 
 import { piModelPayloadAttributes } from './piModelDiagnostics';
 import type { PiStreamFn } from './piModelTypes';
@@ -214,28 +206,8 @@ export async function bindPiStream(
   binding: PiStreamBinding,
 ): Promise<PiStreamFn> {
   const streamSimple = await adapter.loadStreamSimple();
-  const chatModel = binding.requestParameters?.model;
-  const cherryAiChat =
-    adapter.api === 'openai-completions' && chatModel?.providerId === CLOUD_PROVIDER_ID;
-  const cherryAiDeepSeek = cherryAiChat && isDeepSeekModel(chatModel);
 
   return (model, context, options) => {
-    const transcript = normalizeContext(context);
-    // A gateway alias may hide the model family. Pi also records the actual scalar field
-    // returned by the endpoint on each native thinking block.
-    const replayCherryAiReasoning =
-      cherryAiDeepSeek ||
-      (cherryAiChat &&
-        transcript.messages.some(
-          (message) =>
-            message.role === 'assistant' &&
-            message.provider === CLOUD_PROVIDER_ID &&
-            message.model === model.id &&
-            message.api === 'openai-completions' &&
-            message.content.some(
-              (part) => part.type === 'thinking' && part.thinkingSignature === 'reasoning_content',
-            ),
-        ));
     const { reportFetchFailure, trace, ...providerOptions } = options ?? {};
     const fetch = adapter.supportsCustomFetch
       ? withRetryableBodyFailure(binding.fetch, reportFetchFailure)
@@ -284,7 +256,6 @@ export async function bindPiStream(
           parameterizedPayload,
           adapter.api,
           requestModel.id,
-          replayCherryAiReasoning,
         );
         trace?.setAttributes(piModelPayloadAttributes(requestPayload, adapter.api));
         return requestPayload;
@@ -292,42 +263,6 @@ export async function bindPiStream(
       signal: options?.signal,
       temperature,
     } as Parameters<PiStreamFn>[2];
-    if (!replayCherryAiReasoning) return streamSimple(model, transcript, streamOptions);
-
-    return streamSimple(
-      model,
-      {
-        ...transcript,
-        messages: transcript.messages.map((message) => cherryAiReasoningHistory(message, model.id)),
-      },
-      streamOptions,
-    );
-  };
-}
-
-function cherryAiReasoningHistory(message: Message, modelId: string): Message {
-  if (
-    message.role !== 'assistant' ||
-    message.provider !== CLOUD_PROVIDER_ID ||
-    message.model !== modelId ||
-    (message.api !== 'cherry' && message.api !== 'openai-completions') ||
-    !message.content.some((part) => part.type === 'thinking')
-  ) {
-    return message;
-  }
-  // Rebuilt Cherry turns contain only same-model readable reasoning. Native turns may
-  // still carry a relay's scalar field name. Leave opaque signatures to the provider SDK.
-  return {
-    ...message,
-    api: 'openai-completions',
-    content: message.content.map((part) =>
-      part.type === 'thinking' &&
-      !part.redacted &&
-      (!part.thinkingSignature ||
-        part.thinkingSignature === 'reasoning' ||
-        part.thinkingSignature === 'reasoning_text')
-        ? { ...part, thinkingSignature: 'reasoning_content' }
-        : part,
-    ),
+    return streamSimple(model, normalizeContext(context), streamOptions);
   };
 }

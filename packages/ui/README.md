@@ -908,8 +908,8 @@ who contributed a button to it.
 keyboard shows Send and a native submit event supplies the current Markdown without inserting a
 newline or blurring the field. The caller connects that snapshot to its normal guarded submission
 path. IME composition, paste and `inputRef.current.insertText('\n')` stay on the native editing
-path; they never infer submission from text changes. With the preference off, Return keeps its
-ordinary newline and list-editing behavior. Hardware keyboard Return remains an editing action.
+path. On iOS and iPadOS, hardware Return follows the same preference, and Shift+Return inserts
+a newline. With the preference off, Return keeps its ordinary newline and list-editing behavior.
 While Return submits, the native text menu offers an action labelled by `insertNewlineLabel`.
 It inserts at the caret or after selected text without replacing that text or submitting.
 The native menu retains the system editing actions and works without a nonempty selection.

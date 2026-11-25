@@ -119,32 +119,34 @@ export function applyPiRequestParameters(
   return result;
 }
 
-/** Provider-specific requirements on the final Chat Completions history. */
+/** Gemini's OpenAI-compatible route validates signatures even for replayed or imported calls. */
 export function applyPiRequestCompatibility(
   payload: unknown,
   api: SupportedPiApi,
   modelId: string,
-  replayCherryAiReasoning = false,
 ): unknown {
-  if (api !== 'openai-completions' || !isRecord(payload) || !Array.isArray(payload.messages))
+  if (
+    api !== 'openai-completions' ||
+    !/^gemini-(?:[34](?:[.-]|$)|(?:flash|pro)-latest$)/.test(
+      getLowerBaseModelName(modelId ?? ''),
+    ) ||
+    !isRecord(payload) ||
+    !Array.isArray(payload.messages)
+  ) {
     return payload;
-  const needsReasoningField = replayCherryAiReasoning && Array.isArray(payload.tools);
-  const needsGoogleSignature = /^gemini-(?:[34](?:[.-]|$)|(?:flash|pro)-latest$)/.test(
-    getLowerBaseModelName(modelId ?? ''),
-  );
-  if (!needsReasoningField && !needsGoogleSignature) return payload;
+  }
   return {
     ...payload,
     messages: payload.messages.map((message) => {
-      if (!isRecord(message) || message.role !== 'assistant') return message;
-      // DeepSeek can default to thinking even when the catalog omits reasoning controls.
-      const assistant =
-        needsReasoningField && message.reasoning_content == null
-          ? { ...message, reasoning_content: '' }
-          : message;
-      if (!needsGoogleSignature || !Array.isArray(message.tool_calls)) return assistant;
+      if (
+        !isRecord(message) ||
+        message.role !== 'assistant' ||
+        !Array.isArray(message.tool_calls)
+      ) {
+        return message;
+      }
       return {
-        ...assistant,
+        ...message,
         tool_calls: message.tool_calls.map((call) => {
           if (!isRecord(call) || call.type !== 'function') return call;
           const extra = isRecord(call.extra_content) ? call.extra_content : {};

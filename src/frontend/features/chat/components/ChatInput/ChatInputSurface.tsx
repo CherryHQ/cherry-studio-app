@@ -24,14 +24,10 @@ import { ContextUsageRing } from './components/ContextUsageRing';
 import type { ContextUsage } from './utils/contextUsage';
 
 /** A drafted follow-up can be admitted while Pi continues its current answer. */
-export function ChatInputComposer(props: ComponentProps<typeof ComposerSurface>) {
-  const { attachments, draft } = useComposerState();
-  return (
-    <ComposerSurface
-      {...props}
-      streaming={props.streaming && !hasComposerSendableContent(draft, attachments)}
-    />
-  );
+export function ChatInputComposer(
+  props: Omit<ComponentProps<typeof ComposerSurface>, 'allowFollowUp'>,
+) {
+  return <ComposerSurface {...props} allowFollowUp />;
 }
 
 export function ChatInputAccessories({ children }: PropsWithChildren) {
