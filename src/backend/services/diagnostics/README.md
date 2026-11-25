@@ -99,8 +99,12 @@ values; `incident` contains app-authored metadata separately from the user descr
 Linked context records capture time, feature, entry and available source-local correlation IDs.
 Chat reports retain local versus desktop execution, available Session/Agent/execution/turn/message IDs, the message's
 creation time and captured model. Painting reports retain painting/job IDs and a recorded failure
-time when available. Failure projection keeps only bounded codes, classified reason, HTTP status,
-and model/provider. It excludes raw messages, response bodies, names,
+time when available. Failure projection keeps bounded codes, classified reason, HTTP status,
+and model/provider. When the provider names its error code, type or a recognized request parameter,
+the linked incident also includes `providerCode`, `providerType` or `parameter`. The matching
+model trace uses `error.provider.code`, `error.provider.type` and `error.provider.param`. These
+fields can also be recovered from a saved failure's structured response when reporting it later.
+The projection excludes raw messages, response bodies, names,
 URLs, route parameters and credentials. A message creation time is not a failure time; a capture
 time is not a failure time. Desktop incidents identify a remote execution but this archive still
 contains only the phone's diagnostic sources. Older incidents may predate the retained 24-hour

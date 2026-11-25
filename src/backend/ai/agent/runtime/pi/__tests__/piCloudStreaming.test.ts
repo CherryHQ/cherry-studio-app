@@ -10,9 +10,14 @@ import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 import type { DbService } from '@/backend/data/db/DbService';
 import { cloudSnapshot } from '@/backend/services/cloud/__tests__/_cloudFixtures';
 import { CloudRuntime } from '@/backend/services/cloud/CloudRuntime';
+import { projectDiagnosticTrace } from '@/backend/services/diagnostics/diagnosticMetadata';
 import { CLOUD_PROVIDER_ID, type CloudModel } from '@/shared/contracts/cloud';
 
+import { createTraceRecorder } from '../../../../observability/__tests__/_traceRecorder';
+import { toAgentErrorView } from '../../../host/runtimeProjection';
 import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from '../piApiAdapters';
+import { piModelTerminalErrorAttributes } from '../piModelDiagnostics';
+import { readPiTerminalError } from '../piModelError';
 import type { PiStreamFn } from '../piModelTypes';
 import { withPiStreamIdleTimeout } from '../piStreamIdleTimeout';
 
@@ -258,6 +263,7 @@ test.each([
 );
 
 test.each([
+  { activationRequired: false, status: 400, code: 'unsupported_parameter' },
   { activationRequired: false, status: 403, code: 'AMD_ACCESS_DENIED' },
   { activationRequired: false, status: 429, code: 'RATE_LIMITED' },
   { activationRequired: true, status: undefined, code: 'cloud_activation_required' },
@@ -277,9 +283,26 @@ test.each([
     mockGet.mockImplementation(async (account: string, path: string) =>
       path === '/v1/models?limit=1000&catalog=full' ? { data: [amd] } : reply(account, path),
     );
+    const gatewayId = 'fedcba98765432100123456789abcdef';
+    const forwarded = status === 400;
     if (status !== undefined)
       mockInference.mockResolvedValue(
-        new Response(JSON.stringify({ error: { code } }), { status }),
+        new Response(
+          JSON.stringify({
+            error: {
+              code,
+              ...(forwarded && {
+                type: 'invalid_request_error',
+                param: 'max_tokens',
+                message: 'private provider text',
+              }),
+            },
+          }),
+          {
+            status,
+            headers: { 'content-type': 'application/json', 'X-Request-ID': gatewayId },
+          },
+        ),
       );
     const runtime = await setup();
     try {
@@ -291,6 +314,7 @@ test.each([
       const stream = withPiStreamIdleTimeout(
         await bindPiStream(adapter, {
           apiKey: '',
+          isCloudGateway: true,
           fetch: runtime.createModelFetch(amd.id, 'agent'),
           headers: {},
           maxRetries: 0,
@@ -309,20 +333,124 @@ test.each([
         reasoning: false,
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       };
+      const { traces, records } = createTraceRecorder();
+      const trace = traces.startTrace('pi.generate_content');
       const source = await stream(
         model,
         normalizeContext({ messages: [{ role: 'user', content: '你好', timestamp: Date.now() }] }),
+        { trace },
       );
       const result = await source.result();
       if (activationRequired) expect(mockInference).not.toHaveBeenCalled();
       expect(result.stopReason).toBe('error');
       expect(result.diagnostics?.at(-1)).toMatchObject({
         error: { code },
-        details: { ...(status === undefined ? {} : { status }), retryable: false },
+        details: {
+          ...(status === undefined ? {} : { status }),
+          ...(!forwarded && { retryable: false }),
+        },
       });
+      trace?.end('error', piModelTerminalErrorAttributes(result));
+      const attributes = projectDiagnosticTrace(records.at(-1))?.attributes;
+      expect(attributes?.['cherry.gateway.request_id']).toBe(
+        status === undefined ? undefined : gatewayId,
+      );
+      if (forwarded) {
+        expect(attributes).toMatchObject({
+          'error.category': 'invalid_input',
+          'error.provider.code': code,
+          'error.provider.type': 'invalid_request_error',
+          'error.provider.param': 'max_tokens',
+        });
+        expect(JSON.stringify(attributes)).not.toContain('private provider text');
+      }
       expect(isRetryableAssistantError(result)).toBe(false);
     } finally {
       await runtime._doStop();
     }
   },
 );
+
+test('preserves upstream quota codes from a Cloud 429 response in trace and failure projection', async () => {
+  const gatewayId = 'fedcba98765432100123456789abcdef';
+  const modelSnapshot = cloudSnapshot().models[0]!;
+  mockInference.mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        error: {
+          code: 'insufficient_quota',
+          type: 'rate_limit_error',
+          message: 'private quota text',
+        },
+      }),
+      {
+        status: 429,
+        headers: { 'content-type': 'application/json', 'X-Request-ID': gatewayId },
+      },
+    ),
+  );
+  const runtime = await setup();
+  try {
+    await runtime.refresh();
+    const adapter = resolvePiApiAdapter(modelSnapshot.endpoint_type);
+    jest
+      .spyOn(adapter, 'loadStreamSimple')
+      .mockResolvedValue(streamSimpleAnthropic as unknown as PiStreamFn);
+    const stream = withPiStreamIdleTimeout(
+      await bindPiStream(adapter, {
+        apiKey: '',
+        isCloudGateway: true,
+        fetch: runtime.createModelFetch(modelSnapshot.id, 'agent'),
+        headers: {},
+        maxRetries: 0,
+        maxTokens: 64,
+      }),
+    );
+    const model: PiModel<SupportedPiApi> = {
+      api: adapter.api,
+      provider: CLOUD_PROVIDER_ID,
+      id: modelSnapshot.id,
+      name: modelSnapshot.display_name,
+      baseUrl: adapter.formatBaseUrl(service.apiOrigin),
+      contextWindow: modelSnapshot.context_window,
+      maxTokens: 64,
+      input: ['text'],
+      reasoning: false,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    };
+    const { traces, records } = createTraceRecorder();
+    const trace = traces.startTrace('pi.generate_content');
+    const source = await stream(
+      model,
+      normalizeContext({ messages: [{ role: 'user', content: '你好', timestamp: Date.now() }] }),
+      { trace },
+    );
+    const result = await source.result();
+    expect(result.stopReason).toBe('error');
+    expect(isRetryableAssistantError(result)).toBe(false);
+    trace?.end('error', piModelTerminalErrorAttributes(result));
+    const attributes = projectDiagnosticTrace(records.at(-1))?.attributes;
+    expect(attributes).toMatchObject({
+      'cherry.gateway.request_id': gatewayId,
+      'error.provider.code': 'insufficient_quota',
+      'error.provider.type': 'rate_limit_error',
+      'error.category': 'quota',
+      'error.retryable': false,
+    });
+    expect(JSON.stringify(attributes)).not.toContain('private');
+    const view = toAgentErrorView(readPiTerminalError(result)!);
+    expect(view.failure).toMatchObject({
+      reasonCode: 'quota',
+      source: { layer: 'provider', code: 'RATE_LIMITED' },
+      context: {
+        statusCode: 429,
+        responseBody: JSON.stringify({
+          error: { code: 'insufficient_quota', type: 'rate_limit_error' },
+        }),
+      },
+    });
+    expect(JSON.stringify(view)).not.toContain('private');
+  } finally {
+    await runtime._doStop();
+  }
+});

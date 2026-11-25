@@ -34,6 +34,7 @@ it already exists.
 | SHA-256 of bytes or text | `sha256Hex`, `sha256HexOfText` in `src/shared/utils/sha256.ts`; `sha256HexChunks` incrementally hashes package bytes while yielding to the runtime |
 | Model and request failure reasons | `classifyAiFailureReason` in `src/shared/utils/aiFailure.ts` |
 | Provider failure facts | `normalizeAiError` in `src/backend/ai/normalizeAiError.ts`; `piModelError.ts` adapts Pi terminal messages for turn projection and diagnostics |
+| Provider diagnostic metadata for traces and feedback | `src/shared/utils/providerDiagnostics.ts` projects bounded protocol fields, message roles and Cherry Cloud request IDs |
 | Inline bytes of MCP content blocks | `readMcpBinaryBlock` in `src/shared/contracts/mcpContent.ts` |
 | Whether an Agent binding enables a whole MCP server | `enablesMcpServer` in `src/shared/utils/agentMcpBinding.ts` |
 | Audio media-type classification, import-time type inference, and transcription source limits | `src/shared/utils/audioFileTypes.ts` |

@@ -4,6 +4,121 @@ import {
   feedbackTimestamp,
 } from '../feedbackContext';
 
+test('projects only machine rejection details from saved SDK and gateway error envelopes', () => {
+  const error = {
+    type: 'invalid_request_error',
+    code: 'invalid_value',
+    param: 'messages[3].private',
+    message: 'private prompt',
+  };
+  for (const body of [error, { error }, { detail: { error } }]) {
+    expect(
+      feedbackFailureContext({ context: { responseBody: JSON.stringify(body) } }).error,
+    ).toMatchObject({
+      providerType: 'invalid_request_error',
+      providerCode: 'invalid_value',
+      parameter: 'messages',
+    });
+  }
+  const unsafe = { ...error, type: 'Bearer secret', code: 'sk-private', param: 'private' };
+  expect(
+    JSON.stringify(feedbackFailureContext({ context: { responseBody: JSON.stringify(unsafe) } })),
+  ).not.toMatch(/providerCode|providerType|parameter|private|Bearer/);
+  expect(
+    feedbackFailureContext({
+      context: {
+        responseBody: JSON.stringify({
+          error: {
+            code: 'invalid_request',
+            param: '',
+            message: "Unsupported parameter: 'max_tokens'",
+          },
+        }),
+      },
+    }).error,
+  ).toMatchObject({ providerCode: 'invalid_request', parameter: 'max_tokens' });
+  expect(
+    feedbackFailureContext({
+      source: { layer: 'provider' },
+      message: "OpenAI API error (400): Unsupported parameter: 'max_output_tokens'",
+    }).error?.parameter,
+  ).toBe('max_output_tokens');
+  expect(
+    feedbackFailureContext({
+      source: { layer: 'provider' },
+      message: "OpenAI API error (400): 400 Unsupported parameter: 'max_output_tokens'",
+    }).error?.parameter,
+  ).toBe('max_output_tokens');
+  expect(
+    feedbackFailureContext({
+      source: { layer: 'provider' },
+      message: "Azure OpenAI API error (400): 400 Unsupported parameter: 'max_output_tokens'",
+    }).error?.parameter,
+  ).toBe('max_output_tokens');
+  expect(
+    feedbackFailureContext({
+      source: { layer: 'host' },
+      message: "OpenAI API error (400): Unsupported parameter: 'max_output_tokens'",
+    }).error?.parameter,
+  ).toBeUndefined();
+  expect(
+    feedbackFailureContext({
+      source: { layer: 'provider' },
+      message: "OpenAI API error (400): Unsupported parameter: 'private_field'",
+    }).error?.parameter,
+  ).toBeUndefined();
+  const geminiJson = JSON.stringify({
+    error: {
+      code: 400,
+      message: "Unsupported parameter: 'maxOutputTokens'",
+      status: 'INVALID_ARGUMENT',
+    },
+  });
+  for (const geminiMessage of [
+    geminiJson,
+    `[${geminiJson}]`,
+    `got status: INVALID_ARGUMENT. ${geminiJson}`,
+  ]) {
+    expect(
+      feedbackFailureContext({
+        source: { layer: 'provider' },
+        message: geminiMessage,
+      }).error,
+    ).toMatchObject({
+      providerCode: '400',
+      providerType: 'INVALID_ARGUMENT',
+      parameter: 'maxOutputTokens',
+    });
+  }
+  expect(
+    feedbackFailureContext({
+      source: { layer: 'host' },
+      message: geminiJson,
+    }).error,
+  ).not.toMatchObject({
+    providerCode: '400',
+  });
+  expect(
+    feedbackFailureContext({
+      code: 'EXECUTION_FAILED',
+      reasonCode: 'quota',
+      source: { layer: 'provider', code: 'RATE_LIMITED' },
+      context: {
+        statusCode: 429,
+        responseBody: JSON.stringify({
+          error: { code: 'insufficient_quota', type: 'rate_limit_error' },
+        }),
+      },
+    }).error,
+  ).toMatchObject({
+    sourceCode: 'RATE_LIMITED',
+    providerCode: 'insufficient_quota',
+    providerType: 'rate_limit_error',
+    reason: 'quota',
+    statusCode: 429,
+  });
+});
+
 test('projects failure metadata without copying provider text or request payloads', () => {
   const context = feedbackFailureContext({
     code: 'EXECUTION_FAILED',

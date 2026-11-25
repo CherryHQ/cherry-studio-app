@@ -17,6 +17,138 @@ describe('classifyAgentFailureReason', () => {
     ],
     [{ message: 'The requested model is not supported.', statusCode: 400 }, 'model_not_found'],
     [{ code: 'invalid_request_error', message: 'Invalid request', statusCode: 400 }, 'unknown'],
+    [
+      {
+        code: 'invalid_request',
+        message: '400',
+        responseBody: '{"error":{"code":"unsupported_parameter","param":"reasoning_effort"}}',
+        statusCode: 400,
+      },
+      'invalid_input',
+    ],
+    [
+      {
+        code: 'invalid_request',
+        message: "400 Unsupported parameter: 'max_tokens'",
+        statusCode: 400,
+      },
+      'invalid_input',
+    ],
+    [
+      {
+        code: 'invalid_request',
+        message: 'Invalid request',
+        responseBody: '{"error":{"code":"constructor"}}',
+        statusCode: 400,
+      },
+      'unknown',
+    ],
+    [
+      {
+        code: 'billing_not_active',
+        message: '429',
+        responseBody:
+          '{"error":{"type":"rate_limit_error","code":"billing_not_active","message":"Your account is not active, please check your billing details."}}',
+        statusCode: 429,
+      },
+      'quota',
+    ],
+    [
+      {
+        code: 'provider_error',
+        message: '429',
+        responseBody:
+          '{"error":{"code":"billing_not_active","type":"rate_limited","message":"Your account is not active"}}',
+        statusCode: 429,
+      },
+      'quota',
+    ],
+    [
+      {
+        code: 'RATE_LIMITED',
+        message: 'Cloud request failed (429) RATE_LIMITED',
+        responseBody: '{"error":{"code":"insufficient_quota"}}',
+        statusCode: 429,
+      },
+      'quota',
+    ],
+    [{ code: 'RATE_LIMITED', message: 'Request failed' }, 'rate_limit'],
+    [
+      {
+        code: 'insufficient_balance',
+        message: '429',
+        responseBody:
+          '{"error":{"type":"rate_limit_error","code":"insufficient_balance","message":"余额不足"}}',
+        statusCode: 429,
+      },
+      'quota',
+    ],
+    [
+      {
+        code: 'forbidden',
+        message: '403',
+        responseBody:
+          '{"error":{"code":"permission_denied","message":"Country, region, or territory not supported"}}',
+        statusCode: 403,
+      },
+      'region',
+    ],
+    [
+      {
+        code: 'invalid_request',
+        message: '400',
+        responseBody: JSON.stringify({
+          error: {
+            code: 'invalid_request',
+            param: '',
+            message: "Unsupported parameter: 'max_tokens' is not supported",
+          },
+        }),
+        statusCode: 400,
+      },
+      'invalid_input',
+    ],
+    [
+      {
+        code: 'invalid_request',
+        message: "422 Unsupported parameter: 'max_tokens'",
+        statusCode: 422,
+      },
+      'invalid_input',
+    ],
+    [
+      {
+        code: 'invalid_request',
+        message: "OpenAI API error (400): Unsupported parameter: 'max_output_tokens'",
+        statusCode: 400,
+      },
+      'invalid_input',
+    ],
+    [
+      {
+        code: 'invalid_request',
+        message: "OpenAI API error (400): 400 Unsupported parameter: 'max_output_tokens'",
+        statusCode: 400,
+      },
+      'invalid_input',
+    ],
+    [
+      {
+        code: 'invalid_request',
+        message: "Azure OpenAI API error (400): 400 Unsupported parameter: 'max_output_tokens'",
+        statusCode: 400,
+      },
+      'invalid_input',
+    ],
+    [
+      {
+        code: 'provider_error',
+        message:
+          '{"error":{"code":400,"message":"Unsupported parameter: \'maxOutputTokens\'","status":"INVALID_ARGUMENT"}}',
+        statusCode: 400,
+      },
+      'invalid_input',
+    ],
     [{ message: 'HTTP 429', responseBody: '{"type":"insufficient_quota"}' }, 'quota'],
     [{ code: 'insufficient_user_quota', message: 'Request failed', statusCode: 403 }, 'quota'],
     [

@@ -23,6 +23,7 @@ import {
   type PiLanguageEndpointType,
   type SupportedPiApi,
 } from '../piApiAdapters';
+import { piModelPayloadAttributes } from '../piModelDiagnostics';
 import { createPiModelResolver } from '../piModelResolver';
 import type { PiStreamFn } from '../piModelTypes';
 import { emptyAssistantMessage } from '../piStreamEvents';
@@ -567,11 +568,16 @@ describe('Pi API adapters', () => {
       },
     });
     const piModel = { api: 'anthropic-messages' } as PiModel<SupportedPiApi>;
+    const messages = [
+      { role: 'user', content: 'private question' },
+      { role: 'private-role', content: 'private answer' },
+    ];
     await streamFn(piModel, context, {
       trace,
       maxTokens: 2048,
       onPayload: async () => ({
         model: 'rewritten-model',
+        messages,
         max_tokens: 8192,
         tool_choice: { type: 'none' },
       }),
@@ -579,6 +585,7 @@ describe('Pi API adapters', () => {
     const options = mockAnthropicStreamSimple.mock.calls.at(-1)![2];
     expect(await options.onPayload({}, piModel)).toEqual({
       model: 'rewritten-model',
+      messages,
       max_tokens: 2048,
       tool_choice: { type: 'none' },
       thinking: { type: 'enabled', budget_tokens: 2047 },
@@ -586,9 +593,32 @@ describe('Pi API adapters', () => {
     expect(options).not.toHaveProperty('trace');
     trace?.end('ok');
     expect(records.at(-1)?.attributes).toEqual({
+      'gen_ai.request.model': 'rewritten-model',
+      'gen_ai.request.message_roles': 'user|other',
       'gen_ai.request.max_tokens': 2048,
       'gen_ai.request.max_tokens_field': 'max_tokens',
     });
+  });
+
+  test('marks a withheld wire model and bounds the roles without reviving the configured alias', () => {
+    const { traces, records } = createTraceRecorder();
+    const trace = traces.startTrace(
+      'pi.generate_content',
+      {},
+      { 'gen_ai.request.model': 'configured-alias' },
+    );
+    const messages = Array.from({ length: 10 }, () => ({ role: 'assistant', content: 'private' }));
+    trace?.setAttributes(
+      piModelPayloadAttributes({ model: 'private model label', messages }, 'openai-completions'),
+    );
+    trace?.end('error');
+    expect(records.at(-1)?.attributes).toMatchObject({
+      'gen_ai.request.model_omitted': true,
+      'gen_ai.request.message_roles':
+        'assistant|assistant|assistant|assistant|omitted|assistant|assistant|assistant|assistant',
+    });
+    expect(records.at(-1)?.attributes['gen_ai.request.model']).toBeUndefined();
+    expect(JSON.stringify(records.at(-1))).not.toContain('private');
   });
 
   test('applies Gemini tool compatibility after an existing payload hook without registry parameters', async () => {

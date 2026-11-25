@@ -85,6 +85,14 @@ later succeeded. Retry backoff ending alone does not establish success.
 Turn errors use `error.retry_scope: user` for eligibility to retry from the UI. The two scopes need
 not agree and neither asserts that a retry actually occurred. Older records have no explicit scope.
 
+For a serialized model request, `gen_ai.request.model` takes the model ID from the payload when present.
+If that ID fails identifier validation, `gen_ai.request.model_omitted` records the omission.
+`gen_ai.request.message_roles` includes up to the first and last four roles, with unknown roles
+replaced by `other`. It contains no message content. Cherry Cloud model calls can also carry
+`cherry.gateway.request_id` from the final transport attempt's response. This 32-character hex ID
+joins the Cloud gateway's `request_id` in its model request records. The client's turn/request ID
+and the device signing nonce have different owners.
+
 Model requests retain the resolved model's context window, optional separate input limit and output
 limit under `gen_ai.model.*`. These are local configuration, not provider-confirmed limits.
 `gen_ai.request.output_budget_tokens` is the effective output budget passed to the provider adapter;
@@ -144,7 +152,7 @@ finish reasons, and safe error facts. They never receive prompts, message text, 
 arguments/results, request/response bodies, headers, credentials, stacks, or device file paths.
 Error messages and causes are deliberately omitted; the error type, code, origin, retryability,
 HTTP status and closed failure reasons remain diagnosable. Known sensitive attribute keys are excluded,
-and identifiers are bounded. At most 24 accepted attributes are retained, plus an explicit
+and identifiers are bounded. At most 32 accepted attributes are retained, plus an explicit
 `trace.attributes_truncated` marker when more are dropped; rejected/undefined values do not consume
 the allowance. Attributes supplied when a span ends take precedence over earlier ones, so
 terminal error facts survive the limit. Free text, URLs and recognizable credential values are dropped. This is a metadata

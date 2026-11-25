@@ -345,6 +345,10 @@ test('preserves request budgets and failure facts together through capture and a
   const attributes = sanitizeTraceAttributes({
     'runtime.name': 'pi-durable',
     'gen_ai.request.model': 'test-model',
+    'cherry.gateway.request_id': '0123456789abcdef0123456789abcdef',
+    'error.provider.type': 'invalid_request_error',
+    'error.provider.code': 'unsupported_parameter',
+    'error.provider.param': 'max_tokens',
     'gen_ai.provider.id': 'test-provider',
     'gen_ai.provider.api': 'openai-completions',
     'gen_ai.model.context_window': 128_000,
@@ -373,6 +377,8 @@ test('preserves request budgets and failure facts together through capture and a
   expect(exported?.attributes).toMatchObject({
     'gen_ai.request.estimated_input_tokens': 100,
     'gen_ai.request.max_tokens': 4096,
+    'cherry.gateway.request_id': '0123456789abcdef0123456789abcdef',
+    'error.provider.code': 'unsupported_parameter',
     'http.status_code': 400,
     'error.retry_scope': 'automatic',
   });
@@ -386,6 +392,10 @@ test('exports only numeric budgets and closed product reasons and retry scopes',
     attributes: {
       'error.product_reason': 'context_length',
       'error.source.code': 'provider_error',
+      'error.provider.type': 'Bearer private',
+      'gen_ai.request.message_roles': 'user|private',
+      'error.provider.param': 'private_field',
+      'cherry.gateway.request_id': 'client-request-1',
       'error.retry_scope': 'user',
       'gen_ai.request.estimated_input_tokens': 'private-value',
       'gen_ai.request.max_tokens': -1,
