@@ -8,13 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import {
-  type LayoutChangeEvent,
-  Pressable,
-  StyleSheet,
-  View,
-  type ViewInstance,
-} from 'react-native';
+import { type LayoutChangeEvent, Pressable, View, type ViewInstance } from 'react-native';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import Animated, {
   type SharedValue,
@@ -32,21 +26,37 @@ import {
 } from '../utils/composer-dock-layout';
 import { useComposerExpansion } from './composer-expansion';
 
-const COMPOSER_DOCK_FADE_OVERHANG = 28;
+const COMPOSER_DOCK_FADE_HEIGHT = 20;
+const COMPOSER_DOCK_FADE_OVERLAP = 1;
 const FADE_START = { x: 0.5, y: 0 } as const;
 const FADE_END = { x: 0.5, y: 1 } as const;
-const FADE_LOCATIONS = [0, 0.58, 1] as const;
-const FADE_OVERHANG_STYLE = {
+const FADE_LOCATIONS = [
+  0,
+  COMPOSER_DOCK_FADE_HEIGHT / (COMPOSER_DOCK_FADE_HEIGHT + COMPOSER_DOCK_FADE_OVERLAP),
+  1,
+] as const;
+const FLOOR_CONTAINER_STYLE = {
   bottom: 0,
   left: 0,
   position: 'absolute',
   right: 0,
-  top: -COMPOSER_DOCK_FADE_OVERHANG,
+} as const;
+const FADE_BAND_STYLE = {
+  height: COMPOSER_DOCK_FADE_HEIGHT + COMPOSER_DOCK_FADE_OVERLAP,
+  marginBottom: -COMPOSER_DOCK_FADE_OVERLAP,
 } as const;
 
+// Static literal pairs so Uniwind / Tailwind v4 always compiles both the solid and 0-alpha utilities.
+const DOCK_FADE_SURFACES = {
+  'bg-background': 'bg-background/0',
+  'bg-chat-background': 'bg-chat-background/0',
+} as const;
+
+export type ComposerDockBackgroundClassName = keyof typeof DOCK_FADE_SURFACES;
+
 export type ComposerDockProps = PropsWithChildren<{
-  /** Paints the compact dock's whole footprint so an overlaid transcript stays out of sight. */
-  backgroundClassName?: string;
+  /** Paints a solid floor below the compact composer with a short soft fade into its bottom edge. */
+  backgroundClassName?: ComposerDockBackgroundClassName;
   containerRef?: RefObject<ViewInstance | null>;
   /** Expandable overlays publish contentInset instead of reserving parent flow space. */
   layoutMode?: 'floating' | 'flow' | 'expandable' | 'expandable-overlay';
@@ -166,6 +176,13 @@ export function ComposerDock({
   const restingBackgroundStyle = useAnimatedStyle(() => ({
     opacity: 1 - (progress?.get() ?? 0),
   }));
+  const floorHeightStyle = useAnimatedStyle(() => {
+    const expandProgress = isExpandable ? (progress?.get() ?? 0) : 0;
+    const restingOffset = restingExtraOffset * (1 - expandProgress);
+    return {
+      height: bottomPadding + restingOffset,
+    };
+  });
   const dockStyle = useAnimatedStyle(() => {
     const expandProgress = isExpandable ? (progress?.get() ?? 0) : 0;
     const restingOffset = restingExtraOffset * (1 - expandProgress);
@@ -205,6 +222,7 @@ export function ComposerDock({
           {backgroundClassName ? (
             <ComposerDockFade
               backgroundClassName={backgroundClassName}
+              floorHeightStyle={floorHeightStyle}
               restingBackgroundStyle={restingBackgroundStyle}
             />
           ) : null}
@@ -246,14 +264,15 @@ export function ComposerDock({
 
 function ComposerDockFade({
   backgroundClassName,
+  floorHeightStyle,
   restingBackgroundStyle,
 }: {
-  backgroundClassName: string;
+  backgroundClassName: ComposerDockBackgroundClassName;
+  floorHeightStyle: ReturnType<typeof useAnimatedStyle>;
   restingBackgroundStyle: ReturnType<typeof useAnimatedStyle>;
 }) {
-  const transparentClassName = backgroundClassName.includes(' ') ? '' : `${backgroundClassName}/0`;
   const resolvedSolid = useResolveClassNames(backgroundClassName);
-  const resolvedTransparent = useResolveClassNames(transparentClassName);
+  const resolvedTransparent = useResolveClassNames(DOCK_FADE_SURFACES[backgroundClassName]);
   const fadeSolidColor =
     typeof resolvedSolid.backgroundColor === 'string' ? resolvedSolid.backgroundColor : undefined;
   const fadeStartColor =
@@ -271,7 +290,7 @@ function ComposerDockFade({
   return (
     <Animated.View
       pointerEvents="none"
-      style={[fadeColors ? FADE_OVERHANG_STYLE : StyleSheet.absoluteFill, restingBackgroundStyle]}
+      style={[FLOOR_CONTAINER_STYLE, restingBackgroundStyle]}
       testID="composer-dock-fade"
     >
       {fadeColors ? (
@@ -281,11 +300,15 @@ function ComposerDockFade({
           locations={FADE_LOCATIONS}
           pointerEvents="none"
           start={FADE_START}
-          style={StyleSheet.absoluteFill}
+          style={FADE_BAND_STYLE}
         />
-      ) : (
-        <View className={`absolute inset-0 ${backgroundClassName}`} pointerEvents="none" />
-      )}
+      ) : null}
+      <Animated.View
+        className={backgroundClassName}
+        pointerEvents="none"
+        style={floorHeightStyle}
+        testID="composer-dock-floor"
+      />
     </Animated.View>
   );
 }

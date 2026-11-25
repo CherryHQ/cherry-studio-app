@@ -24,13 +24,16 @@ jest.mock('expo-linear-gradient', () => {
   };
 });
 
+const createDefaultResolvedClasses = (): Record<string, { backgroundColor?: string }> => ({
+  'bg-background': { backgroundColor: '#f5f5f5' },
+  'bg-background/0': { backgroundColor: 'rgba(245, 245, 245, 0)' },
+  'bg-chat-background': { backgroundColor: '#f9f9f9' },
+  'bg-chat-background/0': { backgroundColor: 'rgba(249, 249, 249, 0)' },
+});
+let mockResolvedClasses = createDefaultResolvedClasses();
+
 jest.mock('uniwind', () => ({
-  useResolveClassNames: (className: string) =>
-    className.endsWith('/0')
-      ? { backgroundColor: 'rgba(249, 249, 249, 0)' }
-      : className
-        ? { backgroundColor: '#f9f9f9' }
-        : {},
+  useResolveClassNames: (className: string) => mockResolvedClasses[className] ?? {},
   withUniwind: (component: unknown) => component,
 }));
 
@@ -107,6 +110,7 @@ describe('Composer.Dock', () => {
     mockKeyboardMaxHeight = 300;
     mockKeyboardProgress = 1;
     mockExpansion = null;
+    mockResolvedClasses = createDefaultResolvedClasses();
     dockLayout = undefined;
   });
 
@@ -276,12 +280,24 @@ describe('Composer.Dock', () => {
     expect(contentInset.get()).toBe(148);
     expect(onRender).not.toHaveBeenCalled();
     const restingBackground = () => renderer!.root.findByProps({ testID: 'composer-dock-fade' });
-    // The compact dock fades the transcript gently into the composer surface.
-    expect(StyleSheet.flatten(restingBackground().props.style)).toMatchObject({
+    const restingFloor = () => renderer!.root.findByProps({ testID: 'composer-dock-floor' });
+    // The compact dock anchors a solid floor below the composer with a short soft fade at its bottom edge.
+    expect(StyleSheet.flatten(restingBackground().props.style)).toEqual({
+      bottom: 0,
+      left: 0,
       opacity: 1,
-      top: -28,
+      position: 'absolute',
+      right: 0,
     });
-    expect(restingBackground().findByType('LinearGradient' as never)).toBeTruthy();
+    expect(StyleSheet.flatten(restingBackground().props.style)).not.toHaveProperty('top');
+    expect(restingFloor().props.className).toBe('bg-chat-background');
+    expect(StyleSheet.flatten(restingFloor().props.style)).toEqual({ height: 38 });
+    const gradient = restingBackground().findByType('LinearGradient' as never);
+    expect(gradient.props).toMatchObject({
+      colors: ['rgba(249, 249, 249, 0)', '#f9f9f9', '#f9f9f9'],
+      locations: [0, 20 / 21, 1],
+      style: { height: 21, marginBottom: -1 },
+    });
 
     mockExpansion.state = { isExpanded: true, isPresented: true };
     progress.set(1);
@@ -298,6 +314,55 @@ describe('Composer.Dock', () => {
     act(() => renderer!.unmount());
     renderer = undefined;
     expect(contentInset.get()).toBe(0);
+  });
+
+  it('keeps the solid floor aligned to bottom padding across extraBottomOffset, expansion, and unresolved gradient fallback', () => {
+    const progress = cell(0);
+    mockExpansion = {
+      actions: { collapse: jest.fn(), expand: jest.fn(), resizeContent: jest.fn() },
+      meta: {
+        compactDockHeight: cell(0),
+        contentInset: cell(0),
+        dockLift: cell(0),
+        editorMorphing: cell(false),
+        extraHeight: cell(0),
+        keyboardTrackingEnabled: cell(true),
+        progress,
+      },
+      state: { isExpanded: false, isPresented: false },
+    };
+
+    const renderDock = () => (
+      <ComposerDock
+        backgroundClassName="bg-chat-background"
+        extraBottomOffset={64}
+        layoutMode="expandable-overlay"
+      >
+        <View testID="editor" />
+      </ComposerDock>
+    );
+
+    act(() => {
+      renderer = create(renderDock());
+    });
+
+    const restingBackground = () => renderer!.root.findByProps({ testID: 'composer-dock-fade' });
+    const restingFloor = () => renderer!.root.findByProps({ testID: 'composer-dock-floor' });
+
+    expect(StyleSheet.flatten(restingFloor().props.style)).toEqual({ height: 102 });
+    expect(restingBackground().findAllByType('LinearGradient' as never)).toHaveLength(1);
+
+    progress.set(1);
+    act(() => renderer!.update(renderDock()));
+    expect(StyleSheet.flatten(restingFloor().props.style)).toEqual({ height: 38 });
+
+    progress.set(0);
+    mockResolvedClasses = {};
+    act(() => renderer!.update(renderDock()));
+    expect(restingBackground().findAllByType('LinearGradient' as never)).toHaveLength(0);
+    expect(StyleSheet.flatten(restingBackground().props.style)).not.toHaveProperty('top');
+    expect(restingFloor().props.className).toBe('bg-chat-background');
+    expect(StyleSheet.flatten(restingFloor().props.style)).toEqual({ height: 102 });
   });
 
   it('keeps list insets steady while the dock moves and the editor morphs', () => {
