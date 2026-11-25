@@ -1283,6 +1283,27 @@ describe('Pi model resolver', () => {
   });
 
   test.each([
+    [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'deepseek-chat', 'openai-compatible'],
+    [ENDPOINT_TYPE.OPENAI_RESPONSES, 'deepseek-responses', 'openai'],
+    [ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'deepseek-messages', 'anthropic'],
+  ] as const)(
+    'keeps DeepSeek Flash native web tools exclusive of client functions on %s',
+    async (endpoint, dialect, family) => {
+      mockGetProviderById.mockResolvedValue({
+        ...makeProvider(endpoint, 'https://api.deepseek.com', family),
+        id: 'deepseek',
+      });
+      mockGetModelById.mockResolvedValue(
+        makeModel(endpoint, { apiModelId: 'deepseek-flash', modelId: 'deepseek-flash' }),
+      );
+      expect(
+        await resolver.nativeWebTools?.({ providerId: 'deepseek', modelId: 'deepseek-flash' }, {}),
+      ).toEqual({ dialect, search: true, fetch: true, functionToolMixing: false });
+      expect(mockResolveApiKey).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each([
     ['gemini-3-flash-preview', true],
     ['gemini-2.5-flash', false],
   ])('mixes Gemini native tools with functions only from Gemini 3: %s', async (id, mixing) => {
