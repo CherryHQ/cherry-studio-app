@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawnSync, type SpawnSyncOptionsWithStringEncoding } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 
@@ -56,13 +56,13 @@ export interface DispatchPublishReleaseResult {
 const VALID_TARGETS = new Set<PublishReleaseTarget>(['both', 'github', 'gitcode']);
 
 const defaultExecCommand: ExecCommand = (command, args, options) => {
-  const result = spawnSync(command, args, {
-    // NOSONAR fixed internal commands (gh), arguments are validated by callers
+  const spawnOptions: SpawnSyncOptionsWithStringEncoding = {
     input: options?.input,
     stdio: options?.inheritStdio ? 'inherit' : ['pipe', 'pipe', 'pipe'],
     encoding: 'utf8',
     maxBuffer: 16 * 1024 * 1024,
-  });
+  };
+  const result = spawnSync(command, args, spawnOptions); // NOSONAR fixed internal commands (gh), arguments are validated by callers
   if (result.error) {
     throw result.error;
   }

@@ -78,11 +78,8 @@ function checkTrackedFilesAgainstWhitelist(skillNames: string[], errors: string[
 
   let trackedFiles: string[];
   try {
-    const output = execSync('git ls-files -- .agents/skills .claude/skills', {
-      // NOSONAR dev script, git resolved from the developer PATH
-      cwd: ROOT_DIR,
-      encoding: 'utf-8',
-    });
+    // prettier-ignore
+    const output = execSync('git ls-files -- .agents/skills .claude/skills', { cwd: ROOT_DIR, encoding: 'utf-8' }); // NOSONAR dev script, git resolved from the developer PATH
     trackedFiles = output
       .split('\n')
       .map((line) => line.trim())
