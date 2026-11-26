@@ -2169,7 +2169,7 @@ async function main() {
         already_submitted: alreadySubmitted ? 'true' : 'false',
       });
     }
-    console.log(JSON.stringify({ alreadySubmitted, receipt }, null, 2));
+    console.log(sanitizeDiagnostic(JSON.stringify({ alreadySubmitted, receipt }, null, 2)));
     return;
   }
 
@@ -2238,7 +2238,7 @@ async function main() {
     const recovered = await recoverPendingIosBuild({
       pendingDir: requireCliPath(values['pending-dir'], '--pending-dir'),
     });
-    console.log(JSON.stringify(recovered, null, 2));
+    console.log(sanitizeDiagnostic(JSON.stringify(recovered, null, 2)));
     return;
   }
 
