@@ -198,6 +198,7 @@ test.each([
         .spyOn(adapter, 'loadStreamSimple')
         .mockResolvedValue(streamSimple as unknown as PiStreamFn);
       const streamFn = await bindPiStream(adapter, {
+        shouldStream: true,
         apiKey: '',
         fetch: async (input, init) => {
           const response = await send(input, init);
@@ -313,6 +314,7 @@ test.each([
         .mockResolvedValue(streamSimpleCompletions as unknown as PiStreamFn);
       const stream = withPiStreamIdleTimeout(
         await bindPiStream(adapter, {
+          shouldStream: true,
           apiKey: '',
           isCloudGateway: true,
           fetch: runtime.createModelFetch(amd.id, 'agent'),
@@ -398,6 +400,7 @@ test('preserves upstream quota codes from a Cloud 429 response in trace and fail
       .mockResolvedValue(streamSimpleAnthropic as unknown as PiStreamFn);
     const stream = withPiStreamIdleTimeout(
       await bindPiStream(adapter, {
+        shouldStream: true,
         apiKey: '',
         isCloudGateway: true,
         fetch: runtime.createModelFetch(modelSnapshot.id, 'agent'),

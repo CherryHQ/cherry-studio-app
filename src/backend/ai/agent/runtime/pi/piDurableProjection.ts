@@ -35,6 +35,7 @@ import type {
 } from '../types';
 import { PiCodemodeArtifactsEntry } from './piCodemodeFiles';
 import { PiCodemodeMcpResultEntry } from './piCodemodeResults';
+import { readPiCompactionFailure } from './piCompaction';
 import { readPiTerminalError } from './piModelError';
 import { applyPiReplyEdits, PI_REPLY_EDIT_KIND } from './piReplyEditing';
 import { readPiWebResult } from './PiWebResponse';
@@ -644,15 +645,18 @@ export function projectPiTurn(options: {
         : /interrupt|orphan/.test(record.reason)
           ? 'interrupted'
           : 'failed';
-    error ??= {
-      code: record.reason,
-      message:
-        typeof record.detail === 'string'
-          ? record.detail
-          : 'The Agent run ended without an answer.',
-      retryable: status !== 'cancelled',
-      origin: 'runtime',
-    };
+    const compactionFailure =
+      record.reason === 'model_error' ? readPiCompactionFailure(record.detail) : undefined;
+    error = compactionFailure ??
+      error ?? {
+        code: record.reason,
+        message:
+          typeof record.detail === 'string'
+            ? record.detail
+            : 'The Agent run ended without an answer.',
+        retryable: status !== 'cancelled',
+        origin: 'runtime',
+      };
   } else status = hasAssistant ? 'interrupted' : 'completed';
   // Validate completed turns that own an actual model answer; coalesced placeholders and retained retry prefixes stay valid.
   const hasRetainedOutput =

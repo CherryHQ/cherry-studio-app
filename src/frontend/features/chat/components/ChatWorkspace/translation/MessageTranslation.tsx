@@ -88,7 +88,9 @@ export function MessageTranslationContent({ message }: { message: MessageListIte
                   ? 'chat.translation.cancelled'
                   : state.error === 'model-unavailable'
                     ? 'translation.error.modelUnavailable'
-                    : 'translation.error.failed',
+                    : state.error === 'non_streaming_mode_unsupported'
+                      ? 'chat.errorPart.message.streamingRequired'
+                      : 'translation.error.failed',
               )}
             </Text>
           ) : null}

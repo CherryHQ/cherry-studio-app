@@ -52,6 +52,7 @@ async function bind(fetch: FetchFunction) {
     .spyOn(adapter, 'loadStreamSimple')
     .mockResolvedValue(streamVertexAnthropic as unknown as PiStreamFn);
   return bindPiStream(adapter, {
+    shouldStream: true,
     accessToken: 'host-token',
     vertex: { projectId: 'project-id', location: 'us-east5' },
     fetch,

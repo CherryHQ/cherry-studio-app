@@ -50,6 +50,7 @@ import { withPiDeepseekDsml } from './piDeepseekDsml';
 import { withPiDeepseekFiles } from './piDeepseekFiles';
 import { requirePiLanguageBinding, resolvePiLanguageBinding } from './piLanguageBinding';
 import type { PiModelResolution, PiRuntimeDependencies } from './piModelTypes';
+import { assertPiNonStreamingSupported } from './piNonStreamingFetch';
 import {
   endpointForPiApi,
   requireOAuthEndpoint,
@@ -173,6 +174,10 @@ export function createPiModelResolver(
             oauthModel.api === 'openai-codex-responses' ? 'openai-codex' : undefined,
           )
         : configuredAdapter;
+
+      const shouldStream = provider.id === CLOUD_PROVIDER_ID || model.supportsStreaming !== false;
+      // Reject before credential selection or constructing the key-fallback stream.
+      if (!shouldStream) assertPiNonStreamingSupported(adapter.api, adapter.supportsCustomFetch);
 
       const selectedApiKey = vertex
         ? {
@@ -322,6 +327,11 @@ export function createPiModelResolver(
             maxTokens: Math.min(preflight.maxOutputTokens, oauthModel.maxTokens),
           }
         : configuredPiModel;
+      if (!shouldStream && piModel.api === 'openai-completions') {
+        // Finite third-party completions may omit finish_reason. Let Pi derive toolUse/stop
+        // in that case; a provided finish reason still takes precedence.
+        piModel.compat = { ...piModel.compat, supportsFinishReason: false };
+      }
       // Keep capability metadata intact while bounding the default request reservation.
       const outputReservation = resolvePiOutputReservation(
         piModel.maxTokens,
@@ -329,6 +339,7 @@ export function createPiModelResolver(
         runtimeOptions.maxOutputTokens,
       );
       const streamBinding: Parameters<typeof bindPiStream>[1] = {
+        shouldStream,
         apiKey: vertex
           ? undefined
           : oauth
@@ -478,6 +489,7 @@ export function createPiModelResolver(
             : []),
           ...fallbackKeys.map((key) => key.key),
         ],
+        shouldStream,
         streamFn: isDeepSeekModel(model) ? withPiDeepseekDsml(timedStream) : timedStream,
         supportsTools: preflight.supportsTools,
         nativeWebTools:

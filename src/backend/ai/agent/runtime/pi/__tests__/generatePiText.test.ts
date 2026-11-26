@@ -30,6 +30,7 @@ function setup() {
   const resolution = {
     model,
     streamFn,
+    shouldStream: true,
     defaultThinkingLevel: 'medium',
     redactionValues: ['oauth-access'],
     supportsTools: true,
@@ -93,6 +94,7 @@ test('sends a text-only translation through the installed Codex adapter with OAu
     .mockResolvedValue(streamSimpleCodex as unknown as PiStreamFn);
   try {
     const streamFn = await bindPiStream(adapter, {
+      shouldStream: true,
       apiKey: token,
       fetch,
       headers: {},
@@ -299,4 +301,100 @@ test.each([
     expect.anything(),
     expect.objectContaining({ maxTokens: expected }),
   );
+});
+
+test('generates title text in finite mode with one text publication and one usage record', async () => {
+  const { dependencies, request, resolveModel, resolution } = setup();
+  const model = {
+    ...resolution.model,
+    api: 'openai-completions' as const,
+    compat: { supportsFinishReason: false },
+  };
+  const fetch = jest.fn(
+    async (_input: unknown, _init?: RequestInit) =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { role: 'assistant', content: 'A short title' } }],
+          usage: { prompt_tokens: 10, completion_tokens: 3, total_tokens: 13 },
+        }),
+        { headers: { 'content-type': 'application/json' } },
+      ),
+  );
+  const streamFn = await bindPiStream(
+    {
+      ...resolvePiApiAdapter(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS),
+      loadStreamSimple: async () =>
+        jest.requireActual('@earendil-works/pi-ai/api/openai-completions').streamSimple,
+    },
+    {
+      shouldStream: false,
+      apiKey: 'key',
+      fetch,
+      headers: {},
+      maxRetries: 0,
+      maxTokens: 256,
+    },
+  );
+  resolveModel.mockResolvedValue({ ...resolution, model, streamFn, shouldStream: false });
+  const onText = jest.fn();
+  const onUsage = jest.fn(async () => undefined);
+  await expect(
+    generatePiText(
+      dependencies,
+      { ...request, instructions: 'Write a short title.' },
+      { onText, onUsage },
+    ),
+  ).resolves.toEqual({ text: 'A short title', finishReason: 'stop' });
+  expect(onText.mock.calls).toEqual([['A short title']]);
+  expect(onUsage).toHaveBeenCalledTimes(1);
+  expect(onUsage).toHaveBeenCalledWith(
+    expect.objectContaining({
+      usage: expect.objectContaining({ inputTokens: 10, outputTokens: 3, totalTokens: 13 }),
+    }),
+  );
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toMatchObject({ stream: false });
+});
+
+test('publishes all finite Responses text blocks together once', async () => {
+  const { dependencies, request, resolveModel, resolution } = setup();
+  const model = { ...resolution.model, api: 'openai-responses' as const };
+  const streamFn = await bindPiStream(
+    {
+      ...resolvePiApiAdapter(ENDPOINT_TYPE.OPENAI_RESPONSES),
+      loadStreamSimple: async () =>
+        jest.requireActual('@earendil-works/pi-ai/api/openai-responses').streamSimple,
+    },
+    {
+      shouldStream: false,
+      apiKey: 'key',
+      fetch: async () =>
+        Response.json({
+          id: 'response',
+          status: 'completed',
+          output: [
+            {
+              id: 'answer',
+              type: 'message',
+              role: 'assistant',
+              content: ['First ', 'second'].map((text) => ({
+                type: 'output_text',
+                text,
+                annotations: [],
+              })),
+            },
+          ],
+        }),
+      headers: {},
+      maxRetries: 0,
+      maxTokens: 256,
+    },
+  );
+  resolveModel.mockResolvedValue({ ...resolution, model, streamFn, shouldStream: false });
+  const onText = jest.fn();
+  await expect(generatePiText(dependencies, request, { onText })).resolves.toEqual({
+    text: 'First second',
+    finishReason: 'stop',
+  });
+  expect(onText.mock.calls).toEqual([['First second']]);
 });
