@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
+import { useChatSource } from '@/frontend/appShell/navigation/chat';
 import { useOpenFileEntry } from '@/frontend/components/FileEntryPreview';
 import { useBackendModule, usePreference } from '@/frontend/data';
 import { voiceErrorLabelKey } from '@/frontend/utils/voiceErrorLabel';
@@ -22,6 +23,7 @@ export function AudioTranscriptionSheet({
   const { t, i18n } = useTranslation();
   const router = useRouter();
   const files = useBackendModule('file');
+  const { localChat } = useChatSource();
   const { openFileEntry } = useOpenFileEntry();
   const { toast } = useToast();
   const [engine] = usePreference('feature.voice.transcription_engine');
@@ -46,7 +48,10 @@ export function AudioTranscriptionSheet({
       const uri = await files.getUri(state.result.entry.id);
       if (!uri) throw new Error('Transcript unavailable');
       onClose();
-      openFileEntry({ entry: state.result.entry, uri });
+      openFileEntry(
+        { entry: state.result.entry, uri },
+        { origin: 'external', sourceChat: localChat },
+      );
     } catch {
       toast.show({ label: t('filePreview.openFailed'), variant: 'danger' });
     }

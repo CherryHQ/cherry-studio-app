@@ -12,8 +12,9 @@ exporting or sharing conversations as Markdown or stitched long PNG images.
 - Attaching files in chat: open composer menu (`testID:composer-menu`) -> file picker
   (`testID:file-picker`, `testID:file-picker-list`, `testID:file-picker-upload`,
   `testID:file-picker-create-folder`, `testID:file-picker-add`).
-- Sharing/exporting: triggered from message toolbar (`testID:assistant-message-toolbar`) or
-  conversation share selection.
+- Sharing/exporting: triggered from message toolbar (`testID:assistant-message-toolbar`),
+  conversation share selection, or the file viewer footer (`testID:file-viewer-footer-share`,
+  `testID:file-viewer-footer-add-to-chat`, `testID:file-viewer-footer-save-to-photos`).
 
 ## Verification Driver
 
@@ -31,6 +32,13 @@ exporting or sharing conversations as Markdown or stitched long PNG images.
   cleanup when closed mid-read.
 - Exporting long conversations produces valid Markdown or stitched PNG images and releases
   temporary cache files after completion or cancellation.
+- Manual device checklist (Android release build and iOS parity):
+  - Opening a chat-generated file from a conversation shows `testID:file-viewer-footer-share` (plus
+    `testID:file-viewer-footer-save-to-photos` for images) without `testID:file-viewer-footer-add-to-chat`,
+    and tapping Share opens `/share` -> the OS share sheet and returns cleanly.
+  - Opening a file from the file library with an active local `standard` Agent chat shows both
+    `testID:file-viewer-footer-share` and `testID:file-viewer-footer-add-to-chat` (without truncating
+    or overlapping in light/dark themes or long UI locales).
 
 ## Known Pitfalls
 

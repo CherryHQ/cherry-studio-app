@@ -1,11 +1,5 @@
 /* oxlint-disable react/style-prop-object -- Expo StatusBar style is a string union. */
-import {
-  Button,
-  ContentState,
-  ImageEditor,
-  type MenuItem,
-  useToast,
-} from '@cherrystudio/ui/components';
+import { ContentState, ImageEditor, type MenuItem, useToast } from '@cherrystudio/ui/components';
 import { useQuery } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -18,24 +12,28 @@ import { useSaveImageToPhotos } from '@/frontend/appShell/fileExport';
 import { usePaneChrome } from '@/frontend/appShell/layout';
 import type { ChatTarget } from '@/frontend/appShell/navigation/chat';
 import { ArtifactImagePages, ArtifactImageViewer } from '@/frontend/components/ArtifactPreview';
+import type { FilePreviewOrigin } from '@/frontend/components/FileEntryPreview';
 import { queryKeys } from '@/frontend/data';
 import { imageEditGeometry } from '@/shared/utils/imageEditGeometry';
 
 import type { FileViewerSource } from '../fileViewerSource';
 import { useAddFileToChat } from '../hooks/useAddFileToChat';
 import { useFileImageEdit } from '../hooks/useFileImageEdit';
+import { resolveFileViewerFooterActions } from '../utils/fileViewerFooterActions';
 import { readPngDimensions } from '../utils/readPngDimensions';
-import { FileViewerFooter } from './FileViewerFooter';
+import { FileViewerActionFooter } from './FileViewerActionFooter';
 import { FileViewerHeader } from './FileViewerHeader';
 
 export function FileImageViewer({
   file: initialFile,
   imageEditRequestId,
   sourceChat,
+  sourceOrigin = 'external',
 }: {
   file: FileViewerSource;
   imageEditRequestId?: string;
   sourceChat?: ChatTarget;
+  sourceOrigin?: FilePreviewOrigin;
 }) {
   const { t } = useTranslation();
   const { theme } = useUniwind();
@@ -45,7 +43,16 @@ export function FileImageViewer({
   const isInPane = usePaneChrome() !== null;
   const { file } = editing;
   const saveToPhotos = useSaveImageToPhotos({ uri: file.uri });
-  const addToChat = useAddFileToChat(file.kind === 'managed' ? file : undefined, sourceChat);
+  const addToChat = useAddFileToChat(
+    file.kind === 'managed' ? file : undefined,
+    sourceChat,
+    sourceOrigin,
+  );
+  const footerActions = resolveFileViewerFooterActions({
+    canAddToChat: addToChat.canAddToChat,
+    canSaveToPhotos: true,
+    canShare: file.kind === 'managed',
+  });
   const [isZoomed, setIsZoomed] = useState(false);
   const [stillImageUri, setStillImageUri] = useState<string>();
   const [width, setWidth] = useState(0);
@@ -151,7 +158,7 @@ export function FileImageViewer({
       <FileViewerHeader file={file} items={items} />
       <View
         className={
-          addToChat.returnsToSourceChat
+          footerActions.hasActions
             ? 'flex-1 bg-background px-safe'
             : 'flex-1 bg-background px-safe pb-safe'
         }
@@ -198,13 +205,13 @@ export function FileImageViewer({
           )}
         </View>
       </View>
-      {addToChat.returnsToSourceChat ? (
-        <FileViewerFooter>
-          <Button disabled={addToChat.isResolving} onPress={addToChat.add}>
-            {t('fileViewer.addToChat')}
-          </Button>
-        </FileViewerFooter>
-      ) : null}
+      <FileViewerActionFooter
+        actions={footerActions}
+        file={file}
+        isResolvingAddToChat={addToChat.isResolving}
+        onAddToChat={addToChat.add}
+        onSaveToPhotos={saveToPhotos}
+      />
     </>
   );
 }

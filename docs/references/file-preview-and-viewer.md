@@ -80,12 +80,23 @@ separators between actions. Images also offer Save to Photos and, when eligible,
 same menu. Share opens the unified `/share` panel through `appShell/sharing`. Saving to Photos
 uses the add-only permission flow shared with the painting viewer.
 
-Image, document and text viewers receive the existing `sourceChat` from the route or chat pane.
-When `useAddFileToChat.returnsToSourceChat` is true, a shared `FileViewerFooter` shows a text-only
-Add to current chat button, disabled while `isResolving` is true. It returns to the source chat
-and adds the whole file once through the existing attachment handoff, preserving draft text and
-existing attachments without sending. Missing, unavailable or unsupported source chats offer no
-button. The footer owns the bottom safe area while shown; otherwise the preview content owns it.
+Image, document and text viewers receive `sourceChat` and `sourceOrigin` (`'chat'` or `'external'`)
+from the route or chat pane. A shared `FileViewerActionFooter` renders at most two footer buttons
+from `(canAddToChat, canShare, canSaveToPhotos)`:
+
+- Managed files opened from inside a chat (`sourceOrigin === 'chat'`) omit **Add to current chat**
+  and show **Share** (plus **Save to Photos** for images).
+- Managed files opened from external surfaces (library, workspace-folder sheet, transcript sheet, or
+  `FileViewerPane`) offer **Share** alongside **Add to current chat** when `useAddFileToChat.canAddToChat`
+  confirms an eligible `standard`-Agent chat (disabled while `isResolving` is true), or **Save to
+  Photos** + **Share** for images and **Share** for non-images otherwise.
+- Temporary previews (`previewRequestId`) offer **Save to Photos** for images and no footer for
+  non-images.
+
+**Add to current chat** returns to the source chat and attaches the whole file once through the
+existing attachment handoff, preserving draft text and existing attachments without sending. Footer
+**Share** opens the unified `/share` panel, which opens the system share sheet. The footer owns the
+bottom safe area while shown; otherwise the preview content owns it.
 
 ### Image
 
@@ -125,9 +136,10 @@ Selection mode is explicit; browsing does not capture references. The package ow
 scrolling, zoom and cancelled gestures. The app holds the selected anchor/excerpt and supplies a
 footer action to reference the selection with the original attachment. A preview opened from a chat
 returns to that chat and appends the reference after the draft, preserving draft text,
-attachments, Agent and workspace; the workspace sheet the preview came from stays closed. Such a
-preview, including one opened from a library reached from that chat, also offers **Add to current
-chat**, which attaches the whole file to the same composer once without changing its text. A preview
+attachments, Agent and workspace; the workspace sheet the preview came from stays closed. That
+selection-reference footer still returns to the source chat even when `sourceOrigin === 'chat'`,
+while whole-file **Add to current chat** is shown only for external openers (such as the file library,
+workspace sheet, or master-detail pane) when the source chat can accept it. A preview
 opened from the file library, or from a chat whose Agent is minimal, offers an `AgentMenu` of
 standard Agents and opens a new editable draft with the chosen one. Assistant deliverables whose
 files are unavailable are hidden from the message without leaving a gap.

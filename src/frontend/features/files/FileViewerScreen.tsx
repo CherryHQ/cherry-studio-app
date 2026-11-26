@@ -19,7 +19,11 @@ import {
   type ChatTarget,
   useChatSource,
 } from '@/frontend/appShell/navigation/chat';
-import { fileEntryPreviewKind, useResolvedFile } from '@/frontend/components/FileEntryPreview';
+import {
+  type FilePreviewOrigin,
+  fileEntryPreviewKind,
+  useResolvedFile,
+} from '@/frontend/components/FileEntryPreview';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { type FileEntryId, FileEntryIdSchema } from '@/shared/data/types/file';
@@ -38,8 +42,11 @@ export function FileViewerScreen() {
     imageEditRequestId?: string | string[];
     previewRequestId?: string | string[];
     sourceChat?: string | string[];
+    sourceOrigin?: string | string[];
   }>();
   const sourceChat = parseChatPreviewSource(getSingleRouteParam(params.sourceChat));
+  const sourceOrigin: FilePreviewOrigin =
+    getSingleRouteParam(params.sourceOrigin) === 'chat' ? 'chat' : 'external';
   const imageEditRequestId = getSingleRouteParam(params.imageEditRequestId);
   const previewRequestId = getSingleRouteParam(params.previewRequestId);
   const entryId = FileEntryIdSchema.safeParse(getSingleRouteParam(params.fileEntryId));
@@ -76,6 +83,7 @@ export function FileViewerScreen() {
           entryId={entryId.data}
           imageEditRequestId={imageEditRequestId}
           sourceChat={sourceChat}
+          sourceOrigin={sourceOrigin}
           key={`${entryId.data}:${imageEditRequestId ?? ''}`}
         />
       )}
@@ -95,6 +103,7 @@ export function FileViewerPane({ entryId, imageEditRequestId }: FileViewerPanePr
       entryId={entryId}
       imageEditRequestId={imageEditRequestId}
       sourceChat={chatRoute.status === 'ready' ? chatRoute.target : localChat}
+      sourceOrigin="external"
       key={`${entryId}:${imageEditRequestId ?? ''}`}
     />
   );
@@ -104,10 +113,12 @@ function FileViewer({
   entryId,
   imageEditRequestId,
   sourceChat,
+  sourceOrigin,
 }: {
   entryId: FileEntryId;
   imageEditRequestId?: string;
   sourceChat?: ChatTarget;
+  sourceOrigin?: FilePreviewOrigin;
 }) {
   const { t } = useTranslation();
   const query = useResolvedFile(entryId);
@@ -136,6 +147,7 @@ function FileViewer({
           file={{ ...file, kind: 'managed' }}
           imageEditRequestId={imageEditRequestId}
           sourceChat={sourceChat}
+          sourceOrigin={sourceOrigin}
         />
       )}
     </View>
@@ -169,10 +181,12 @@ function FileViewerContent({
   file,
   imageEditRequestId,
   sourceChat,
+  sourceOrigin,
 }: {
   file: FileViewerSource;
   imageEditRequestId?: string;
   sourceChat?: ChatTarget;
+  sourceOrigin?: FilePreviewOrigin;
 }) {
   const kind = fileEntryPreviewKind(file.entry);
   return kind === 'image' ? (
@@ -181,15 +195,22 @@ function FileViewerContent({
       imageEditRequestId={imageEditRequestId}
       key={`${file.entry.updatedAt}:${file.uri}`}
       sourceChat={sourceChat}
+      sourceOrigin={sourceOrigin}
     />
   ) : kind === 'document' || kind === 'audio' ? (
-    <FileDocumentViewer file={file} sourceChat={sourceChat} key={file.entry.id} />
+    <FileDocumentViewer
+      file={file}
+      sourceChat={sourceChat}
+      sourceOrigin={sourceOrigin}
+      key={file.entry.id}
+    />
   ) : (
     <FileTextViewer
       file={file}
       key={`${file.entry.updatedAt}:${file.uri}`}
       kind={kind}
       sourceChat={sourceChat}
+      sourceOrigin={sourceOrigin}
     />
   );
 }

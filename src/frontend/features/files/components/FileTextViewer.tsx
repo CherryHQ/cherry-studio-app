@@ -1,4 +1,4 @@
-import { Button, ContentState, type MenuItem, useToast } from '@cherrystudio/ui/components';
+import { ContentState, type MenuItem, useToast } from '@cherrystudio/ui/components';
 import { useQuery } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { useMemo, useState } from 'react';
@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import type { ChatTarget } from '@/frontend/appShell/navigation/chat';
-import type { FileEntryKind } from '@/frontend/components/FileEntryPreview';
+import type { FileEntryKind, FilePreviewOrigin } from '@/frontend/components/FileEntryPreview';
 import { queryKeys } from '@/frontend/data';
 import { readFileText } from '@/frontend/utils/readFileText';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -14,9 +14,10 @@ import { aiContentMarkdownBody } from '@/shared/utils/aiContentText';
 
 import type { FileViewerSource } from '../fileViewerSource';
 import { useAddFileToChat } from '../hooks/useAddFileToChat';
+import { resolveFileViewerFooterActions } from '../utils/fileViewerFooterActions';
 import { FileHtmlBody } from './FileHtmlBody';
 import { FileTextBody } from './FileTextBody';
-import { FileViewerFooter } from './FileViewerFooter';
+import { FileViewerActionFooter } from './FileViewerActionFooter';
 import { FileViewerHeader } from './FileViewerHeader';
 
 const logger = loggerService.withContext('FileViewer');
@@ -25,12 +26,23 @@ export function FileTextViewer({
   file,
   kind,
   sourceChat,
+  sourceOrigin = 'external',
 }: {
   file: FileViewerSource;
   kind: FileEntryKind;
   sourceChat?: ChatTarget;
+  sourceOrigin?: FilePreviewOrigin;
 }) {
-  const addToChat = useAddFileToChat(file.kind === 'managed' ? file : undefined, sourceChat);
+  const addToChat = useAddFileToChat(
+    file.kind === 'managed' ? file : undefined,
+    sourceChat,
+    sourceOrigin,
+  );
+  const footerActions = resolveFileViewerFooterActions({
+    canAddToChat: addToChat.canAddToChat,
+    canSaveToPhotos: false,
+    canShare: file.kind === 'managed',
+  });
   const { t } = useTranslation();
   const { toast } = useToast();
   const [isSourceVisible, setIsSourceVisible] = useState(false);
@@ -51,6 +63,7 @@ export function FileTextViewer({
     staleTime: Infinity,
   });
   const content = textQuery.data;
+  const hasActionFooter = Boolean(content) && footerActions.hasActions;
   const displayText = useMemo(() => {
     if (!content || kind !== 'markdown') return content?.text;
     try {
@@ -121,12 +134,12 @@ export function FileTextViewer({
                   <ContentState.Empty title={t('fileViewer.empty')} />
                 </View>
               ) : showHtml ? (
-                <View className={addToChat.returnsToSourceChat ? 'flex-1' : 'flex-1 pb-safe'}>
+                <View className={hasActionFooter ? 'flex-1' : 'flex-1 pb-safe'}>
                   <FileHtmlBody html={content.text} onFailure={() => setHasHtmlFailed(true)} />
                 </View>
               ) : (
                 <FileTextBody
-                  bottomInset={addToChat.returnsToSourceChat ? 0 : undefined}
+                  bottomInset={hasActionFooter ? 0 : undefined}
                   text={displayText ?? content.text}
                   variant={
                     kind === 'markdown' && !content.isTruncated
@@ -141,12 +154,13 @@ export function FileTextViewer({
           )}
         </View>
       </View>
-      {content && addToChat.returnsToSourceChat ? (
-        <FileViewerFooter>
-          <Button disabled={addToChat.isResolving} onPress={addToChat.add}>
-            {t('fileViewer.addToChat')}
-          </Button>
-        </FileViewerFooter>
+      {hasActionFooter ? (
+        <FileViewerActionFooter
+          actions={footerActions}
+          file={file}
+          isResolvingAddToChat={addToChat.isResolving}
+          onAddToChat={addToChat.add}
+        />
       ) : null}
     </>
   );

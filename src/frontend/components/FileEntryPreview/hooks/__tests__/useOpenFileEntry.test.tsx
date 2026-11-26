@@ -138,6 +138,7 @@ it('retains the source conversation and message destination when opening a previ
     kind: 'session',
     ...mockParams,
   });
+  expect(mockPush.mock.calls[0][0].params.sourceOrigin).toBe('chat');
 });
 
 it('retains an unsent chat with its seeded draft and workspace', () => {
@@ -153,6 +154,7 @@ it('retains an unsent chat with its seeded draft and workspace', () => {
     kind: 'draft',
     ...mockParams,
   });
+  expect(mockPush.mock.calls[0][0].params.sourceOrigin).toBe('chat');
 });
 
 it('keeps the chat a library page was opened from', () => {
@@ -164,6 +166,7 @@ it('keeps the chat a library page was opened from', () => {
     kind: 'session',
     sessionId: 'session-1',
   });
+  expect(mockPush.mock.calls[0][0].params).not.toHaveProperty('sourceOrigin');
 });
 
 it('does not treat a file-library route as a conversation', () => {
@@ -254,4 +257,63 @@ it('opens a temporary image through the cache without resolving its display id a
     }),
   );
   expect(mockToast).not.toHaveBeenCalled();
+});
+
+it('does not push sourceChat or sourceOrigin on / without a ready chat target', () => {
+  mockPathname = '/';
+  mockParams = {};
+  act(() => renderer.update(<Probe />));
+  act(() => actions.openFileEntry(file));
+  expect(mockPush).toHaveBeenCalledWith({
+    pathname: '/files/[fileEntryId]',
+    params: { fileEntryId: entry.id },
+  });
+  expect(mockPush.mock.calls[0][0].params).not.toHaveProperty('sourceChat');
+  expect(mockPush.mock.calls[0][0].params).not.toHaveProperty('sourceOrigin');
+});
+
+it('omits sourceOrigin when opening externally from /', () => {
+  mockPathname = '/';
+  mockParams = { sessionId: 'session-1' };
+  act(() => renderer.update(<Probe />));
+  act(() => actions.openFileEntry(file, { origin: 'external' }));
+  expect(parseChatPreviewSource(mockPush.mock.calls[0][0].params.sourceChat)).toEqual({
+    kind: 'session',
+    sessionId: 'session-1',
+  });
+  expect(mockPush.mock.calls[0][0].params).not.toHaveProperty('sourceOrigin');
+});
+
+it('uses fallback sourceChat option on /library without a route sourceChat and omits sourceOrigin', () => {
+  mockPathname = '/library';
+  mockParams = {};
+  act(() => renderer.update(<Probe />));
+  act(() =>
+    actions.openFileEntry(file, {
+      origin: 'external',
+      sourceChat: { kind: 'session', sessionId: 'session-2' },
+    }),
+  );
+  expect(parseChatPreviewSource(mockPush.mock.calls[0][0].params.sourceChat)).toEqual({
+    kind: 'session',
+    sessionId: 'session-2',
+  });
+  expect(mockPush.mock.calls[0][0].params).not.toHaveProperty('sourceOrigin');
+});
+
+it('prefers route sourceChat over fallback sourceChat option on /library', () => {
+  mockPathname = '/library';
+  mockParams = { sourceChat: JSON.stringify({ sessionId: 'session-route' }) };
+  act(() => renderer.update(<Probe />));
+  act(() =>
+    actions.openFileEntry(file, {
+      origin: 'external',
+      sourceChat: { kind: 'session', sessionId: 'session-fallback' },
+    }),
+  );
+  expect(parseChatPreviewSource(mockPush.mock.calls[0][0].params.sourceChat)).toEqual({
+    kind: 'session',
+    sessionId: 'session-route',
+  });
+  expect(mockPush.mock.calls[0][0].params).not.toHaveProperty('sourceOrigin');
 });

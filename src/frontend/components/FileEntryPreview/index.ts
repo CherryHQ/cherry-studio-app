@@ -1,6 +1,10 @@
 export { FileEntryAttachment, FileEntryPreview, LoadedFileEntryPreview } from './FileEntryPreview';
 export { FileEntryImage } from './FileEntryImage';
-export { useOpenFileEntry } from './hooks/useOpenFileEntry';
+export {
+  type FilePreviewOrigin,
+  type OpenFileEntryOptions,
+  useOpenFileEntry,
+} from './hooks/useOpenFileEntry';
 export { useResolvedFile } from './hooks/useResolvedFile';
 export {
   canPreviewDocument,

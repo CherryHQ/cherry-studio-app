@@ -57,7 +57,9 @@ export function FileEntryPreview({
       uri={data?.uri}
       variant={variant}
       transfer={transfer}
-      onOpen={(file) => openFileEntry(file, onImageReplace)}
+      onOpen={(file) =>
+        openFileEntry(file, onImageReplace ? { replaceImage: onImageReplace } : undefined)
+      }
     />
   );
 }
