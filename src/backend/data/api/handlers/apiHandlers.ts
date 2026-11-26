@@ -24,6 +24,8 @@ import { createAgentToolBindingHandlers } from './agentToolBindings';
 import { createAiUsageRecordHandlers } from './aiUsageRecords';
 import { createDesktopConnectionHandlers } from './desktopConnections';
 import { createFileHandlers } from './files';
+import type { GithubPagesRuntime } from './githubPages';
+import { createGithubPagesHandlers } from './githubPages';
 import { createJobHandlers } from './jobs';
 import { createMcpServerHandlers, type McpServerMutations } from './mcpServers';
 import { createModelHandlers, type SystemModelSupportFilter } from './models';
@@ -63,6 +65,7 @@ export type DataApiDependencies = {
   jobs: JobService;
   mcpServerMutations: McpServerMutations;
   mcpServers: McpServerService;
+  mcpRuntime: GithubPagesRuntime;
   models: import('../../services/ModelService').ModelService;
   systemModelSupport: SystemModelSupportFilter;
   paintings: PaintingService;
@@ -87,6 +90,7 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
       dependencies.desktopConnectionNameChanged,
     ),
     ...createFileHandlers(dependencies.files, dependencies.trashMutations),
+    ...createGithubPagesHandlers(dependencies.mcpRuntime, dependencies.mcpServers),
     ...createJobHandlers(dependencies.jobs),
     ...createMcpServerHandlers(dependencies.mcpServers, dependencies.mcpServerMutations),
     ...createModelHandlers(dependencies.models, dependencies.systemModelSupport),

@@ -302,6 +302,7 @@ export function createAppBootstrapRuntime(
       jobs: services.job,
       mcpServerMutations: dataApiDependencies.mcpServerMutations,
       mcpServers: services.mcpServer,
+      mcpRuntime: dataApiDependencies.mcpRuntime,
       models: services.model,
       paintings: services.painting,
       pluginCatalog: dataApiDependencies.pluginCatalog,

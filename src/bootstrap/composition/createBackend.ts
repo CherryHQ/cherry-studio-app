@@ -15,6 +15,7 @@ import {
 } from '@/backend/ai/provider/systemModelSupport';
 import type { ResourceScopeCoordinator } from '@/backend/core/resources/ResourceScopeCoordinator';
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
+import type { GithubPagesRuntime } from '@/backend/data/api/handlers/githubPages';
 import {
   createMcpServerMutations,
   type McpServerMutations,
@@ -119,6 +120,7 @@ export type BackendComposition = {
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
     mcpServerMutations: McpServerMutations;
+    mcpRuntime: GithubPagesRuntime;
     pluginCatalog: PluginCatalogReader;
     skillAvailability: SkillAvailabilityReader;
     skillInstructions: SkillInstructionReader;
@@ -537,6 +539,7 @@ export function createBackend(
     dataApiDependencies: {
       agentAvatars,
       mcpServerMutations,
+      mcpRuntime: services.mcpRuntime,
       pluginCatalog: getBuiltInPluginCatalog,
       skillAvailability: skills.availability,
       skillInstructions: skills.instructionReader,

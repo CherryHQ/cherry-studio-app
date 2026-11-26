@@ -199,6 +199,7 @@ function RootStack() {
       />
       <Stack.Screen name="share-destination" options={{ headerTransparent: false }} />
       <Stack.Screen name="mermaid-diagram" options={{ headerTransparent: false }} />
+      <Stack.Screen name="html-preview" options={{ headerTransparent: false }} />
       <Stack.Screen name="edit-reply" options={{ headerTransparent: false }} />
       <Stack.Screen name="uu-remote/callback" options={{ headerShown: false, animation: 'none' }} />
       <Stack.Screen

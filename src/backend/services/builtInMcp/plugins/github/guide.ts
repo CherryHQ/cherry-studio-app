@@ -1,7 +1,7 @@
 import type { PluginGuideDefinition } from '../../pluginGuide';
 
 export const githubGuide = {
-  revision: 4,
+  revision: 5,
   sections: [
     {
       requiredTools: [],
@@ -114,7 +114,21 @@ remote branch is requested. Branch creation alone does not add the requested cod
       content: `## Create a pull request
 
 Use \`github create_pull_request\` with an existing head branch, the intended base and prepared changes.
-This connection cannot edit local code or upload file changes; prepared changes are a prerequisite.`,
+This connection can publish a generated HTML site to GitHub Pages: create a repository with
+\`pages_create_repository\`, upload the site files with \`pages_upload_file\` (pass the full file
+content; \`index.html\` at the repository root is the entry point), then enable Pages with
+\`pages_enable\` (branch source). Poll \`pages_status\` for the published URL.`,
+    },
+    {
+      requiredTools: ['pages_create_repository', 'pages_upload_file', 'pages_enable'],
+      content: `## Publish an HTML site to GitHub Pages
+
+Use \`pages_create_repository\` to create a repository under the authenticated user, then
+\`pages_upload_file\` for each site file (the full file content is required; \`index.html\` at the
+repository root is the entry point). Call \`pages_enable\` with the repository owner, name and
+branch to turn on Pages using a branch source (legacy build — no workflow scope needed). Finish
+with \`pages_status\` to read the published URL and build status. Writes are not replayed; if an
+outcome is unknown, check \`pages_status\` before retrying.`,
     },
   ],
 } satisfies PluginGuideDefinition;

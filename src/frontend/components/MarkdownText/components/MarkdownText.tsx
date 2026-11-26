@@ -6,6 +6,7 @@ import { normalizeFontSizeStep } from '@cherrystudio/ui/utils';
 import { type ReactElement, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { HtmlPreviewBlock } from '@/frontend/components/HtmlPreview';
 import { MermaidBlock } from '@/frontend/components/MermaidDiagram';
 import { usePreference } from '@/frontend/data/hooks';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
@@ -44,6 +45,7 @@ export function MarkdownText({
       isStreaming={isStreaming}
       markdown={markdown}
       onLinkPress={handleLinkPress}
+      renderHtml={renderHtml}
       renderMermaid={renderMermaid}
       selectable={selectable}
       selectionAction={selectionAction}
@@ -54,6 +56,10 @@ export function MarkdownText({
 
 function renderMermaid({ source, fallback }: { source: string; fallback: ReactElement }) {
   return <MermaidBlock fallback={fallback} source={source} />;
+}
+
+function renderHtml({ source }: { source: string }) {
+  return <HtmlPreviewBlock source={source} />;
 }
 
 function handleLinkPress(url: string) {

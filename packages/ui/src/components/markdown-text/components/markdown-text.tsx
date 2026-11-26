@@ -8,7 +8,7 @@ import {
 import { StreamdownText } from 'react-native-streamdown';
 import { useCSSVariable, useUniwind } from 'uniwind';
 
-import { normalizeLatexDelimiters } from '../../../markdown';
+import { normalizeLatexDelimiters, splitHtmlBlocks } from '../../../markdown';
 import { splitMermaidBlocks } from '../../../markdown/split-mermaid-blocks';
 import { resolveTypographyScale, type TypographySizeStep } from '../../../utils/typography-scale';
 import { resolveSyntaxColors } from '../utils/syntax-colors';
@@ -61,6 +61,11 @@ export type MarkdownTextProps = {
    * block, for diagrams the caller cannot present. Without it, Mermaid stays a code block.
    */
   renderMermaid?: (diagram: { source: string; fallback: ReactElement }) => ReactNode;
+  /**
+   * Presents a complete top-level HTML fence as a live preview. `fallback` is the fence as an
+   * ordinary code block, for HTML the caller cannot present. Without it, HTML stays a code block.
+   */
+  renderHtml?: (html: { source: string; fallback: ReactElement }) => ReactNode;
   selectable?: boolean;
   selectionAction?: MarkdownSelectionAction;
   selectionMenuLabels?: MarkdownSelectionMenuLabels;
@@ -151,6 +156,7 @@ export function MarkdownContent({
   isStreaming = false,
   markdown,
   onLinkPress,
+  renderHtml,
   renderMermaid,
   selectable = true,
   selectionAction,
@@ -313,10 +319,24 @@ export function MarkdownContent({
     [isStreaming, markdown],
   );
 
-  const parts = useMemo(
-    () => (renderMermaid ? splitMermaidBlocks(normalizedMarkdown, isStreaming) : undefined),
-    [isStreaming, normalizedMarkdown, renderMermaid],
-  );
+  type RenderPart =
+    | { kind: 'markdown'; key: string; markdown: string }
+    | { kind: 'mermaid'; key: string; markdown: string; source: string }
+    | { kind: 'html'; key: string; markdown: string; source: string };
+  const parts = useMemo<RenderPart[] | undefined>(() => {
+    if (!renderMermaid && !renderHtml) return undefined;
+    // Split Mermaid first, then split HTML inside each non-Mermaid markdown segment so both
+    // fence types are presented without one splitter swallowing the other's fences.
+    const mermaidParts: RenderPart[] = renderMermaid
+      ? splitMermaidBlocks(normalizedMarkdown, isStreaming)
+      : [{ kind: 'markdown' as const, key: '0', markdown: normalizedMarkdown }];
+    return mermaidParts.flatMap((part) => {
+      if (part.kind === 'mermaid' || !renderHtml) return [part];
+      return splitHtmlBlocks(part.markdown, isStreaming).map(
+        (htmlPart) => ({ ...htmlPart, key: `${part.key}:${htmlPart.key}` }) as RenderPart,
+      );
+    });
+  }, [isStreaming, normalizedMarkdown, renderHtml, renderMermaid]);
 
   const renderMarkdown = (markdown: string, key: string, isTail: boolean) => (
     <MarkdownRenderer
@@ -337,7 +357,8 @@ export function MarkdownContent({
     />
   );
 
-  if (!parts || !renderMermaid) return renderMarkdown(normalizedMarkdown, '0', true);
+  if (!parts || (!renderMermaid && !renderHtml))
+    return renderMarkdown(normalizedMarkdown, '0', true);
 
   // The wrapper stays mounted while fences complete, so streamed segments keep their native views.
   // Each segment drops its trailing margin; the gap restores the code block's 12-point rhythm.
@@ -345,13 +366,21 @@ export function MarkdownContent({
     <View className="gap-3">
       {parts.map((part, index) => {
         const content = renderMarkdown(part.markdown, part.key, index === parts.length - 1);
-        return part.kind === 'mermaid' ? (
-          <Fragment key={part.key}>
-            {renderMermaid({ source: part.source, fallback: content })}
-          </Fragment>
-        ) : (
-          content
-        );
+        if (part.kind === 'mermaid' && renderMermaid) {
+          return (
+            <Fragment key={part.key}>
+              {renderMermaid({ source: part.source, fallback: content })}
+            </Fragment>
+          );
+        }
+        if (part.kind === 'html' && renderHtml) {
+          return (
+            <Fragment key={part.key}>
+              {renderHtml({ source: part.source, fallback: content })}
+            </Fragment>
+          );
+        }
+        return content;
       })}
     </View>
   );

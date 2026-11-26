@@ -609,6 +609,54 @@ export class McpRuntimeService extends BaseService implements McpModule {
     }
   }
 
+  /**
+   * Invoke a single admitted tool on a connected plugin by server ID. Used by product features
+   * (e.g. GitHub Pages publishing) that need to run a plugin tool outside an Agent turn. The
+   * call still goes through the pooled client, catalog check and write-approval policy.
+   */
+  async callPluginTool(
+    serverId: string,
+    name: string,
+    args: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<unknown> {
+    const server = await mcpServerService.getById(serverId);
+    if (!server.isEnabled || !isRunnableMcpServer(server)) throw unavailableToolError();
+    if (server.origin === 'builtin' && !isBuiltInMcpToolAllowed(server.builtinId, name))
+      throw unavailableToolError();
+    if (server.disabledTools.includes(name)) throw unavailableToolError();
+    const state = this.getRuntimeState(server);
+    const generation = state.generation;
+    const bound = createBoundedSignal(60_000, state.abort.signal, ...(signal ? [signal] : []));
+    const progress: McpInvocationProgress = { sent() {}, waiting: bound.setPaused };
+    state.calls.add(progress);
+    try {
+      // Ensure the pooled client is connected before invoking; invokeTool resolves it again.
+      await this.getClient(server, state, bound.signal);
+      const result = await this.invokeTool(
+        { source: 'mcp', serverId, rawToolName: name },
+        args as RuntimeJsonValue,
+        bound.signal,
+        { endpointUrl: server.endpointUrl, generation: state.catalogGeneration },
+        progress,
+      );
+      bound.signal.throwIfAborted();
+      if (!this.isCurrentState(state, generation)) throw unavailableToolError();
+      return result;
+    } catch (error) {
+      if (error instanceof McpRuntimeToolError || !this.isCurrentState(state, generation))
+        throw error;
+      const rejection = classifyMcpCallRejection(error);
+      if (rejection?.staleCatalog) this.refreshChangedCatalog(state);
+      else if (!signal?.aborted && !ProtocolError.isInstance(error)) this.resetConnection(state);
+      throw rejection?.failure ?? error;
+    } finally {
+      bound.done();
+      state.calls.delete(progress);
+      if (state.calls.size === 0) for (const question of state.questions) question.abort();
+    }
+  }
+
   /** Tool list for the server edit screen. */
   async listTools(serverId: string): Promise<McpToolSummary[]> {
     const server = await mcpServerService.getById(serverId);

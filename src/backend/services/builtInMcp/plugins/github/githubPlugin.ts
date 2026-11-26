@@ -3,7 +3,7 @@ import * as z from 'zod';
 import { PluginError } from '@/shared/contracts/plugins';
 
 import type { PluginAuthorizationDefinition, PluginDefinition } from '../../pluginDefinition';
-import { createOfficialMcpClient } from '../../transport/createOfficialMcpClient';
+import { createGithubClient } from './createGithubClient';
 import { GithubAuthorizationRuntime } from './GithubAuthorizationRuntime';
 import { GithubTokenCredentialSchema, GithubUserCredentialSchema } from './githubCredentials';
 import { getGithubApplication } from './githubOauth';
@@ -72,6 +72,10 @@ export const githubPlugin: PluginDefinition = {
     merge_pull_request: 'write',
     pull_request_review_write: 'write',
     add_comment_to_pending_review: 'write',
+    pages_create_repository: 'write',
+    pages_upload_file: 'write',
+    pages_enable: 'write',
+    pages_status: 'read',
   },
   authMethods: [
     ...(getGithubApplication() ? [githubUserMethod] : []),
@@ -94,9 +98,7 @@ export const githubPlugin: PluginDefinition = {
     },
   ],
   createClient(context) {
-    return createOfficialMcpClient(context, {
-      url: 'https://api.githubcopilot.com/mcp/',
-    });
+    return createGithubClient(context);
   },
   validation: {
     tool: 'get_me',

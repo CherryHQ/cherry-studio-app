@@ -5,6 +5,7 @@ import type { AgentToolBindingSchemas } from './agentToolBindings';
 import type { AiUsageRecordSchemas } from './aiUsageRecords';
 import type { DesktopConnectionSchemas } from './desktopConnections';
 import type { FileSchemas } from './files';
+import type { GithubPagesSchemas } from './githubPages';
 import type { JobSchemas } from './jobs';
 import type { McpServerSchemas } from './mcpServers';
 import type { ModelSchemas } from './models';
@@ -26,6 +27,7 @@ export type ApiSchemas = SshProfileSchemas &
   AiUsageRecordSchemas &
   DesktopConnectionSchemas &
   FileSchemas &
+  GithubPagesSchemas &
   JobSchemas &
   McpServerSchemas &
   ModelSchemas &
