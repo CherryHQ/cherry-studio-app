@@ -3,6 +3,7 @@ import { appendFileSync, existsSync, openAsBlob, readFileSync, statSync } from '
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
+import { requireCliPath, requireSafeId } from './cliInput';
 import { fileEvidence, parseReleaseTag, sanitizeSecrets } from './releaseLocalBuild';
 
 const SHA_RE = /^[a-f0-9]{40}$/i;
@@ -712,16 +713,19 @@ async function main() {
     const result = await stageGitcodeRelease({
       tag: values.tag,
       commitSha: values.commit,
-      archiveDir: values['archive-dir'],
+      archiveDir: requireCliPath(values['archive-dir'], '--archive-dir'),
       artifactName: values['artifact-name'],
       releaseName: values.name,
-      buildId: values['build-id'],
+      buildId:
+        values['build-id'] === undefined
+          ? undefined
+          : requireSafeId(values['build-id'], '--build-id'),
       nativeBuildVersion: values['native-build-version'],
     });
 
     if (values.summary) {
       appendFileSync(
-        values.summary,
+        requireCliPath(values.summary, '--summary'),
         `GitCode Staged Release (${result.releaseStatus}): ${result.releaseUrl}\n`,
       );
     }
@@ -748,14 +752,14 @@ async function main() {
 
     const result = await publishGitcodeRelease({
       tag: values.tag,
-      notesText: readFileSync(resolve(values['notes-file']), 'utf8'),
+      notesText: readFileSync(requireCliPath(values['notes-file'], '--notes-file'), 'utf8'),
       artifactName: values['artifact-name'],
       releaseName: values.name,
     });
 
     if (values.summary) {
       appendFileSync(
-        values.summary,
+        requireCliPath(values.summary, '--summary'),
         `GitCode Release (${result.releaseStatus}): ${result.releaseUrl}\n`,
       );
     }

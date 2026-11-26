@@ -23,6 +23,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { parseArgs } from 'node:util';
 
+import { requireCliPath, requireSafeId } from './cliInput';
 import { sanitizeDiagnostic } from './uploadIosSymbols';
 import { verifyIosSymbolPackage } from './verifyIosSymbolPackage';
 
@@ -1999,6 +2000,10 @@ function formatBatchSummary(
   return `${lines.join('\n')}\n`;
 }
 
+function optionalCliPath(value: string | undefined, label: string): string | undefined {
+  return value === undefined ? undefined : requireCliPath(value, label);
+}
+
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   if (command === 'build') {
@@ -2023,12 +2028,12 @@ async function main() {
       target: resolveTargetConfig(values.target).id,
       tag: values.tag,
       commitSha: values.commit,
-      runId: values['run-id'] ?? 'manual',
-      attempt: values.attempt ?? '1',
-      releaseRoot: values.root,
+      runId: requireSafeId(values['run-id'] ?? 'manual', '--run-id'),
+      attempt: requireSafeId(values.attempt ?? '1', '--attempt'),
+      releaseRoot: optionalCliPath(values.root, '--root'),
     });
     if (values['github-output']) {
-      writeGitHubOutputs(values['github-output'], {
+      writeGitHubOutputs(requireCliPath(values['github-output'], '--github-output'), {
         build_id: result.buildId,
         archive_dir: result.archiveDir,
         artifact_name: result.artifactName,
@@ -2039,7 +2044,7 @@ async function main() {
     }
     if (values.summary) {
       appendFileSync(
-        values.summary,
+        requireCliPath(values.summary, '--summary'),
         `- \`${result.target}\` build \`${result.buildId}\` (native \`${result.nativeBuildVersion}\`) archived to \`${result.archiveDir}\`\n`,
       );
     }
@@ -2074,20 +2079,23 @@ async function main() {
     const result = await runLocalReleaseBatch({
       tag: values.tag,
       commitSha: values.commit,
-      runId: values['run-id'] ?? 'manual',
-      attempt: values.attempt ?? '1',
-      releaseRoot: values.root,
+      runId: requireSafeId(values['run-id'] ?? 'manual', '--run-id'),
+      attempt: requireSafeId(values.attempt ?? '1', '--attempt'),
+      releaseRoot: optionalCliPath(values.root, '--root'),
       includeGooglePlay: googlePlayMode === 'auto' ? undefined : googlePlayMode === 'true',
       reuseExisting: !values['no-reuse'],
     });
     if (values['github-output']) {
       writeGitHubOutputs(
-        values['github-output'],
+        requireCliPath(values['github-output'], '--github-output'),
         formatBatchOutputs(result.overallOk, result.targets),
       );
     }
     if (values.summary) {
-      appendFileSync(values.summary, formatBatchSummary(result.tag, result.targets));
+      appendFileSync(
+        requireCliPath(values.summary, '--summary'),
+        formatBatchSummary(result.tag, result.targets),
+      );
     }
     console.log(JSON.stringify(result, null, 2));
     if (!result.overallOk && !values['allow-partial-failure']) {
@@ -2111,7 +2119,7 @@ async function main() {
     if (!values.target || !values.tag || !values.commit) {
       throw new Error('Missing required flags: --target, --tag, --commit.');
     }
-    const releaseRoot = resolveReleaseRoot(process.env, values.root);
+    const releaseRoot = resolveReleaseRoot(process.env, optionalCliPath(values.root, '--root'));
     const result = await findCompleteBuild({
       target: resolveTargetConfig(values.target).id,
       tag: values.tag,
@@ -2120,7 +2128,7 @@ async function main() {
     });
     if (values['github-output']) {
       writeGitHubOutputs(
-        values['github-output'],
+        requireCliPath(values['github-output'], '--github-output'),
         result.found
           ? {
               found: 'true',
@@ -2152,12 +2160,12 @@ async function main() {
     if (!values['build-dir']) {
       throw new Error('Usage: check-submit --build-dir <dir> [--build-id <id>]');
     }
-    const receipt = readSubmitReceipt(resolve(values['build-dir']));
+    const receipt = readSubmitReceipt(requireCliPath(values['build-dir'], '--build-dir'));
     const alreadySubmitted =
       receipt?.status === 'succeeded' &&
       (!values['build-id'] || receipt.buildId === values['build-id']);
     if (values['github-output']) {
-      writeGitHubOutputs(values['github-output'], {
+      writeGitHubOutputs(requireCliPath(values['github-output'], '--github-output'), {
         already_submitted: alreadySubmitted ? 'true' : 'false',
       });
     }
@@ -2180,8 +2188,11 @@ async function main() {
       throw new Error('Usage: record-submit --build-dir <dir> --status <succeeded|failed>');
     }
     const receipt = recordSubmitReceipt({
-      buildDir: resolve(values['build-dir']),
-      buildId: values['build-id'],
+      buildDir: requireCliPath(values['build-dir'], '--build-dir'),
+      buildId:
+        values['build-id'] === undefined
+          ? undefined
+          : requireSafeId(values['build-id'], '--build-id'),
       status: values.status,
       message: values.message,
     });
@@ -2205,9 +2216,9 @@ async function main() {
       );
     }
     const verified = await verifyArchivedIpa({
-      ipaPath: values['ipa-path'],
+      ipaPath: requireCliPath(values['ipa-path'], '--ipa-path'),
       expectedSha256: values['expected-sha256'],
-      symbolsDir: values['symbols-dir'],
+      symbolsDir: optionalCliPath(values['symbols-dir'], '--symbols-dir'),
     });
     console.log(JSON.stringify(verified, null, 2));
     return;
@@ -2225,7 +2236,7 @@ async function main() {
       throw new Error('Usage: recover-ios --pending-dir <dir>');
     }
     const recovered = await recoverPendingIosBuild({
-      pendingDir: values['pending-dir'],
+      pendingDir: requireCliPath(values['pending-dir'], '--pending-dir'),
     });
     console.log(JSON.stringify(recovered, null, 2));
     return;
@@ -2253,7 +2264,7 @@ async function main() {
       throw new Error('--keep-prerelease must be a non-negative integer.');
     }
     const result = pruneReleases({
-      releaseRoot: resolveReleaseRoot(process.env, values.root),
+      releaseRoot: resolveReleaseRoot(process.env, optionalCliPath(values.root, '--root')),
       keepStable,
       keepPrerelease,
       dryRun: values['dry-run'],

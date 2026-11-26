@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
-  <application>
+  <application> <!-- NOSONAR library manifest, app-level flags come from app.json -->
     <receiver android:name=".BackgroundTaskActionReceiver" android:exported="false" />
     <activity
       android:name=".ShareReceiverActivity"

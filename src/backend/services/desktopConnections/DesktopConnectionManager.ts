@@ -823,7 +823,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
       return;
     entry.retryTimer = setTimeout(
       () => this.ensureConnected(id, entry),
-      Math.min(20_000, 1000 * 2 ** Math.min(entry.retry++, 5)) * (0.8 + Math.random() * 0.2),
+      Math.min(20_000, 1000 * 2 ** Math.min(entry.retry++, 5)) * (0.8 + Math.random() * 0.2), // NOSONAR retry jitter, not security sensitive
     );
   }
   private retiredError(reason: DesktopLeaseState['reason']) {

@@ -24,6 +24,7 @@ function prepareLibssh2(moduleRoot = __dirname) {
   try {
     const archive = join(temporary, 'libssh2.tar.gz');
     execFileSync(
+      // NOSONAR trusted build tool resolved from PATH
       'curl',
       [
         '--fail',
@@ -53,6 +54,7 @@ function prepareLibssh2(moduleRoot = __dirname) {
     const extracted = join(temporary, 'source');
     mkdirSync(extracted);
     execFileSync('tar', ['-xzf', archive, '--strip-components=1', '-C', extracted], {
+      // NOSONAR
       stdio: 'inherit',
       timeout: 30000,
     });

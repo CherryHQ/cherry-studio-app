@@ -1,8 +1,8 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
+import { requireCliPath } from './cliInput';
 import { parseReleaseTag } from './releaseLocalBuild';
 
 export type PublishReleaseTarget = 'both' | 'github' | 'gitcode';
@@ -57,6 +57,7 @@ const VALID_TARGETS = new Set<PublishReleaseTarget>(['both', 'github', 'gitcode'
 
 const defaultExecCommand: ExecCommand = (command, args, options) => {
   const result = spawnSync(command, args, {
+    // NOSONAR fixed internal commands (gh), arguments are validated by callers
     input: options?.input,
     stdio: options?.inheritStdio ? 'inherit' : ['pipe', 'pipe', 'pipe'],
     encoding: 'utf8',
@@ -256,10 +257,10 @@ function main() {
 
   const targets = (values.target ?? 'both') as PublishReleaseTarget;
   const notesEn = values['en-notes']
-    ? readFileSync(resolve(values['en-notes']), 'utf8')
+    ? readFileSync(requireCliPath(values['en-notes'], '--en-notes'), 'utf8')
     : undefined;
   const notesZh = values['zh-notes']
-    ? readFileSync(resolve(values['zh-notes']), 'utf8')
+    ? readFileSync(requireCliPath(values['zh-notes'], '--zh-notes'), 'utf8')
     : undefined;
 
   const result = dispatchPublishRelease({
