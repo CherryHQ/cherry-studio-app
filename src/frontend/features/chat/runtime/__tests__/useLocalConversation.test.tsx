@@ -187,3 +187,91 @@ it('keeps readCitations identity stable while live streaming updates arrive', ()
   });
   expect(result.messageWindow.readCitations).toBe(firstReadCitations);
 });
+
+it('caps backward citation scans when cited ids are absent', async () => {
+  mockApi.get.mockImplementation(async (_url: string, options: { query?: { cursor?: string } }) => {
+    const pageIndex = options.query?.cursor ? Number(options.query.cursor.split('-')[1]) : 1;
+    return {
+      items: [message(`msg-${pageIndex}`)],
+      nextCursor: pageIndex < 40 ? `cursor-${pageIndex + 1}` : undefined,
+    };
+  });
+  act(() => {
+    renderer = create(<Probe sessionId="session" />);
+  });
+
+  expect(
+    await result.messageWindow.readCitations!(
+      'msg-1',
+      ['missing-id'],
+      new AbortController().signal,
+    ),
+  ).toEqual([]);
+  expect(mockApi.get.mock.calls.length).toBeLessThanOrEqual(25);
+});
+
+it('shares cached pages and in-flight fetches across concurrent reads while isolating aborts', async () => {
+  let resolveSecondPage!: (value: { items: AgentMessageView[]; nextCursor?: string }) => void;
+  mockApi.get
+    .mockResolvedValueOnce({
+      items: [message('target')],
+      nextCursor: 'cursor-2',
+    })
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSecondPage = resolve;
+        }),
+    );
+  act(() => {
+    renderer = create(<Probe sessionId="session" />);
+  });
+
+  const controller1 = new AbortController();
+  const controller2 = new AbortController();
+  const firstRead = result.messageWindow.readCitations!('target', ['lookup-1'], controller1.signal);
+  const secondRead = result.messageWindow.readCitations!(
+    'target',
+    ['lookup-1'],
+    controller2.signal,
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(mockApi.get).toHaveBeenCalledTimes(2);
+
+  controller1.abort();
+  await expect(firstRead).rejects.toMatchObject({ name: 'AbortError' });
+
+  resolveSecondPage({
+    items: [
+      {
+        ...message('earlier'),
+        parts: [
+          {
+            id: 'earlier-tool',
+            type: 'dynamic-tool',
+            toolName: 'web_search',
+            title: 'web_search',
+            toolCallId: 'earlier-call',
+            toolRef: { source: 'builtin', capabilityId: 'web_search' },
+            input: { query: 'source' },
+            state: 'output-available',
+            output: {
+              value: [{ id: 'lookup-1', title: 'Cached Source', url: 'https://example.com' }],
+              artifacts: [],
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  await expect(secondRead).resolves.toEqual([
+    { id: 'lookup-1', title: 'Cached Source', url: 'https://example.com' },
+  ]);
+  expect(mockApi.get).toHaveBeenCalledTimes(2);
+
+  await expect(
+    result.messageWindow.readCitations!('target', ['lookup-1'], new AbortController().signal),
+  ).resolves.toEqual([{ id: 'lookup-1', title: 'Cached Source', url: 'https://example.com' }]);
+  expect(mockApi.get).toHaveBeenCalledTimes(2);
+});

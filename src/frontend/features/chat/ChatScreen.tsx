@@ -34,7 +34,11 @@ import { queryKeys, useApiClient, useBackendModule } from '@/frontend/data';
 import { cacheService } from '@/frontend/data/CacheService';
 import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
 import { useFileWorkspace } from '@/frontend/hooks/file';
-import { citationIds, collectCitationSources } from '@/frontend/utils/messageCitations';
+import {
+  citationIds,
+  collectCitationSources,
+  conversationCitationSources,
+} from '@/frontend/utils/messageCitations';
 import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import { agentPolicy } from '@/shared/data/managedPolicy';
@@ -231,17 +235,30 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                 query: { ids: [...ids] },
                 signal,
               });
+              const displayParts = snapshot.messages.map(
+                (message) => toAgentMessageDisplayParts(message.parts).parts ?? [],
+              );
+              const selectedRegistry = conversationCitationSources(
+                snapshot.messages.map((message, index) => ({
+                  id: message.id,
+                  parts: displayParts[index],
+                  sources: [],
+                })),
+              );
               const messages = await Promise.all(
-                snapshot.messages.map(async (message) => {
-                  const parts = toAgentMessageDisplayParts(message.parts).parts ?? [];
-                  const known = collectCitationSources(parts);
+                snapshot.messages.map(async (message, index) => {
+                  const parts = displayParts[index];
+                  const selected = selectedRegistry.get(message.id) ?? [];
+                  const known = collectCitationSources(parts, selected);
                   const missing = citationIds(parts).filter((id) => !known.has(id));
+                  const earlier = missing.length
+                    ? await readCitationsRef.current?.(message.id, missing, signal)
+                    : undefined;
+                  const citationSources = [...selected, ...(earlier ?? [])];
                   return {
                     ...message,
                     modelName: resolveMessageModel(message)?.name,
-                    citationSources: missing.length
-                      ? await readCitationsRef.current?.(message.id, missing, signal)
-                      : undefined,
+                    citationSources: citationSources.length ? citationSources : undefined,
                   };
                 }),
               );

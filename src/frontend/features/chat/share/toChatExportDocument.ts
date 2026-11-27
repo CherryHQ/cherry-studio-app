@@ -1,6 +1,7 @@
 import dayjs from 'dayjs';
 
 import type { TranscriptMessage } from '@/frontend/appShell/conversation';
+import { replaceChatCitations } from '@/frontend/utils/chatExportCitations';
 import {
   collectCitationSources,
   conversationCitationSources,
@@ -16,7 +17,6 @@ import {
 } from '@/shared/contracts/documentExport';
 import { CHERRY_AGENT_AVATAR } from '@/shared/data/types/agent';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
-import type { CherryMessagePart } from '@/shared/data/types/message';
 import type { AppLanguage } from '@/shared/utils/languages';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
@@ -239,23 +239,4 @@ function finalTextIndex(parts: Readonly<TranscriptMessage['parts']>): number | u
   return undefined;
 }
 
-/** Portable links use the same source validation, numbering and code exclusion as the message. */
-export function replaceChatCitations(
-  source: string,
-  sources: ReadonlyMap<string, { title: string; url?: string }>,
-  preferredNumbers?: ReadonlyMap<string, number>,
-  parts: readonly CherryMessagePart[] = [],
-): string {
-  const translationParts: CherryMessagePart[] = [
-    ...parts.filter((part) => part.type !== 'text'),
-    { type: 'text', text: source },
-  ];
-  return (
-    resolveMessageCitations(
-      translationParts,
-      [...sources].map(([id, item]) => ({ ...item, id })),
-      'export',
-      preferredNumbers,
-    ).textByPartIndex.get(translationParts.length - 1)?.markdown ?? source
-  );
-}
+export { replaceChatCitations };

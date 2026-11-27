@@ -610,26 +610,42 @@ export function createRemoteConversationSession(
         )
           throw new ConversationReadError({ code: 'conflict', retry: 'read-again' });
         const messages = [];
+        const priorSources = new Map<string, CitationSource>();
         for (const message of selected.toReversed()) {
           const transcript = remoteTranscriptMessage(message);
           const row = projectHistory(message);
           const ids = citationIds(row.display.data.parts ?? []);
-          const sources: CitationSource[] = [];
+          const ownSources: CitationSource[] = [];
+          for (const tool of row.tools ?? [])
+            ownSources.push(...(await readToolCitations(tool, signal)));
+          const sources = [...ownSources];
           if (ids.length) {
-            for (const tool of row.tools ?? [])
-              sources.push(...(await readToolCitations(tool, signal)));
             const known = new Set([
-              ...sources.map((source) => source.id),
+              ...ownSources.map((source) => source.id),
               ...message.parts.flatMap((part) =>
                 part.kind === 'presentation' && part.part.type === 'source-url'
                   ? [part.part.sourceId]
                   : [],
               ),
             ]);
-            const missing = ids.filter((id) => !known.has(id));
-            if (missing.length)
-              sources.push(...(await handle.history.readCitations!(message.id, missing, signal)));
+            const missing: string[] = [];
+            for (const id of ids) {
+              if (known.has(id)) continue;
+              const prior = priorSources.get(id);
+              if (prior) {
+                sources.push(prior);
+                known.add(id);
+              } else {
+                missing.push(id);
+              }
+            }
+            if (missing.length) {
+              const earlier = await handle.history.readCitations!(message.id, missing, signal);
+              sources.push(...earlier);
+              for (const source of earlier) priorSources.set(source.id, source);
+            }
           }
+          for (const source of ownSources) priorSources.set(source.id, source);
           transcript.citationSources = sources;
           for (const part of transcript.parts) {
             if (part.type !== 'prepared-file' || !part.mediaType.toLowerCase().startsWith('image/'))
