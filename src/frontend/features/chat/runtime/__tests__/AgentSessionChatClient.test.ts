@@ -819,6 +819,7 @@ describe('AgentSessionChatClient', () => {
     const client = new AgentSessionChatClient(protocol, { onTranscriptChanged });
     await client.observe('session-1');
     onTranscriptChanged.mockClear();
+    const revision = client.getState('session-1').transcriptRevision ?? 0;
     const second = { ...assistantMessage(), id: 'assistant-2' };
     listener?.({ type: 'message.created', message: userMessage() });
     listener?.({ type: 'message.created', message: assistantMessage() });
@@ -830,8 +831,10 @@ describe('AgentSessionChatClient', () => {
       message: { ...assistantMessage(), status: 'success' },
     });
     expect(onTranscriptChanged).not.toHaveBeenCalled();
+    expect(client.getState('session-1').transcriptRevision).toBe(revision);
     listener?.({ type: 'message.finalized', message: { ...second, status: 'success' } });
     expect(onTranscriptChanged).toHaveBeenCalledTimes(1);
+    expect(client.getState('session-1').transcriptRevision).toBe(revision + 1);
   });
 
   test('drops a deleted turn from live state and refreshes the durable transcript', async () => {

@@ -891,16 +891,14 @@ it('uses the nearest source in the pinned history even when the selection skips 
   }));
   const handle = await test.source.openSession(address, signal());
   jest.mocked(test.remote.history).mockClear();
-  jest
-    .mocked(test.remote.readSession)
-    .mockResolvedValueOnce(session)
-    .mockResolvedValue({ ...session, historyVersion: '2' });
+  jest.mocked(test.remote.readSession).mockClear();
   try {
     const prepared = await handle.history.prepareSelection(['first', 'answer'], signal());
     expect(prepared.messages[1].citationSources).toEqual([
       { id: 'lookup-1', title: 'nearby-output', url: 'https://example.com/nearby-output' },
     ]);
     expect(jest.mocked(test.remote.history).mock.calls.map((call) => call[1])).toEqual(['1', '1']);
+    expect(test.remote.readSession).toHaveBeenCalledTimes(2);
   } finally {
     test.source.dispose();
   }

@@ -776,26 +776,31 @@ export class AgentSessionChatClient {
         return;
       }
       case 'message.edited':
-      case 'message.finalized':
+      case 'message.finalized': {
         // Parallel answers keep streaming: drop only this message's unflushed text.
         for (const [key, pending] of entry.pendingTextDeltas)
           if (pending.messageId === event.message.id) entry.pendingTextDeltas.delete(key);
         entry.liveMessages.set(event.message.id, event.message);
         this.toolInputPreviews.clearMessage(event.message.id);
-        this.commitLiveMessages(entry);
         // Settled history omits a turn while any of its answers runs; only the last answer to
         // finish changes what it reads.
-        if (
+        const transcriptChanged =
           !event.message.turnId ||
           ![...entry.liveMessages.values()].some(
             (message) =>
               message.role === 'assistant' &&
               message.turnId === event.message.turnId &&
               !isTerminalMessage(message),
-          )
-        )
-          this.invalidateTranscript(entry.state.sessionId);
+          );
+        this.commitLiveMessages(
+          entry,
+          transcriptChanged
+            ? { transcriptRevision: (entry.state.transcriptRevision ?? 0) + 1 }
+            : undefined,
+        );
+        if (transcriptChanged) this.options.onTranscriptChanged?.(entry.state.sessionId);
         return;
+      }
       case 'turn.deleted':
       case 'messages.deleted': {
         for (const messageId of event.messageIds) {
