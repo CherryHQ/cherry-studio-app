@@ -130,22 +130,22 @@ describe('resolveNavigationShellMode', () => {
 describe('floating dock bottom padding and clearance', () => {
   test('gives Android system gesture and 3-button bars extra breathing room', () => {
     // Android gesture navigation (~24dp inset)
-    expect(resolveFloatingDockBottomPadding(24, 'android')).toBe(30);
-    expect(resolveFloatingDockClearance(44, 24, 'android')).toBe(60);
+    expect(resolveFloatingDockBottomPadding(24, 'android')).toBe(32);
+    expect(resolveFloatingDockClearance(46, 24, 'android')).toBe(66);
 
     // Android 3-button navigation (~48dp inset)
-    expect(resolveFloatingDockBottomPadding(48, 'android')).toBe(54);
-    expect(resolveFloatingDockClearance(44, 48, 'android')).toBe(60);
+    expect(resolveFloatingDockBottomPadding(48, 'android')).toBe(56);
+    expect(resolveFloatingDockClearance(46, 48, 'android')).toBe(66);
 
     // Zero bottom inset still maintains minimum padding
     expect(resolveFloatingDockBottomPadding(0, 'android')).toBe(12);
-    expect(resolveFloatingDockClearance(44, 0, 'android')).toBe(66);
+    expect(resolveFloatingDockClearance(46, 0, 'android')).toBe(70);
   });
 
   test('preserves compact home-indicator offset on iOS', () => {
     expect(resolveFloatingDockBottomPadding(34, 'ios')).toBe(18);
-    expect(resolveFloatingDockClearance(44, 34, 'ios')).toBe(38);
+    expect(resolveFloatingDockClearance(46, 34, 'ios')).toBe(42);
     expect(resolveFloatingDockBottomPadding(0, 'ios')).toBe(12);
-    expect(resolveFloatingDockClearance(44, 0, 'ios')).toBe(66);
+    expect(resolveFloatingDockClearance(46, 0, 'ios')).toBe(70);
   });
 });
