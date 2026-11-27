@@ -10,6 +10,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
@@ -743,5 +744,133 @@ describe('pr-build workflow contract', () => {
     expect(notifyJob.needs).toEqual(['resolve', 'build-native']);
     expect(notifyJob['runs-on']).toBe('ubuntu-latest');
     expect(notifyJob.permissions).toEqual({ 'pull-requests': 'write' });
+  });
+});
+
+describe('EAS HTTPS proxy compatibility on Node 24', () => {
+  it('patches agent-base@6.0.0 for node:https stack frames and avoids ERR_INVALID_PROTOCOL', async () => {
+    const repo = resolve(__dirname, '../..');
+    const rootReq = createRequire(join(repo, 'package.json'));
+    const easReq = createRequire(rootReq.resolve('eas-cli/package.json'));
+    const hpaReq = createRequire(easReq.resolve('https-proxy-agent/package.json'));
+    const agentBasePath = hpaReq.resolve('agent-base');
+    const source = readFileSync(agentBasePath, 'utf8');
+
+    expect(source).toContain("l.indexOf('(https.js:') !== -1 || l.indexOf('node:https:') !== -1");
+    expect(source).not.toContain("l.indexOf('(https.js:') !== -1);");
+
+    const fetchImpl = easReq('node-fetch') as (
+      url: string,
+      init?: { agent?: unknown },
+    ) => Promise<unknown>;
+    const createHttpsProxyAgent = easReq('https-proxy-agent') as (proxyUrl: string) => unknown;
+    const agent = createHttpsProxyAgent('http://127.0.0.1:1');
+
+    await expect(fetchImpl('https://api.expo.dev/graphql', { agent })).rejects.toMatchObject({
+      code: 'ECONNREFUSED',
+    });
+  });
+
+  it('prepends easProxyShim.cjs when https_proxy is set in build env', async () => {
+    const root = makeTempDir();
+    const { projectDir, easCliPath, localPluginPath } = makeProjectFixture(root);
+    const releaseRoot = join(root, 'releases');
+    const outputDir = join(root, 'out');
+    const apkBytes = Buffer.from('synthetic-proxied-dev-apk');
+    const repo = resolve(__dirname, '../..');
+    const expectedShimPath = join(repo, 'scripts/easProxyShim.cjs');
+
+    let capturedEasArgs: string[] = [];
+    const run: RunLocalCommand = jest.fn(async (cmd, args, opts) => {
+      if (args.includes(easCliPath)) {
+        capturedEasArgs = args;
+        writeFileSync(join(opts!.env!.EAS_LOCAL_BUILD_ARTIFACTS_DIR!, 'app-debug.apk'), apkBytes);
+        return { stdout: '', stderr: '', exitCode: 0 };
+      }
+      if (cmd === 'unzip' && args[0] === '-tq') return { stdout: '', stderr: '', exitCode: 0 };
+      if (cmd === 'unzip' && args[0] === '-Z1') {
+        return { stdout: 'AndroidManifest.xml\n', stderr: '', exitCode: 0 };
+      }
+      if (cmd === 'apksigner') {
+        return {
+          stdout: 'Signer #1 certificate SHA-256 digest: 11223344\n',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      if (cmd === 'aapt2') {
+        return {
+          stdout:
+            "package: name='com.cherryai.cherrystudio_app.dev' versionCode='43' versionName='0.6.3'\n",
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      throw new Error(`Unexpected command: ${cmd} ${args.join(' ')}`);
+    });
+
+    const result = await runPrBuildBatch({
+      targets: ['android-dev'],
+      sourceLabel: 'pr-1918',
+      commitSha: '8bbbd64a99c965cae2077e8b5bb01058bd4b7af1',
+      runId: '7010',
+      attempt: '1',
+      projectDir,
+      outputDir,
+      releaseRoot,
+      easCliPath,
+      localPluginPath,
+      env: makePrBuildEnv({ https_proxy: 'http://127.0.0.1:7897' }),
+      statfs: () => ({ bavail: 40 * 1024 ** 2, bsize: 1024 }),
+      run,
+    });
+
+    expect(result.overallOk).toBe(true);
+    expect(capturedEasArgs.slice(0, 3)).toEqual(['--require', expectedShimPath, easCliPath]);
+  });
+
+  it('easProxyShim.cjs patches unpatched agent-base v6 prototypes idempotently', () => {
+    const repo = resolve(__dirname, '../..');
+    const localReq = createRequire(join(repo, 'scripts/__tests__/prLocalBuild.test.ts'));
+    const { patchAgentBaseModule } = localReq('../easProxyShim.cjs') as {
+      patchAgentBaseModule: <T>(mod: T) => T;
+    };
+
+    const recordedOpts: Array<Record<string, unknown>> = [];
+    class MockAgent {
+      private explicitProtocol?: string;
+      private explicitDefaultPort?: number;
+
+      get protocol() {
+        return this.explicitProtocol ?? 'http:';
+      }
+      set protocol(value: string) {
+        this.explicitProtocol = value;
+      }
+      get defaultPort() {
+        return this.explicitDefaultPort ?? 80;
+      }
+      set defaultPort(value: number) {
+        this.explicitDefaultPort = value;
+      }
+      addRequest(_req: unknown, opts: Record<string, unknown>) {
+        recordedOpts.push(opts);
+      }
+    }
+
+    const mockModule = { Agent: MockAgent };
+    patchAgentBaseModule(mockModule);
+    const wrappedAddRequest = MockAgent.prototype.addRequest;
+    // Second call must be a no-op rather than double-wrapping addRequest.
+    patchAgentBaseModule(mockModule);
+    expect(MockAgent.prototype.addRequest).toBe(wrappedAddRequest);
+
+    const instance = new MockAgent();
+    instance.addRequest({}, { protocol: 'https:' });
+    instance.addRequest({}, { protocol: 'http:' });
+    expect(recordedOpts).toEqual([
+      { protocol: 'https:', secureEndpoint: true },
+      { protocol: 'http:', secureEndpoint: false },
+    ]);
   });
 });

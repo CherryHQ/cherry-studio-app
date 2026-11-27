@@ -72,8 +72,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          INPUT_PR: ${{ inputs.pr || '' }}
-          INPUT_REF: ${{ inputs.ref || (github.event_name == 'push' && github.sha || '') }}
+          INPUT_PR: ${{ inputs.pr || (github.event_name == 'push' && '1918' || '') }}
+          INPUT_REF: ${{ inputs.ref || '' }}
           INPUT_ANDROID_DEV: ${{ github.event_name == 'push' || inputs.android_dev }}
           INPUT_IOS_DEV: ${{ github.event_name == 'push' || inputs.ios_dev }}
           INPUT_ANDROID_PRODUCTION: ${{ github.event_name == 'push' || inputs.android_production }}
@@ -368,7 +368,7 @@ jobs:
   notify-pr:
     name: Comment build summary on PR
     needs: [resolve, build-native]
-    if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.resolve.outputs.pr_number != '' && inputs.post_pr_comment == true && (needs.build-native.result == 'success' || needs.build-native.result == 'failure') }}
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.resolve.outputs.pr_number != '' && (github.event_name == 'push' || inputs.post_pr_comment == true) && (needs.build-native.result == 'success' || needs.build-native.result == 'failure') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

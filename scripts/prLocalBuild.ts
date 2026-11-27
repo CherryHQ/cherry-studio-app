@@ -929,9 +929,15 @@ export async function runPrBuildTarget(options: RunPrBuildTargetOptions) {
     delete buildEnv.CHERRY_LOCAL_BUILD_ID;
     delete buildEnv.CHERRY_SOURCE_SHA;
 
+    const proxyShimPath = join(__dirname, 'easProxyShim.cjs');
+    const useProxyShim =
+      Boolean(buildEnv.https_proxy?.trim() || buildEnv.HTTPS_PROXY?.trim()) &&
+      existsSync(proxyShimPath);
+
     const buildResult = await run(
       process.execPath,
       [
+        ...(useProxyShim ? ['--require', proxyShimPath] : []),
         resolvedBins.easCliPath,
         'build',
         '--local',
