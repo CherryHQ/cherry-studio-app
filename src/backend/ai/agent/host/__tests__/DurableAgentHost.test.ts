@@ -1,5 +1,4 @@
 import { v4 as uuidv4, v7 as uuid } from 'uuid';
-import { ZodError } from 'zod';
 
 import type { BackgroundReplyTurnInput } from '@/backend/services/backgroundReply';
 import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
@@ -18,6 +17,7 @@ import { createTraceRecorder } from '../../../observability/__tests__/_traceReco
 import {
   FakeRuntime,
   LANES_PER_SESSION,
+  RuntimeCorruptLaneError,
   laneKey,
   parseLaneKey,
   runtimeLane,
@@ -2130,7 +2130,10 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       .spyOn(state.conversations, 'initialize')
       .mockImplementation(async (database, ports, signal) => {
         await initialize(database, ports, signal);
-        await ports.onRecoveryFailure!(runtimeLane(state.sessionId), new ZodError([]));
+        await ports.onRecoveryFailure!(
+          runtimeLane(state.sessionId),
+          new RuntimeCorruptLaneError('corrupt lane'),
+        );
       });
     const observe = jest.spyOn(state.conversations, 'observe');
     try {
@@ -2157,6 +2160,35 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test('isolates an idle RuntimeCorruptLaneError without leaking schema error internals', async () => {
+    const state = fixture();
+    const completed = await state.reserve();
+    await state.host.initialize();
+    const lane = runtimeLane(state.sessionId);
+    jest
+      .spyOn(state.conversations, 'observe')
+      .mockRejectedValueOnce(new RuntimeCorruptLaneError('corrupt lane', { lane }));
+    try {
+      await expect(state.host.observeSession(state.sessionId, () => {})).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED' },
+      });
+      expect(state.host.isReady).toBe(true);
+      await state.host.startSession({
+        sessionId: uuid(),
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Synthetic healthy input' }],
+      });
+      expect(state.conversations.submit).toHaveBeenCalledTimes(1);
+      expect(
+        await state.store.getMessage(state.sessionId, completed.assistantMessageId),
+      ).not.toBeNull();
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test('isolates an idle observation failure without changing history or blocking other Sessions', async () => {
     const state = fixture();
     const completed = await state.reserve();
@@ -2164,7 +2196,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     const original = await state.store.getMessage(state.sessionId, completed.assistantMessageId);
     const observe = jest
       .spyOn(state.conversations, 'observe')
-      .mockRejectedValueOnce(new ZodError([]));
+      .mockRejectedValueOnce(new RuntimeCorruptLaneError('corrupt lane'));
     try {
       const observations = await Promise.allSettled([
         state.host.observeSession(state.sessionId, () => {}),
@@ -2227,7 +2259,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
-  test('seals in-flight admission and concurrent sibling attach when observation hits ZodError', async () => {
+  test('seals in-flight admission and concurrent sibling attach when observation hits RuntimeCorruptLaneError', async () => {
     const state = fixture();
     await state.reserve();
     await state.host.initialize();
@@ -2268,7 +2300,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
           unsubscribe: siblingUnsubscribe,
         };
       }
-      throw new ZodError([]);
+      throw new RuntimeCorruptLaneError('corrupt lane');
     });
 
     try {
@@ -2361,7 +2393,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     const observing = jest
       .spyOn(state.conversations, 'observe')
       .mockImplementation(async (lane, listener) => {
-        if (lane.sessionId === state.sessionId) throw new ZodError([]);
+        if (lane.sessionId === state.sessionId) throw new RuntimeCorruptLaneError('corrupt lane');
         return observe(lane, listener);
       });
 
@@ -2480,7 +2512,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       jest.spyOn(state.conversations, 'observe').mockImplementation(async (lane, listener) => {
         if (lane.slot === 1) {
           await lookupEntered;
-          throw new ZodError([]);
+          throw new RuntimeCorruptLaneError('corrupt lane');
         }
         const observation = await observe(lane, listener);
         return {
@@ -2550,7 +2582,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     const initializing = state.host.initialize(controller.signal);
     await entered;
     controller.abort(new Error('Host replaced'));
-    rejectObservation(new ZodError([]));
+    rejectObservation(new RuntimeCorruptLaneError('corrupt lane'));
     await expect(initializing).rejects.toThrow('Host replaced');
     await state.host.close();
     expect(state.conversations.resume).not.toHaveBeenCalled();
@@ -2559,7 +2591,9 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
   test('retries isolated data when a fresh runtime generation can observe it', async () => {
     const state = fixture();
     await state.reserve('running');
-    jest.spyOn(state.conversations, 'observe').mockRejectedValueOnce(new ZodError([]));
+    jest
+      .spyOn(state.conversations, 'observe')
+      .mockRejectedValueOnce(new RuntimeCorruptLaneError('corrupt lane'));
     try {
       await state.host.initialize();
       await state.host.suspend();
@@ -2609,7 +2643,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         expect(
           (await state.store.getMessage(healthy.session.id, healthy.assistantMessage.id))?.status,
         ).toBe('interrupted');
-        await expect(state.host.quiesce()).rejects.toBeInstanceOf(ZodError);
+        await expect(state.host.quiesce()).rejects.toBeInstanceOf(RuntimeCorruptLaneError);
         await state.host.startSession({
           sessionId: uuid(),
           agentId: state.agentId,
@@ -2664,7 +2698,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         modelId: inferenceSnapshot.model.uniqueModelId,
         inferenceSnapshot,
       });
-      const failure = new ZodError([]);
+      const failure = new RuntimeCorruptLaneError('corrupt lane');
       if (source === 'native-read') {
         const message = state.conversations.message;
         jest.spyOn(state.conversations, 'message').mockImplementation(async (lane, id) => {

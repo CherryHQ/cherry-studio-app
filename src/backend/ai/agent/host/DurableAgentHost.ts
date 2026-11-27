@@ -1,6 +1,5 @@
 import { ReasoningEffortOptionSchema } from '@cherrystudio/universal/types/aiSdk';
 import { v7 as uuidv7 } from 'uuid';
-import { ZodError } from 'zod';
 
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import type {
@@ -64,6 +63,7 @@ import { applyReplyEdits } from '@/shared/utils/assistantReply';
 
 import type { ManagedFileResolver } from '../resources/managedFileResolver';
 import {
+  RuntimeCorruptLaneError,
   laneKey,
   raceAbort,
   runtimeLane,
@@ -2331,7 +2331,7 @@ export class DurableAgentHost implements AgentProtocol {
     ) => {
       signal?.throwIfAborted();
       // Startup can isolate validation failures; commands and backups must still read strictly.
-      if (!options?.isolateInvalid || !(error instanceof ZodError)) throw error;
+      if (!options?.isolateInvalid || !(error instanceof RuntimeCorruptLaneError)) throw error;
       logger.error('Agent operation failed', {
         error,
         operation: 'ai.reconcile',
@@ -2626,7 +2626,7 @@ export class DurableAgentHost implements AgentProtocol {
       },
       this.controller.signal,
     ).catch(async (error: unknown) => {
-      if (error instanceof ZodError) {
+      if (error instanceof RuntimeCorruptLaneError) {
         await this.isolateInvalidSession(lane, error, 'ai.observe');
         this.assertSessionRecovered(lane.sessionId);
       }
@@ -2646,7 +2646,7 @@ export class DurableAgentHost implements AgentProtocol {
     operation: 'ai.recovery' | 'ai.observe',
   ) {
     this.controller.signal.throwIfAborted();
-    if (!(error instanceof ZodError)) throw error;
+    if (!(error instanceof RuntimeCorruptLaneError)) throw error;
     this.recoveryFailures.add(lane.sessionId);
     this.admissions.get(lane.sessionId)?.controller.abort(recoveryFailureError());
     logger.error('Agent operation failed', {

@@ -1,4 +1,5 @@
 import { and, asc, eq, inArray, isNotNull, isNull, notInArray, sql } from 'drizzle-orm';
+import { ZodError } from 'zod';
 
 import {
   AppStatePolicy,
@@ -49,7 +50,7 @@ import { applyReplyEdits } from '@/shared/utils/assistantReply';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
-import type { RuntimeContextCheckpoint } from '../runtime';
+import { RuntimeCorruptLaneError, type RuntimeContextCheckpoint } from '../runtime';
 import type {
   AgentSessionStore,
   DeleteTurnInput,
@@ -1004,9 +1005,19 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       )
       .limit(1);
     if (!row) return null;
-    return options?.tolerateInvalidParts
-      ? (toReadableAgentMessageViews([row])[0] ?? null)
-      : toAgentMessageView(row);
+    if (options?.tolerateInvalidParts) {
+      return toReadableAgentMessageViews([row])[0] ?? null;
+    }
+    try {
+      return toAgentMessageView(row);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        throw new RuntimeCorruptLaneError('Stored agent message failed schema validation.', {
+          cause: error,
+        });
+      }
+      throw error;
+    }
   }
 
   async listTurnMessages(sessionId: string, turnId: string): Promise<AgentMessageView[]> {
