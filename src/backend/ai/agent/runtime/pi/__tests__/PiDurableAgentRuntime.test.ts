@@ -40,7 +40,7 @@ import type {
   RuntimeLane,
   RuntimeSqlDatabase,
 } from '../../durableTypes';
-import { runtimeLane } from '../../durableTypes';
+import { RuntimeCorruptLaneError, runtimeLane } from '../../durableTypes';
 import type { RuntimeTool } from '../../types';
 import { bindPiStream, resolvePiApiAdapter } from '../piApiAdapters';
 import { PiDurableAgentRuntime } from '../PiDurableAgentRuntime';
@@ -596,7 +596,11 @@ describe('Persistent Agent facade', () => {
       try {
         await expect(
           runtime.initialize(state.database, state.ports, controller.signal),
-        ).rejects.toBe(failure);
+        ).rejects.toMatchObject(
+          source === 'unhandled-validation'
+            ? { name: 'RuntimeCorruptLaneError', cause: failure }
+            : failure,
+        );
         expect(onRecoveryFailure).not.toHaveBeenCalled();
       } finally {
         configuration.mockRestore();
@@ -605,7 +609,7 @@ describe('Persistent Agent facade', () => {
     },
   );
 
-  test.each(['unfinished', 'idle'] as const)(
+  test.each(['unfinished', 'idle', 'unfinished tool-schema'] as const)(
     'isolates corrupt %s configuration while restoring and running a healthy owner',
     async (status) => {
       const state = fixture();
@@ -643,7 +647,23 @@ describe('Persistent Agent facade', () => {
           const submission = input(target.sessionId);
           await conversation.commit(async (tx) => {
             if (target === lane) {
-              (await tx.doc(configuration, target.sessionId, {})).value = {};
+              (await tx.doc(configuration, target.sessionId, {})).value =
+                status === 'unfinished tool-schema'
+                  ? {
+                      ...seed.configuration,
+                      version: 2,
+                      tools: [
+                        {
+                          ref: { source: 'builtin', capabilityId: 'read_file' },
+                          providerName: 'read_file',
+                          displayName: 'Read file',
+                          description: 'Read a file.',
+                          inputSchema: null,
+                          approval: 'auto',
+                        },
+                      ],
+                    }
+                  : {};
               if (status === 'idle') return;
             }
             await tx.doc(
@@ -676,14 +696,16 @@ describe('Persistent Agent facade', () => {
       } finally {
         await inspection.close();
       }
-      const failure = jest.fn(async () => {});
+      const failure = jest.fn(async (_lane: unknown, _error: unknown) => {});
       state.ports.onRecoveryFailure = failure;
       runtime = state.create();
       try {
         await runtime.initialize(state.database, state.ports);
-        if (status === 'unfinished')
-          expect(failure).toHaveBeenCalledWith(lane, expect.any(ZodError));
-        expect(failure).toHaveBeenCalledTimes(status === 'unfinished' ? 1 : 0);
+        if (status !== 'idle') {
+          expect(failure).toHaveBeenCalledWith(lane, expect.any(RuntimeCorruptLaneError));
+          expect((failure.mock.calls[0]?.[1] as Error | undefined)?.cause).toBeInstanceOf(ZodError);
+        }
+        expect(failure).toHaveBeenCalledTimes(status === 'idle' ? 0 : 1);
         expect((await runtime.configuration(healthy)).model).toEqual(reference);
         const completed = deferred<void>();
         const observed = await runtime.observe(healthy, (event) => {
@@ -695,8 +717,12 @@ describe('Persistent Agent facade', () => {
         await observed.unsubscribe();
         expect(state.requests).toHaveLength(1);
         expect((await runtime.history(healthy, { limit: 1 })).turns[0]?.status).toBe('completed');
-        await expect(runtime.configuration(lane)).rejects.toBeInstanceOf(ZodError);
-        await expect(runtime.observe(lane, () => {})).rejects.toBeInstanceOf(ZodError);
+        if (status !== 'unfinished tool-schema') {
+          await expect(runtime.configuration(lane)).rejects.toBeInstanceOf(RuntimeCorruptLaneError);
+          await expect(runtime.observe(lane, () => {})).rejects.toBeInstanceOf(
+            RuntimeCorruptLaneError,
+          );
+        }
       } finally {
         await runtime.close();
       }

@@ -65,6 +65,7 @@ export type {
 export {
   DURABLE_IMAGE_TOOL_NAME,
   LANES_PER_SESSION,
+  RuntimeCorruptLaneError,
   laneKey,
   parseLaneKey,
   runtimeLane,
