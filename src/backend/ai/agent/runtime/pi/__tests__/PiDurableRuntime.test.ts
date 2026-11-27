@@ -523,6 +523,37 @@ describe('PiDurableRuntime identity and handoff', () => {
     }
   });
 
+  test('file grants use bounded deltas and keep all grants at the next checkpoint', async () => {
+    const storage = new MemoryStorage();
+    const runtime = await PiDurableRuntime.open(storage, options());
+    try {
+      const conversation = await runtime.ensureConversation(seed);
+      const document = await storage.findDocument(
+        {
+          kind: 'cherry.resources',
+          scope: { kind: 'conversation', conversationId: conversation.id },
+        },
+        'current',
+        BACKGROUND_CONTEXT,
+      );
+      if (!document) throw new Error('Expected a file grant document');
+
+      const fileIds = Array.from({ length: 32 }, (_, index) => `file-${index}`);
+      for (const id of fileIds) await runtime.grantFiles(seed.sessionId, [id]);
+      const before = await storage.document(document.id, 'current', BACKGROUND_CONTEXT);
+      expect(before?.deltasSinceBase).toBe(32);
+
+      await runtime.grantFiles(seed.sessionId, ['last-file']);
+      const after = await storage.document(document.id, 'current', BACKGROUND_CONTEXT);
+      expect(after).toMatchObject({
+        deltasSinceBase: 0,
+        value: { fileEntryIds: [...fileIds, 'last-file'] },
+      });
+    } finally {
+      await runtime.close();
+    }
+  });
+
   test.each(['1.4.0', '1.5.0'])(
     'reopens a %s run and advances waiting input after a missing-model failure',
     async (version) => {
@@ -880,7 +911,79 @@ describe('PiDurableRuntime identity and handoff', () => {
     }
   });
 
-  test('placed inputs respect every fork boundary and use submission lookups without entry scans', async () => {
+  test('latest input waits for a stored submission to reach the warm index', async () => {
+    class PublicationStorage extends MemoryStorage {
+      publishing(publish: () => void) {
+        publish();
+      }
+    }
+    const storage = new PublicationStorage();
+    const configuration = options();
+    const harness = await Harness.open(storage, configuration, BACKGROUND_CONTEXT);
+    const open = jest.spyOn(Harness, 'open').mockResolvedValueOnce(harness);
+    const runtime = await PiDurableRuntime.open(storage, configuration).finally(() =>
+      open.mockRestore(),
+    );
+    let releasePublication: (() => void) | undefined;
+    try {
+      const conversation = await runtime.ensureConversation(seed);
+      expect(await runtime.placedInputs(seed.sessionId, { limit: 1 })).toEqual([]);
+
+      const publication = Promise.withResolvers<() => void>();
+      jest.spyOn(storage, 'publishing').mockImplementationOnce(publication.resolve);
+      const submitted = conversation.commit(async (tx) => {
+        const entry = await tx.appendEntry(conversation.id, seed.entries[0]!);
+        return tx.createSubmission({
+          conversationId: conversation.id,
+          type: 'input',
+          status: 'placed',
+          requestId: 'stored-input',
+          entry: entry.id,
+        });
+      }, BACKGROUND_CONTEXT);
+      const publish = await Promise.race([publication.promise, submitted.then(() => undefined)]);
+      if (!publish) throw new Error('Expected publication to be held');
+      releasePublication = publish;
+      const stored = await storage.submissionByRequest(
+        conversation.id,
+        'stored-input',
+        BACKGROUND_CONTEXT,
+      );
+      if (stored?.entry === undefined)
+        throw new Error('Expected a stored input before publication');
+
+      // Model a lookup that resolved the session before the writer was admitted.
+      jest.spyOn(runtime, 'conversation').mockResolvedValueOnce(conversation);
+      const commit = harness.commit.bind(harness);
+      jest.spyOn(harness, 'commit').mockImplementationOnce((read, context, commitOptions) =>
+        commit(
+          async (tx) => {
+            const latestEntryId = tx.latestEntryId.bind(tx);
+            jest.spyOn(tx, 'latestEntryId').mockImplementationOnce((id) => {
+              const gatedRead = latestEntryId(id);
+              publish();
+              return gatedRead;
+            });
+            try {
+              return await read(tx);
+            } finally {
+              // If the gate is omitted, release only after the callback has selected from the stale index.
+              publish();
+            }
+          },
+          context,
+          commitOptions,
+        ),
+      );
+      const latest = await runtime.latestInput(seed.sessionId, stored.entry);
+      expect(latest?.record).toEqual(await submitted);
+    } finally {
+      releasePublication?.();
+      await runtime.close();
+    }
+  });
+
+  test('placed inputs respect fork boundaries and avoid bulk entry scans', async () => {
     const storage = new MemoryStorage();
     const runtime = await PiDurableRuntime.open(storage, options());
     const place = async (sessionId: string, requestId: string) => {
@@ -931,6 +1034,7 @@ describe('PiDurableRuntime identity and handoff', () => {
       ).toEqual([newer, inherited]);
       expect(byRequest).toHaveBeenCalledTimes(3 * 4);
       expect(scanSubmissions).not.toHaveBeenCalled();
+      expect(scanEntries).not.toHaveBeenCalled();
       expect(
         await runtime.placedInputs('grandchild', {
           limit: 2,
@@ -942,9 +1046,13 @@ describe('PiDurableRuntime identity and handoff', () => {
       readMetadata.mockClear();
       expect(await runtime.placedInputs('grandchild', { limit: 1 })).toEqual([newer]);
       expect(readMetadata).toHaveBeenCalledTimes(1);
+      expect(scanSubmissions.mock.calls.map(([query]) => query.conversationId)).toEqual([
+        grandchild.id,
+        child.id,
+      ]);
       expect(await runtime.placedInputs('grandchild', { limit: 3 })).toEqual([newer, inherited]);
       expect(await runtime.latestInput('grandchild', hidden.record.entry!)).toEqual(inherited);
-      expect(scanEntries).not.toHaveBeenCalled();
+      expect(scanEntries.mock.calls.every(([, limit]) => limit === 1)).toBe(true);
       expect(readEntry).not.toHaveBeenCalledWith(
         grandchild.id,
         hidden.record.entry,

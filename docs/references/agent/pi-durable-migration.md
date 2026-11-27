@@ -31,8 +31,12 @@ and [Pi AI changelog](https://github.com/earendil-works/pi/blob/v1.5.0/packages/
   paused reply. Sleeping/blocked work still follows the existing execution-protection policy.
 - `afterFailedRun: 'continue'`, model-specific compaction policy and Cherry client identity remain.
   `progress.persistWithinMs` uses Pi's 1000 ms default to coalesce streaming progress writes.
-- Cherry's current-only documents use `checkpointWhen: () => true`. SQLite replaces their prior
-  revisions when it writes a base checkpoint, bounding `document_revisions` per document.
+  A successful normal close flushes held progress. Explicit stop saves the partial answer recorded
+  in `pi.live` as an aborted transcript entry. An abrupt process kill can lose progress still held
+  in memory during the coalescing window.
+- Cherry's current-only documents generally checkpoint each change. The growing managed-file grant
+  list writes a new base on the next change after 32 deltas. SQLite replaces prior revisions when
+  it writes a new base, bounding `document_revisions` per document.
 - Tool parameters remain ordinary JSON Schema objects, preserving additional-property semantics.
   Error `afterTool` results retain their diagnostics and failure details; confirmed Code Mode
   artifacts still come from their durable transcript receipts. Unoffered calls must never execute.

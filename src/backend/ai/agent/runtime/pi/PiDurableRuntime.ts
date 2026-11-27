@@ -121,7 +121,7 @@ const ResourceScope = defineDoc<{ fileEntryIds: string[] }>({
   kind: 'cherry.resources',
   version: 1,
   scope: 'conversation',
-  checkpointWhen: () => true,
+  checkpointWhen: (_value, _ops, { deltasSinceBase }) => deltasSinceBase >= 32,
   history: 'latest',
   fork: 'current',
   initial: () => ({ fileEntryIds: [] }),
@@ -946,29 +946,33 @@ export class PiDurableRuntime {
     if (!Number.isSafeInteger(query.limit) || query.limit < 1 || requestIds?.size === 0) return [];
     const conversation = await this.requireSession(sessionId, context);
     const matched = await this.harness.commit(async (tx) => {
-      const candidates = new Map<SubmissionId, SubmissionRecord>();
+      // The append publishes its placed submissions to the index before Pi releases this read.
+      if (!requestIds) await tx.latestEntryId(conversation.id);
+
+      const records: SubmissionRecord[] = [];
+      // Global entry IDs increase. Each fork's own entries are newer than its inherited prefix.
       for await (const { origin, upper } of this.forkLineage(
         conversation.id,
         query.maxEntryId,
         context,
       )) {
+        const candidates: SubmissionRecord[] = [];
         if (requestIds) {
           for (const requestId of requestIds) {
             const input = await tx.submissionByRequest(origin, requestId);
             if (input?.type === 'input' && input.entry !== undefined && input.entry <= upper)
-              candidates.set(input.id, input);
+              candidates.push(input);
           }
         } else {
           const index = await this.submissionIndex(origin, context);
           for (const [entry, input] of index.entries)
-            if (input.type === 'input' && entry <= upper) candidates.set(input.id, input);
+            if (input.type === 'input' && entry <= upper) candidates.push(input);
         }
-      }
-      const records: SubmissionRecord[] = [];
-      for (const candidate of [...candidates.values()].sort((a, b) => b.entry! - a.entry!)) {
-        if (!(await this.storage.entry(conversation.id, candidate.entry!, context))) continue;
-        records.push(candidate);
-        if (records.length === query.limit) break;
+        for (const candidate of candidates.sort((a, b) => b.entry! - a.entry!)) {
+          if (!(await this.storage.entry(conversation.id, candidate.entry!, context))) continue;
+          records.push(candidate);
+          if (records.length === query.limit) return records;
+        }
       }
       return records;
     }, context);
