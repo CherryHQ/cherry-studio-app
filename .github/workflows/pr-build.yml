@@ -1,0 +1,448 @@
+name: PR Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number (e.g. 1913; provide either pr or ref)
+        required: false
+        default: ''
+        type: string
+      ref:
+        description: Branch name or commit SHA when not building a PR
+        required: false
+        default: ''
+        type: string
+      android_dev:
+        description: Build Android development APK (development profile)
+        required: false
+        default: true
+        type: boolean
+      ios_dev:
+        description: Build iOS development device IPA (development profile)
+        required: false
+        default: false
+        type: boolean
+      android_production:
+        description: Build Android production APK (production profile, Sentry upload disabled, increments remote versionCode)
+        required: false
+        default: false
+        type: boolean
+      post_pr_comment:
+        description: Post build summary and artifact link to the PR when pr is set
+        required: false
+        default: true
+        type: boolean
+      allow_fork_pr:
+        description: Allow building a reviewed cross-repository fork PR on the self-hosted runner
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: Resolve PR build targets
+    if: github.repository == 'CherryHQ/cherry-studio-app'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      targets_csv: ${{ steps.resolve.outputs.targets_csv }}
+      needs_android: ${{ steps.resolve.outputs.needs_android }}
+      needs_ios: ${{ steps.resolve.outputs.needs_ios }}
+      needs_android_dev: ${{ steps.resolve.outputs.needs_android_dev }}
+      needs_ios_dev: ${{ steps.resolve.outputs.needs_ios_dev }}
+      needs_android_production: ${{ steps.resolve.outputs.needs_android_production }}
+      source_sha: ${{ steps.resolve.outputs.source_sha }}
+      short_sha: ${{ steps.resolve.outputs.short_sha }}
+      checkout_ref: ${{ steps.resolve.outputs.checkout_ref }}
+      source_label: ${{ steps.resolve.outputs.source_label }}
+      pr_number: ${{ steps.resolve.outputs.pr_number }}
+    steps:
+      - name: Validate inputs and resolve source commit
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          INPUT_PR: ${{ inputs.pr }}
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_ANDROID_DEV: ${{ inputs.android_dev }}
+          INPUT_IOS_DEV: ${{ inputs.ios_dev }}
+          INPUT_ANDROID_PRODUCTION: ${{ inputs.android_production }}
+          INPUT_ALLOW_FORK_PR: ${{ inputs.allow_fork_pr }}
+        run: |
+          targets=()
+          needs_android=false
+          needs_ios=false
+          needs_android_dev=false
+          needs_ios_dev=false
+          needs_android_production=false
+
+          if [[ "$INPUT_ANDROID_DEV" == "true" ]]; then
+            targets+=("android-dev")
+            needs_android=true
+            needs_android_dev=true
+          fi
+          if [[ "$INPUT_ANDROID_PRODUCTION" == "true" ]]; then
+            targets+=("android-production")
+            needs_android=true
+            needs_android_production=true
+          fi
+          if [[ "$INPUT_IOS_DEV" == "true" ]]; then
+            targets+=("ios-dev")
+            needs_ios=true
+            needs_ios_dev=true
+          fi
+
+          if [[ "${#targets[@]}" -eq 0 ]]; then
+            echo "::error::Select at least one build target (android_dev, ios_dev, or android_production)."
+            exit 1
+          fi
+          targets_csv="$(IFS=,; echo "${targets[*]}")"
+
+          pr_trimmed="$(printf '%s' "$INPUT_PR" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+          ref_trimmed="$(printf '%s' "$INPUT_REF" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+
+          if [[ -n "$pr_trimmed" && -n "$ref_trimmed" ]]; then
+            echo "::error::Provide either pr or ref, not both."
+            exit 1
+          fi
+          if [[ -z "$pr_trimmed" && -z "$ref_trimmed" ]]; then
+            echo "::error::Provide either pr (PR number) or ref (branch or commit SHA)."
+            exit 1
+          fi
+
+          pr_number=""
+          checkout_ref=""
+          source_sha=""
+          source_label=""
+
+          if [[ -n "$pr_trimmed" ]]; then
+            pr_number="${pr_trimmed#\#}"
+            if [[ ! "$pr_number" =~ ^[1-9][0-9]*$ ]]; then
+              echo "::error::Invalid PR number '$pr_trimmed'. Expected a positive integer."
+              exit 1
+            fi
+            gh api "repos/$GH_REPO/pulls/$pr_number" > "$RUNNER_TEMP/pr.json"
+            head_repo="$(jq -r '.head.repo.full_name // ""' "$RUNNER_TEMP/pr.json")"
+            if [[ "$head_repo" != "$GH_REPO" && "$INPUT_ALLOW_FORK_PR" != "true" ]]; then
+              echo "::error::PR #$pr_number originates from fork '$head_repo'. Review its changes first and re-run with allow_fork_pr=true if trusted."
+              exit 1
+            fi
+            source_sha="$(jq -r '.head.sha // ""' "$RUNNER_TEMP/pr.json" | tr '[:upper:]' '[:lower:]')"
+            rm -f "$RUNNER_TEMP/pr.json"
+            if [[ ! "$source_sha" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::Could not resolve valid head SHA for PR #$pr_number."
+              exit 1
+            fi
+            checkout_ref="refs/pull/$pr_number/head"
+            source_label="pr-$pr_number"
+          else
+            if [[ "$ref_trimmed" == -* ]] || printf '%s' "$ref_trimmed" | grep -qE '[[:cntrl:][:space:]]'; then
+              echo "::error::Invalid ref '$ref_trimmed'."
+              exit 1
+            fi
+            encoded_ref="$(jq -rn --arg ref "$ref_trimmed" '$ref | @uri')"
+            source_sha="$(gh api "repos/$GH_REPO/commits/$encoded_ref" --jq '.sha' | tr '[:upper:]' '[:lower:]')"
+            if [[ ! "$source_sha" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::Could not resolve valid commit SHA for ref '$ref_trimmed'."
+              exit 1
+            fi
+            checkout_ref="$source_sha"
+            short_tmp="${source_sha:0:7}"
+            source_label="$(printf '%s' "$ref_trimmed" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g; s/\.\.+/./g; s/^[._-]+//; s/[._-]+$//' | cut -c1-48 | sed -E 's/[._-]+$//')"
+            if [[ -z "$source_label" ]]; then
+              source_label="ref-$short_tmp"
+            fi
+          fi
+
+          short_sha="${source_sha:0:7}"
+          {
+            echo "targets_csv=$targets_csv"
+            echo "needs_android=$needs_android"
+            echo "needs_ios=$needs_ios"
+            echo "needs_android_dev=$needs_android_dev"
+            echo "needs_ios_dev=$needs_ios_dev"
+            echo "needs_android_production=$needs_android_production"
+            echo "source_sha=$source_sha"
+            echo "short_sha=$short_sha"
+            echo "checkout_ref=$checkout_ref"
+            echo "source_label=$source_label"
+            echo "pr_number=$pr_number"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### PR Native Build Plan"
+            echo ""
+            echo "- Source: \`$source_label\` (\`$source_sha\`)"
+            echo "- Checkout ref: \`$checkout_ref\`"
+            echo "- Targets: \`$targets_csv\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build-native:
+    name: Build PR native packages
+    needs: resolve
+    runs-on: [self-hosted, macOS, ARM64, release]
+    permissions:
+      contents: read
+    concurrency:
+      group: cherry-studio-app-pr-native-local-build
+      cancel-in-progress: false
+    timeout-minutes: 180
+    outputs:
+      overall_ok: ${{ steps.build.outputs.overall_ok }}
+      android_dev_ready: ${{ steps.build.outputs.android_dev_ready }}
+      android_dev_status: ${{ steps.build.outputs.android_dev_status }}
+      android_dev_dir: ${{ steps.build.outputs.android_dev_dir }}
+      android_dev_artifact_name: ${{ steps.build.outputs.android_dev_artifact_name }}
+      android_dev_native_build_version: ${{ steps.build.outputs.android_dev_native_build_version }}
+      android_dev_sha256: ${{ steps.build.outputs.android_dev_sha256 }}
+      android_dev_error: ${{ steps.build.outputs.android_dev_error }}
+      ios_dev_ready: ${{ steps.build.outputs.ios_dev_ready }}
+      ios_dev_status: ${{ steps.build.outputs.ios_dev_status }}
+      ios_dev_dir: ${{ steps.build.outputs.ios_dev_dir }}
+      ios_dev_artifact_name: ${{ steps.build.outputs.ios_dev_artifact_name }}
+      ios_dev_native_build_version: ${{ steps.build.outputs.ios_dev_native_build_version }}
+      ios_dev_sha256: ${{ steps.build.outputs.ios_dev_sha256 }}
+      ios_dev_error: ${{ steps.build.outputs.ios_dev_error }}
+      android_production_ready: ${{ steps.build.outputs.android_production_ready }}
+      android_production_status: ${{ steps.build.outputs.android_production_status }}
+      android_production_dir: ${{ steps.build.outputs.android_production_dir }}
+      android_production_artifact_name: ${{ steps.build.outputs.android_production_artifact_name }}
+      android_production_native_build_version: ${{ steps.build.outputs.android_production_native_build_version }}
+      android_production_sha256: ${{ steps.build.outputs.android_production_sha256 }}
+      android_production_error: ${{ steps.build.outputs.android_production_error }}
+
+    steps:
+      - name: Checkout PR or branch source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.resolve.outputs.checkout_ref }}
+          path: src
+          persist-credentials: false
+          clean: true
+
+      - name: Checkout trusted build tooling
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          path: tools
+          persist-credentials: false
+          clean: true
+
+      - name: Verify runner toolchain
+        env:
+          NEEDS_ANDROID: ${{ needs.resolve.outputs.needs_android }}
+          NEEDS_IOS: ${{ needs.resolve.outputs.needs_ios }}
+        run: |
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}"
+          if ! command -v apksigner > /dev/null 2>&1 || ! command -v aapt2 > /dev/null 2>&1; then
+            if [[ -d "$sdk_root/build-tools" ]]; then
+              latest_build_tools="$(ls -1 "$sdk_root/build-tools" 2>/dev/null | sort -V | tail -n 1 || true)"
+              if [[ -n "$latest_build_tools" && -d "$sdk_root/build-tools/$latest_build_tools" ]]; then
+                echo "$sdk_root/build-tools/$latest_build_tools" >> "$GITHUB_PATH"
+                export PATH="$sdk_root/build-tools/$latest_build_tools:$PATH"
+              fi
+            fi
+          fi
+
+          echo "=== Host Toolchain Diagnostics ==="
+          echo "arch=$(uname -m)"
+          echo "node=$(node -v 2>/dev/null || echo missing)"
+          echo "pnpm=$(pnpm -v 2>/dev/null || echo missing)"
+          echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-unset}"
+          echo "JAVA_HOME=${JAVA_HOME:-unset}"
+          echo "RUNNER_RELEASE_ROOT=${RUNNER_RELEASE_ROOT:-unset}"
+          echo "xcodebuild=$(xcodebuild -version 2>/dev/null | tr '\n' ' ' || echo missing)"
+          echo "pod=$(pod --version 2>/dev/null || echo missing)"
+          echo "fastlane=$(fastlane --version 2>/dev/null | head -n 1 || echo missing)"
+          echo "bundletool=$(command -v bundletool 2>/dev/null || echo missing)"
+          echo "jarsigner=$(command -v jarsigner 2>/dev/null || echo missing)"
+          echo "gh=$(command -v gh 2>/dev/null || echo missing)"
+          df -h "${RUNNER_RELEASE_ROOT:-$HOME}"
+
+          missing=()
+          if ! node -p 'process.version' 2>/dev/null | grep -Eq '^v24\.'; then
+            missing+=("node@v24.x (found: $(node -v 2>/dev/null || echo missing))")
+          fi
+          if [[ "$(pnpm -v 2>/dev/null || true)" != "12.2.1" ]]; then
+            missing+=("pnpm@12.2.1 (found: $(pnpm -v 2>/dev/null || echo missing))")
+          fi
+          for cmd in jq unzip; do
+            if ! command -v "$cmd" > /dev/null 2>&1; then
+              missing+=("$cmd")
+            fi
+          done
+          if [[ "$NEEDS_ANDROID" == "true" ]]; then
+            for cmd in apksigner aapt2; do
+              if ! command -v "$cmd" > /dev/null 2>&1; then
+                missing+=("$cmd")
+              fi
+            done
+          fi
+          if [[ "$NEEDS_IOS" == "true" ]]; then
+            for cmd in plutil xcodebuild pod fastlane; do
+              if ! command -v "$cmd" > /dev/null 2>&1; then
+                missing+=("$cmd")
+              fi
+            done
+          fi
+          if [[ "${#missing[@]}" -gt 0 ]]; then
+            echo "::error::Missing or mismatched runner tools: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Install PR dependencies
+        working-directory: src
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and verify PR targets
+        id: build
+        working-directory: src
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          TARGETS_CSV: ${{ needs.resolve.outputs.targets_csv }}
+          SOURCE_LABEL: ${{ needs.resolve.outputs.source_label }}
+          SOURCE_SHA: ${{ needs.resolve.outputs.source_sha }}
+          OUTPUT_DIR: ${{ runner.temp }}/pr-build-artifacts
+        run: |
+          ulimit -n 10240 2>/dev/null || true
+          node --import tsx "$GITHUB_WORKSPACE/tools/scripts/prLocalBuild.ts" build-all \
+            --project-dir "$GITHUB_WORKSPACE/src" \
+            --targets "$TARGETS_CSV" \
+            --source-label "$SOURCE_LABEL" \
+            --commit "$SOURCE_SHA" \
+            --run-id "$GITHUB_RUN_ID" \
+            --attempt "$GITHUB_RUN_ATTEMPT" \
+            --output-dir "$OUTPUT_DIR" \
+            --allow-partial-failure \
+            --github-output "$GITHUB_OUTPUT" \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Android development APK
+        if: ${{ !cancelled() && steps.build.outputs.android_dev_ready == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-build-${{ needs.resolve.outputs.source_label }}-${{ needs.resolve.outputs.short_sha }}-android-dev
+          path: ${{ steps.build.outputs.android_dev_dir }}
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload iOS development IPA
+        if: ${{ !cancelled() && steps.build.outputs.ios_dev_ready == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-build-${{ needs.resolve.outputs.source_label }}-${{ needs.resolve.outputs.short_sha }}-ios-dev
+          path: ${{ steps.build.outputs.ios_dev_dir }}
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload Android production APK
+        if: ${{ !cancelled() && steps.build.outputs.android_production_ready == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-build-${{ needs.resolve.outputs.source_label }}-${{ needs.resolve.outputs.short_sha }}-android-production
+          path: ${{ steps.build.outputs.android_production_dir }}
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Fail job if any selected target failed
+        if: ${{ steps.build.outputs.overall_ok != 'true' }}
+        env:
+          ANDROID_DEV_STATUS: ${{ steps.build.outputs.android_dev_status }}
+          IOS_DEV_STATUS: ${{ steps.build.outputs.ios_dev_status }}
+          ANDROID_PRODUCTION_STATUS: ${{ steps.build.outputs.android_production_status }}
+        run: |
+          echo "PR native build failed for one or more targets: android-dev=$ANDROID_DEV_STATUS, ios-dev=$IOS_DEV_STATUS, android-production=$ANDROID_PRODUCTION_STATUS" >&2
+          exit 1
+
+  notify-pr:
+    name: Comment build summary on PR
+    needs: [resolve, build-native]
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.resolve.outputs.pr_number != '' && inputs.post_pr_comment == true && (needs.build-native.result == 'success' || needs.build-native.result == 'failure') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Post PR build comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
+          SOURCE_LABEL: ${{ needs.resolve.outputs.source_label }}
+          SOURCE_SHA: ${{ needs.resolve.outputs.source_sha }}
+          SHORT_SHA: ${{ needs.resolve.outputs.short_sha }}
+          BUILD_RESULT: ${{ needs.build-native.result }}
+          NEEDS_ANDROID_DEV: ${{ needs.resolve.outputs.needs_android_dev }}
+          NEEDS_IOS_DEV: ${{ needs.resolve.outputs.needs_ios_dev }}
+          NEEDS_ANDROID_PRODUCTION: ${{ needs.resolve.outputs.needs_android_production }}
+          ANDROID_DEV_STATUS: ${{ needs.build-native.outputs.android_dev_status }}
+          ANDROID_DEV_ARTIFACT_NAME: ${{ needs.build-native.outputs.android_dev_artifact_name }}
+          ANDROID_DEV_NATIVE_BUILD_VERSION: ${{ needs.build-native.outputs.android_dev_native_build_version }}
+          ANDROID_DEV_SHA256: ${{ needs.build-native.outputs.android_dev_sha256 }}
+          ANDROID_DEV_ERROR: ${{ needs.build-native.outputs.android_dev_error }}
+          IOS_DEV_STATUS: ${{ needs.build-native.outputs.ios_dev_status }}
+          IOS_DEV_ARTIFACT_NAME: ${{ needs.build-native.outputs.ios_dev_artifact_name }}
+          IOS_DEV_NATIVE_BUILD_VERSION: ${{ needs.build-native.outputs.ios_dev_native_build_version }}
+          IOS_DEV_SHA256: ${{ needs.build-native.outputs.ios_dev_sha256 }}
+          IOS_DEV_ERROR: ${{ needs.build-native.outputs.ios_dev_error }}
+          ANDROID_PRODUCTION_STATUS: ${{ needs.build-native.outputs.android_production_status }}
+          ANDROID_PRODUCTION_ARTIFACT_NAME: ${{ needs.build-native.outputs.android_production_artifact_name }}
+          ANDROID_PRODUCTION_NATIVE_BUILD_VERSION: ${{ needs.build-native.outputs.android_production_native_build_version }}
+          ANDROID_PRODUCTION_SHA256: ${{ needs.build-native.outputs.android_production_sha256 }}
+          ANDROID_PRODUCTION_ERROR: ${{ needs.build-native.outputs.android_production_error }}
+        run: |
+          COMMENT_FILE="$RUNNER_TEMP/pr-build-comment.md"
+          run_url="https://github.com/$GH_REPO/actions/runs/$GITHUB_RUN_ID"
+          status_label="Succeeded"
+          if [[ "$BUILD_RESULT" != "success" ]]; then
+            status_label="Failed"
+          fi
+
+          {
+            echo "### PR Native Build — $status_label (\`$SHORT_SHA\`)"
+            echo ""
+            echo "Workflow run: $run_url"
+            echo ""
+            echo "| Target | Status | Native Build | Artifact | SHA-256 |"
+            echo "| --- | --- | --- | --- | --- |"
+          } > "$COMMENT_FILE"
+
+          append_row() {
+            local requested="$1"
+            local target="$2"
+            local status="$3"
+            local native_ver="$4"
+            local artifact="$5"
+            local sha="$6"
+            local err="$7"
+            if [[ "$requested" != "true" ]]; then
+              return
+            fi
+            if [[ "$status" == "built" ]]; then
+              local artifact_name="pr-build-$SOURCE_LABEL-$SHORT_SHA-$target"
+              echo "| \`$target\` | built | \`$native_ver\` | \`$artifact\` (artifact \`$artifact_name\`) | \`${sha:0:12}\` |" >> "$COMMENT_FILE"
+            else
+              local reason="${err:-build failed}"
+              echo "| \`$target\` | failed | — | $reason | — |" >> "$COMMENT_FILE"
+            fi
+          }
+
+          append_row "$NEEDS_ANDROID_DEV" "android-dev" "$ANDROID_DEV_STATUS" "$ANDROID_DEV_NATIVE_BUILD_VERSION" "$ANDROID_DEV_ARTIFACT_NAME" "$ANDROID_DEV_SHA256" "$ANDROID_DEV_ERROR"
+          append_row "$NEEDS_IOS_DEV" "ios-dev" "$IOS_DEV_STATUS" "$IOS_DEV_NATIVE_BUILD_VERSION" "$IOS_DEV_ARTIFACT_NAME" "$IOS_DEV_SHA256" "$IOS_DEV_ERROR"
+          append_row "$NEEDS_ANDROID_PRODUCTION" "android-production" "$ANDROID_PRODUCTION_STATUS" "$ANDROID_PRODUCTION_NATIVE_BUILD_VERSION" "$ANDROID_PRODUCTION_ARTIFACT_NAME" "$ANDROID_PRODUCTION_SHA256" "$ANDROID_PRODUCTION_ERROR"
+
+          {
+            echo ""
+            echo "Download packaged artifacts from the **Artifacts** section of [run #$GITHUB_RUN_ID]($run_url) (7-day retention)."
+          } >> "$COMMENT_FILE"
+
+          gh pr comment "$PR_NUMBER" --body-file "$COMMENT_FILE"
+          rm -f "$COMMENT_FILE"

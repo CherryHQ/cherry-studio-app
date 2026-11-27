@@ -342,6 +342,34 @@ removing a plugin from app config does not clean its hooks out of an existing na
 Successful compilation alone does not verify production Sentry event delivery or source-map
 matching; those require a separate runtime check.
 
+## PR Native Builds
+
+Use the manual [PR Build](../../.github/workflows/pr-build.yml) workflow on GitHub Actions to build
+installable packages for a pull request, branch, or commit on the shared Mac Studio runner
+(`[self-hosted, macOS, ARM64, release]`) without creating a release tag.
+
+Trigger **Actions → PR Build → Run workflow** (or run `gh workflow run pr-build.yml`) with:
+
+- `pr` or `ref`: Provide either a pull request number (for example `1913`) or a repository branch /
+  commit SHA. Cross-repository fork PRs fail by default until reviewed and re-run with
+  `allow_fork_pr=true`.
+- `android_dev` (default `true`): Builds the Android `development` APK
+  (`com.cherryai.cherrystudio_app.dev`).
+- `ios_dev` (default `false`): Builds the iOS `development` physical-device IPA
+  (`com.cherryai.cherrystudio-app.dev`).
+- `android_production` (default `false`): Builds the Android `production` APK
+  (`com.cherryai.cherrystudio_app`) with `SENTRY_DISABLE_AUTO_UPLOAD=true`,
+  `SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD=true`, and `SENTRY_ALLOW_FAILURE=true`. Because it reuses the
+  `production` EAS profile, it increments the remote EAS Android `versionCode` and does not receive
+  the tag-only `local-release` secrets (Sentry DSN/upload token, cloud signing, diagnostics, or
+  OAuth credentials). For a full production release with all secrets and symbol verification, push a
+  version tag per [Native Releases](./cloud-releases.md).
+- `post_pr_comment` (default `true`): Posts a build summary table and artifact link on the target PR.
+
+Each successful target is verified locally on Mac Studio (`apksigner` / `aapt2` / `plutil`) and
+uploaded to the workflow run's **Artifacts** section (`pr-build-<source>-<sha>-<target>`, retained
+for 7 days) alongside `SHA256SUMS` and `build-manifest.json`.
+
 ## Tablet Device Configuration
 
 `app.json` enables iPad support and all iPad orientations while retaining iPhone portrait behavior.
