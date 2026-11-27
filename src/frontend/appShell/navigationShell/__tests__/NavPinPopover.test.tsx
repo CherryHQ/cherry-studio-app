@@ -128,14 +128,45 @@ describe('NavPinPopover opened from Dock', () => {
     expect(tree.root.findAllByProps({ testID: 'nav-popover-unpin-agents' })).toHaveLength(0);
   });
 
+  test('renders both move actions without unpin when agents sits in the middle of three tabs', () => {
+    const tree = renderDockPopover(['drawings', 'agents', 'files'], 'agents');
+
+    const moveLeft = tree.root.findByProps({ testID: 'nav-popover-move-left-agents' });
+    const moveRight = tree.root.findByProps({ testID: 'nav-popover-move-right-agents' });
+    expect(moveLeft.props.className).toContain('active:opacity-70');
+    expect(moveRight.props.className).toContain('active:opacity-70');
+    expect(tree.root.findAllByProps({ testID: 'nav-popover-unpin-agents' })).toHaveLength(0);
+
+    act(() => moveLeft.props.onPress());
+    expect(mockReorderMiddleTab).toHaveBeenCalledWith('agents', 0);
+    expect(mockClosePinPopover).toHaveBeenCalledTimes(1);
+
+    act(() => moveRight.props.onPress());
+    expect(mockReorderMiddleTab).toHaveBeenCalledWith('agents', 2);
+    expect(mockClosePinPopover).toHaveBeenCalledTimes(2);
+  });
+
   test('renders move and unpin actions for removable dock tabs and unpins before closing', () => {
     const tree = renderDockPopover(['agents', 'drawings'], 'drawings');
 
-    expect(tree.root.findByProps({ testID: 'nav-popover-move-left-drawings' })).toBeTruthy();
+    const moveLeft = tree.root.findByProps({ testID: 'nav-popover-move-left-drawings' });
+    expect(moveLeft.props.className).toContain('active:opacity-70');
     const unpinButton = tree.root.findByProps({ testID: 'nav-popover-unpin-drawings' });
+    expect(unpinButton.props.className).toContain('active:opacity-70');
+
+    act(() => moveLeft.props.onPress());
+    expect(mockReorderMiddleTab).toHaveBeenCalledWith('drawings', 0);
 
     act(() => unpinButton.props.onPress());
     expect(mockUnpinTabFromDock).toHaveBeenCalledWith('drawings');
-    expect(mockClosePinPopover).toHaveBeenCalledTimes(1);
+    expect(mockClosePinPopover).toHaveBeenCalledTimes(2);
+  });
+
+  test('derives move index from normalized pinned tabs even when input omits agents', () => {
+    const tree = renderDockPopover(['drawings'], 'drawings');
+
+    const moveLeft = tree.root.findByProps({ testID: 'nav-popover-move-left-drawings' });
+    act(() => moveLeft.props.onPress());
+    expect(mockReorderMiddleTab).toHaveBeenCalledWith('drawings', 0);
   });
 });

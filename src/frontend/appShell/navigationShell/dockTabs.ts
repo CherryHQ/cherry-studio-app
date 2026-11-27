@@ -112,6 +112,7 @@ export type DockPopoverActions = {
   canMoveLeft: boolean;
   canMoveRight: boolean;
   canUnpin: boolean;
+  currentIndex: number;
 };
 
 export function resolveDockPopoverActions(
@@ -123,7 +124,8 @@ export function resolveDockPopoverActions(
   return {
     canMoveLeft: currentIndex > 0,
     canMoveRight: currentIndex >= 0 && currentIndex < normalized.length - 1,
-    canUnpin: canUnpinTab(normalized, id),
+    canUnpin: !REQUIRED_MIDDLE_TABS.has(id) && currentIndex >= 0,
+    currentIndex,
   };
 }
 

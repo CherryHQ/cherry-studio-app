@@ -38,12 +38,10 @@ export function NavPinPopover() {
   );
   const top = Math.max(72, Math.min(windowHeight - 130, popover.y - 68));
 
-  const currentIndex = pinnedTabs.indexOf(popover.id);
-  const dockActions =
+  const { canMoveLeft, canMoveRight, canUnpin, currentIndex } =
     popover.source === 'dock'
       ? resolveDockPopoverActions(pinnedTabs, popover.id)
-      : { canMoveLeft: false, canMoveRight: false, canUnpin: false };
-  const { canMoveLeft, canMoveRight, canUnpin } = dockActions;
+      : { canMoveLeft: false, canMoveRight: false, canUnpin: false, currentIndex: -1 };
   const canPin = popover.source === 'more' && canPinTab(pinnedTabs, popover.id);
 
   if (popover.source === 'dock' && !canMoveLeft && !canMoveRight && !canUnpin) {
@@ -85,7 +83,7 @@ export function NavPinPopover() {
                 {canMoveLeft ? (
                   <Pressable
                     accessibilityRole="button"
-                    className="flex-row items-center gap-1 rounded-full px-2.5 py-2"
+                    className="flex-row items-center gap-1 rounded-full px-2.5 py-2 active:opacity-70"
                     onPress={() => {
                       reorderMiddleTab(popover.id, currentIndex - 1);
                       closePinPopover();
@@ -101,7 +99,7 @@ export function NavPinPopover() {
                 {canMoveRight ? (
                   <Pressable
                     accessibilityRole="button"
-                    className="flex-row items-center gap-1 rounded-full px-2.5 py-2"
+                    className="flex-row items-center gap-1 rounded-full px-2.5 py-2 active:opacity-70"
                     onPress={() => {
                       reorderMiddleTab(popover.id, currentIndex + 1);
                       closePinPopover();

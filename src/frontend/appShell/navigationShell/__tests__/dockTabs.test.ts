@@ -67,6 +67,7 @@ describe('dockTabs', () => {
       canMoveLeft: false,
       canMoveRight: false,
       canUnpin: false,
+      currentIndex: 0,
     });
     expect(hasDockPopoverActions(['agents'], 'agents')).toBe(false);
 
@@ -74,6 +75,7 @@ describe('dockTabs', () => {
       canMoveLeft: false,
       canMoveRight: true,
       canUnpin: false,
+      currentIndex: 0,
     });
     expect(hasDockPopoverActions(['agents', 'drawings'], 'agents')).toBe(true);
 
@@ -81,6 +83,7 @@ describe('dockTabs', () => {
       canMoveLeft: true,
       canMoveRight: false,
       canUnpin: true,
+      currentIndex: 1,
     });
     expect(hasDockPopoverActions(['agents', 'drawings'], 'drawings')).toBe(true);
 
@@ -88,6 +91,7 @@ describe('dockTabs', () => {
       canMoveLeft: false,
       canMoveRight: false,
       canUnpin: false,
+      currentIndex: -1,
     });
     expect(hasDockPopoverActions(['agents'], 'drawings')).toBe(false);
   });
