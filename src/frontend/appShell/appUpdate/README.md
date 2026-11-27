@@ -6,6 +6,14 @@ the cold-start offer; `useAppUpdateEntry` gives a page the state for an ordinary
 row. Pages render that row with their own settings components and do not own channel decisions,
 transfers or update UI.
 
+The published mobile config `mobile.minSupportedVersion` is a single numeric version string for
+all distributions. Set it after the packages are available. The app compares the native installed
+version with the last valid installation-wide minimum and refreshes it on launch and foreground.
+A successful response without the key clears the minimum; a failed or malformed response keeps it.
+Below the minimum, the same dialog stays open on every route, even while release details are missing
+or after returning from the store or installer. Android offers exit instead of postponing; iOS
+keeps the dialog open until the version qualifies or the policy is withdrawn.
+
 The observer checks after bootstrap, privacy consent and foreground activation without blocking
 startup. Each cold launch checks again; returning to the foreground refreshes results older than
 six hours. Query keys include the channel.

@@ -22,6 +22,8 @@ const mockToast = { show: jest.fn((_options: ToastShowOptions) => 'update') };
 const mockUpdate = {
   channel: 'apk' as AppUpdateModule['channel'],
   isEnabled: true,
+  getRequiredVersion: () => null,
+  refreshRequiredVersion: async () => null,
   check: jest.fn<Promise<AppUpdateResult>, [AbortSignal?]>(),
   getDownload: jest.fn((): AppUpdateDownload => ({ status: 'idle' })),
   subscribeDownload: jest.fn(() => () => {}),
@@ -43,8 +45,8 @@ jest.mock('@/frontend/data/BackendProvider', () => ({
   useBackendModule: () => mockUpdate,
 }));
 let mockDialog: AppUpdateDialogProps;
-jest.mock('../AppUpdateDialog', () => ({
-  AppUpdateDialog: (props: AppUpdateDialogProps) => {
+jest.mock('../AppUpdateObserver', () => ({
+  AppUpdateObserver: (props: AppUpdateDialogProps) => {
     mockDialog = props;
     return null;
   },

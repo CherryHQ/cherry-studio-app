@@ -15,7 +15,7 @@ import { useBackendModule } from '@/frontend/data/BackendProvider';
 import { cacheService } from '@/frontend/data/CacheService';
 import type { AppUpdateRelease } from '@/shared/contracts/appUpdate';
 
-import { AppUpdateDialog } from './AppUpdateDialog';
+import { AppUpdateObserver } from './AppUpdateObserver';
 import { appUpdateQueryOptions } from './appUpdateQueries';
 
 const UNAVAILABLE_KEYS = {
@@ -104,11 +104,9 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
     /** A failed package may have been replaced or withdrawn, so a retry asks for the latest. */
     const retry = async () => {
       try {
-        const result = await queryClient.fetchQuery({
-          ...appUpdateQueryOptions(appUpdate),
-          queryFn: ({ signal }) => appUpdate.check(signal, { force: true }),
-          staleTime: 0,
-        });
+        const result = await queryClient.fetchQuery(
+          appUpdateQueryOptions(appUpdate, { force: true }),
+        );
         if (result.status === 'available') {
           setRelease(result);
           start(result);
@@ -149,11 +147,9 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
       }
       toast.show({ label: t('appUpdate.checking') });
       try {
-        const result = await queryClient.fetchQuery({
-          ...options,
-          staleTime: 0,
-          queryFn: ({ signal }) => appUpdate.check(signal, { force: true }),
-        });
+        const result = await queryClient.fetchQuery(
+          appUpdateQueryOptions(appUpdate, { force: true }),
+        );
         if (result.status === 'available') open(result);
         else if (result.status === 'upToDate') {
           toast.show({ label: t('appUpdate.upToDate', { version: result.currentVersion }) });
@@ -178,7 +174,7 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
   return (
     <AppUpdateActionsContext value={actions}>
       {children}
-      <AppUpdateDialog actions={dialog} release={release} />
+      <AppUpdateObserver actions={dialog} onOffer={actions.open} release={release} />
     </AppUpdateActionsContext>
   );
 }

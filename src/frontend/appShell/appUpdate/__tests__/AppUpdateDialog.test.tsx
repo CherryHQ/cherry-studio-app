@@ -1,5 +1,7 @@
+import { Dialog } from '@cherrystudio/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
+import { BackHandler, Platform } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type {
@@ -58,14 +60,18 @@ const actions = {
 };
 let client: QueryClient;
 let renderer: ReactTestRenderer;
-const tree = (current: AppUpdateRelease | null) => (
+const tree = (
+  current: AppUpdateRelease | null,
+  required?: Parameters<typeof AppUpdateDialog>[0]['required'],
+) => (
   <QueryClientProvider client={client}>
-    <AppUpdateDialog actions={actions} release={current} />
+    <AppUpdateDialog actions={actions} release={current} required={required} />
   </QueryClientProvider>
 );
 const rendered = () => JSON.stringify(renderer.toJSON());
 beforeEach(() => {
   jest.clearAllMocks();
+  actions.cancel.mockResolvedValue(undefined);
   mockDownload = mockIdle;
   mockUpdate.releaseNotes.mockResolvedValue('Release notes');
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -73,7 +79,30 @@ beforeEach(() => {
 afterEach(() => {
   act(() => renderer.unmount());
   client.clear();
+  jest.restoreAllMocks();
 });
+
+test.each(['android', 'ios'] as const)(
+  'mandatory update on %s cannot be dismissed into the app',
+  async (os) => {
+    jest.replaceProperty(Platform, 'OS', os);
+    const exit = jest.spyOn(BackHandler, 'exitApp').mockImplementation(() => {});
+    const required = { version: '2.0.0', checking: false, recheck: jest.fn() };
+    await act(async () => {
+      renderer = create(tree(null, required));
+    });
+    expect(rendered()).toContain('common.retry');
+    expect(rendered()).not.toContain('appUpdate.later');
+    expect(rendered().includes('appUpdate.exit')).toBe(os === 'android');
+    await act(async () => renderer.root.findByType(Dialog).props.onOpenChange(false));
+    expect(exit).toHaveBeenCalledTimes(os === 'android' ? 1 : 0);
+    expect(actions.close).not.toHaveBeenCalled();
+
+    mockDownload = { status: 'downloading', release: apkRelease, receivedBytes: 5, totalBytes: 10 };
+    await act(async () => renderer.update(tree(apkRelease, required)));
+    expect(rendered()).not.toContain('appUpdate.downloadInBackground');
+  },
+);
 
 test('an open update dialog requests and displays release notes', async () => {
   await act(async () => {

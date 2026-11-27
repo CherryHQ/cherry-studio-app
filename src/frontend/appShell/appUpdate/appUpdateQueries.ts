@@ -7,12 +7,15 @@ import type { AppUpdateModule, AppUpdateRelease } from '@/shared/contracts/appUp
 /**
  * The app-shell observer owns automatic checks; other surfaces observe or explicitly refetch.
  */
-export function appUpdateQueryOptions(appUpdate: AppUpdateModule) {
+export function appUpdateQueryOptions(
+  appUpdate: AppUpdateModule,
+  { force = false }: { force?: boolean } = {},
+) {
   return queryOptions({
     queryKey: queryKeys.appUpdate.latest(appUpdate.channel),
-    queryFn: ({ signal }) => appUpdate.check(signal),
+    queryFn: ({ signal }) => appUpdate.check(signal, { force }),
     enabled: appUpdate.isEnabled,
-    staleTime: 6 * 60 * 60 * 1000,
+    staleTime: force ? 0 : 6 * 60 * 60 * 1000,
     gcTime: 6 * 60 * 60 * 1000,
     // The backend owns failure cooldowns; an immediate retry only consumes the same quota.
     retry: false,

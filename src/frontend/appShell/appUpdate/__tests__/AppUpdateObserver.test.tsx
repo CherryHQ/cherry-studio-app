@@ -2,8 +2,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AppState } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { AppUpdateModule, AppUpdateResult } from '@/shared/contracts/appUpdate';
+import type { AppUpdateResult } from '@/shared/contracts/appUpdate';
 
+import type { AppUpdateDialog } from '../AppUpdateDialog';
 import { AppUpdateObserver } from '../AppUpdateObserver';
 
 const available: AppUpdateResult = {
@@ -18,9 +19,11 @@ const available: AppUpdateResult = {
 const mockUpdate = {
   channel: 'app-store',
   isEnabled: true,
+  getRequiredVersion: jest.fn(() => null as string | null),
+  refreshRequiredVersion: jest.fn(async () => null as string | null),
   check: jest.fn<Promise<AppUpdateResult>, [AbortSignal?]>(),
   getDownload: jest.fn(() => ({ status: 'idle' }) as const),
-} as unknown as AppUpdateModule & { check: jest.Mock };
+};
 const mockOpen = jest.fn();
 let mockPathname = '/';
 let mockParams: Record<string, string> = {};
@@ -46,13 +49,26 @@ jest.mock('@/frontend/data/BackendProvider', () => ({ useBackendModule: () => mo
 jest.mock('@/frontend/data/CacheService', () => ({
   cacheService: { getPersist: () => mockReminder },
 }));
-jest.mock('../AppUpdateProvider', () => ({ useAppUpdateActions: () => ({ open: mockOpen }) }));
+let mockDialog: Parameters<typeof AppUpdateDialog>[0];
+jest.mock('../AppUpdateDialog', () => ({
+  AppUpdateDialog: (props: typeof mockDialog) => {
+    mockDialog = props;
+    return null;
+  },
+}));
+const dialogActions = {
+  close: jest.fn(),
+  cancel: jest.fn(),
+  start: jest.fn(),
+  install: jest.fn(),
+  retry: jest.fn(),
+};
 
 let renderer: ReactTestRenderer;
 let queryClient: QueryClient;
 const tree = () => (
   <QueryClientProvider client={queryClient}>
-    <AppUpdateObserver />
+    <AppUpdateObserver actions={dialogActions} onOffer={mockOpen} release={null} />
   </QueryClientProvider>
 );
 async function launch() {
@@ -71,6 +87,8 @@ beforeAll(() => {
 });
 beforeEach(() => {
   jest.clearAllMocks();
+  mockUpdate.getRequiredVersion.mockReturnValue(null);
+  mockUpdate.refreshRequiredVersion.mockResolvedValue(null);
   mockUpdate.check.mockResolvedValue(available);
   mockPathname = '/';
   mockParams = {};
@@ -139,7 +157,27 @@ test('privacy consent prevents starting a vendor query', async () => {
   mockPrivacyPending = true;
   await launch();
   expect(mockUpdate.check).not.toHaveBeenCalled();
+  expect(mockUpdate.refreshRequiredVersion).not.toHaveBeenCalled();
   expect(mockOpen).not.toHaveBeenCalled();
+});
+
+test('a cached minimum blocks a deep link even without release details, until the floor is withdrawn', async () => {
+  mockPathname = '/settings/about';
+  mockReminder = { releaseId: available.id, remindedAt: Date.now() };
+  mockUpdate.getRequiredVersion.mockReturnValue('2.0.0');
+  mockUpdate.refreshRequiredVersion.mockRejectedValueOnce(new Error('Offline'));
+  mockUpdate.check.mockRejectedValueOnce(new Error('Offline'));
+  await launch();
+  expect(mockDialog.release).toBeNull();
+  expect(mockDialog.required?.version).toBe('2.0.0');
+  expect(mockOpen).not.toHaveBeenCalled();
+
+  await act(async () => {
+    await queryClient.refetchQueries();
+  });
+  await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  expect(mockDialog.required).toBeNull();
+  expect(mockDialog.release).toBeNull();
 });
 
 test('a failed cold-start check ends this launch reminder even after returning to foreground', async () => {
