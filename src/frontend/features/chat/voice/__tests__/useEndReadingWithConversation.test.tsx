@@ -112,3 +112,26 @@ test('one message observes its own phase and cancels only its own reading', () =
   expect(readControl()).toMatchObject({ phase: 'idle', isSpeaking: false });
   act(() => renderer.unmount());
 });
+
+test('resolves a lazy speech text getter only when reading starts', () => {
+  const getText = jest.fn(() => 'Lazy speech body');
+  function Control(_props: ReturnType<typeof useMessageSpeech>) {
+    return null;
+  }
+  function Message() {
+    return <Control {...useMessageSpeech('lazy', getText)} />;
+  }
+  let renderer!: ReactTestRenderer;
+  act(() => {
+    renderer = create(<Message />);
+  });
+  expect(getText).not.toHaveBeenCalled();
+
+  act(() => renderer.root.findByType(Control).props.toggle());
+  expect(getText).toHaveBeenCalledTimes(1);
+  expect(mockSpeak).toHaveBeenCalledWith(
+    'Lazy speech body',
+    expect.objectContaining({ key: 'lazy', inputFormat: 'plainText' }),
+  );
+  act(() => renderer.unmount());
+});

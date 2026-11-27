@@ -6,6 +6,7 @@ import {
   conversationCitationSources,
   resolveMessageCitations,
   stripMessageCitations,
+  type CitationSource,
 } from '../messageCitations';
 
 describe('resolveMessageCitations', () => {
@@ -195,21 +196,60 @@ describe('stripMessageCitations', () => {
   test.each([
     ['[Details](https://example.com)', ''],
     ['[Details][defined]', '\n\n[defined]: https://example.com'],
-  ])('resolves and strips confirmed markers adjacent to %s', (link, definition) => {
-    const citations = [
-      ['[cite:known]', '❶'],
-      ['[1]', '[❶](cite:https%3A%2F%2Fexample.com)'],
+  ])('resolves and strips confirmed named markers adjacent to %s', (link, definition) => {
+    const text = `See [cite:known]${link}.${definition}`;
+    const stripped = strip(text);
+    expect(stripped).toBe(`See ${link}.${definition}`);
+    expect(speakableText(stripped)).toBe('See Details.');
+    expect(resolveMessageCitations(partsWithText(text), sources).textByPartIndex.get(1)).toEqual({
+      markdown: `See ❶${link}.${definition}`,
+      plainText: `See [1]${link}.${definition}`,
+    });
+
+    // Baseline treats numeric [1][Details] identically to unresolved [1][ref] in display and speech.
+    const numeric = `See [1]${link}.${definition}`;
+    expect(strip(numeric)).toBe(numeric);
+    expect(resolveMessageCitations(partsWithText(numeric), sources).textByPartIndex.get(1)).toEqual(
+      {
+        markdown: numeric,
+        plainText: numeric,
+      },
+    );
+  });
+
+  test('preserves confirmed citations glued to prose parentheses, unfinished brackets, and table pipes', () => {
+    const tableSources: CitationSource[] = [
+      { id: 'a', title: 'Source A', url: 'https://a.example' },
+      { id: 'b', title: 'Source B', url: 'https://b.example' },
     ];
-    for (const [marker, displayMarker] of citations) {
-      const text = `See ${marker}${link}.${definition}`;
-      const stripped = strip(text);
-      expect(stripped).toBe(`See ${link}.${definition}`);
-      expect(speakableText(stripped)).toBe('See Details.');
-      expect(resolveMessageCitations(partsWithText(text), sources).textByPartIndex.get(1)).toEqual({
-        markdown: `See ${displayMarker}${link}.${definition}`,
-        plainText: `See [1]${link}.${definition}`,
-      });
-    }
+    const run = (text: string) => ({
+      resolved: resolveMessageCitations([{ type: 'text', text }], tableSources).textByPartIndex.get(
+        0,
+      ),
+      stripped: stripMessageCitations([{ type: 'text', text }], tableSources).get(0),
+    });
+
+    const parenthesized = run('结果[cite:a](2024)。补充[cite:b]。');
+    expect(parenthesized.resolved).toEqual({
+      markdown:
+        '结果[❶](cite:https%3A%2F%2Fa.example)(2024)。补充[❷](cite:https%3A%2F%2Fb.example)。',
+      plainText: '结果[1](2024)。补充[2]。',
+    });
+    expect(parenthesized.stripped).toBe('结果(2024)。补充。');
+
+    const adjacentBracket = run('结果[cite:a][待核实]');
+    expect(adjacentBracket.resolved).toEqual({
+      markdown: '结果[❶](cite:https%3A%2F%2Fa.example)[待核实]',
+      plainText: '结果[1][待核实]',
+    });
+    expect(adjacentBracket.stripped).toBe('结果[待核实]');
+
+    const tableRow = run('| [ | [cite:a] ](https://example.test) |\n| --- | --- |');
+    expect(tableRow.resolved).toEqual({
+      markdown: '| [ | [❶](cite:https%3A%2F%2Fa.example) ](https://example.test) |\n| --- | --- |',
+      plainText: '| [ | [1] ](https://example.test) |\n| --- | --- |',
+    });
+    expect(tableRow.stripped).toBe('| [ |](https://example.test) |\n| --- | --- |');
   });
 
   test('uses confirmed native, provider and tool sources while retaining unknown IDs', () => {
@@ -256,8 +296,11 @@ describe('stripMessageCitations', () => {
     ];
     const prefix = protectedLines.join('\n');
     expect(strip(prefix + '\n\nCited [1] and [cite:known].')).toBe(prefix + '\n\nCited and.');
-    const resolved = resolveMessageCitations(partsWithText(prefix), sources).textByPartIndex.get(1);
-    expect(resolved?.markdown).toBe(prefix);
+  });
+
+  test('handles CRLF multiline links without shifting later citation edits', () => {
+    const input = '[Label [1]](\r\nhttps://example.test) and [cite:known]\r\nwith [1].';
+    expect(strip(input)).toBe('[Label [1]](\r\nhttps://example.test) and\r\nwith.');
   });
 
   test.each(['[1]: some note', '[1](not a url)', '[1](https://example.com'])(

@@ -16,6 +16,7 @@ import {
 } from '../../../../share/chatShareSelection';
 import { AssistantMessageActionsProvider } from '../../context/AssistantMessageActionsProvider';
 import { copyAssistantMessageText } from '../../utils/copyAssistantMessageText';
+import * as speechAssistantModule from '../../utils/speechAssistantMessageText';
 import { AssistantMessageToolbar } from '../AssistantMessageToolbar';
 
 jest.mock('../../translation/MessageTranslationProvider', () => ({
@@ -35,15 +36,19 @@ let mockMessageTranslation:
 
 const mockToggleSpeech = jest.fn();
 let mockSpeechPhase: 'idle' | 'preparing' | 'playing';
-const mockSpeech = jest.fn((_messageId: string, _text: string) => ({
+const mockSpeech = jest.fn((_messageId: string, _text: string | (() => string)) => ({
   phase: mockSpeechPhase,
   isSpeaking: mockSpeechPhase !== 'idle',
   toggle: mockToggleSpeech,
 }));
 jest.mock('../../../../voice/useMessageSpeech', () => ({
-  useMessageSpeech: (messageId: string, text: string) => mockSpeech(messageId, text),
+  useMessageSpeech: (messageId: string, text: string | (() => string)) =>
+    mockSpeech(messageId, text),
 }));
-jest.mock('@/frontend/hooks/useThemeColor', () => ({ useThemeColor: () => 'foreground-test' }));
+const mockUseThemeColor = jest.fn(() => 'foreground-test');
+jest.mock('@/frontend/hooks/useThemeColor', () => ({
+  useThemeColor: () => mockUseThemeColor(),
+}));
 
 const mockSetStringAsync = jest.fn(async (_text: string) => undefined);
 const mockToastShow = jest.fn();
@@ -78,7 +83,7 @@ jest.mock('@cherrystudio/ui/components', () => {
   return {
     ActionMenu: ({ children, items }: { children: unknown; items: unknown }) =>
       createElement('ActionMenu', { items }, children),
-    Button: (props: object) => createElement('Button', props),
+    Button: (props: { icon?: unknown }) => createElement('Button', props, props.icon as never),
     OptionPickerBottomSheet: (props: object) => createElement('OptionPickerBottomSheet', props),
     Spinner: (props: object) => createElement('Spinner', props),
     useAlert: () => ({ alert: { confirm: mockAlertConfirm } }),
@@ -272,10 +277,20 @@ describe('AssistantMessageToolbar', () => {
     expect(mockShare).toHaveBeenCalledWith('assistant-1', undefined);
   });
 
-  test('reads the answer text aloud from the toolbar', () => {
-    renderToolbar(createMessage('success', '**Answer** <https://example.com>'));
+  test('reads the answer text aloud from the toolbar lazily without full parsing at mount', () => {
+    const extractSpy = jest.spyOn(speechAssistantModule, 'speechAssistantMessageText');
+    renderToolbar(createMessage('success', 'Plain prose answer'));
+    expect(mockUseThemeColor).not.toHaveBeenCalled();
+    expect(extractSpy).not.toHaveBeenCalled();
+    extractSpy.mockRestore();
 
-    expect(mockSpeech).toHaveBeenLastCalledWith('assistant-1', 'Answer');
+    renderToolbar(createMessage('success', '**Answer** <https://example.com>'));
+    expect(mockUseThemeColor).not.toHaveBeenCalled();
+
+    const [id, textOrGetter] = mockSpeech.mock.lastCall!;
+    expect(id).toBe('assistant-1');
+    expect(typeof textOrGetter).toBe('function');
+    expect(typeof textOrGetter === 'function' ? textOrGetter() : textOrGetter).toBe('Answer');
     const button = renderer?.root.findByProps({ testID: 'assistant-message-read-aloud' });
     expect(button?.props.accessibilityLabel).toBe('voice.speech.start');
     act(() => button?.props.onPress());
@@ -293,6 +308,7 @@ describe('AssistantMessageToolbar', () => {
   test('exposes the cancellable button as busy and hides its spinner from accessibility', () => {
     mockSpeechPhase = 'preparing';
     renderToolbar(createMessage('success', ''));
+    expect(mockUseThemeColor).toHaveBeenCalledTimes(1);
     const button = renderer!.root.findByProps({ testID: 'assistant-message-read-aloud' });
     expect(button.props).toMatchObject({
       accessibilityLabel: 'voice.speech.stop',
@@ -300,7 +316,8 @@ describe('AssistantMessageToolbar', () => {
     });
     expect(button.props.loading).toBeFalsy();
     expect(button.props.disabled).toBeFalsy();
-    expect(button.props.icon.props).toMatchObject({
+    const spinner = renderer!.root.findByType('Spinner' as never);
+    expect(spinner.props).toMatchObject({
       accessibilityElementsHidden: true,
       accessible: false,
       importantForAccessibility: 'no-hide-descendants',

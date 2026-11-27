@@ -100,7 +100,10 @@ test.each([
   ['访问 https://例子.中国/a 后继续。', '访问 后继续。'],
   ['See https://münchen.de/straße, please.', 'See, please.'],
   ['访问 https://例子.中国/路径/测试。', '访问。'],
+  ['访问 https://example.com/路径/测试。', '访问。'],
+  ['访问 https://[::1]:8080/?q=中文。', '访问。'],
   ['访问https://example.com查看详情', '访问查看详情'],
+  ['访问https://example.com:8080查看详情', '访问查看详情'],
   ['访问https://例子.com查看详情', '访问查看详情'],
 ])('omits the bare URL and preserves surrounding prose in %s', (input, expected) => {
   expect(speakableText(input)).toBe(expected);
@@ -141,9 +144,19 @@ test.each([
     '$$\n\nKeep this paragraph.\n\nNext $$x^2$$ example.',
     '$$\nKeep this paragraph.\nNext example.',
   ],
+  [
+    '- Use $$ literally.\n- Keep this step.\n- Next $$x^2$$ example.',
+    'Use $$ literally.\nKeep this step.\nNext example.',
+  ],
+  ['Use $$ literally.\n# Next heading $$x^2$$ end.', 'Use $$ literally.\nNext heading end.'],
   ['First $$x^2$$ example.\n\n$$\na = b\n\nb = c\n$$\n\nAfter.', 'First example.\nAfter.'],
 ])('pairs each $$ formula within its scope in %s', (input, expected) => {
   expect(speakableText(input)).toBe(expected);
+});
+
+test('handles long single lines with many repeated formulas without pathological slowdown', () => {
+  const repeated = Array.from({ length: 1_000 }, (_, i) => `item $$x_${i}$$`).join(' ');
+  expect(speakableText(repeated)).toBe(Array.from({ length: 1_000 }, () => 'item').join(' '));
 });
 
 test('preserves money, escaped citations, empty inline and unclosed formula delimiters', () => {

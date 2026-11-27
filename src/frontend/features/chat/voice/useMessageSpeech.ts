@@ -7,7 +7,7 @@ import { useBackendModule } from '@/frontend/data';
 import { voiceErrorLabelKey } from '@/frontend/utils/voiceErrorLabel';
 
 /** Read-aloud state of one message; starting another message replaces it. */
-export function useMessageSpeech(messageId: string, text: string) {
+export function useMessageSpeech(messageId: string, text: string | (() => string)) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const voice = useBackendModule('voice');
@@ -22,9 +22,10 @@ export function useMessageSpeech(messageId: string, text: string) {
       voice.stopSpeaking(messageId);
       return;
     }
-    if (!text) return;
+    const content = typeof text === 'function' ? text() : text;
+    if (!content) return;
     voice
-      .speak(text, {
+      .speak(content, {
         key: messageId,
         inputFormat: 'plainText',
         playbackLabels: { title: t('settings.voice.speech.title'), stop: t('voice.speech.stop') },

@@ -69,11 +69,16 @@ export function resolveMessageCitations(
   parts.forEach((part, index) => {
     if (part.type !== 'text') return;
 
-    const markers = findCitationMarkers(part.text);
-    const replace = (markdown: boolean) => {
-      const edits = markers.map(({ match: [marker, nativeNumber], start, end }) => {
-        const nativeId = nativeNumber ? nativeByNumber.get(Number(nativeNumber)) : undefined;
-        const replacement = (nativeId ? `[cite:${nativeId}]` : marker)
+    const replace = (content: string, markdown: boolean) =>
+      mapMarkdownOutsideCode(content, (text) =>
+        text
+          .replace(
+            /\[(\d{1,3})\](?![(:]|\[(?!\d{1,3}\](?![(:])|cite:))/g,
+            (marker, number: string) => {
+              const id = nativeByNumber.get(Number(number));
+              return id ? `[cite:${id}]` : marker;
+            },
+          )
           .replace(/cite([^]+)/g, (marker, value: string) => {
             const ids = value.split('');
             return ids.every((id) => sourceById.has(id))
@@ -106,15 +111,12 @@ export function resolveMessageCitations(
               return `[${marker}](cite:${target})`;
             }
             return markdown ? marker : `[${number}]`;
-          });
-        return { start, end, replacement };
-      });
-      return replaceInlineTextRanges(part.text, edits);
-    };
+          }),
+      );
 
     textByPartIndex.set(index, {
-      markdown: replace(true),
-      plainText: replace(false),
+      markdown: replace(part.text, true),
+      plainText: replace(part.text, false),
     });
   });
 
@@ -130,53 +132,55 @@ export function resolveMessageCitations(
 const citationLinkParser = new MarkdownIt({ html: false, linkify: false });
 const CITATION_OR_LINK_LABEL = /\[(?:(\d{1,3})\]|cite:([^\]\r\n]+)\])?|cite([^]+)/g;
 
-function findCitationMarkers(text: string) {
-  const markers: { match: RegExpMatchArray; start: number; end: number }[] = [];
-  if (!/\[(?:\d{1,3}\]|cite:)|cite/.test(text)) return markers;
-
-  const env: Env = {};
-  if (text.includes(']:'))
-    citationLinkParser.block.parse(text.replace(/\r\n?/g, '\n'), citationLinkParser, env, []);
-  const linkState = new citationLinkParser.inline.State(text, citationLinkParser, env, []);
-  const paragraphBreak = /\n[ \t]*\r?\n/g;
-  const unresolvedReference = /\[(?!\d{1,3}\](?![(:])|cite:)[^[\]\r\n]*\]/y;
-  let paragraphEnd = -1;
-  let linkEnd = 0;
-  mapMarkdownOutsideCode(text, (prose, offset) => {
-    for (const match of prose.matchAll(CITATION_OR_LINK_LABEL)) {
-      const [marker, number, names, providerIds] = match;
-      const start = offset + match.index;
-      if (start < linkEnd) continue;
-      const end = start + marker.length;
-      if (!providerIds) {
-        if (start >= paragraphEnd) {
-          paragraphBreak.lastIndex = start;
-          paragraphEnd = paragraphBreak.exec(text)?.index ?? text.length;
-          linkState.posMax = paragraphEnd;
-        }
-        // At an opening bracket, Markdown advances past one character only for a real link.
-        linkState.pos = start;
-        citationLinkParser.inline.skipToken(linkState);
-        if (linkState.pos > start + 1) {
-          linkEnd = linkState.pos;
-          continue;
-        }
-        if (!number && !names) continue;
-        if (number && (text[end] === ':' || text[end] === '(')) continue;
-        // Keep unresolved reference syntax unless the next bracket starts a separate link.
-        unresolvedReference.lastIndex = end;
-        if (unresolvedReference.test(text)) {
-          linkState.pos = end;
-          citationLinkParser.inline.skipToken(linkState);
-          if (linkState.pos <= end + 1) continue;
-          linkEnd = linkState.pos;
-        }
-      }
-      markers.push({ match, start, end });
+function normalizeLineEndingsWithIndexMap(text: string): {
+  normalizedText: string;
+  toOriginalIndex: readonly number[];
+} {
+  const chunks: string[] = [];
+  const toOriginalIndex: number[] = [];
+  let plainStart = 0;
+  for (let index = 0; index < text.length; index++) {
+    const charCode = text.charCodeAt(index);
+    if (charCode !== 13) {
+      toOriginalIndex.push(index);
+      continue;
     }
-    return prose;
-  });
-  return markers;
+    if (index > plainStart) chunks.push(text.slice(plainStart, index));
+    chunks.push('\n');
+    toOriginalIndex.push(index);
+    if (text.charCodeAt(index + 1) === 10) index += 1;
+    plainStart = index + 1;
+  }
+  if (plainStart < text.length) chunks.push(text.slice(plainStart));
+  toOriginalIndex.push(text.length);
+  return { normalizedText: chunks.join(''), toOriginalIndex };
+}
+
+/** Cap link probing at paragraph boundaries and unescaped table-row cell pipes. */
+function findLinkProbeLimit(text: string, start: number, paragraphEnd: number): number {
+  const newline = text.indexOf('\n', start);
+  const lineEnd = newline === -1 || newline > paragraphEnd ? paragraphEnd : newline;
+  let escaped = false;
+  let codeFenceLength = 0;
+  for (let index = start; index < lineEnd; index++) {
+    const char = text[index];
+    if (char === '\\' && codeFenceLength === 0) {
+      escaped = !escaped;
+      continue;
+    }
+    if (!escaped && char === '`') {
+      let run = 1;
+      while (index + run < lineEnd && text[index + run] === '`') run += 1;
+      if (codeFenceLength === 0) codeFenceLength = run;
+      else if (codeFenceLength === run) codeFenceLength = 0;
+      index += run - 1;
+      escaped = false;
+      continue;
+    }
+    if (!escaped && codeFenceLength === 0 && char === '|') return index;
+    escaped = false;
+  }
+  return paragraphEnd;
 }
 
 /** Remove confirmed citation markers from speech Markdown while preserving literal examples. */
@@ -193,32 +197,83 @@ export function stripMessageCitations(
   parts.forEach((part, index) => {
     if (part.type !== 'text' || (targetIndices !== undefined && !targetIndices.has(index))) return;
     const { text } = part;
+    if (!/\[(?:\d{1,3}\]|cite:)|cite/.test(text)) return;
+
+    const crlfMap = text.includes('\r') ? normalizeLineEndingsWithIndexMap(text) : undefined;
+    const normalizedText = crlfMap ? crlfMap.normalizedText : text;
+    const mapOffset = (offset: number) => (crlfMap ? crlfMap.toOriginalIndex[offset]! : offset);
+
+    const env: Env = {};
+    if (normalizedText.includes(']:'))
+      citationLinkParser.block.parse(normalizedText, citationLinkParser, env, []);
+    const linkState = new citationLinkParser.inline.State(
+      normalizedText,
+      citationLinkParser,
+      env,
+      [],
+    );
+    const paragraphBreak = /\n[ \t]*\n/g;
+    const unresolvedReference = /\[(?!\d{1,3}\](?![(:])|cite:)[^[\]\r\n]*\]/y;
+    let paragraphEnd = -1;
+    let linkEnd = 0;
     const edits: { start: number; end: number; replacement?: string }[] = [];
-    for (const {
-      match: [, number, names, providerIds],
-      start,
-      end,
-    } of findCitationMarkers(text)) {
-      if (number) {
-        const id = nativeByNumber.get(Number(number));
-        if (id !== undefined && sourceById.has(id)) edits.push({ start, end });
-      } else if (providerIds) {
-        if (providerIds.split('').every((id) => sourceById.has(id))) edits.push({ start, end });
-      } else {
-        const ids = names
-          .split(/[\s,;]+/)
-          .filter(Boolean)
-          .map((id) => id.replace(/^cite:/, ''));
-        if (!ids.every((id) => /^[\w-]+$/.test(id))) continue;
-        const unknown = ids.filter((id) => !sourceById.has(id));
-        if (unknown.length < ids.length)
-          edits.push({
-            start,
-            end,
-            replacement: unknown.length ? '[cite:' + unknown.join(', ') + ']' : '',
-          });
+
+    mapMarkdownOutsideCode(normalizedText, (prose, offset) => {
+      for (const match of prose.matchAll(CITATION_OR_LINK_LABEL)) {
+        const [marker, number, names, providerIds] = match;
+        const start = offset + match.index;
+        if (start < linkEnd) continue;
+        const end = start + marker.length;
+        if (!providerIds) {
+          if (start >= paragraphEnd) {
+            paragraphBreak.lastIndex = start;
+            paragraphEnd = paragraphBreak.exec(normalizedText)?.index ?? normalizedText.length;
+          }
+          if (!number && !names) {
+            // Bare '[' opens a potential enclosing Markdown link such as [Label [1]](url).
+            linkState.pos = start;
+            linkState.posMax = findLinkProbeLimit(normalizedText, start, paragraphEnd);
+            citationLinkParser.inline.skipToken(linkState);
+            if (linkState.pos > start + 1) linkEnd = linkState.pos;
+            continue;
+          }
+        }
+        const editStart = mapOffset(start);
+        const editEnd = mapOffset(end);
+        if (number) {
+          if (normalizedText[end] === ':' || normalizedText[end] === '(') continue;
+          linkState.pos = start;
+          linkState.posMax = findLinkProbeLimit(normalizedText, start, paragraphEnd);
+          citationLinkParser.inline.skipToken(linkState);
+          if (linkState.pos > start + 1) {
+            linkEnd = linkState.pos;
+            continue;
+          }
+          unresolvedReference.lastIndex = end;
+          if (unresolvedReference.test(normalizedText)) continue;
+          const id = nativeByNumber.get(Number(number));
+          if (id !== undefined && sourceById.has(id))
+            edits.push({ start: editStart, end: editEnd });
+        } else if (providerIds) {
+          if (providerIds.split('').every((id) => sourceById.has(id)))
+            edits.push({ start: editStart, end: editEnd });
+        } else {
+          const ids = names
+            .split(/[\s,;]+/)
+            .filter(Boolean)
+            .map((id) => id.replace(/^cite:/, ''));
+          if (!ids.every((id) => /^[\w-]+$/.test(id))) continue;
+          const unknown = ids.filter((id) => !sourceById.has(id));
+          if (unknown.length < ids.length)
+            edits.push({
+              start: editStart,
+              end: editEnd,
+              replacement: unknown.length ? '[cite:' + unknown.join(', ') + ']' : '',
+            });
+        }
       }
-    }
+      return prose;
+    });
     if (edits.length) textByPartIndex.set(index, replaceInlineTextRanges(text, edits));
   });
 

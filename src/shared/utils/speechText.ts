@@ -6,6 +6,8 @@ const parser = new MarkdownIt({ html: true, linkify: false }).disable('html_inli
 const HTTP_SCHEME = /^https?:\/\//i;
 const URL_HOST = /^(?:[^/?#]*@)?(\[[\da-f:.]+\]|[\p{L}\p{M}\p{N}-]+(?:\.[\p{L}\p{M}\p{N}-]+)*)/iu;
 const CJK_TEXT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+const GLUED_ASCII_CJK =
+  /[a-z\d]([\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}])/iu;
 const URL_TRAILING_PUNCTUATION = /[.,;:!?]/;
 const URL_OPENERS = { ')': '(', ']': '[', '}': '{' } as const;
 
@@ -33,14 +35,15 @@ function bareUrlRanges(text: string) {
     const hostMatch = URL_HOST.exec(url.slice(addressStart));
     if (hostMatch) {
       const host = hostMatch[1];
+      const hostEnd = addressStart + hostMatch[0].length;
       const lastLabel = host.slice(host.lastIndexOf('.') + 1);
       const cjkInLabel = lastLabel.search(CJK_TEXT);
-      // Keep prose glued to an ASCII top-level label, or to the tail of an ASCII URL.
+      // Keep prose glued to an ASCII top-level label or to an ASCII path/port/query tail.
       if (cjkInLabel > 0 && /^[a-z\d-]+$/i.test(lastLabel.slice(0, cjkInLabel))) {
-        end = addressStart + hostMatch[0].length - lastLabel.length + cjkInLabel;
-      } else if (/^[\x00-\x7f]+$/.test(host)) {
-        const cjkStart = url.search(CJK_TEXT);
-        if (cjkStart !== -1) end = cjkStart;
+        end = hostEnd - lastLabel.length + cjkInLabel;
+      } else {
+        const glued = GLUED_ASCII_CJK.exec(url.slice(hostEnd));
+        if (glued) end = hostEnd + glued.index + 1;
       }
     }
     const balance = { '(': 0, '[': 0, '{': 0 };
@@ -61,16 +64,9 @@ function bareUrlRanges(text: string) {
   return ranges;
 }
 
-const BLANK_LINE = /^[ \t]*(?:>[ \t]*)*\n/gm;
+const BLOCK_BOUNDARY = /^[ \t]*(?:>[ \t]*)*(?:\n|(?:[-+*]|\d{1,9}[.)])[ \t]+|#{1,6}(?:[ \t]|$))/gm;
 const TEX_SIGNAL = /[\\^_={}+<>]/;
-const BLOCK_PREFIX = /^(?: {0,3}>[ \t]?)* {0,3}$/;
-
-function isOnlyOnLine(text: string, index: number) {
-  const start = index === 0 ? 0 : text.lastIndexOf('\n', index - 1) + 1;
-  const newline = text.indexOf('\n', index + 2);
-  const end = newline === -1 ? text.length : newline;
-  return BLOCK_PREFIX.test(text.slice(start, index)) && /^[ \t]*$/.test(text.slice(index + 2, end));
-}
+const STANDALONE_DELIMITER = /^(?: {0,3}>[ \t]?)* {0,3}(?:\$\$|\\\[|\\\])[ \t]*$/;
 
 function findCodeSpanEnd(text: string, start: number, length: number, limit: number) {
   const backticks = /\x60+/g;
@@ -83,8 +79,10 @@ function findCodeSpanEnd(text: string, start: number, length: number, limit: num
 
 function omitProseFormulas(text: string) {
   const ranges: { start: number; end: number }[] = [];
-  const syntax = /\x60+|\\[^\n]|\${2,}|^[ \t]*(?:>[ \t]*)*\n/gm;
-  const blankLine = new RegExp(BLANK_LINE);
+  const syntax = /\x60+|\\[^\n]|\${2,}/g;
+  const blockBoundary = new RegExp(BLOCK_BOUNDARY);
+  let lineEnd = -1;
+  let isStandaloneLine = false;
   let paragraphEnd = -1;
   let blockDollar: { start: number; paragraphEnd: number } | undefined;
   let inlineDollar: number | undefined;
@@ -94,9 +92,19 @@ function omitProseFormulas(text: string) {
   for (let match = syntax.exec(text); match; match = syntax.exec(text)) {
     const { index } = match;
     const delimiter = match[0];
+    if (index > lineEnd) {
+      const lineStart = index === 0 ? 0 : text.lastIndexOf('\n', index - 1) + 1;
+      const newline = text.indexOf('\n', index);
+      lineEnd = newline === -1 ? text.length : newline;
+      isStandaloneLine = STANDALONE_DELIMITER.test(text.slice(lineStart, lineEnd));
+    }
     if (index >= paragraphEnd) {
-      blankLine.lastIndex = index;
-      paragraphEnd = blankLine.exec(text)?.index ?? text.length;
+      if (lineEnd + 1 < text.length) {
+        blockBoundary.lastIndex = lineEnd + 1;
+        paragraphEnd = blockBoundary.exec(text)?.index ?? text.length;
+      } else {
+        paragraphEnd = text.length;
+      }
       inline.length = 0;
       inlineDollar = undefined;
     }
@@ -104,7 +112,7 @@ function omitProseFormulas(text: string) {
       const codeEnd = findCodeSpanEnd(text, syntax.lastIndex, delimiter.length, paragraphEnd);
       if (codeEnd !== -1) syntax.lastIndex = codeEnd;
     } else if (delimiter === '$$') {
-      if (isOnlyOnLine(text, index)) {
+      if (isStandaloneLine) {
         if (blockDollar !== undefined) {
           ranges.push({ start: blockDollar.start, end: index + 2 });
           blockDollar = undefined;
@@ -131,12 +139,12 @@ function omitProseFormulas(text: string) {
       if (start !== undefined && text.slice(start + 2, index).trim())
         ranges.push({ start, end: index + 2 });
     } else if (delimiter === '\\[') {
-      brackets.push({ start: index, paragraphEnd, isBlock: isOnlyOnLine(text, index) });
+      brackets.push({ start: index, paragraphEnd, isBlock: isStandaloneLine });
     } else if (delimiter === '\\]') {
       const open = brackets.pop();
       if (
         open &&
-        ((open.isBlock && isOnlyOnLine(text, index)) ||
+        ((open.isBlock && isStandaloneLine) ||
           (open.paragraphEnd === paragraphEnd &&
             TEX_SIGNAL.test(text.slice(open.start + 2, index))))
       ) {

@@ -1,6 +1,9 @@
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
-import { speechAssistantMessageText } from '../speechAssistantMessageText';
+import {
+  hasSpeakableAssistantMessageText,
+  speechAssistantMessageText,
+} from '../speechAssistantMessageText';
 
 const text = (value: string): CherryMessagePart => ({ type: 'text', text: value });
 const image = {
@@ -47,4 +50,24 @@ test('inline code that looks like Markdown survives the first speech projection'
   expect(speechAssistantMessageText([text('`[label](target)` and `https://code.test`.')])).toBe(
     '[label](target) and https://code.test.',
   );
+});
+
+test.each<[string, CherryMessagePart[], boolean]>([
+  ['plain prose', [text('Hello world.')], true],
+  ['fenced code followed by prose', [text('```ts\nconst a = 1\n```\nDone.')], true],
+  ['HTML comment block before prose', [text('<!--\ndraft\n-->\nVisible answer.')], true],
+  ['link label only', [text('[Read docs](https://example.com)')], true],
+  ['inline code only', [text('`npm test`')], true],
+  ['image only', [image, text('![duplicate](/managed-image)')], false],
+  ['indented code only', [text('    const a = 1')], false],
+  ['fenced code only', [text('```js\nconsole.log(1)\n```')], false],
+  ['bare URL only', [text('https://example.com')], false],
+  ['HTML comment only', [text('<!--\nignored prose\n-->')], false],
+  ['formula block only', [text('$$\nx = 1\n$$')], false],
+  ['confirmed citation only', [tool, text('[cite:search-result]')], false],
+  ['unknown citation preserved', [text('[cite:unknown]')], true],
+])('availability check matches extracted speech in %s', (_name, parts, expected) => {
+  const full = Boolean(speechAssistantMessageText(parts));
+  expect(full).toBe(expected);
+  expect(hasSpeakableAssistantMessageText(parts)).toBe(expected);
 });

@@ -16,7 +16,7 @@ import {
   Spinner,
   type MenuItem,
 } from '@cherrystudio/ui/components';
-import { memo, useMemo, useState, type ReactElement } from 'react';
+import { memo, useCallback, useMemo, useState, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, View } from 'react-native';
 
@@ -32,11 +32,27 @@ import {
 } from '../context/AssistantMessageActionsProvider';
 import { useMessageTranslation } from '../translation/MessageTranslationProvider';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
-import { speechAssistantMessageText } from '../utils/speechAssistantMessageText';
+import {
+  hasSpeakableAssistantMessageText,
+  speechAssistantMessageText,
+} from '../utils/speechAssistantMessageText';
 
 type AssistantMessageToolbarProps = {
   message: MessageListItem;
 };
+
+function PreparingSpeechSpinner() {
+  const foregroundColor = useThemeColor('foreground');
+  return (
+    <Spinner
+      accessibilityElementsHidden
+      accessible={false}
+      color={foregroundColor}
+      importantForAccessibility="no-hide-descendants"
+      size="sm"
+    />
+  );
+}
 
 /**
  * The shared preference chooses placement; each message still owns action availability.
@@ -45,7 +61,6 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   message,
 }: AssistantMessageToolbarProps) {
   const { t } = useTranslation();
-  const foregroundColor = useThemeColor('foreground');
   const [isTranslationLanguagePickerOpen, setIsTranslationLanguagePickerOpen] = useState(false);
   const {
     answerableMessageIds,
@@ -77,14 +92,17 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
         : '',
     [isSettled, message],
   );
-  const speechText = useMemo(
+  const canReadAloud = useMemo(
     () =>
-      isSettled
-        ? speechAssistantMessageText(message.data.parts ?? [], message.data.citationSources)
-        : '',
+      isSettled &&
+      hasSpeakableAssistantMessageText(message.data.parts ?? [], message.data.citationSources),
     [isSettled, message.data.parts, message.data.citationSources],
   );
-  const speech = useMessageSpeech(message.id, speechText);
+  const getSpeechText = useCallback(
+    () => speechAssistantMessageText(message.data.parts ?? [], message.data.citationSources),
+    [message.data.parts, message.data.citationSources],
+  );
+  const speech = useMessageSpeech(message.id, getSpeechText);
   const isSpeechPreparing = speech.phase === 'preparing';
   const isCopied = copiedMessageId === message.id;
   // Turn-scoped, so a row with no turn — synthetic, or not yet reserved — has
@@ -116,7 +134,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           },
         }
       : {}),
-    ...(Boolean(speechText) || speech.phase !== 'idle'
+    ...(canReadAloud || speech.phase !== 'idle'
       ? {
           readAloud: {
             id: 'readAloud',
@@ -128,13 +146,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
                   : 'voice.speech.start',
             ),
             icon: isSpeechPreparing ? (
-              <Spinner
-                accessibilityElementsHidden
-                accessible={false}
-                color={foregroundColor}
-                importantForAccessibility="no-hide-descendants"
-                size="sm"
-              />
+              <PreparingSpeechSpinner />
             ) : speech.isSpeaking ? (
               <SquareIcon className="text-foreground" size={15} />
             ) : (

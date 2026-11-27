@@ -54,7 +54,11 @@ export function createSystemSpeechEngine({
             if (settled || signal.aborted) return;
             onStart();
           },
-          onDone: () => settle(),
+          onDone: () => {
+            if (settled || signal.aborted) return;
+            onStart();
+            settle();
+          },
           // A stop that reading did not request, such as an audio interruption, fails it.
           onStopped: () => settle(new Error('System speech was stopped.')),
           onError: (error) => settle(error),
