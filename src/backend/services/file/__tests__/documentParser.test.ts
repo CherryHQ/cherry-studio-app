@@ -87,7 +87,7 @@ describe('shared document parser selection', () => {
     expect(parseAnydocDocument).not.toHaveBeenCalled();
   });
 
-  test.each(['ppt', 'xls', 'odt', 'ods', 'odp', 'rtf', 'epub'])(
+  test.each(['doc', 'ppt', 'xls', 'odt', 'ods', 'odp', 'rtf', 'epub'])(
     'rejects %s in built-in mode before parsing',
     async (extension) => {
       const port = reader();
@@ -98,25 +98,6 @@ describe('shared document parser selection', () => {
       expect(port.readDocumentText).not.toHaveBeenCalled();
     },
   );
-
-  test('parses legacy doc through AnyDoc in built-in mode', async () => {
-    const output = {
-      status: 'ok' as const,
-      ir: { kind: 'document' },
-      assets: [],
-    } as unknown as Awaited<ReturnType<typeof parseAnydocDocument>>;
-    jest.mocked(parseAnydocDocument).mockResolvedValue(output);
-    const port = reader();
-    const result = await readAttachmentContent(
-      file('file.doc'),
-      port,
-      signal(),
-      undefined,
-      'builtin',
-    );
-    expect(result).toMatchObject({ kind: 'document', parsed: { parser: 'anydoc', output } });
-    expect(port.readDocumentText).not.toHaveBeenCalled();
-  });
 
   test('preserves the original failure without a second-engine fallback', async () => {
     const failure = { status: 'fallback' as const, reason: 'encrypted', detail: 'original detail' };

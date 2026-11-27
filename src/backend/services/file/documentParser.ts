@@ -46,16 +46,10 @@ export async function parseDocument(
   const issue = { fileEntryId: file.fileEntryId, name: file.name };
   const type = documentFileTypeFromMediaType(file.mediaType);
   const cloud = mode === 'deepseek' && type !== undefined && isDeepseekOcrFileType(type);
-  // The built-in parser cannot read legacy .doc, so those files go through AnyDoc instead of
-  // being refused behind a setting the user may not know about.
-  const legacyDoc = type === 'doc';
-  if (
-    !type ||
-    (mode === 'builtin' && !legacyDoc && type !== 'pdf' && !isBuiltinOfficeFileType(type))
-  ) {
+  if (!type || (mode === 'builtin' && type !== 'pdf' && !isBuiltinOfficeFileType(type))) {
     throw new FileAttachmentError({ ...issue, code: 'parser-unsupported' });
   }
-  if (type === 'pdf' || (mode === 'builtin' && !legacyDoc) || cloud) {
+  if (type === 'pdf' || mode === 'builtin' || cloud) {
     const output = await reader.readDocumentText?.(file, signal, mode);
     signal.throwIfAborted();
     if (!output) throw new FileAttachmentError({ ...issue, code: 'unavailable' });
