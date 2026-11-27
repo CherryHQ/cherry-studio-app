@@ -43,6 +43,7 @@ export type RemoteCommand = Readonly<{
   agentId?: string;
   userMessageId?: string;
   sessionId?: string;
+  executionId?: string;
   interactionId?: string;
   text?: string;
   attachments?: RemoteAttachment[];
@@ -61,12 +62,13 @@ export type RemoteStartOperation = Readonly<{
   attachments?: RemoteAttachment[];
   status: RemoteOperationStatus;
   sessionId?: string;
+  executionId?: string;
   error?: string;
   errorMessage?: string;
 }>;
 export type RemoteDispatchReceipt = Pick<
   RemoteStartOperation,
-  'id' | 'draftId' | 'status' | 'sessionId' | 'error'
+  'id' | 'draftId' | 'status' | 'sessionId' | 'executionId' | 'error'
 >;
 
 export type RemoteSourceState = Readonly<{

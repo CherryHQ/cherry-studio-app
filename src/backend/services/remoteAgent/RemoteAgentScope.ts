@@ -78,9 +78,11 @@ function activeExecution(snapshot: RemoteSessionSnapshot | undefined) {
   );
 }
 
-function terminalExecution(snapshot: RemoteSessionSnapshot | undefined) {
-  return snapshot?.executions.findLast(({ state }) =>
-    ['completed', 'cancelled', 'failed', 'interrupted'].includes(state),
+function terminalExecution(snapshot: RemoteSessionSnapshot | undefined, executionId?: string) {
+  return snapshot?.executions.findLast(
+    ({ id, state }) =>
+      (!executionId || id === executionId) &&
+      ['completed', 'cancelled', 'failed', 'interrupted'].includes(state),
   );
 }
 
@@ -97,6 +99,7 @@ type Observation = {
   pendingCommandId?: string;
   reply?: BackgroundReplyTurn;
   executionId?: string;
+  admittedExecutionId?: string;
   previousTerminalId?: string;
   backgroundInteractionKey?: string;
   listeners: Set<(snapshot: RemoteSessionSnapshot) => void>;
@@ -260,7 +263,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
         if (command?.status === 'pending') continue;
         observation.pendingCommandId = undefined;
         observation.pendingSubmission = false;
-        if (command?.status === 'applied') this.refreshExecutionCheckpoint(id);
+        if (command?.status === 'applied') this.refreshExecutionCheckpoint(id, command.executionId);
         else this.settleUnadmittedSend(id, observation);
       }
       if (settledDispatch) {
@@ -270,7 +273,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
           settledDispatch.sessionId &&
           !this.observations.get(settledDispatch.sessionId)?.tracking
         )
-          this.refreshExecutionCheckpoint(settledDispatch.sessionId);
+          this.refreshExecutionCheckpoint(settledDispatch.sessionId, settledDispatch.executionId);
       }
       this.reconcileCommandProtection();
       const previous = operationSessions;
@@ -329,7 +332,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
         command.status === 'applied' &&
         !this.observations.get(command.sessionId)?.tracking
       )
-        this.refreshExecutionCheckpoint(command.sessionId);
+        this.refreshExecutionCheckpoint(command.sessionId, command.executionId);
     }
     // Recovery may confirm the first send after its route has gone away. Hand
     // protection to the session before releasing the uncertain-command lease.
@@ -341,7 +344,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
         start.sessionId &&
         !this.observations.get(start.sessionId)?.tracking
       )
-        this.refreshExecutionCheckpoint(start.sessionId);
+        this.refreshExecutionCheckpoint(start.sessionId, start.executionId);
     }
     if (this.hasPendingCommands() && !this.pendingCommandLease && !this.backgroundBlocked) {
       this.pendingCommandLease = this.background?.keepAlive.acquire('remote.chat.command', () => {
@@ -458,7 +461,12 @@ export class RemoteAgentScope implements RemoteAgentSource {
     }
 
     const snapshot = observation?.snapshot;
-    const active = activeExecution(snapshot);
+    const currentExecution = activeExecution(snapshot);
+    const admitted = observation?.admittedExecutionId;
+    const active =
+      !admitted || !observation?.tracking || currentExecution?.id === admitted
+        ? currentExecution
+        : undefined;
     const pending =
       observation?.pendingSubmission ||
       start?.status === 'pending' ||
@@ -470,7 +478,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
         );
     const terminal =
       !active && !pending && !observation?.awaitingCheckpoint
-        ? terminalExecution(snapshot)
+        ? terminalExecution(snapshot, admitted ?? observation?.executionId)
         : undefined;
     const confirmed = terminal?.id === observation?.previousTerminalId ? undefined : terminal;
     const interaction = snapshot?.interactions.find((item) => item.state === 'pending');
@@ -679,6 +687,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
           error.failure.details?.retryable !== false &&
             ['RATE_LIMITED', 'TOKEN_EXPIRED', 'RESOURCE_EXHAUSTED'].includes(error.reason),
           error.message,
+          method,
         );
       }
       throw error;
@@ -1072,8 +1081,11 @@ export class RemoteAgentScope implements RemoteAgentSource {
   private updateExecution(sessionId: string, observation: Observation): void {
     const snapshot = observation.snapshot;
     if (!snapshot?.current || this.backgroundBlocked) return;
-    const execution = activeExecution(snapshot);
+    const active = activeExecution(snapshot);
+    const admitted = observation.tracking ? observation.admittedExecutionId : undefined;
+    const execution = !admitted || active?.id === admitted ? active : undefined;
     if (execution) {
+      if (!observation.tracking) observation.admittedExecutionId = undefined;
       if (observation.executionId && observation.executionId !== execution.id) {
         observation.reply?.finish('completed');
         observation.reply = undefined;
@@ -1120,11 +1132,15 @@ export class RemoteAgentScope implements RemoteAgentSource {
       !observation.awaitingCheckpoint &&
       !observation.pendingSubmission
     ) {
-      const terminal =
-        snapshot.executions.find((execution) => execution.id === observation.executionId) ??
-        snapshot.executions.at(-1);
+      const executionId = admitted ?? observation.executionId;
+      // A checkpoint may still contain the prior turn while the admitted run is arriving.
+      const terminal = terminalExecution(snapshot, executionId);
+      if (executionId && !terminal) {
+        if (active || observation.executionId) this.endTracking(sessionId, observation);
+        return;
+      }
       if (
-        !observation.executionId &&
+        !executionId &&
         observation.previousTerminalId === terminal?.id &&
         observation.previousTerminalId !== undefined
       )
@@ -1233,6 +1249,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
   /** A send the desktop never admitted must not settle as the previous turn's outcome. */
   private settleUnadmittedSend(sessionId: string, observation: Observation): void {
     observation.awaitingCheckpoint = false;
+    observation.admittedExecutionId = undefined;
     observation.previousTerminalId = undefined;
     if (observation.tracking && !observation.executionId && !observation.pendingSubmission)
       this.endTracking(sessionId, observation, 'failed');
@@ -1242,9 +1259,10 @@ export class RemoteAgentScope implements RemoteAgentSource {
   private endTracking(
     sessionId: string,
     observation: Observation,
-    outcome: 'completed' | 'failed' | 'cancelled',
+    outcome?: 'completed' | 'failed' | 'cancelled',
   ): void {
-    observation.reply?.finish(outcome);
+    if (outcome) observation.reply?.finish(outcome);
+    else observation.reply?.retire();
     observation.reply = undefined;
     observation.tracking = false;
     observation.awaitingCheckpoint = false;
@@ -1274,8 +1292,9 @@ export class RemoteAgentScope implements RemoteAgentSource {
     }
   }
 
-  private refreshExecutionCheckpoint(sessionId: string): void {
+  private refreshExecutionCheckpoint(sessionId: string, executionId?: string): void {
     const observation = this.trackExecution(sessionId);
+    observation.admittedExecutionId = executionId;
     this.stopObservation(observation);
     this.startObservation(sessionId, observation);
     this.notifyLiveListeners(sessionId);
@@ -1316,31 +1335,26 @@ export class RemoteAgentScope implements RemoteAgentSource {
           (error) => {
             if (observation.sync !== sync) return;
             this.stopObservation(observation);
-            // A deleted or forbidden session cannot report its execution again;
-            // stop holding background demand for it.
-            if (
-              observation.tracking &&
+            const sessionUnavailable =
               error instanceof RemoteAgentError &&
               !error.retryable &&
-              error.code !== 'CLOSED'
-            ) {
-              this.endTracking(sessionId, observation, 'failed');
-              if (!observation.listeners.size) {
-                this.withdrawTargets(sessionId, observation);
-                if (!observation.snapshot) this.notifyLiveListeners(sessionId);
-                return;
-              }
-            }
-            if (observation.snapshot) {
-              observation.snapshot = {
-                ...observation.snapshot,
-                current: false,
-                sendTarget: undefined,
-              };
-              for (const listener of observation.listeners) listener(observation.snapshot);
+              (error.code === 'FORBIDDEN' ||
+                error.code === 'GRANT_REVOKED' ||
+                error.code === 'UPGRADE_REQUIRED' ||
+                (error.code === 'NOT_FOUND' && error.method === 'agent.sessions.subscribe'));
+            // Read failures describe synchronization. Only an execution or command receipt
+            // can report the outcome of a reply.
+            observation.awaitingCheckpoint = observation.tracking;
+            this.withdrawTargets(sessionId, observation);
+            if (sessionUnavailable && observation.tracking) {
+              this.endTracking(sessionId, observation);
               this.notifyLiveListeners(sessionId);
             }
-            if (!this.stopped && this.state.status === 'ready') {
+            if (
+              !this.stopped &&
+              this.state.status === 'ready' &&
+              (observation.tracking || observation.listeners.size)
+            ) {
               const attempt = observation.retries ?? 0;
               observation.retries = attempt + 1;
               observation.retryTimer = setTimeout(
@@ -1417,11 +1431,12 @@ export class RemoteAgentScope implements RemoteAgentSource {
         const result = await this.actions.start(input, prepared);
         if (prepared) this.attachmentDrafts!.submitted(prepared.selectionId);
         if (
+          !input.dispatch &&
           result.status === 'applied' &&
           result.sessionId &&
           !this.observations.get(result.sessionId)?.tracking
         )
-          this.refreshExecutionCheckpoint(result.sessionId);
+          this.refreshExecutionCheckpoint(result.sessionId, result.executionId);
         return result;
       }),
     );
@@ -1438,6 +1453,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
     });
     const observation = this.trackExecution(params.sessionId);
     observation.previousTerminalId = terminalExecution(observation.snapshot)?.id;
+    observation.admittedExecutionId = undefined;
     observation.pendingSubmission = true;
     this.notifyLiveListeners(params.sessionId);
     return this.track(
@@ -1469,7 +1485,8 @@ export class RemoteAgentScope implements RemoteAgentSource {
           if (prepared) this.attachmentDrafts!.submitted(prepared.selectionId);
           if (command.status === 'pending') observation.pendingCommandId = command.id;
           else observation.pendingSubmission = false;
-          if (command.status === 'applied') this.refreshExecutionCheckpoint(params.sessionId);
+          if (command.status === 'applied')
+            this.refreshExecutionCheckpoint(params.sessionId, command.executionId);
           else if (command.status === 'rejected' || command.status === 'interrupted') {
             this.settleUnadmittedSend(params.sessionId, observation);
             if (command.error === 'CONFLICT')

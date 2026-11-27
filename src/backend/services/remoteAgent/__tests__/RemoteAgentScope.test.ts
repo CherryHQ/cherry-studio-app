@@ -512,7 +512,129 @@ it('settles a rejected send as failed instead of repeating the previous turn out
   await test.source.drain();
 });
 
-it('stops background demand when a tracked session can no longer be observed', async () => {
+it('keeps a failed handoff settled and follows the execution named by a follow-up receipt', async () => {
+  const test = backgroundFixture();
+  const first = {
+    executionId: 'first',
+    status: 'failed',
+    durable: true,
+    messageId: 'first-message',
+    history: { historyRevision: '1', messageRevision: '1' },
+    failure: {
+      message: 'No model configured',
+      retryable: false,
+      failure: { version: 1, reasonCode: 'model_not_found', source: { layer: 'host' } },
+    },
+  } as const satisfies AgentProjection['executions'][string];
+  const second = {
+    executionId: 'second',
+    status: 'completed',
+    durable: true,
+    messageId: 'second-message',
+    history: { historyRevision: '2', messageRevision: '1' },
+  } as const;
+  test.projection.executions.first = first;
+  const request = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.sessions.get') return { session: test.projection.session };
+    if (method === 'agent.sessions.create' || method === 'agent.messages.send')
+      return {
+        commandId: params.commandId,
+        method,
+        status: 'applied',
+        sessionId: 's',
+        admittedAt: '2026-09-22T00:00:00.000Z',
+        ...(method === 'agent.messages.send'
+          ? { executionId: params.text === 'original' ? first.executionId : second.executionId }
+          : {}),
+      };
+    return request(method, params);
+  });
+  let snapshot: RemoteSessionSnapshot | undefined;
+  test.source.observe('s', (value) => {
+    snapshot = value;
+  });
+  const input = {
+    dispatch: true,
+    draftId: 'handoff',
+    agentId: 'a',
+    title: 'Desktop task',
+    workspaceId: 'w',
+    text: 'original',
+  } as const;
+  const start = await test.source.start(input);
+  await settle();
+  expect(test.turn.finish.mock.calls).toEqual([['failed']]);
+
+  await expect(test.source.start(input)).resolves.toMatchObject({
+    id: start.id,
+    executionId: first.executionId,
+  });
+  await settle();
+  expect(test.turn.finish.mock.calls).toEqual([['failed']]);
+
+  await test.source.send(snapshot!.sendTarget!, 'follow-up');
+  await settle();
+  expect(test.turn.finish.mock.calls).toEqual([['failed']]);
+  expect(test.source.getLiveSessionPreview('s')?.executionState).toBe('running');
+
+  test.projection.executions = { second, first };
+  test.projection.session.historyRevision = '2';
+  test.setState({ status: 'ready' });
+  await settle();
+  expect(test.turn.finish.mock.calls).toEqual([['failed'], ['completed']]);
+  expect(test.source.getLiveSessionPreview('s')?.executionState).toBe('completed');
+  expect(
+    test.request.mock.calls
+      .filter(([method]) => method === 'agent.messages.send')
+      .map(([, params]) => params.text),
+  ).toEqual(['original', 'follow-up']);
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it('recovers a status read without reporting that the running reply failed', async () => {
+  const test = backgroundFixture();
+  test.projection.executions.e = { executionId: 'e', status: 'running', durable: false };
+  let snapshot: RemoteSessionSnapshot | undefined;
+  test.source.observe('s', (value) => {
+    snapshot = value;
+  });
+  await settle();
+  const request = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.checkpoints.read')
+      throw new RemoteFailureError({ reason: 'NOT_FOUND', message: 'Checkpoint expired' });
+    return request(method, params);
+  });
+  try {
+    test.setState({ status: 'ready' });
+    await settle();
+    expect(snapshot?.current).toBe(false);
+    expect(test.turn.finish).not.toHaveBeenCalled();
+    expect(test.turn.retire).not.toHaveBeenCalled();
+    expect(test.source.hasPendingExecution()).toBe(true);
+
+    test.request.mockImplementation(request);
+    test.projection.executions.e = {
+      executionId: 'e',
+      status: 'completed',
+      durable: true,
+      messageId: 'm',
+      history: { historyRevision: '1', messageRevision: '1' },
+    };
+    test.setState({ status: 'ready' });
+    await settle();
+    expect(test.startTurn).toHaveBeenCalledTimes(1);
+    expect(test.turn.finish.mock.calls).toEqual([['completed']]);
+    expect(test.source.hasPendingExecution()).toBe(false);
+  } finally {
+    test.source.dispose();
+    await test.source.drain();
+  }
+});
+
+it('retires background demand when the desktop no longer exposes the session', async () => {
   const test = backgroundFixture();
   test.projection.executions.e = { executionId: 'e', status: 'running', durable: false };
   const unobserve = test.source.observe('s', () => {});
@@ -529,7 +651,8 @@ it('stops background demand when a tracked session can no longer be observed', a
   test.setState({ status: 'ready' });
   await settle();
   await settle();
-  expect(test.turn.finish).toHaveBeenCalledWith('failed');
+  expect(test.turn.finish).not.toHaveBeenCalled();
+  expect(test.turn.retire).toHaveBeenCalledTimes(1);
   expect(test.source.hasPendingExecution()).toBe(false);
   expect(test.lease.setBackgroundRequired).toHaveBeenLastCalledWith(false);
   test.source.dispose();

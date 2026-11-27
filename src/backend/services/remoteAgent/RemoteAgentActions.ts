@@ -76,6 +76,7 @@ const DispatchReceiptSchema = z.object({
   draftId: z.string(),
   status: z.enum(['applied', 'rejected', 'interrupted']),
   sessionId: z.string().optional(),
+  executionId: z.string().optional(),
   error: z.string().optional(),
 });
 const JournalSchema = z.object({
@@ -95,6 +96,7 @@ function projectAction(entry: RecordEntry): RemoteCommand {
   return {
     ...action,
     status: isUncertain(entry) ? 'pending' : (action.status as RemoteCommand['status']),
+    ...(receipt?.executionId ? { executionId: receipt.executionId } : {}),
     ...(receipt?.error ? { errorMessage: receipt.error.message } : {}),
     ...(action.kind === 'respond' && typeof params.interactionId === 'string'
       ? { interactionId: params.interactionId }
@@ -115,21 +117,33 @@ function projectStart(
   { createId, sendId, dispatch: _dispatch, ...view }: StartEntry,
   records: RecordEntry[],
 ): RemoteStartOperation {
-  const record =
-    records.find((entry) => entry.action.id === sendId) ??
-    records.find((entry) => entry.action.id === createId);
+  const send = records.find((entry) => entry.action.id === sendId);
+  const record = send ?? records.find((entry) => entry.action.id === createId);
   const errorMessage =
     view.errorMessage ??
     (record?.receipt?.error?.reason === view.error ? record?.receipt?.error?.message : undefined);
-  return { ...view, ...(errorMessage ? { errorMessage } : {}) };
+  const executionId = send?.receipt?.executionId;
+  return {
+    ...view,
+    ...(executionId ? { executionId } : {}),
+    ...(errorMessage ? { errorMessage } : {}),
+  };
 }
 
-function projectDispatch({ id, draftId, status, sessionId, error }: StartEntry) {
+function projectDispatch({
+  id,
+  draftId,
+  status,
+  sessionId,
+  executionId,
+  error,
+}: RemoteStartOperation) {
   return {
     id,
     draftId,
     status,
     ...(sessionId !== undefined ? { sessionId } : {}),
+    ...(executionId !== undefined ? { executionId } : {}),
     ...(error !== undefined ? { error } : {}),
   };
 }
@@ -471,7 +485,7 @@ export class RemoteAgentActions {
   private updateStart(entry: StartEntry, records = this.records) {
     const view = projectStart(entry, records);
     if (entry.dispatch && entry.status !== 'pending') {
-      const receipt = { ...projectDispatch(entry), status: entry.status };
+      const receipt = { ...projectDispatch(view), status: entry.status };
       // Keep the outcome and forget both commands in one journal write.
       this.commit(
         records.filter(({ action }) => action.id !== entry.createId && action.id !== entry.sendId),
