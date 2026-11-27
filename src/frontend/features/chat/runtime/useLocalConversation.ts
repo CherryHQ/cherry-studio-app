@@ -117,10 +117,16 @@ export function useLocalConversation(input: {
     if (window.hasNewerMessages) return historyMessages;
     return branchMessages.map((message) => projector.message(message, state));
   }, [projector, branchMessages, historyMessages, state, window.hasNewerMessages]);
-  const liveMessagesRef = useRef(state.liveMessages);
+  const liveStateRef = useRef({
+    liveMessages: state.liveMessages,
+    transcriptRevision: state.transcriptRevision,
+  });
   useEffect(() => {
-    liveMessagesRef.current = state.liveMessages;
-  }, [state.liveMessages]);
+    liveStateRef.current = {
+      liveMessages: state.liveMessages,
+      transcriptRevision: state.transcriptRevision,
+    };
+  }, [state.liveMessages, state.transcriptRevision]);
   const citationReader = useMemo(
     () => (sessionId ? createLocalCitationReader(apiClient, sessionId) : undefined),
     [apiClient, sessionId],
@@ -128,7 +134,13 @@ export function useLocalConversation(input: {
   const readCitations = useCallback<NonNullable<ConversationHistoryView['readCitations']>>(
     (messageId, ids, signal) =>
       citationReader
-        ? citationReader(messageId, ids, signal, liveMessagesRef.current)
+        ? citationReader(
+            messageId,
+            ids,
+            signal,
+            liveStateRef.current.liveMessages,
+            liveStateRef.current.transcriptRevision,
+          )
         : Promise.resolve([]),
     [citationReader],
   );

@@ -55,9 +55,11 @@ export function createLocalCitationReader(
   ids: readonly string[],
   signal: AbortSignal,
   liveMessages?: readonly AgentMessageView[],
+  revision?: number,
 ) => Promise<CitationSource[]> {
   const pageCache = new Map<string, CachedCitationPage>();
   const inFlight = new Map<string, InFlightPage>();
+  let cachedRevision: number | undefined;
 
   const rememberPage = (cacheKey: string, page: CachedCitationPage) => {
     if (pageCache.has(cacheKey)) pageCache.delete(cacheKey);
@@ -72,6 +74,7 @@ export function createLocalCitationReader(
     query: ListAgentSessionMessagesQueryParams,
     cacheKey: string | undefined,
     inFlightKey: string,
+    requestRevision: number | undefined,
     signal: AbortSignal,
   ): Promise<CachedCitationPage> => {
     signal.throwIfAborted();
@@ -83,7 +86,8 @@ export function createLocalCitationReader(
       }
     }
 
-    let entry = inFlight.get(inFlightKey);
+    const requestInFlightKey = `${requestRevision ?? 0}:${inFlightKey}`;
+    let entry = inFlight.get(requestInFlightKey);
     if (!entry) {
       const controller = new AbortController();
       const created: InFlightPage = {
@@ -96,14 +100,16 @@ export function createLocalCitationReader(
           })
           .then((page) => {
             const summarized = summarizePage(page);
-            if (cacheKey) rememberPage(cacheKey, summarized);
+            if (cacheKey && requestRevision === cachedRevision) {
+              rememberPage(cacheKey, summarized);
+            }
             return summarized;
           })
           .finally(() => {
-            if (inFlight.get(inFlightKey) === created) inFlight.delete(inFlightKey);
+            if (inFlight.get(requestInFlightKey) === created) inFlight.delete(requestInFlightKey);
           }),
       };
-      inFlight.set(inFlightKey, created);
+      inFlight.set(requestInFlightKey, created);
       entry = created;
     }
 
@@ -116,6 +122,7 @@ export function createLocalCitationReader(
         settled = true;
         entry.waiters.delete(waiter);
         if (entry.waiters.size === 0) {
+          if (inFlight.get(requestInFlightKey) === entry) inFlight.delete(requestInFlightKey);
           entry.controller.abort(signal.reason);
         }
         reject(toAbortError(signal));
@@ -145,8 +152,13 @@ export function createLocalCitationReader(
     });
   };
 
-  return async (messageId, ids, signal, liveMessages = []) => {
+  return async (messageId, ids, signal, liveMessages = [], revision) => {
     signal.throwIfAborted();
+    if (revision !== cachedRevision) {
+      cachedRevision = revision;
+      pageCache.clear();
+    }
+    const requestRevision = revision;
     const missing = new Set(ids);
     if (!missing.size) return [];
     const sources: CitationSource[] = [];
@@ -161,7 +173,7 @@ export function createLocalCitationReader(
     const visited = new Set<string>();
 
     for (let scanned = 0; missing.size && scanned < MAX_CITATION_SCAN_PAGES; scanned++) {
-      const page = await fetchPage(query, cacheKey, inFlightKey, signal);
+      const page = await fetchPage(query, cacheKey, inFlightKey, requestRevision, signal);
       signal.throwIfAborted();
       for (const entry of page.entries) {
         if (entry.id === messageId) {

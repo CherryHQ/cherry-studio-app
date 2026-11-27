@@ -39,6 +39,7 @@ export type AgentSessionChatState = {
   snapshot?: AgentSessionSnapshot;
   contextStatus?: AgentSessionSnapshot['contextStatus'];
   contextUsages?: AgentSessionSnapshot['contextUsages'];
+  transcriptRevision?: number;
   status: AgentSessionChatStatus;
 };
 
@@ -810,6 +811,7 @@ export class AgentSessionChatClient {
             : event.messageIds.includes(entry.state.activeTurn.assistantMessageId)),
         );
         this.commitLiveMessages(entry, {
+          transcriptRevision: (entry.state.transcriptRevision ?? 0) + 1,
           ...(isActiveTurnDeleted
             ? { activeTurn: null, pendingApprovals: [], pendingQuestion: null }
             : {}),
