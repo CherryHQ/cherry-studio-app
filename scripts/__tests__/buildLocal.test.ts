@@ -1,5 +1,7 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
 
@@ -69,3 +71,123 @@ process.exit(plugin.status ?? 1);
     }
   },
 );
+
+test('keeps eas-cli and eas-cli-local-build-plugin aligned on @expo/eas-build-job', () => {
+  const requireFromProject = createRequire(resolve('package.json'));
+  const rootPkg = JSON.parse(readFileSync(resolve('package.json'), 'utf8')) as {
+    devDependencies?: Record<string, string>;
+  };
+  const easCliPkg = requireFromProject('eas-cli/package.json') as {
+    version: string;
+    dependencies?: Record<string, string>;
+  };
+  const localPluginPkg = requireFromProject('eas-cli-local-build-plugin/package.json') as {
+    version: string;
+    dependencies?: Record<string, string>;
+  };
+
+  expect(easCliPkg.version).toBe(rootPkg.devDependencies?.['eas-cli']);
+  expect(localPluginPkg.version).toBe(rootPkg.devDependencies?.['eas-cli-local-build-plugin']);
+  expect(easCliPkg.dependencies?.['@expo/eas-build-job']).toBeTruthy();
+  expect(localPluginPkg.dependencies?.['@expo/eas-build-job']).toBe(
+    easCliPkg.dependencies?.['@expo/eas-build-job'],
+  );
+});
+
+test('routes EAS CLI HTTPS requests through https_proxy on Node 24 without ERR_INVALID_PROTOCOL', async () => {
+  const connectTargets: string[] = [];
+  const server = createServer();
+  server.on('connect', (req, socket) => {
+    connectTargets.push(req.url ?? '');
+    socket.write('HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n');
+    socket.destroy();
+  });
+
+  await new Promise<void>((resolveListen, rejectListen) => {
+    server.once('error', rejectListen);
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', rejectListen);
+      resolveListen();
+    });
+  });
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Expected loopback proxy server to bind to an IP port.');
+    }
+
+    const childScript = [
+      "const { createRequire } = require('node:module');",
+      "const { resolve } = require('node:path');",
+      "const requireFromProject = createRequire(resolve('package.json'));",
+      "const requireFromEas = createRequire(requireFromProject.resolve('eas-cli/package.json'));",
+      "const fetchMod = requireFromEas('./build/fetch.js');",
+      '(async () => {',
+      '  let errorCode = null;',
+      '  let errorMessage = null;',
+      '  try {',
+      "    await fetchMod.default('https://api.expo.dev/graphql', { method: 'POST' });",
+      '  } catch (error) {',
+      "    errorCode = error && typeof error === 'object' && 'code' in error ? error.code : null;",
+      '    errorMessage = error instanceof Error ? error.message : String(error);',
+      '  }',
+      '  process.stdout.write(JSON.stringify({',
+      '    hasAgent: Boolean(fetchMod.httpsProxyAgent),',
+      '    errorCode,',
+      '    errorMessage,',
+      '  }));',
+      '})();',
+    ].join('\n');
+
+    const childResult = await new Promise<{
+      status: number | null;
+      stdout: string;
+      stderr: string;
+    }>((resolveChild, rejectChild) => {
+      const child = spawn(process.execPath, ['-e', childScript], {
+        cwd: process.cwd(),
+        env: {
+          NODE_ENV: process.env.NODE_ENV,
+          PATH: process.env.PATH,
+          https_proxy: `http://127.0.0.1:${address.port}`,
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 10_000,
+      });
+      let stdout = '';
+      let stderr = '';
+      child.stdout.setEncoding('utf8');
+      child.stderr.setEncoding('utf8');
+      child.stdout.on('data', (chunk: string) => {
+        stdout += chunk;
+      });
+      child.stderr.on('data', (chunk: string) => {
+        stderr += chunk;
+      });
+      child.once('error', rejectChild);
+      child.once('close', (status) => {
+        resolveChild({ status, stdout, stderr });
+      });
+    });
+
+    expect({ status: childResult.status, stderr: childResult.stderr }).toEqual({
+      status: 0,
+      stderr: '',
+    });
+    const parsed = JSON.parse(childResult.stdout) as {
+      hasAgent: boolean;
+      errorCode: string | null;
+      errorMessage: string | null;
+    };
+    expect(parsed.hasAgent).toBe(true);
+    expect(connectTargets).toEqual(['api.expo.dev:443']);
+    expect(parsed.errorCode).not.toBe('ERR_INVALID_PROTOCOL');
+    expect(parsed.errorMessage).not.toMatch(/Protocol "https:" not supported/i);
+    expect(parsed.errorMessage).toContain('502');
+  } finally {
+    await new Promise<void>((resolveClose) => {
+      server.close(() => resolveClose());
+    });
+  }
+});
