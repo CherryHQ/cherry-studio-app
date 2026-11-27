@@ -836,7 +836,7 @@ test('forgetSession revokes the live target even when removing the remembered bi
     throw new Error('Storage unavailable');
   });
 
-  await expect(runtime.forgetSession(sessionId)).rejects.toThrow('Storage unavailable');
+  await expect(runtime.forgetSession(sessionId)).rejects.toMatchObject({ code: 'storage' });
   expect(runtime.getTarget(sessionId)).toBeNull();
 });
 
