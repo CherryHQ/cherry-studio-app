@@ -1,8 +1,10 @@
 import { Surface } from '@cherrystudio/ui/components';
-import { duration, easing } from '@cherrystudio/ui/motion';
-import { type RefObject, useCallback, useEffect, useMemo } from 'react';
+import { haptics } from '@cherrystudio/ui/haptics';
+import { duration, easing, spring } from '@cherrystudio/ui/motion';
+import { type RefObject, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  Platform,
   Pressable,
   type StyleProp,
   Text,
@@ -16,6 +18,11 @@ import Animated, {
   FadeOut,
   LinearTransition,
   ReduceMotion,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+  withTiming,
   ZoomIn,
 } from 'react-native-reanimated';
 
@@ -49,6 +56,46 @@ const navPillEnter = FadeIn.duration(duration.fast)
 const navPillExit = FadeOut.duration(duration.fast)
   .easing(easing.settle)
   .reduceMotion(ReduceMotion.System);
+
+/**
+ * Horizontal bottom-dock pill & icon motion:
+ * - Active pill fill and outline/filled icon cross-fade run on the UI thread via opacity
+ *   (`150ms` enter / `120ms` exit, `easing.settle`), keeping Android rounded corners uncollapsed
+ *   (`#1899`) and allowing immediate mid-flight interruption on rapid tab switches.
+ * - Tactile press-in (`1 -> 0.9`, `100ms`) responds on pointer down and recovers with
+ *   `spring.tactile`; inactive-to-active switches add a subtle `0.92 -> 1` `spring.morph` settle.
+ *   Both scale animations degrade to static swaps when Reduce Motion is enabled.
+ */
+const HORIZONTAL_PILL_ENTER_TIMING = {
+  duration: 150,
+  easing: easing.settle,
+  reduceMotion: ReduceMotion.System,
+} as const;
+const HORIZONTAL_PILL_EXIT_TIMING = {
+  duration: 120,
+  easing: easing.settle,
+  reduceMotion: ReduceMotion.System,
+} as const;
+const HORIZONTAL_PRESS_IN_TIMING = {
+  duration: 100,
+  easing: easing.settle,
+  reduceMotion: ReduceMotion.System,
+} as const;
+const HORIZONTAL_PRESS_OUT_TIMING = {
+  duration: 180,
+  easing: easing.settle,
+  reduceMotion: ReduceMotion.System,
+} as const;
+const HORIZONTAL_ICON_PRESS_SCALE = 0.9;
+const HORIZONTAL_ICON_ACTIVATION_START_SCALE = 0.92;
+const HORIZONTAL_ICON_PRESS_OUT_SPRING = {
+  ...spring.tactile,
+  reduceMotion: ReduceMotion.System,
+} as const;
+const HORIZONTAL_ICON_ACTIVATION_SPRING = {
+  ...spring.morph,
+  reduceMotion: ReduceMotion.System,
+} as const;
 
 const COLLAPSED_DETACHED_STYLE: ViewStyle = {
   height: 1,
@@ -168,21 +215,10 @@ type NavTabCapsuleProps = {
   id: NavTabId;
   isActive: boolean;
   isDragPreview?: boolean;
-  orientation: 'horizontal' | 'vertical';
 };
 
-function NavTabCapsule({
-  color,
-  filled,
-  id,
-  isActive,
-  isDragPreview = false,
-  orientation,
-}: NavTabCapsuleProps) {
-  const isHorizontal = orientation === 'horizontal';
-  const capsuleClassName = isHorizontal
-    ? 'h-9 w-full max-w-24 items-center justify-center rounded-xl'
-    : 'h-11 w-11 items-center justify-center rounded-full';
+function NavTabCapsule({ color, filled, id, isActive, isDragPreview = false }: NavTabCapsuleProps) {
+  const capsuleClassName = 'h-11 w-11 items-center justify-center rounded-full';
   const stateClassName = isDragPreview
     ? 'bg-secondary-active border-border-selected border border-dashed'
     : isActive
@@ -194,11 +230,187 @@ function NavTabCapsule({
       className={stateClassName ? `${capsuleClassName} ${stateClassName}` : capsuleClassName}
       collapsable={false}
     >
-      <View className={isHorizontal && !isActive && !isDragPreview ? 'opacity-75' : undefined}>
-        <NavIcon color={color} filled={filled} id={id} size={isHorizontal ? 20 : 22} />
-      </View>
+      <NavIcon color={color} filled={filled} id={id} size={22} />
     </View>
   );
+}
+
+type NavHorizontalTabButtonProps = {
+  accessibilityLabel: string;
+  foregroundColor: string;
+  gesture?: ReturnType<typeof usePinDragGesture>;
+  isActive: boolean;
+  isDragPreview: boolean;
+  isDraggingOut: boolean;
+  mutedForegroundColor: string;
+  onPress: () => void;
+  rippleColor?: string;
+  tabId: NavTabId;
+  testIDPrefix: 'floating-nav' | 'vertical-rail';
+};
+
+function NavHorizontalTabButton({
+  accessibilityLabel,
+  foregroundColor,
+  gesture,
+  isActive,
+  isDragPreview,
+  isDraggingOut,
+  mutedForegroundColor,
+  onPress,
+  rippleColor,
+  tabId,
+  testIDPrefix,
+}: NavHorizontalTabButtonProps) {
+  const isAndroid = Platform?.OS === 'android';
+  const reducedMotion = useReducedMotion();
+  const isVisualActive = isActive || isDragPreview;
+  const activeProgress = useSharedValue(isVisualActive ? 1 : 0);
+  const pressScale = useSharedValue(1);
+  const activationScale = useSharedValue(1);
+  const pressWashOpacity = useSharedValue(0);
+  const prevActiveRef = useRef(isActive);
+
+  useEffect(() => {
+    activeProgress.set(
+      withTiming(
+        isVisualActive ? 1 : 0,
+        isVisualActive ? HORIZONTAL_PILL_ENTER_TIMING : HORIZONTAL_PILL_EXIT_TIMING,
+      ),
+    );
+  }, [activeProgress, isVisualActive]);
+
+  useEffect(() => {
+    if (reducedMotion) {
+      pressScale.set(1);
+      activationScale.set(1);
+      prevActiveRef.current = isActive;
+      return;
+    }
+    if (isActive && !prevActiveRef.current) {
+      activationScale.set(HORIZONTAL_ICON_ACTIVATION_START_SCALE);
+      activationScale.set(withSpring(1, HORIZONTAL_ICON_ACTIVATION_SPRING));
+    }
+    prevActiveRef.current = isActive;
+  }, [activationScale, isActive, pressScale, reducedMotion]);
+
+  const handlePressIn = useCallback(() => {
+    if (!reducedMotion) {
+      pressScale.set(withTiming(HORIZONTAL_ICON_PRESS_SCALE, HORIZONTAL_PRESS_IN_TIMING));
+    }
+    if (!isAndroid) {
+      pressWashOpacity.set(withTiming(1, HORIZONTAL_PRESS_IN_TIMING));
+    }
+  }, [isAndroid, pressScale, pressWashOpacity, reducedMotion]);
+
+  const handlePressOut = useCallback(() => {
+    if (!reducedMotion) {
+      pressScale.set(withSpring(1, HORIZONTAL_ICON_PRESS_OUT_SPRING));
+    } else {
+      pressScale.set(1);
+    }
+    if (!isAndroid) {
+      pressWashOpacity.set(withTiming(0, HORIZONTAL_PRESS_OUT_TIMING));
+    }
+  }, [isAndroid, pressScale, pressWashOpacity, reducedMotion]);
+
+  const handlePress = useCallback(() => {
+    if (!isActive && !isDraggingOut) {
+      haptics.selection();
+    }
+    onPress();
+  }, [isActive, isDraggingOut, onPress]);
+
+  const activePillStyle = useAnimatedStyle(() => ({
+    opacity: activeProgress.get(),
+  }));
+
+  const pressWashStyle = useAnimatedStyle(() => ({
+    opacity: pressWashOpacity.get() * 0.75,
+  }));
+
+  const iconScaleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pressScale.get() * activationScale.get() }],
+  }));
+
+  const outlineIconStyle = useAnimatedStyle(() => ({
+    opacity: 1 - activeProgress.get(),
+  }));
+
+  const filledIconStyle = useAnimatedStyle(() => ({
+    opacity: activeProgress.get(),
+  }));
+
+  const pill = (
+    <View className="h-[46px] w-full overflow-hidden rounded-full" collapsable={false}>
+      <Pressable
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: isActive }}
+        android_ripple={
+          isAndroid && rippleColor
+            ? { borderless: false, color: rippleColor, foreground: true }
+            : undefined
+        }
+        className={`h-full w-full items-center justify-center rounded-full ${
+          isDraggingOut ? 'opacity-35' : ''
+        }`}
+        onPress={handlePress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        testID={`${testIDPrefix}-tab-${tabId}`}
+      >
+        <Animated.View
+          className="bg-secondary dark:bg-secondary-active absolute inset-0 rounded-full"
+          collapsable={false}
+          pointerEvents="none"
+          style={activePillStyle}
+          testID={`${testIDPrefix}-active-pill-${tabId}`}
+        />
+        {!isAndroid ? (
+          <Animated.View
+            className="bg-secondary dark:bg-secondary-active absolute inset-0 rounded-full"
+            pointerEvents="none"
+            style={pressWashStyle}
+            testID={`${testIDPrefix}-press-wash-${tabId}`}
+          />
+        ) : null}
+        {isDragPreview ? (
+          <View
+            className="border-border-selected absolute inset-0 rounded-full border border-dashed"
+            pointerEvents="none"
+            testID={`${testIDPrefix}-dashed-border-${tabId}`}
+          />
+        ) : null}
+        <Animated.View
+          className="h-6 w-6 items-center justify-center"
+          pointerEvents="none"
+          style={iconScaleStyle}
+        >
+          <Animated.View
+            className="absolute inset-0 items-center justify-center"
+            style={outlineIconStyle}
+          >
+            <NavIcon
+              color={mutedForegroundColor}
+              filled={false}
+              id={tabId}
+              size={24}
+              strokeWidth={2}
+            />
+          </Animated.View>
+          <Animated.View
+            className="absolute inset-0 items-center justify-center"
+            style={filledIconStyle}
+          >
+            <NavIcon color={foregroundColor} filled id={tabId} size={24} strokeWidth={2} />
+          </Animated.View>
+        </Animated.View>
+      </Pressable>
+    </View>
+  );
+
+  return gesture ? <GestureDetector gesture={gesture}>{pill}</GestureDetector> : pill;
 }
 
 type NavMiddleTabButtonProps = {
@@ -211,8 +423,9 @@ type NavMiddleTabButtonProps = {
   mutedForegroundColor: string;
   onPress: () => void;
   orientation: 'horizontal' | 'vertical';
+  rippleColor?: string;
   tabId: NavigationPinTabId;
-  testIDPrefix: string;
+  testIDPrefix: 'floating-nav' | 'vertical-rail';
 };
 
 function NavMiddleTabButton({
@@ -225,11 +438,29 @@ function NavMiddleTabButton({
   mutedForegroundColor,
   onPress,
   orientation,
+  rippleColor,
   tabId,
   testIDPrefix,
 }: NavMiddleTabButtonProps) {
   const panGesture = usePinDragGesture(tabId, 'dock');
-  const buttonShapeClass = orientation === 'horizontal' ? 'rounded-xl' : 'rounded-full';
+
+  if (orientation === 'horizontal') {
+    return (
+      <NavHorizontalTabButton
+        accessibilityLabel={accessibilityLabel}
+        foregroundColor={foregroundColor}
+        gesture={panGesture}
+        isActive={isActive}
+        isDragPreview={isDragPreview}
+        isDraggingOut={isDraggingOut}
+        mutedForegroundColor={mutedForegroundColor}
+        onPress={onPress}
+        rippleColor={rippleColor}
+        tabId={tabId}
+        testIDPrefix={testIDPrefix}
+      />
+    );
+  }
 
   return (
     <GestureDetector gesture={panGesture}>
@@ -237,7 +468,7 @@ function NavMiddleTabButton({
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="tab"
         accessibilityState={{ selected: isActive }}
-        className={`${buttonSizeClass} items-center justify-center ${buttonShapeClass} ${
+        className={`${buttonSizeClass} items-center justify-center rounded-full ${
           isDraggingOut ? 'opacity-35' : ''
         }`}
         onPress={onPress}
@@ -249,7 +480,6 @@ function NavMiddleTabButton({
           id={tabId}
           isActive={isActive}
           isDragPreview={isDragPreview}
-          orientation={orientation}
         />
       </Pressable>
     </GestureDetector>
@@ -266,6 +496,7 @@ type NavTabStripProps = {
   orientation: 'horizontal' | 'vertical';
   pinnedTabs: readonly NavigationPinTabId[];
   preview: DockDragPreviewState;
+  rippleColor?: string;
   testIDPrefix: 'floating-nav' | 'vertical-rail';
 };
 
@@ -283,14 +514,16 @@ export function NavTabStrip({
   orientation,
   pinnedTabs,
   preview,
+  rippleColor,
   testIDPrefix,
 }: NavTabStripProps) {
   const { t } = useTranslation();
   const isHorizontal = orientation === 'horizontal';
-  const itemWrapperClassName = isHorizontal ? 'flex-1 items-center justify-center' : undefined;
+  const itemWrapperClassName = isHorizontal
+    ? 'flex-1 max-w-[100px] items-center justify-center'
+    : undefined;
   const itemWrapperStyle = maxItemWidth !== undefined ? { maxWidth: maxItemWidth } : undefined;
-  const buttonSizeClass = isHorizontal ? 'h-11 w-full' : 'h-11 w-11';
-  const buttonShapeClass = isHorizontal ? 'rounded-xl' : 'rounded-full';
+  const buttonSizeClass = 'h-11 w-11';
   const isDragOutUnpinning =
     dragState?.source === 'dock' && dragState.draggingOut && !preview.tabs.includes(dragState.id);
 
@@ -321,16 +554,23 @@ export function NavTabStrip({
               style={itemWrapperStyle}
               testID={`${testIDPrefix}-preview-${tabId}`}
             >
-              <View className={`${buttonSizeClass} items-center justify-center`}>
-                <NavTabCapsule
-                  color={foregroundColor}
-                  filled
-                  id={tabId}
-                  isActive
-                  isDragPreview
-                  orientation={orientation}
-                />
-              </View>
+              {isHorizontal ? (
+                <View
+                  className="bg-secondary dark:bg-secondary-active h-[46px] w-full items-center justify-center overflow-hidden rounded-full"
+                  collapsable={false}
+                >
+                  <View
+                    className="border-border-selected absolute inset-0 rounded-full border border-dashed"
+                    pointerEvents="none"
+                    testID={`${testIDPrefix}-dashed-border-${tabId}`}
+                  />
+                  <NavIcon color={foregroundColor} filled id={tabId} size={24} strokeWidth={2} />
+                </View>
+              ) : (
+                <View className={`${buttonSizeClass} items-center justify-center`}>
+                  <NavTabCapsule color={foregroundColor} filled id={tabId} isActive isDragPreview />
+                </View>
+              )}
             </Animated.View>
           );
         }
@@ -343,22 +583,36 @@ export function NavTabStrip({
               layout={navTabLayout}
               style={itemWrapperStyle}
             >
-              <Pressable
-                accessibilityLabel={label}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: isActive }}
-                className={`${buttonSizeClass} items-center justify-center ${buttonShapeClass}`}
-                onPress={handlePress}
-                testID={`${testIDPrefix}-tab-${tabId}`}
-              >
-                <NavTabCapsule
-                  color={isActive ? foregroundColor : mutedForegroundColor}
-                  filled={isActive}
-                  id={tabId}
+              {isHorizontal ? (
+                <NavHorizontalTabButton
+                  accessibilityLabel={label}
+                  foregroundColor={foregroundColor}
                   isActive={isActive}
-                  orientation={orientation}
+                  isDragPreview={false}
+                  isDraggingOut={false}
+                  mutedForegroundColor={mutedForegroundColor}
+                  onPress={handlePress}
+                  rippleColor={rippleColor}
+                  tabId={tabId}
+                  testIDPrefix={testIDPrefix}
                 />
-              </Pressable>
+              ) : (
+                <Pressable
+                  accessibilityLabel={label}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: isActive }}
+                  className={`${buttonSizeClass} items-center justify-center rounded-full`}
+                  onPress={handlePress}
+                  testID={`${testIDPrefix}-tab-${tabId}`}
+                >
+                  <NavTabCapsule
+                    color={isActive ? foregroundColor : mutedForegroundColor}
+                    filled={isActive}
+                    id={tabId}
+                    isActive={isActive}
+                  />
+                </Pressable>
+              )}
             </Animated.View>
           );
         }
@@ -387,6 +641,7 @@ export function NavTabStrip({
               mutedForegroundColor={mutedForegroundColor}
               onPress={detached ? NOOP : handlePress}
               orientation={orientation}
+              rippleColor={rippleColor}
               tabId={tabId}
               testIDPrefix={testIDPrefix}
             />
