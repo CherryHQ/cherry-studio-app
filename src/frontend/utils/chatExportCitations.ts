@@ -1,13 +1,15 @@
 import { AgentToolResultSchema, type AgentMessagePart } from '@/shared/contracts/agent';
+import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import {
+  citableToolName,
   collectCitationSources,
   resolveMessageCitations,
   toolCitationSources,
   type CitationSource,
 } from './messageCitations';
 
-type ExportCitationSource = { title: string; url: string };
+export type ExportCitationSource = { title: string; url?: string };
 
 /** Adapt saved local parts without exposing tool execution records in the export. */
 export function collectChatExportSources(
@@ -16,42 +18,55 @@ export function collectChatExportSources(
   const candidates = parts.flatMap<CitationSource>((part) => {
     if (part.type === 'source-url')
       return [{ id: part.sourceId, title: part.title ?? part.url, url: part.url }];
-    if (
-      part.type !== 'dynamic-tool' ||
-      part.state !== 'output-available' ||
-      part.toolRef.source !== 'builtin' ||
-      !['web_search', 'web_fetch'].includes(part.toolRef.capabilityId)
-    )
-      return [];
+    if (part.type !== 'dynamic-tool' || part.state !== 'output-available') return [];
+    const toolName =
+      part.toolRef.source === 'builtin'
+        ? citableToolName(part.toolRef.capabilityId, part.input, true)
+        : part.toolRef.source === 'mcp'
+          ? citableToolName(part.toolName, part.input, false)
+          : undefined;
+    if (!toolName) return [];
     const output = AgentToolResultSchema.safeParse(part.output);
     if (!output.success) return [];
     const value = output.data.value;
     const details =
       value && typeof value === 'object' && !Array.isArray(value) ? value.details : undefined;
-    return toolCitationSources(
-      part.toolRef.capabilityId,
-      details && typeof details === 'object' && !Array.isArray(details) ? details.results : value,
-    );
+    const payload =
+      details && typeof details === 'object' && !Array.isArray(details) && 'results' in details
+        ? details.results
+        : value;
+    return toolCitationSources(toolName, payload);
   });
   return new Map(
-    [...collectCitationSources([], candidates)].flatMap(([id, source]) =>
-      source.url ? [[id, { title: source.title, url: new URL(source.url).href }] as const] : [],
-    ),
+    [...collectCitationSources([], candidates)].map(([id, source]) => [
+      id,
+      {
+        title: source.title,
+        ...(source.url ? { url: new URL(source.url).href } : {}),
+      },
+    ]),
   );
 }
 
-/** Preserve source-list numbering while using the shared portable citation and code rules. */
+/** Portable links use the same source validation, numbering and code exclusion as the message. */
 export function replaceChatCitations(
   source: string,
   sources: ReadonlyMap<string, ExportCitationSource>,
+  preferredNumbers?: ReadonlyMap<string, number>,
+  parts: readonly CherryMessagePart[] = [],
 ): string {
-  const numbers = new Map([...sources.keys()].map((id, index) => [id, index + 1]));
+  const numbers =
+    preferredNumbers ?? new Map([...sources.keys()].map((id, index) => [id, index + 1]));
+  const translationParts: CherryMessagePart[] = [
+    ...parts.filter((part) => part.type !== 'text'),
+    { type: 'text', text: source },
+  ];
   return (
     resolveMessageCitations(
-      [{ type: 'text', text: source }],
+      translationParts,
       [...sources].map(([id, item]) => ({ ...item, id })),
       'export',
       numbers,
-    ).textByPartIndex.get(0)?.markdown ?? source
+    ).textByPartIndex.get(translationParts.length - 1)?.markdown ?? source
   );
 }

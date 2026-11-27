@@ -22,11 +22,11 @@ import {
   sentryTargetFingerprint,
   sentryTargetFromEnv,
   type CommandResult,
-} from '../uploadIosSymbols';
+} from '../release/iosSymbolShared';
 import { readMachOSlices, verifyIosSymbolPackage } from '../verifyIosSymbolPackage';
 
-jest.mock('../uploadIosSymbols', () =>
-  Object.assign(jest.requireActual('../uploadIosSymbols'), {
+jest.mock('../release/iosSymbolShared', () =>
+  Object.assign(jest.requireActual('../release/iosSymbolShared'), {
     runCommand: jest.fn(),
     resolveSentryCli: jest.fn(() => '/native/sentry-cli'),
   }),

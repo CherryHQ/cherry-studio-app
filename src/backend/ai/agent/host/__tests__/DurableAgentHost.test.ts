@@ -1,5 +1,4 @@
 import { v4 as uuidv4, v7 as uuid } from 'uuid';
-import { ZodError } from 'zod';
 
 import type { BackgroundReplyTurnInput } from '@/backend/services/backgroundReply';
 import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
@@ -18,6 +17,7 @@ import { createTraceRecorder } from '../../../observability/__tests__/_traceReco
 import {
   FakeRuntime,
   LANES_PER_SESSION,
+  RuntimeCorruptLaneError,
   laneKey,
   parseLaneKey,
   runtimeLane,
@@ -2130,7 +2130,10 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       .spyOn(state.conversations, 'initialize')
       .mockImplementation(async (database, ports, signal) => {
         await initialize(database, ports, signal);
-        await ports.onRecoveryFailure!(runtimeLane(state.sessionId), new ZodError([]));
+        await ports.onRecoveryFailure!(
+          runtimeLane(state.sessionId),
+          new RuntimeCorruptLaneError('corrupt lane'),
+        );
       });
     const observe = jest.spyOn(state.conversations, 'observe');
     try {
@@ -2157,6 +2160,35 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test('isolates an idle RuntimeCorruptLaneError without leaking schema error internals', async () => {
+    const state = fixture();
+    const completed = await state.reserve();
+    await state.host.initialize();
+    const lane = runtimeLane(state.sessionId);
+    jest
+      .spyOn(state.conversations, 'observe')
+      .mockRejectedValueOnce(new RuntimeCorruptLaneError('corrupt lane', { lane }));
+    try {
+      await expect(state.host.observeSession(state.sessionId, () => {})).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED' },
+      });
+      expect(state.host.isReady).toBe(true);
+      await state.host.startSession({
+        sessionId: uuid(),
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Synthetic healthy input' }],
+      });
+      expect(state.conversations.submit).toHaveBeenCalledTimes(1);
+      expect(
+        await state.store.getMessage(state.sessionId, completed.assistantMessageId),
+      ).not.toBeNull();
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test('isolates an idle observation failure without changing history or blocking other Sessions', async () => {
     const state = fixture();
     const completed = await state.reserve();
@@ -2164,7 +2196,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     const original = await state.store.getMessage(state.sessionId, completed.assistantMessageId);
     const observe = jest
       .spyOn(state.conversations, 'observe')
-      .mockRejectedValueOnce(new ZodError([]));
+      .mockRejectedValueOnce(new RuntimeCorruptLaneError('corrupt lane'));
     try {
       const observations = await Promise.allSettled([
         state.host.observeSession(state.sessionId, () => {}),
@@ -2227,7 +2259,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
-  test('seals in-flight admission and concurrent sibling attach when observation hits ZodError', async () => {
+  test('seals in-flight admission and concurrent sibling attach when observation hits RuntimeCorruptLaneError', async () => {
     const state = fixture();
     await state.reserve();
     await state.host.initialize();
@@ -2268,7 +2300,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
           unsubscribe: siblingUnsubscribe,
         };
       }
-      throw new ZodError([]);
+      throw new RuntimeCorruptLaneError('corrupt lane');
     });
 
     try {
@@ -2361,7 +2393,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     const observing = jest
       .spyOn(state.conversations, 'observe')
       .mockImplementation(async (lane, listener) => {
-        if (lane.sessionId === state.sessionId) throw new ZodError([]);
+        if (lane.sessionId === state.sessionId) throw new RuntimeCorruptLaneError('corrupt lane');
         return observe(lane, listener);
       });
 
@@ -2480,7 +2512,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       jest.spyOn(state.conversations, 'observe').mockImplementation(async (lane, listener) => {
         if (lane.slot === 1) {
           await lookupEntered;
-          throw new ZodError([]);
+          throw new RuntimeCorruptLaneError('corrupt lane');
         }
         const observation = await observe(lane, listener);
         return {
@@ -2550,7 +2582,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     const initializing = state.host.initialize(controller.signal);
     await entered;
     controller.abort(new Error('Host replaced'));
-    rejectObservation(new ZodError([]));
+    rejectObservation(new RuntimeCorruptLaneError('corrupt lane'));
     await expect(initializing).rejects.toThrow('Host replaced');
     await state.host.close();
     expect(state.conversations.resume).not.toHaveBeenCalled();
@@ -2559,7 +2591,9 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
   test('retries isolated data when a fresh runtime generation can observe it', async () => {
     const state = fixture();
     await state.reserve('running');
-    jest.spyOn(state.conversations, 'observe').mockRejectedValueOnce(new ZodError([]));
+    jest
+      .spyOn(state.conversations, 'observe')
+      .mockRejectedValueOnce(new RuntimeCorruptLaneError('corrupt lane'));
     try {
       await state.host.initialize();
       await state.host.suspend();
@@ -2572,13 +2606,13 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
-  test.each(['runtime-metadata', 'stored-parts'] as const)(
+  test.each(['runtime-metadata', 'stored-parts', 'stored-stats'] as const)(
     'isolates invalid %s at startup without rewriting it or relaxing backup reads',
     async (source) => {
       const state = fixture();
       const unreadable = await state.reserve();
       if (source === 'runtime-metadata') unreadable.metadata = {};
-      else {
+      else if (source === 'stored-parts') {
         state.copies.clear();
         state.raw
           .prepare('UPDATE agent_session_message SET data = ? WHERE id = ?')
@@ -2586,10 +2620,14 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
             JSON.stringify({ parts: [{ id: 'future', type: 'unsupported-part' }] }),
             unreadable.assistantMessageId,
           );
+      } else {
+        state.raw
+          .prepare('UPDATE agent_session_message SET stats = ? WHERE id = ?')
+          .run(JSON.stringify({ requestCount: 'invalid' }), unreadable.assistantMessageId);
       }
       const readUnreadable = () =>
         state.raw
-          .prepare('SELECT status, data FROM agent_session_message WHERE id = ?')
+          .prepare('SELECT status, data, stats FROM agent_session_message WHERE id = ?')
           .get(unreadable.assistantMessageId);
       const original = readUnreadable();
       const healthy = await state.store.reserveInitialSubmission({
@@ -2609,7 +2647,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         expect(
           (await state.store.getMessage(healthy.session.id, healthy.assistantMessage.id))?.status,
         ).toBe('interrupted');
-        await expect(state.host.quiesce()).rejects.toBeInstanceOf(ZodError);
+        await expect(state.host.quiesce()).rejects.toBeInstanceOf(RuntimeCorruptLaneError);
         await state.host.startSession({
           sessionId: uuid(),
           agentId: state.agentId,
@@ -2664,7 +2702,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         modelId: inferenceSnapshot.model.uniqueModelId,
         inferenceSnapshot,
       });
-      const failure = new ZodError([]);
+      const failure = new RuntimeCorruptLaneError('corrupt lane');
       if (source === 'native-read') {
         const message = state.conversations.message;
         jest.spyOn(state.conversations, 'message').mockImplementation(async (lane, id) => {
@@ -4917,6 +4955,51 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test('successful independent lease recovery resets a previously used storage retry', async () => {
+    const protection = executionProtection();
+    const state = fixture({
+      executionLease: protection.acquire,
+      isForeground: () => true,
+      shouldRecoverStorage: () => true,
+    });
+    jest
+      .spyOn(state.conversations, 'watchWork')
+      .mockResolvedValue({ active: true, unsubscribe: async () => {} });
+    await state.reserve('running');
+    await state.host.initialize();
+    const runtimeEvents: string[] = [];
+    const observation = await state.host.observeSession(state.sessionId, (event) => {
+      if (event.type === 'runtime.recovered' || event.type === 'runtime.failed') {
+        runtimeEvents.push(event.type);
+      }
+    });
+    const failure = {
+      code: 'runtime_storage_failed',
+      message: 'Storage unavailable',
+      retryable: true,
+    };
+    try {
+      state.execution()!.onFailure!(failure);
+      await settle();
+      await protection.acquire.mock.calls[1]![0](
+        new KeepAliveInterruptionError('continued-processing-expired'),
+      );
+      state.execution()!.onFailure!(failure);
+      await settle();
+
+      expect(state.conversations.initialize).toHaveBeenCalledTimes(4);
+      expect(runtimeEvents).toEqual([
+        'runtime.recovered',
+        'runtime.recovered',
+        'runtime.recovered',
+      ]);
+      expect(state.host.isReady).toBe(true);
+    } finally {
+      observation.unsubscribe();
+      await state.host.close();
+    }
+  });
+
   test('losing session execution time suspends parallel replies without cancelling them', async () => {
     const protection = executionProtection();
     const state = fixture({ executionLease: protection.acquire });
@@ -4933,6 +5016,260 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       await state.host.close();
     }
   });
+
+  test.each(['storage-first', 'lease-first'] as const)(
+    'serializes overlapping storage recovery and foreground lease expiry (%s)',
+    async (order) => {
+      const protection = executionProtection();
+      const state = fixture({
+        executionLease: protection.acquire,
+        isForeground: () => true,
+        shouldRecoverStorage: () => true,
+      });
+      await state.reserve('completed');
+      await state.host.initialize();
+      const runtimeEvents: AgentEvent[] = [];
+      const observation = await state.host.observeSession(state.sessionId, (event) => {
+        if (event.type === 'runtime.recovered' || event.type === 'runtime.failed') {
+          runtimeEvents.push(event);
+        }
+      });
+      let releaseClose!: () => void;
+      jest.spyOn(state.conversations, 'close').mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            releaseClose = resolve;
+          }),
+      );
+      const failure = {
+        code: 'runtime_storage_failed',
+        message: 'Storage unavailable',
+        retryable: true,
+      };
+      try {
+        await askTwoModels(state);
+        await settle();
+
+        let leasePromise!: Promise<void>;
+        if (order === 'storage-first') {
+          state.execution()!.onFailure!(failure);
+          await settle();
+          leasePromise = protection.acquire.mock.calls[0]![0](
+            new KeepAliveInterruptionError('continued-processing-expired'),
+          ) as Promise<void>;
+        } else {
+          leasePromise = protection.acquire.mock.calls[0]![0](
+            new KeepAliveInterruptionError('continued-processing-expired'),
+          ) as Promise<void>;
+          await settle();
+          state.execution()!.onFailure!(failure);
+        }
+
+        await settle();
+        releaseClose();
+        await leasePromise;
+        await settle();
+
+        expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+        expect(runtimeEvents).toEqual([{ type: 'runtime.recovered' }]);
+
+        state.execution()!.onFailure!(failure);
+        expect(runtimeEvents).toEqual([
+          { type: 'runtime.recovered' },
+          { type: 'runtime.failed', retryable: false },
+        ]);
+        expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+      } finally {
+        observation.unsubscribe();
+        await state.host.close();
+      }
+    },
+  );
+
+  test.each(['storage-first', 'lease-first'] as const)(
+    'does not reopen behind a terminal storage failure when foreground lease expiry overlaps (%s)',
+    async (order) => {
+      const protection = executionProtection();
+      const state = fixture({
+        executionLease: protection.acquire,
+        isForeground: () => true,
+        shouldRecoverStorage: () => true,
+      });
+      await state.reserve('completed');
+      await state.host.initialize();
+      const runtimeEvents: AgentEvent[] = [];
+      const observation = await state.host.observeSession(state.sessionId, (event) => {
+        if (event.type === 'runtime.recovered' || event.type === 'runtime.failed') {
+          runtimeEvents.push(event);
+        }
+      });
+      const failure = {
+        code: 'runtime_storage_failed',
+        message: 'Storage unavailable',
+        retryable: true,
+      };
+      try {
+        await askTwoModels(state);
+        await settle();
+
+        // Exhaust the single automatic storage recovery first while work is in flight.
+        state.execution()!.onFailure!(failure);
+        await settle();
+        expect(runtimeEvents).toEqual([{ type: 'runtime.recovered' }]);
+        expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+
+        runtimeEvents.length = 0;
+
+        let releaseClose!: () => void;
+        jest.spyOn(state.conversations, 'close').mockImplementationOnce(
+          () =>
+            new Promise<void>((resolve) => {
+              releaseClose = resolve;
+            }),
+        );
+
+        let leasePromise!: Promise<void>;
+        const onInterrupt = protection.acquire.mock.calls.at(-1)![0];
+        if (order === 'storage-first') {
+          state.execution()!.onFailure!(failure);
+          await settle();
+          leasePromise = onInterrupt(
+            new KeepAliveInterruptionError('continued-processing-expired'),
+          ) as Promise<void>;
+        } else {
+          leasePromise = onInterrupt(
+            new KeepAliveInterruptionError('continued-processing-expired'),
+          ) as Promise<void>;
+          await settle();
+          state.execution()!.onFailure!(failure);
+        }
+
+        await settle();
+        releaseClose();
+        await leasePromise;
+        await settle();
+
+        expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+        expect(state.host.isReady).toBe(false);
+        expect(runtimeEvents).toEqual([{ type: 'runtime.failed', retryable: false }]);
+      } finally {
+        observation.unsubscribe();
+        await state.host.close();
+      }
+    },
+  );
+
+  test('does not emit runtime.recovered when storage fails again during storage recovery reopen', async () => {
+    const state = fixture({ shouldRecoverStorage: () => true });
+    await state.reserve('completed');
+    await state.host.initialize();
+    const runtimeEvents: AgentEvent[] = [];
+    const observation = await state.host.observeSession(state.sessionId, (event) => {
+      if (event.type === 'runtime.recovered' || event.type === 'runtime.failed') {
+        runtimeEvents.push(event);
+      }
+    });
+    const failure = {
+      code: 'runtime_storage_failed',
+      message: 'Storage unavailable',
+      retryable: true,
+    };
+    jest.spyOn(state.conversations, 'resume').mockImplementationOnce(() => {
+      state.steps.push('resume');
+      state.execution()!.onFailure!(failure);
+    });
+    try {
+      await askTwoModels(state);
+      await settle();
+
+      state.execution()!.onFailure!(failure);
+      await settle();
+
+      expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+      expect(state.host.isReady).toBe(false);
+      expect(runtimeEvents).toEqual([{ type: 'runtime.failed', retryable: false }]);
+    } finally {
+      observation.unsubscribe();
+      await state.host.close();
+    }
+  });
+
+  test.each(['lease', 'storage'] as const)(
+    're-evaluates foreground lease expiry arriving during %s reopen',
+    async (mode) => {
+      const protection = executionProtection();
+      const state = fixture({
+        executionLease: protection.acquire,
+        isForeground: () => true,
+        shouldRecoverStorage: () => true,
+      });
+      await state.reserve('completed');
+      await state.host.initialize();
+      const runtimeEvents: AgentEvent[] = [];
+      const observation = await state.host.observeSession(state.sessionId, (event) => {
+        if (event.type === 'runtime.recovered' || event.type === 'runtime.failed') {
+          runtimeEvents.push(event);
+        }
+      });
+      const failure = {
+        code: 'runtime_storage_failed',
+        message: 'Storage unavailable',
+        retryable: true,
+      };
+      const baseInitialize = jest.mocked(state.conversations.initialize).getMockImplementation()!;
+      let reopenStarted!: () => void;
+      const reopenInFlight = new Promise<void>((resolve) => {
+        reopenStarted = resolve;
+      });
+      let releaseReopenInit!: () => void;
+      jest
+        .spyOn(state.conversations, 'initialize')
+        .mockImplementationOnce(async (database, ports, signal) => {
+          await baseInitialize(database, ports, signal);
+          reopenStarted();
+          await new Promise<void>((resolve) => {
+            releaseReopenInit = resolve;
+          });
+        });
+      try {
+        await askTwoModels(state);
+        await settle();
+
+        let firstOp: Promise<void> | undefined;
+        if (mode === 'lease') {
+          firstOp = protection.acquire.mock.calls.at(-1)![0](
+            new KeepAliveInterruptionError('continued-processing-expired'),
+          ) as Promise<void>;
+        } else {
+          state.execution()!.onFailure!(failure);
+        }
+
+        await reopenInFlight;
+        const secondLease = protection.acquire.mock.calls.at(-1)![0](
+          new KeepAliveInterruptionError('continued-processing-expired'),
+        ) as Promise<void>;
+        await settle();
+        releaseReopenInit();
+        await Promise.all([firstOp, secondLease]);
+        await settle();
+
+        expect(state.host.isReady).toBe(true);
+        expect(state.conversations.initialize).toHaveBeenCalledTimes(3);
+        expect(runtimeEvents.length).toBeGreaterThanOrEqual(1);
+        expect(runtimeEvents.every((event) => event.type === 'runtime.recovered')).toBe(true);
+
+        if (mode === 'storage') {
+          state.execution()!.onFailure!(failure);
+          await settle();
+          expect(runtimeEvents.at(-1)).toEqual({ type: 'runtime.failed', retryable: false });
+          expect(state.conversations.initialize).toHaveBeenCalledTimes(3);
+        }
+      } finally {
+        observation.unsubscribe();
+        await state.host.close();
+      }
+    },
+  );
 
   test('the background reply passes to a running answer and ends with the last one', async () => {
     const state = fixture();
@@ -5644,6 +5981,30 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       expect(await state.store.getSession(state.sessionId)).toBeNull();
       expect(await state.store.listMessages(state.sessionId)).toEqual([]);
       expect((await state.store.listMessages(fork.id)).at(-1)?.parts).toEqual(turn.parts);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('deleteSession notifies onSessionDeleted best-effort only after deleting an existing session', async () => {
+    const onSessionDeleted = jest
+      .fn<Promise<void>, [string]>()
+      .mockRejectedValueOnce(new Error('cleanup failed'))
+      .mockResolvedValueOnce(undefined);
+    const state = fixture({ onSessionDeleted });
+    await state.reserve();
+    await state.host.initialize();
+    try {
+      await expect(
+        state.host.deleteSession({ sessionId: state.sessionId }),
+      ).resolves.toBeUndefined();
+      expect(onSessionDeleted).toHaveBeenCalledTimes(1);
+      expect(onSessionDeleted).toHaveBeenCalledWith(state.sessionId);
+
+      await expect(state.host.deleteSession({ sessionId: state.sessionId })).rejects.toMatchObject({
+        view: { code: 'SESSION_NOT_FOUND' },
+      });
+      expect(onSessionDeleted).toHaveBeenCalledTimes(1);
     } finally {
       await state.host.close();
     }

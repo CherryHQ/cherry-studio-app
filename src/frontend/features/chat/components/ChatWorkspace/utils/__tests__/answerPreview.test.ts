@@ -48,6 +48,21 @@ describe('answerPreview', () => {
     });
   });
 
+  test('keeps the conclusion and omits Markdown that repeats a generated image file', () => {
+    expect(
+      answerPreview([
+        { type: 'text', state: 'done', text: 'Conclusion.' },
+        {
+          type: 'file',
+          mediaType: 'image/png',
+          url: 'file:///generated.png',
+          providerMetadata: { cherry: { fileEntryId: 'managed-image' } },
+        },
+        { type: 'text', state: 'done', text: '![duplicate](/managed-image)' },
+      ]),
+    ).toEqual({ isTruncated: false, length: 11, text: 'Conclusion.' });
+  });
+
   test('has no text before an answer writes any', () => {
     expect(answerPreview(undefined)).toEqual({ isTruncated: false, length: 0, text: '' });
   });

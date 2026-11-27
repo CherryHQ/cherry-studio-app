@@ -94,12 +94,7 @@ function measureViewInWindow(
       }
     )?.measureInWindow;
 
-    const isUnimplementedMock =
-      typeof measure === 'function' &&
-      '_isMockFunction' in measure &&
-      !(measure as { getMockImplementation?: () => unknown }).getMockImplementation?.();
-
-    if (typeof measure !== 'function' || isUnimplementedMock) {
+    if (typeof measure !== 'function') {
       resolve({ height: fallback.height, pageX: 0, pageY: 0, width: fallback.width });
       return;
     }

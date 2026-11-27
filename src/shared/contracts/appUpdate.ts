@@ -49,6 +49,8 @@ export type AppUpdateDownload =
 export interface AppUpdateModule {
   readonly channel: AppUpdateChannel | null;
   readonly isEnabled: boolean;
+  /** The configured minimum only when the installed native version is below it. */
+  checkRequiredVersion(): Promise<string | null>;
   check(signal?: AbortSignal, options?: { force?: boolean }): Promise<AppUpdateResult>;
   openStore(release: AppUpdateRelease): Promise<void>;
   /** One app-owned transfer, shared by every screen. Completion never installs automatically. */

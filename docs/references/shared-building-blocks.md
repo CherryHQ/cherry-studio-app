@@ -64,6 +64,7 @@ it already exists.
 | Editable assistant reply prose | `editableReplyParts` and `applyReplyEdits` in `src/shared/utils/assistantReply.ts`; every non-empty text part is editable, reasoning and tool receipts are not |
 | Safe Markdown code fences | `createCodeBlockMarkdown` from `@cherrystudio/ui/markdown` |
 | Markdown prose to plain text, code kept literal | `stripMarkdownFormatting` in `src/shared/utils/markdownFormatting.ts`, shared by search indexing and quote excerpts |
+| Markdown to readable speech | `speakableText` in `src/shared/utils/speechText.ts`, shared by chat and the voice runtime. It skips block code, images, web addresses and supported math delimiters while keeping link labels and inline code. |
 | Status-only reasoning display data | `projectAgentMessageDisplay` in `src/shared/utils/agentMessageDisplay.ts`; list reasoning carries no text, while tool inputs, outputs and execution/recovery records remain complete |
 | On-demand reasoning reads | `AgentProtocol.readReasoning`; the host reads the current Pi watch frame or saved transcript, isolating unrelated invalid saved parts with the existing display reader; expanded previews use `MessagePart.TextBody`, and tapping the viewport opens the message-owned full-text sheet |
 | Private Agent working materials | Upstream `CodemodeStoreDoc` via Code Mode `store/load`; successful preparation calls precede execution/checking, never library files or backups |
@@ -98,6 +99,7 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Provider selection | `ProviderPickerDrawer` in `src/frontend/components/ProviderPicker`; caller-owned candidates/search, matching model-picker sheet and row visuals |
 | Outgoing sharing, ordered previews and export lifetime | `src/frontend/appShell/sharing` and `src/frontend/features/sharing`; file delivery remains in `appShell/fileExport` |
 | Local whole-conversation Markdown data export | `useExportConversation` in `appShell/sharing`, over `ConversationCatalog.readTranscript`; `frontend/utils/chatExportCitations` adapts saved parts to shared citation semantics in `frontend/utils/messageCitations` |
+| Readable assistant answer body and confirmed citations | `selectAssistantBodyTextParts` from `Message/body` uses the renderer's generated-image de-duplication and body partition. `stripMessageCitations` in `frontend/utils/messageCitations` removes confirmed marks from the speech projection using the whole message's sources. |
 | Small ordered preview stacks | CherryUI `CardStack`; caller-owned content, index and translated controls |
 | Bounded local text reading | `readFileText` in `src/frontend/utils/readFileText.ts`, shared by file viewing and authored HTML conversion |
 | Product UI components | CherryUI in `packages/ui`; see [UI Components](./ui-components.md) |

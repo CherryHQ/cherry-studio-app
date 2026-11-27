@@ -34,10 +34,7 @@ Android service compliance with file-source extras still requires device accepta
 ignore unsupported extras. JavaScript requests Speech access on iOS and the system API's required
 microphone permission on Android before a file operation.
 
-On Android, `beginPlayback` admits an explicitly started reading to a media-playback foreground service.
-Its media session exposes a stop control; focus loss and task removal also signal the owning
-reading by ID. The caller releases that ID once the engine has stopped. Microphone capture keeps
-its independent background interruption rule.
+On Android, `beginPlayback(request: PlaybackRequest)` admits an opted-in reading to a media-playback foreground service, `requestPlaybackFocus(id)` grants/verifies OS audio focus before playback resume, `updatePlaybackState` publishes `MediaSession` controls (`play`, `pause`, custom `stop` for Android 13+, plus pre-API-33 notification actions) using brand notification icons and deep-link navigation, and `endPlayback(id)` resolves once the service slot and native ownership are released. On iOS, `SpeechPlaybackControls` dispatches updates on the main queue with single-owner clearing (`Self.activeOwner === self`), publishes generic privacy-safe `MPNowPlayingInfoCenter` metadata, and wires `MPRemoteCommandCenter` play, pause, toggle, and stop controls plus `AVAudioSession` interruption begin/end handling. Native control intents arrive through the single `playbackCommand` event (`pause` | `resume` | `stop` | `interrupt` | `resume-interruption`), while the backend voice runtime owns pause reason and user intent. Microphone capture keeps its independent background interruption rule.
 
 Native changes require new development clients. Compilation and iOS/Android device acceptance have
 not been run for this implementation; microphone interruptions and stop/cancel races need device

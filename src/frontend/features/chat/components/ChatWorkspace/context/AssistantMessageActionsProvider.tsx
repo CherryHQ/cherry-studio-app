@@ -25,6 +25,7 @@ import { ModelPickerDrawer, type ModelPickerModelItem } from '@/frontend/compone
 import { useModelChoice } from '@/frontend/components/Policy';
 import { usePreference } from '@/frontend/data/hooks';
 import { useTransientValue } from '@/frontend/hooks/useTransientValue';
+import type { SpeechSourceRef } from '@/shared/contracts/voice';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import {
   type AssistantMessageToolbarConfig,
@@ -35,6 +36,7 @@ import { useChatEditing } from '../../../context/ChatEditingProvider';
 import { editReplyHref } from '../../../editReply/editReplyRoute';
 import { useIsChatShareSelecting } from '../../../share/chatShareSelection';
 import type { ChatShareTranslations } from '../../../share/chatShareTarget';
+import type { SpeechContext } from '../../../voice/useMessageSpeech';
 import { getSendErrorCodeLabelKey } from '../../ChatInput/utils/sendErrorLabel';
 import { AssistantToolbarManageSheet } from '../components/AssistantToolbarManageSheet';
 import { useMessageTranslationStore } from '../translation/MessageTranslationProvider';
@@ -65,6 +67,8 @@ type AssistantMessageActionsState = {
   toolbarConfig: AssistantMessageToolbarConfig;
   copiedMessageId?: string;
   isAssistantToolbarEnabled: boolean;
+  /** Conversation source owning active read-aloud state checks on message toolbars. */
+  speechSource?: SpeechSourceRef;
   /** A running turn owns the transcript; its rows must not disappear underneath it. */
   isDeleteDisabled: boolean;
   /** Editing is refused while the Session has unfinished work or is re-synchronizing. */
@@ -82,6 +86,8 @@ type AssistantMessageActionsState = {
 
 type AssistantMessageActions = {
   openToolbarManager: () => void;
+  /** Resolves conversation and agent metadata on demand when read-aloud starts. */
+  getSpeechContext?: () => SpeechContext | undefined;
   editAnswer?: (input: { messageId: string }) => void;
   retryAssistantMessage?: (input: { messageId: string }) => void;
   shareAssistantMessage: (input: { messageId: string }) => void;
@@ -110,20 +116,24 @@ const AssistantMessageActionsStateContext = createContext<AssistantMessageAction
 const AssistantMessageActionsContext = createContext<AssistantMessageActions | null>(null);
 
 type AssistantMessageActionsProviderProps = PropsWithChildren<{
+  assistantName?: string;
   isAssistantToolbarEnabled: boolean;
   /** Opens the source-owned share selector; absent while no Session exists. */
   onShare?: (messageId: string, translations?: ChatShareTranslations) => void;
   /** The local Session whose answers open in the reply editor. */
   sessionId?: string;
+  speechSource?: SpeechSourceRef;
   snapshot: ConversationSnapshot;
   messages: readonly ConversationMessage[];
 }>;
 
 export function AssistantMessageActionsProvider({
+  assistantName,
   children,
   isAssistantToolbarEnabled,
   onShare,
   sessionId,
+  speechSource,
   snapshot,
   messages,
 }: AssistantMessageActionsProviderProps) {
@@ -199,6 +209,7 @@ export function AssistantMessageActionsProvider({
   // only whether an action exists or is enabled reaches rows as rendered state.
   const latest = useRef({
     alert,
+    assistantName,
     isBusy,
     messages,
     onShare,
@@ -207,7 +218,16 @@ export function AssistantMessageActionsProvider({
     toast,
   });
   useLayoutEffect(() => {
-    latest.current = { alert, isBusy, messages, onShare, snapshot, t, toast };
+    latest.current = {
+      alert,
+      assistantName,
+      isBusy,
+      messages,
+      onShare,
+      snapshot,
+      t,
+      toast,
+    };
   });
 
   const run = useCallback(
@@ -385,9 +405,21 @@ export function AssistantMessageActionsProvider({
     },
     [beginEdit],
   );
+  const getSpeechContext = useCallback((): SpeechContext | undefined => {
+    const { assistantName: currentAssistantName, snapshot: currentSnapshot } = latest.current;
+    const snapshotTitle = currentSnapshot.title.trim();
+    return snapshotTitle || currentAssistantName
+      ? {
+          ...(snapshotTitle ? { title: snapshotTitle } : {}),
+          ...(currentAssistantName ? { subtitle: currentAssistantName } : {}),
+        }
+      : undefined;
+  }, []);
   return (
     <ChatMessageActionsProvider
       isAssistantToolbarEnabled={isAssistantToolbarEnabled && !isSelecting}
+      getSpeechContext={getSpeechContext}
+      speechSource={speechSource}
       onShare={share}
       onEditAnswer={editableAnswerIds.size ? edit : undefined}
       editableAnswerIds={editableAnswerIds}
@@ -448,6 +480,8 @@ export function AssistantMessageActionsProvider({
 export function ChatMessageActionsProvider({
   children,
   isAssistantToolbarEnabled,
+  getSpeechContext,
+  speechSource,
   onShare: shareAssistantMessage,
   onEditAnswer: editAnswer,
   onFork: forkFromAssistantMessage,
@@ -466,6 +500,8 @@ export function ChatMessageActionsProvider({
   isEditQuestionDisabled = true,
 }: PropsWithChildren<{
   isAssistantToolbarEnabled: boolean;
+  getSpeechContext?: AssistantMessageActions['getSpeechContext'];
+  speechSource?: SpeechSourceRef;
   onShare: AssistantMessageActions['shareAssistantMessage'];
   onEditAnswer?: AssistantMessageActions['editAnswer'];
   onFork?: AssistantMessageActions['forkFromAssistantMessage'];
@@ -556,6 +592,7 @@ export function ChatMessageActionsProvider({
       isEditQuestionDisabled,
       isRetryDisabled,
       retryableMessageIds,
+      speechSource,
       toolbarConfig,
     }),
     [
@@ -569,6 +606,7 @@ export function ChatMessageActionsProvider({
       isEditQuestionDisabled,
       isRetryDisabled,
       retryableMessageIds,
+      speechSource,
       toolbarConfig,
     ],
   );
@@ -580,6 +618,7 @@ export function ChatMessageActionsProvider({
       deleteMessageTurn,
       editQuestion,
       forkFromAssistantMessage,
+      getSpeechContext,
       retryAssistantMessage,
       selectBranch,
       shareAssistantMessage,
@@ -592,6 +631,7 @@ export function ChatMessageActionsProvider({
       deleteMessageTurn,
       editQuestion,
       forkFromAssistantMessage,
+      getSpeechContext,
       retryAssistantMessage,
       selectBranch,
       shareAssistantMessage,

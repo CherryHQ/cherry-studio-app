@@ -205,6 +205,18 @@ const frontendPublicSurfaceZones = [
     ],
     message: 'Import the shared Agent form from @/frontend/components/AgentEditor.',
   },
+  {
+    target: [
+      'src/app',
+      'src/bootstrap/runtime',
+      'src/frontend/!(appShell)/**/*',
+      'src/frontend/appShell/!(navigationShell)/**/*',
+    ],
+    from: 'src/frontend/appShell/navigationShell',
+    except: ['./index.ts', './state.ts'],
+    message:
+      'Import navigation shell UI from @/frontend/appShell/navigationShell or state and layout contracts from @/frontend/appShell/navigationShell/state.',
+  },
 ];
 
 const backendPublicSurfaceZones = [
@@ -437,7 +449,6 @@ const pageUseEffectMessage =
 // Existing direct React effect references are capped per file. Reduce the cap with removals.
 const legacyPageUseEffectLimits = {
   'src/app/onboarding/device-connections/pair.tsx': 1,
-  'src/frontend/features/chat/ChatScreen.tsx': 1,
   'src/frontend/features/chat/components/ChatInput/ChatInput.tsx': 2,
   'src/frontend/features/chat/components/ChatInput/components/ChatInputPluginSheet.tsx': 1,
   'src/frontend/features/chat/components/ChatInput/components/ChatInputPromptSheet.tsx': 2,
@@ -461,7 +472,7 @@ const legacyPageUseEffectLimits = {
   'src/frontend/features/chat/remote/RemoteComposer.tsx': 4,
   'src/frontend/features/chat/remote/useRemoteDraftPersistence.ts': 2,
   'src/frontend/features/chat/runtime/ChatProvider.tsx': 4,
-  'src/frontend/features/chat/runtime/useLocalConversation.ts': 2,
+  'src/frontend/features/chat/runtime/useLocalConversation.ts': 1,
   'src/frontend/features/chat/share/ChatShareDragSelection.tsx': 4,
   'src/frontend/features/chat/share/ChatShareSelectionProvider.tsx': 2,
   'src/frontend/features/chat/share/useShareChat.ts': 1,

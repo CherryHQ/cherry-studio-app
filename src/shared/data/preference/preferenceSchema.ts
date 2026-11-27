@@ -118,6 +118,8 @@ export interface PreferenceSchema {
   'feature.voice.dictation_language': LanguageVarious | null;
   /** Null uses the first engine this device supports. */
   'feature.voice.speech_engine': VoiceEngineId | null;
+  /** Device-local background read-aloud toggle; migrated once from legacy audio consent on upgrade. */
+  'feature.voice.background_reading': boolean;
   /** Audio files use SenseVoice unless the user selects the system's offline recognizer. */
   'feature.voice.transcription_engine': VoiceEngineId;
   /** Null follows the app language; independent of microphone dictation. */
@@ -184,6 +186,7 @@ export const PreferenceDefaults = {
   'feature.voice.dictation_engine': null,
   'feature.voice.dictation_language': null,
   'feature.voice.speech_engine': null,
+  'feature.voice.background_reading': false,
   'feature.voice.system_voice': '',
   'feature.voice.deepseek_voice': 'stella',
   'feature.voice.transcription_engine': 'sensevoice',
@@ -250,6 +253,7 @@ export const DEVICE_LOCAL_PREFERENCE_KEYS = [
   // Engine support and system voices differ per device.
   'feature.voice.dictation_engine',
   'feature.voice.speech_engine',
+  'feature.voice.background_reading',
   'feature.voice.transcription_engine',
   'feature.voice.system_voice',
   'ui.sidebar.collapsed',

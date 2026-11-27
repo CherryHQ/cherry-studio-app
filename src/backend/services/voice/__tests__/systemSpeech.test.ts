@@ -74,6 +74,41 @@ test('reads in the playback session so the ring switch does not silence it', asy
   expect(mockEndUse).toHaveBeenCalledWith(mockBeginUse.mock.calls[0][0]);
 });
 
+test.each([{ firstEmitsStart: true }, { firstEmitsStart: false }])(
+  'reports one native start when firstEmitsStart is $firstEmitsStart',
+  async ({ firstEmitsStart }) => {
+    const first = deferred<Speech.SpeechOptions>();
+    const second = deferred<Speech.SpeechOptions>();
+    const onPhase = jest.fn();
+    jest.mocked(Speech.speak).mockImplementationOnce((_text, options) => first.resolve(options!));
+    jest.mocked(Speech.speak).mockImplementationOnce((_text, options) => second.resolve(options!));
+    const engine = createSystemSpeechEngine({ voice: async () => '' });
+    const speaking = engine.speak({
+      text: 'x'.repeat(221),
+      language: 'en-US',
+      signal: new AbortController().signal,
+      playback: { onPhase, onProgress: jest.fn(), onControls: jest.fn() },
+    });
+    const firstOptions = await first.promise;
+    expect(onPhase).not.toHaveBeenCalled();
+    if (firstEmitsStart) {
+      firstOptions.onStart?.();
+      firstOptions.onStart?.();
+      expect(onPhase).toHaveBeenCalledTimes(1);
+      expect(onPhase).toHaveBeenCalledWith('playing');
+    }
+    firstOptions.onDone?.();
+    const secondOptions = await second.promise;
+    expect(onPhase).toHaveBeenCalledTimes(1);
+    expect(onPhase).toHaveBeenCalledWith('playing');
+    secondOptions.onStart?.();
+    secondOptions.onDone?.();
+    await speaking;
+    expect(Speech.speak).toHaveBeenCalledTimes(2);
+    expect(onPhase).toHaveBeenCalledTimes(1);
+  },
+);
+
 test('the default supplies an installed voice for the app locale instead of the device language', async () => {
   jest
     .mocked(Speech.getAvailableVoicesAsync)
@@ -170,6 +205,181 @@ test('cancellation while loading voices cannot start playback when enumeration c
   await expect(speaking).rejects.toBe(controller.signal.reason);
   expect(setAudioModeAsync).not.toHaveBeenCalled();
   expect(Speech.speak).not.toHaveBeenCalled();
+});
+
+test('pauses active utterance cleanly and resumes without replaying already-completed chunks', async () => {
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const utterances: { text: string; options?: Speech.SpeechOptions }[] = [];
+  jest.mocked(Speech.speak).mockImplementation((text, options) => {
+    utterances.push({ text, options });
+  });
+  jest.mocked(Speech.stop).mockImplementation(async () => {
+    const current = utterances.at(-1);
+    current?.options?.onStopped?.();
+  });
+
+  const controller = new AbortController();
+  const phases: string[] = [];
+  const progresses: { completedChunks: number; totalChunks: number }[] = [];
+  const controlsHolder: { current: { pause(): void; resume(): string | void } | null } = {
+    current: null,
+  };
+  const engine = createSystemSpeechEngine({ voice: async () => '' });
+
+  // Build text that splits across at least two chunks (> 220 chars).
+  const firstSentence = `${'A'.repeat(180)}.`;
+  const secondSentence = `${'B'.repeat(180)}.`;
+  const speaking = engine.speak({
+    text: `${firstSentence} ${secondSentence}`,
+    language: 'en-US',
+    signal: controller.signal,
+    playback: {
+      onPhase: (phase) => phases.push(phase),
+      onProgress: (progress) => progresses.push(progress),
+      onControls: (next) => {
+        controlsHolder.current = next;
+      },
+    },
+  });
+
+  await flush();
+  expect(utterances).toHaveLength(1);
+  expect(progresses).toEqual([{ completedChunks: 0, totalChunks: 2 }]);
+  utterances[0]!.options?.onStart?.();
+  expect(phases).toEqual(['playing']);
+  const controls = controlsHolder.current;
+  expect(controls).not.toBeNull();
+  if (!controls) throw new Error('Expected controls to be registered');
+
+  controls.pause();
+  await flush();
+  expect(phases.at(-1)).toBe('paused');
+  expect(utterances).toHaveLength(1);
+
+  expect(controls.resume()).toBe('preparing');
+  expect(phases.at(-1)).toBe('preparing');
+  await flush();
+  expect(utterances).toHaveLength(2);
+  expect(utterances[1]!.text).toBe(firstSentence);
+  expect(phases.at(-1)).toBe('preparing');
+  utterances[1]!.options?.onStart?.();
+  expect(phases.at(-1)).toBe('playing');
+
+  // If Speech.stop() settles before a trailing onDone arrives, chunk 0 still advances without replay.
+  jest.mocked(Speech.stop).mockResolvedValueOnce(undefined);
+  controls.pause();
+  await Promise.resolve();
+  await Promise.resolve();
+  utterances[1]!.options?.onDone?.();
+  await flush();
+  expect(utterances).toHaveLength(2);
+  expect(progresses.at(-1)).toEqual({ completedChunks: 1, totalChunks: 2 });
+
+  expect(controls.resume()).toBe('preparing');
+  await flush();
+  expect(utterances).toHaveLength(3);
+  expect(utterances[2]!.text).toBe(secondSentence);
+  utterances[2]!.options?.onStart?.();
+  expect(phases.at(-1)).toBe('playing');
+
+  // If neither onDone nor onStopped fires after Speech.stop(), fallback timer pauses cleanly.
+  jest.mocked(Speech.stop).mockResolvedValueOnce(undefined);
+  controls.pause();
+  await new Promise((resolve) => setTimeout(resolve, 75));
+  controller.abort(new Error('Stopped'));
+  await expect(speaking).rejects.toThrow('Stopped');
+  expect(controlsHolder.current).toBeNull();
+});
+
+test('unexpected native onStopped delegates to onInterrupted without aborting when wired', async () => {
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const utterances: { text: string; options?: Speech.SpeechOptions }[] = [];
+  jest.mocked(Speech.speak).mockImplementation((text, options) => {
+    utterances.push({ text, options });
+  });
+
+  const controlsHolder: { current: { pause(): void; resume(): string | void } | null } = {
+    current: null,
+  };
+  const onInterrupted = jest.fn(() => controlsHolder.current?.pause());
+  const engine = createSystemSpeechEngine({ voice: async () => '' });
+  const speaking = engine.speak({
+    text: 'Hello.',
+    language: 'en-US',
+    signal: new AbortController().signal,
+    playback: {
+      onPhase: jest.fn(),
+      onProgress: jest.fn(),
+      onControls: (next) => {
+        controlsHolder.current = next;
+      },
+      onInterrupted,
+    },
+  });
+
+  await flush();
+  expect(utterances).toHaveLength(1);
+  utterances[0]!.options?.onStopped?.();
+  await flush();
+  expect(onInterrupted).toHaveBeenCalledTimes(1);
+  expect(utterances).toHaveLength(1);
+
+  controlsHolder.current?.resume();
+  await flush();
+  expect(utterances).toHaveLength(2);
+  utterances[1]!.options?.onDone?.();
+  await expect(speaking).resolves.toBeUndefined();
+});
+
+test('advances paused chunk when onDone arrives after the 50ms fallback timer without replaying or finishing prematurely', async () => {
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const utterances: { text: string; options?: Speech.SpeechOptions }[] = [];
+  jest.mocked(Speech.speak).mockImplementation((text, options) => {
+    utterances.push({ text, options });
+  });
+  jest.mocked(Speech.stop).mockResolvedValue(undefined);
+
+  const progresses: { completedChunks: number; totalChunks: number }[] = [];
+  const controlsHolder: { current: { pause(): void; resume(): string | void } | null } = {
+    current: null,
+  };
+  const firstSentence = `${'A'.repeat(180)}.`;
+  const secondSentence = `${'B'.repeat(180)}.`;
+  const engine = createSystemSpeechEngine({ voice: async () => '' });
+  const speaking = engine.speak({
+    text: `${firstSentence} ${secondSentence}`,
+    language: 'en-US',
+    signal: new AbortController().signal,
+    playback: {
+      onPhase: jest.fn(),
+      onProgress: (progress) => progresses.push(progress),
+      onControls: (next) => {
+        controlsHolder.current = next;
+      },
+    },
+  });
+
+  await flush();
+  expect(utterances).toHaveLength(1);
+  controlsHolder.current!.pause();
+  // Let the 50ms fallback timer settle pause first, then deliver a very late onDone.
+  await new Promise((resolve) => setTimeout(resolve, 70));
+  utterances[0]!.options?.onDone?.();
+  expect(progresses.at(-1)).toEqual({ completedChunks: 1, totalChunks: 2 });
+
+  controlsHolder.current!.resume();
+  await flush();
+  expect(utterances).toHaveLength(2);
+  expect(utterances[1]!.text).toBe(secondSentence);
+
+  // On the final chunk, late onDone past 50ms completes and tears down reading immediately without needing manual resume.
+  controlsHolder.current!.pause();
+  await new Promise((resolve) => setTimeout(resolve, 70));
+  utterances[1]!.options?.onDone?.();
+  expect(progresses.at(-1)).toEqual({ completedChunks: 2, totalChunks: 2 });
+  await expect(speaking).resolves.toBeUndefined();
+  expect(utterances).toHaveLength(2);
+  expect(controlsHolder.current).toBeNull();
 });
 
 function deferred<T>() {

@@ -8,6 +8,7 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
 } from 'react';
 import { Keyboard, StyleSheet, View } from 'react-native';
 import { useUniwind } from 'uniwind';
@@ -17,6 +18,7 @@ import { useChatSource, useConversationTarget } from '@/frontend/appShell/naviga
 import { useOptionalNavigationShellActions } from '@/frontend/appShell/navigationShell/state';
 import type { AppSearchPanelProps } from '@/frontend/appShell/search';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+import { appSidebar } from '@/frontend/utils/constants';
 
 import { type SidebarActions, SidebarActionsContext } from '../context';
 import type { SessionSearchResult } from '../hooks/sessionSearch';
@@ -116,6 +118,7 @@ function SidebarContent({
   waitForClose: SidebarActions['prepareExternalNavigation'];
 }) {
   const router = useRouter();
+  const [dockHeight, setDockHeight] = useState<number>(appSidebar.dockHeight);
   // Compare the exact route (including a nested page) and the context carried by its entry.
   const page =
     '/' +
@@ -286,9 +289,13 @@ function SidebarContent({
             className="flex-1"
             importantForAccessibility={isSearching ? 'no-hide-descendants' : 'auto'}
           >
-            <SidebarBody />
+            <SidebarBody dockHeight={dockHeight} />
             <SidebarHeader />
-            <SidebarFooter />
+            <SidebarFooter
+              covered={isSearching || (isOverlay && (isOnSettings || page === '/search'))}
+              dockHeight={dockHeight}
+              onDockHeightChange={setDockHeight}
+            />
           </View>
           {isSearching && SearchPanel ? (
             <View className="absolute inset-0" style={{ backgroundColor: surfaceColor }}>

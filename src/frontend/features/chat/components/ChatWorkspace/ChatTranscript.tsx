@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { mainHeaderRowHeight } from '@/frontend/appShell/header';
 import { resolveHeaderContentInset } from '@/frontend/appShell/navigation';
+import { useSpeechPlaybackInset } from '@/frontend/appShell/speechPlayback';
 import { MessageList, type MessageListHandle } from '@/frontend/components/Message';
 
 import { ChatShareDragSelection } from '../../share/ChatShareDragSelection';
@@ -64,7 +65,9 @@ export function ChatTranscript({
     setHeaderHeight(reportedHeaderHeight);
   }
   const { top } = useSafeAreaInsets();
-  const contentTopInset = resolveHeaderContentInset(headerHeight, top + mainHeaderRowHeight);
+  const speechInset = useSpeechPlaybackInset();
+  const contentTopInset =
+    resolveHeaderContentInset(headerHeight, top + mainHeaderRowHeight) + speechInset;
   const { isCoverVisible, markListLoaded } = useMessageListInitialRenderGate({
     renderGateKey: list.dataKey,
     requiresInitialHistoryLayout: requiresInitialLayout,

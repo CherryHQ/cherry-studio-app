@@ -27,6 +27,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import {
   LANES_PER_SESSION,
+  RuntimeCorruptLaneError,
   laneKey,
   parseLaneKey,
   runtimeLane,
@@ -262,7 +263,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
           await this.restoreLane(lane, signal);
         } catch (error) {
           signal?.throwIfAborted();
-          if (!(error instanceof ZodError) || !ports.onRecoveryFailure) throw error;
+          if (!(error instanceof RuntimeCorruptLaneError) || !ports.onRecoveryFailure) throw error;
           await ports.onRecoveryFailure(lane, error);
         }
       }
@@ -421,11 +422,22 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       .map(({ sessionId }) => parseLaneKey(sessionId));
   }
 
+  private wrapCorruptLaneError(error: unknown, lane?: RuntimeLane): unknown {
+    return error instanceof ZodError
+      ? new RuntimeCorruptLaneError(error.message, { lane, cause: error })
+      : error;
+  }
+
   async configuration(lane: RuntimeLane): Promise<RuntimeConversationConfiguration> {
     const key = laneKey(lane);
-    const stored =
-      this.configurations.get(key) ??
-      PiConfigurationSchema.parse(await this.requireRuntime().configuration(key));
+    let stored: PiStoredConfiguration;
+    try {
+      stored =
+        this.configurations.get(key) ??
+        PiConfigurationSchema.parse(await this.requireRuntime().configuration(key));
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
     return {
       kind: stored.kind,
       model: { ...stored.model },
@@ -559,18 +571,22 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
 
   async observe(lane: RuntimeLane, listener: (event: RuntimeConversationEvent) => void) {
     const runtime = this.requireRuntime();
-    // Idle copies also need validation before the Host can admit more input to them.
-    await this.configuration(lane);
-    const observer = new PiDurableObserver(runtime, lane, listener);
-    const snapshot = await observer.start();
-    this.observers.add(observer);
-    return {
-      snapshot,
-      unsubscribe: async () => {
-        this.observers.delete(observer);
-        await observer.stop();
-      },
-    };
+    try {
+      // Idle copies also need validation before the Host can admit more input to them.
+      await this.configuration(lane);
+      const observer = new PiDurableObserver(runtime, lane, listener);
+      const snapshot = await observer.start();
+      this.observers.add(observer);
+      return {
+        snapshot,
+        unsubscribe: async () => {
+          this.observers.delete(observer);
+          await observer.stop();
+        },
+      };
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
   }
 
   async history(
@@ -581,58 +597,70 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       throw new Error('A history page must contain between 1 and 128 turns.');
     const runtime = this.requireRuntime();
     const maxEntryId = query.cursor !== undefined ? parseBoundary(query.cursor) : undefined;
-    const matched = await runtime.placedInputs(laneKey(lane), {
-      limit: query.limit,
-      ...(maxEntryId !== undefined ? { maxEntryId } : {}),
-      ...(query.requestIds ? { requestIds: query.requestIds } : {}),
-    });
-    const turns: RuntimeDurableTurn[] = [];
-    for (const { record, metadata } of matched)
-      turns.push(await this.project(lane, record, metadata));
-    return {
-      turns,
-      ...(turns.length === query.limit
-        ? { nextCursor: `pi:${Number(matched.at(-1)!.record.entry) - 1}` }
-        : {}),
-    };
+    try {
+      const matched = await runtime.placedInputs(laneKey(lane), {
+        limit: query.limit,
+        ...(maxEntryId !== undefined ? { maxEntryId } : {}),
+        ...(query.requestIds ? { requestIds: query.requestIds } : {}),
+      });
+      const turns: RuntimeDurableTurn[] = [];
+      for (const { record, metadata } of matched)
+        turns.push(await this.project(lane, record, metadata));
+      return {
+        turns,
+        ...(turns.length === query.limit
+          ? { nextCursor: `pi:${Number(matched.at(-1)!.record.entry) - 1}` }
+          : {}),
+      };
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
   }
 
   async assistantMessageIdForRequest(
     lane: RuntimeLane,
     requestId: string,
   ): Promise<string | undefined> {
-    const [match] = await this.requireRuntime().placedInputs(laneKey(lane), {
-      limit: 1,
-      requestIds: [requestId],
-    });
-    return match ? readPiSubmission(match.metadata).assistantMessageId : undefined;
+    try {
+      const [match] = await this.requireRuntime().placedInputs(laneKey(lane), {
+        limit: 1,
+        requestIds: [requestId],
+      });
+      return match ? readPiSubmission(match.metadata).assistantMessageId : undefined;
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
   }
 
   async message(lane: RuntimeLane, messageId: string, options?: { fullReasoning?: boolean }) {
     const runtime = this.requireRuntime();
-    if (options?.fullReasoning) {
-      for (const observer of this.observers) {
-        const turn = observer.readReasoningTurn(lane, messageId);
-        if (turn) return { turn, role: 'assistant' as const };
+    try {
+      if (options?.fullReasoning) {
+        for (const observer of this.observers) {
+          const turn = observer.readReasoningTurn(lane, messageId);
+          if (turn) return { turn, role: 'assistant' as const };
+        }
       }
+      const selected = await runtime.submissionForMessage(laneKey(lane), messageId);
+      if (!selected) return undefined;
+      const turn = await this.project(lane, selected.record, selected.metadata, options);
+      if (
+        selected.role === 'assistant' &&
+        !turn.hasAssistant &&
+        turn.status !== 'queued' &&
+        turn.status !== 'running'
+      )
+        return undefined;
+      // Forking would drop that edit; Cherry rebuilds the edited history instead.
+      if (
+        turn.answerBoundary &&
+        (await runtime.editedAfter(laneKey(lane), parseBoundary(turn.answerBoundary)))
+      )
+        return { turn: { ...turn, answerBoundary: null }, role: selected.role };
+      return { turn, role: selected.role };
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
     }
-    const selected = await runtime.submissionForMessage(laneKey(lane), messageId);
-    if (!selected) return undefined;
-    const turn = await this.project(lane, selected.record, selected.metadata, options);
-    if (
-      selected.role === 'assistant' &&
-      !turn.hasAssistant &&
-      turn.status !== 'queued' &&
-      turn.status !== 'running'
-    )
-      return undefined;
-    // Forking would drop that edit; Cherry rebuilds the edited history instead.
-    if (
-      turn.answerBoundary &&
-      (await runtime.editedAfter(laneKey(lane), parseBoundary(turn.answerBoundary)))
-    )
-      return { turn: { ...turn, answerBoundary: null }, role: selected.role };
-    return { turn, role: selected.role };
   }
 
   async exportTurn(
@@ -641,21 +669,25 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     options: { currentContext?: boolean } = {},
   ) {
     const runtime = this.requireRuntime();
-    const record = await runtime.inputRecord(laneKey(lane), requestId);
-    if (!record || record.type !== 'input' || record.status !== 'done')
-      return { contextCheckpoint: null };
-    const stored = readPiSubmission(await runtime.submissionMetadata(record));
-    const conversation = await runtime.conversation(laneKey(lane));
-    if (!conversation) throw new Error('The working copy is missing.');
-    const view = await conversation.context(
-      BACKGROUND_CONTEXT,
-      options.currentContext ? {} : { at: await runtime.answerBoundary(laneKey(lane), record) },
-    );
-    const contextCheckpoint =
-      view.head && (CompactionEntry.is(view.head) || ResetEntry.is(view.head))
-        ? createPiContextCheckpoint(stored.turnId, view.messages)
-        : null;
-    return { contextCheckpoint };
+    try {
+      const record = await runtime.inputRecord(laneKey(lane), requestId);
+      if (!record || record.type !== 'input' || record.status !== 'done')
+        return { contextCheckpoint: null };
+      const stored = readPiSubmission(await runtime.submissionMetadata(record));
+      const conversation = await runtime.conversation(laneKey(lane));
+      if (!conversation) throw new Error('The working copy is missing.');
+      const view = await conversation.context(
+        BACKGROUND_CONTEXT,
+        options.currentContext ? {} : { at: await runtime.answerBoundary(laneKey(lane), record) },
+      );
+      const contextCheckpoint =
+        view.head && (CompactionEntry.is(view.head) || ResetEntry.is(view.head))
+          ? createPiContextCheckpoint(stored.turnId, view.messages)
+          : null;
+      return { contextCheckpoint };
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
   }
 
   async editReply(lane: RuntimeLane, input: Parameters<DurableAgentRuntime['editReply']>[1]) {
@@ -736,7 +768,11 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     return this.requireRuntime().steerInput(laneKey(lane), requestId);
   }
   async inputParents(lane: RuntimeLane, userMessageIds: readonly string[]) {
-    return this.requireRuntime().inputParents(laneKey(lane), userMessageIds);
+    try {
+      return await this.requireRuntime().inputParents(laneKey(lane), userMessageIds);
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
   }
   async hasUnfinishedWork() {
     const state = await this.requireRuntime().inspect();
@@ -777,11 +813,17 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const runtime = this.requireRuntime();
     const key = laneKey(lane);
     signal?.throwIfAborted();
-    const stored = await runtime.configuration(key);
-    signal?.throwIfAborted();
-    const configuration = PiConfigurationSchema.parse(stored);
-    const agent = await this.installConfiguration(lane, configuration, true, signal);
+    let stored: Awaited<ReturnType<PiDurableRuntime['configuration']>>;
+    let configuration: PiStoredConfiguration;
     try {
+      stored = await runtime.configuration(key);
+      signal?.throwIfAborted();
+      configuration = PiConfigurationSchema.parse(stored);
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
+    try {
+      const agent = await this.installConfiguration(lane, configuration, true, signal);
       signal?.throwIfAborted();
       if (stored?.version === 1)
         await runtime.restoreConfiguration(key, serializePiConfiguration(configuration), agent);
@@ -789,7 +831,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       await this.bindProvider(lane);
     } catch (error) {
       this.configurations.delete(key);
-      throw error;
+      throw this.wrapCorruptLaneError(error, lane);
     }
   }
 
@@ -978,6 +1020,10 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
               return summary ? { summary } : { failure };
             } catch (error) {
               signal.throwIfAborted();
+              logger.warn('Pi compaction summarization failed', {
+                error,
+                operation: 'pi.compaction',
+              });
               return { failure: error instanceof PiCompactionError ? error.message : failure };
             }
           },
@@ -1104,7 +1150,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       } catch (error) {
         // A malformed historical owner must not block startup or later valid receipts.
         // Leave this receipt pending so repairing its owner can deliver it on a later pass.
-        if (!(error instanceof ZodError)) throw error;
+        if (!(error instanceof RuntimeCorruptLaneError) && !(error instanceof ZodError))
+          throw error;
         logger.warn('Pi durable usage delivery failed', {
           error,
           operation: 'pi.usage_delivery',

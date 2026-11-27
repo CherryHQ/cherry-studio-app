@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { Component, type ReactNode, useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { AgentProtocolError, type AgentMessageView } from '@/shared/contracts/agent';
@@ -92,12 +92,33 @@ let imageResult: import('@/frontend/appShell/conversation').ConversationImageRes
 type HarnessProps = {
   sessionId?: string;
   composerKey?: number;
+  initialDraft?: string;
   persistedImage?: AgentMessageView;
   routeKey?: string;
+  shouldThrowAfterProbe?: boolean;
 };
 
-function Probe({ sessionId, composerKey = 0, persistedImage }: HarnessProps) {
-  const controls = useAgentChatControls({ agentId: 'agent-1', sessionId, composerKey });
+class RenderErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  override state = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  override render() {
+    return this.state.hasError ? null : this.props.children;
+  }
+}
+
+function ThrowOnRender(): null {
+  throw new Error('Aborted render');
+}
+
+function Probe({ sessionId, composerKey = 0, initialDraft, persistedImage }: HarnessProps) {
+  const controls = useAgentChatControls({
+    agentId: 'agent-1',
+    sessionId,
+    composerKey,
+    initialDraft,
+  });
   const handoff = useAgentChatDraftHandoff(sessionId);
   const latestImage = useAgentChatImageResult(
     sessionId,
@@ -117,15 +138,26 @@ function Probe({ sessionId, composerKey = 0, persistedImage }: HarnessProps) {
   return null;
 }
 
-function Harness({ sessionId, composerKey, persistedImage, routeKey }: HarnessProps) {
+function Harness({
+  sessionId,
+  composerKey,
+  initialDraft,
+  persistedImage,
+  routeKey,
+  shouldThrowAfterProbe,
+}: HarnessProps) {
   return (
     <ChatProvider>
-      <Probe
-        key={routeKey}
-        sessionId={sessionId}
-        composerKey={composerKey}
-        persistedImage={persistedImage}
-      />
+      <RenderErrorBoundary key={shouldThrowAfterProbe ? 'throwing' : 'ok'}>
+        <Probe
+          key={routeKey}
+          sessionId={sessionId}
+          composerKey={composerKey}
+          initialDraft={initialDraft}
+          persistedImage={persistedImage}
+        />
+        {shouldThrowAfterProbe ? <ThrowOnRender /> : null}
+      </RenderErrorBoundary>
     </ChatProvider>
   );
 }
@@ -847,6 +879,27 @@ describe('ChatProvider Draft handoff', () => {
       renderer?.update(<Harness persistedImage={persisted} sessionId="session-2" />);
     });
     expect(imageResult).toBeUndefined();
+  });
+
+  it('does not retain composer state from an uncommitted aborted render', () => {
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      act(() => {
+        renderer = create(
+          <Harness
+            sessionId="session-aborted"
+            initialDraft="stale-aborted"
+            shouldThrowAfterProbe
+          />,
+        );
+      });
+      act(() => {
+        renderer!.update(<Harness sessionId="session-aborted" initialDraft="committed-seed" />);
+      });
+      expect(currentControls().composer.draft.text.get()).toBe('committed-seed');
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 });
 

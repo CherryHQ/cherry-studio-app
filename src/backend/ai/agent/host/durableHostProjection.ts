@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { ZodError, z } from 'zod';
 
 import {
   AgentInferenceSnapshotV1Schema,
@@ -12,7 +12,7 @@ import {
 } from '@/shared/contracts/agent';
 import type { MessageRuntimeSpan, MessageRuntimeTiming } from '@/shared/data/types/message';
 
-import type { RuntimeDurableTurn } from '../runtime';
+import { RuntimeCorruptLaneError, type RuntimeDurableTurn } from '../runtime';
 import { toAgentErrorView, toAgentMessagePart } from './runtimeProjection';
 
 /** Display identities accompany execution; terminal content and replay settle into Cherry. */
@@ -67,71 +67,85 @@ export function projectDurableHostTurn(turn: RuntimeDurableTurn): {
   user: AgentMessageView;
   assistant: AgentMessageView | null;
 } {
-  const metadata = DurableTurnMetadataSchema.parse(turn.metadata);
-  const terminal = turn.status !== 'running' && turn.status !== 'queued';
-  // A failed provider attempt may still be retrying. Only a terminal failure belongs in the reply.
-  const error =
-    turn.error && (turn.status === 'failed' || turn.status === 'interrupted')
-      ? toAgentErrorView(turn.error)
+  try {
+    const metadata = DurableTurnMetadataSchema.parse(turn.metadata);
+    const terminal = turn.status !== 'running' && turn.status !== 'queued';
+    // A failed provider attempt may still be retrying. Only a terminal failure belongs in the reply.
+    const error =
+      turn.error && (turn.status === 'failed' || turn.status === 'interrupted')
+        ? toAgentErrorView(turn.error)
+        : null;
+    const common = {
+      sessionId: turn.identity.sessionId,
+      turnId: turn.identity.turnId,
+      createdAt: new Date(turn.createdAt).toISOString(),
+      updatedAt: new Date(turn.updatedAt).toISOString(),
+      modelId: metadata.inferenceSnapshot.model.uniqueModelId,
+      inferenceSnapshot: readAgentInferenceSnapshot(metadata.inferenceSnapshot),
+      stats: null,
+    };
+    const user = AgentMessageViewSchema.parse({
+      ...common,
+      ...(metadata.parentMessageId !== undefined ? { parentId: metadata.parentMessageId } : {}),
+      id: turn.userMessageId,
+      role: 'user',
+      status: 'success',
+      parts: metadata.userParts,
+    });
+    const parts = [
+      ...(metadata.retainedParts ?? []),
+      ...turn.parts
+        .filter((part) => !metadata.inferenceSnapshot.imageGeneration || part.type !== 'tool')
+        .map(toAgentMessagePart),
+    ];
+    if (error)
+      parts.push({
+        id: `durable-error:${turn.identity.requestId}`,
+        type: 'data-error',
+        data: error,
+      });
+    const assistant = turn.hasAssistant
+      ? AgentMessageViewSchema.parse({
+          ...common,
+          id: turn.assistantMessageId,
+          parentId: turn.userMessageId,
+          stats: assistantStats(turn),
+          role: 'assistant',
+          status:
+            turn.status === 'queued'
+              ? 'pending'
+              : turn.status === 'running'
+                ? 'streaming'
+                : turn.status === 'completed'
+                  ? 'success'
+                  : turn.status === 'failed'
+                    ? 'error'
+                    : turn.status,
+          parts,
+        })
       : null;
-  const common = {
-    sessionId: turn.identity.sessionId,
-    turnId: turn.identity.turnId,
-    createdAt: new Date(turn.createdAt).toISOString(),
-    updatedAt: new Date(turn.updatedAt).toISOString(),
-    modelId: metadata.inferenceSnapshot.model.uniqueModelId,
-    inferenceSnapshot: readAgentInferenceSnapshot(metadata.inferenceSnapshot),
-    stats: null,
-  };
-  const user = AgentMessageViewSchema.parse({
-    ...common,
-    ...(metadata.parentMessageId !== undefined ? { parentId: metadata.parentMessageId } : {}),
-    id: turn.userMessageId,
-    role: 'user',
-    status: 'success',
-    parts: metadata.userParts,
-  });
-  const parts = [
-    ...(metadata.retainedParts ?? []),
-    ...turn.parts
-      .filter((part) => !metadata.inferenceSnapshot.imageGeneration || part.type !== 'tool')
-      .map(toAgentMessagePart),
-  ];
-  if (error)
-    parts.push({ id: `durable-error:${turn.identity.requestId}`, type: 'data-error', data: error });
-  const assistant = turn.hasAssistant
-    ? AgentMessageViewSchema.parse({
-        ...common,
-        id: turn.assistantMessageId,
-        parentId: turn.userMessageId,
-        stats: assistantStats(turn),
-        role: 'assistant',
-        status:
-          turn.status === 'queued'
-            ? 'pending'
-            : turn.status === 'running'
-              ? 'streaming'
-              : turn.status === 'completed'
-                ? 'success'
-                : turn.status === 'failed'
-                  ? 'error'
-                  : turn.status,
-        parts,
-      })
-    : null;
-  const view = AgentTurnViewSchema.parse({
-    id: turn.identity.turnId,
-    sessionId: turn.identity.sessionId,
-    status: turn.status === 'queued' ? 'running' : turn.status,
-    assistantMessageId: turn.assistantMessageId,
-    error,
-    // Always present: clients skip turn updates whose fields are unchanged.
-    isRetrying: turn.isRetrying === true,
-    isPaused: turn.isPaused === true,
-    startedAt: common.createdAt,
-    endedAt: terminal ? common.updatedAt : null,
-  });
-  return { turn: view, user, assistant };
+    const view = AgentTurnViewSchema.parse({
+      id: turn.identity.turnId,
+      sessionId: turn.identity.sessionId,
+      status: turn.status === 'queued' ? 'running' : turn.status,
+      assistantMessageId: turn.assistantMessageId,
+      error,
+      // Always present: clients skip turn updates whose fields are unchanged.
+      isRetrying: turn.isRetrying === true,
+      isPaused: turn.isPaused === true,
+      startedAt: common.createdAt,
+      endedAt: terminal ? common.updatedAt : null,
+    });
+    return { turn: view, user, assistant };
+  } catch (error) {
+    if (error instanceof ZodError) {
+      throw new RuntimeCorruptLaneError('Durable turn metadata failed schema validation.', {
+        lane: { sessionId: turn.identity.sessionId, slot: turn.identity.slot },
+        cause: error,
+      });
+    }
+    throw error;
+  }
 }
 
 function assistantStats(turn: RuntimeDurableTurn): AgentMessageView['stats'] {
