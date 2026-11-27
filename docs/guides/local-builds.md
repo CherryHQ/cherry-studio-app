@@ -342,6 +342,19 @@ removing a plugin from app config does not clean its hooks out of an existing na
 Successful compilation alone does not verify production Sentry event delivery or source-map
 matching; those require a separate runtime check.
 
+## Branch Builds on Mac Studio
+
+Open **Actions → Branch Build → Run workflow** and use the workflow from `main`. Enter the
+repository branch to build, such as `feature/chat`, and select one package. The task runs the
+selected branch's `pnpm build:local`. [Workflow source](../../.github/workflows/branch-build.yml)
+
+- `android-dev` (default) builds the Android development APK.
+- `ios-dev` builds the iOS development IPA for physical devices.
+- `android-production` builds an APK with the production profile and increments the remote Android
+  `versionCode`. The workflow disables Sentry build uploads.
+
+Download the package from **Artifacts** on the workflow run page within 7 days.
+
 ## Tablet Device Configuration
 
 `app.json` enables iPad support and all iPad orientations while retaining iPhone portrait behavior.
