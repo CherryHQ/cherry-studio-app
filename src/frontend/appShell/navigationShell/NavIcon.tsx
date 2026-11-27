@@ -51,7 +51,7 @@ export function NavIcon({
   filled = false,
   id,
   size,
-  strokeWidth = 2,
+  strokeWidth,
 }: NavIconProps): ReactElement {
   const entry = NAV_ICON_BY_TAB[id];
   const Icon = filled ? entry.filled : entry.outline;
