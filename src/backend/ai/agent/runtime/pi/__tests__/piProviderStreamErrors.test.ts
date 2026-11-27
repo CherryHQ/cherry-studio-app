@@ -225,6 +225,7 @@ describe('Pi provider stream errors', () => {
         .spyOn(adapter, 'loadStreamSimple')
         .mockResolvedValue(streamSimple as unknown as StreamFn);
       const stream = await bindPiStream(adapter, {
+        shouldStream: true,
         apiKey: adapter.api === 'openai-codex-responses' ? CODEX_API_KEY : 'test-key',
         // The native layer reports the drop as an OS-localized message without status or code.
         fetch: async () =>
@@ -295,6 +296,7 @@ describe('Pi provider stream errors', () => {
         .spyOn(adapter, 'loadStreamSimple')
         .mockResolvedValue(streamSimple as unknown as StreamFn);
       const stream = await bindPiStream(adapter, {
+        shouldStream: true,
         apiKey: adapter.api === 'openai-codex-responses' ? CODEX_API_KEY : 'test-key',
         // The native layer rejects with an OS-localized message without status or code.
         fetch: async () => {
@@ -331,6 +333,7 @@ describe('Pi provider stream errors', () => {
       .mockResolvedValue(streamSimpleCodex as unknown as StreamFn);
     const controller = new AbortController();
     const stream = await bindPiStream(adapter, {
+      shouldStream: true,
       apiKey: CODEX_API_KEY,
       fetch: async () => {
         controller.abort();
@@ -481,6 +484,7 @@ describe('Gemini injected transport', () => {
         loadStreamSimple: async () => streamSimpleGoogle as unknown as StreamFn,
       },
       {
+        shouldStream: true,
         apiKey: 'test-key',
         fetch,
         headers: {},

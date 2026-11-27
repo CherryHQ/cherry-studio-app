@@ -124,6 +124,7 @@ describe('Pi API adapters', () => {
       });
     });
     const stream = await bindPiStream(adapter, {
+      shouldStream: true,
       apiKey: 'test',
       fetch,
       headers: {},
@@ -371,6 +372,7 @@ describe('Pi API adapters', () => {
       .mockResolvedValue(testCase.streamSimple as unknown as PiStreamFn);
 
     const streamFn = await bindPiStream(adapter, {
+      shouldStream: true,
       apiKey: 'secret-key',
       fetch: mockFetch,
       headers: { 'X-App': 'Cherry' },
@@ -426,6 +428,7 @@ describe('Pi API adapters', () => {
     mockAzureResponsesStreamSimple.mockReturnValue(mockStreamResult);
 
     const streamFn = await bindPiStream(adapter, {
+      shouldStream: true,
       apiKey: 'azure-key',
       azureApiVersion: '2025-04-01-preview',
       fetch: mockFetch,
@@ -468,6 +471,7 @@ describe('Pi API adapters', () => {
         ? undefined
         : jest.spyOn(globalThis, 'fetch').mockImplementation(fetch);
       const streamFn = await bindPiStream(adapter, {
+        shouldStream: true,
         apiKey: '',
         fetch,
         headers: { 'X-App': 'Cherry' },
@@ -516,6 +520,7 @@ describe('Pi API adapters', () => {
       });
     });
     const streamFn = await bindPiStream(adapter, {
+      shouldStream: true,
       fetch,
       headers: { Authorization: 'Bearer kimi-access' },
       maxRetries: 0,
@@ -533,6 +538,7 @@ describe('Pi API adapters', () => {
     const adapter = resolvePiApiAdapter(ENDPOINT_TYPE.ANTHROPIC_MESSAGES);
     jest.spyOn(adapter, 'loadStreamSimple').mockResolvedValue(mockAnthropicStreamSimple);
     const streamFn = await bindPiStream(adapter, {
+      shouldStream: true,
       apiKey: '',
       fetch: mockFetch,
       headers: { aUtHoRiZaTiOn: 'Bearer gateway-token' },
@@ -554,6 +560,7 @@ describe('Pi API adapters', () => {
     const adapter = resolvePiApiAdapter(ENDPOINT_TYPE.ANTHROPIC_MESSAGES);
     jest.spyOn(adapter, 'loadStreamSimple').mockResolvedValue(mockAnthropicStreamSimple);
     const streamFn = await bindPiStream(adapter, {
+      shouldStream: true,
       apiKey: 'key',
       fetch: mockFetch,
       headers: {},
@@ -625,6 +632,7 @@ describe('Pi API adapters', () => {
     const adapter = resolvePiApiAdapter(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS);
     jest.spyOn(adapter, 'loadStreamSimple').mockResolvedValue(mockOpenAiCompletionsStreamSimple);
     const stream = await bindPiStream(adapter, {
+      shouldStream: true,
       apiKey: 'key',
       fetch: mockFetch,
       headers: {},
@@ -893,6 +901,7 @@ describe('Pi API adapters', () => {
         : completion([{ content: 'Done' }], 'stop');
     });
     const stream = await bindPiStream(adapter, {
+      shouldStream: true,
       apiKey: 'key',
       fetch,
       headers: {},
@@ -997,6 +1006,7 @@ describe('Pi API adapters', () => {
         .spyOn(adapter, 'loadStreamSimple')
         .mockResolvedValue(streamSimple as unknown as PiStreamFn);
       const streamFn = await bindPiStream(adapter, {
+        shouldStream: true,
         apiKey: 'private-key',
         fetch: mockFetch,
         headers: {},

@@ -6,7 +6,10 @@ export type TranslationOptions = {
   /** Complete text received so far, delivered only while this request is active. */
   onText?: (text: string) => void;
 };
-export type TranslationErrorCode = 'model-unavailable' | 'failed';
+export type TranslationErrorCode =
+  | 'model-unavailable'
+  | 'non_streaming_mode_unsupported'
+  | 'failed';
 
 export class TranslationError extends Error {
   constructor(

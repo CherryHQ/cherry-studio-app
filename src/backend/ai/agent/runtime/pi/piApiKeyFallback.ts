@@ -2,6 +2,7 @@ import type { AssistantMessage, AssistantMessageEvent } from '@earendil-works/pi
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
 import type { PiStreamFn as StreamFn } from './piModelTypes';
+import { isPiNonStreamingError } from './piNonStreamingFetch';
 import {
   emptyAssistantMessage,
   errorRecord,
@@ -15,7 +16,7 @@ import { isPiNativeWebActivity } from './piWebTools';
 /**
  * Serve from `credentials[0]`. When a request fails before any content, try every other
  * credential once in ring order; the one that succeeds serves later tool steps. Only
- * cancellation and HTTP 400, which rejects the request itself, keep the failing credential.
+ * cancellation, local protocol failures and HTTP 400 keep the failing credential.
  * A credential that cannot be resolved counts as a failed attempt like any other.
  */
 export function withPiApiKeyFallback(credentials: readonly (() => Promise<StreamFn>)[]): StreamFn {
@@ -87,6 +88,11 @@ export function withPiApiKeyFallback(credentials: readonly (() => Promise<Stream
             !options?.signal?.aborted &&
             failure.reason === 'error' &&
             !hasResponseContent(failure.error) &&
+            !isPiNonStreamingError(
+              failure.error.diagnostics?.findLast(
+                (entry) => entry.type === 'provider_response_failure',
+              )?.error,
+            ) &&
             !isBadRequest(failure.error)
           ) {
             activeIndex = (activeIndex + 1) % credentials.length;

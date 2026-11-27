@@ -12,10 +12,12 @@ import { OPENAI_CODEX_MODELS } from '@earendil-works/pi-ai/providers/openai-code
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
+import { application } from '@/backend/core/application/Application';
 import { buildRuntimeEndpointConfigs } from '@/backend/data/services/providerRegistryProjection';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 import { createTranslationModule } from '@/backend/services/translation';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 import { ProviderAccountError } from '@/shared/contracts/providerAccounts';
 import type { Model } from '@/shared/data/types/model';
 import { DEFAULT_API_FEATURES, type Provider } from '@/shared/data/types/provider';
@@ -114,6 +116,127 @@ describe('Pi model resolver', () => {
     mockBindPiStream.mockResolvedValue(mockBoundStreamFn);
     resolver = createPiModelResolver();
   });
+
+  test.each([false, true, undefined])(
+    'derives shouldStream from effective supportsStreaming=%s',
+    async (supportsStreaming) => {
+      const endpoint = ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
+      mockGetProviderById.mockResolvedValue(
+        makeProvider(endpoint, 'https://chat.test', 'openai-compatible'),
+      );
+      mockGetModelById.mockResolvedValue(makeModel(endpoint, { supportsStreaming }));
+      await resolve(resolver);
+      expect(mockBindPiStream.mock.calls[0][1]).toMatchObject({
+        shouldStream: supportsStreaming !== false,
+      });
+    },
+  );
+
+  test('reads a changed streaming setting on the next resolution and only relaxes finite finish reasons', async () => {
+    const endpoint = ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
+    mockGetProviderById.mockResolvedValue(
+      makeProvider(endpoint, 'https://chat.test', 'openai-compatible'),
+    );
+    for (const supportsStreaming of [false, true, false]) {
+      mockGetModelById.mockResolvedValue(makeModel(endpoint, { supportsStreaming }));
+      const resolved = await resolve(resolver);
+      expect(mockBindPiStream.mock.calls.at(-1)?.[1].shouldStream).toBe(supportsStreaming);
+      if (supportsStreaming)
+        expect(resolved.model.compat).not.toHaveProperty('supportsFinishReason');
+      else
+        expect(resolved.model.compat).toMatchObject({
+          supportsFinishReason: false,
+          supportsDeveloperRole: false,
+        });
+    }
+  });
+
+  test('cloud models always stream even when the stored model disables streaming', async () => {
+    const endpoint = ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
+    const provider = {
+      ...makeProvider(endpoint, 'https://cloud.test', 'openai-compatible'),
+      id: CLOUD_PROVIDER_ID,
+    };
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(
+      makeModel(endpoint, { providerId: CLOUD_PROVIDER_ID, supportsStreaming: false }),
+    );
+    const createModelFetch = jest.fn(() => jest.fn());
+    jest.spyOn(application, 'get').mockReturnValue({ createModelFetch } as never);
+    const resolved = await resolver.resolveModel(
+      { providerId: CLOUD_PROVIDER_ID, modelId: 'test-model' },
+      {},
+      'session',
+    );
+    expect(mockBindPiStream.mock.calls[0][1]).toMatchObject({
+      shouldStream: true,
+      isCloudGateway: true,
+    });
+    expect(resolved.model.compat).not.toHaveProperty('supportsFinishReason');
+    expect(createModelFetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('OAuth finite completions carry the mode without requestParameters and preserve compatibility metadata', async () => {
+    const oauthModel = Object.values(KIMI_CODING_MODELS)[0];
+    jest.spyOn(piOAuthModels, 'resolveOAuthPiModel').mockResolvedValueOnce({
+      ...oauthModel,
+      compat: { ...oauthModel.compat, supportsFinishReason: true },
+    });
+    const endpoint = ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
+    const provider = makeProvider(endpoint, 'https://api.kimi.com/coding/v1', 'openai-compatible');
+    provider.presetProviderId = 'kimi-coding';
+    provider.authMethods = ['oauth'];
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(
+      makeModel(endpoint, { apiModelId: oauthModel.id, supportsStreaming: false }),
+    );
+    const oauthResolver = createPiModelResolver({
+      resolveAuth: async () => ({
+        id: 'kimi-coding',
+        auth: { apiKey: 'oauth-access' },
+        availableModelIds: [oauthModel.id],
+      }),
+    });
+    const resolved = await resolve(oauthResolver);
+    expect(mockBindPiStream.mock.calls[0][1]).toMatchObject({
+      shouldStream: false,
+      requestParameters: undefined,
+    });
+    expect(resolved.model.compat).toMatchObject({
+      ...oauthModel.compat,
+      supportsDeveloperRole: false,
+      supportsFinishReason: false,
+    });
+  });
+
+  test.each([false, true])(
+    'Codex finite mode rejects before keys or dispatch (OAuth: %s)',
+    async (isOAuth) => {
+      const endpoint = ENDPOINT_TYPE.OPENAI_RESPONSES;
+      const provider = makeProvider(endpoint, 'https://chatgpt.com/backend-api', 'openai-codex');
+      provider.presetProviderId = 'openai-codex';
+      mockGetProviderById.mockResolvedValue(provider);
+      mockGetModelById.mockResolvedValue(makeModel(endpoint, { supportsStreaming: false }));
+      if (isOAuth) {
+        const oauthModel = Object.values(OPENAI_CODEX_MODELS)[0];
+        jest.spyOn(piOAuthModels, 'resolveOAuthPiModel').mockResolvedValueOnce(oauthModel);
+        resolver = createPiModelResolver({
+          resolveAuth: async () => ({
+            id: 'openai-codex',
+            auth: { apiKey: 'oauth-access' },
+            availableModelIds: [oauthModel.id],
+          }),
+        });
+      }
+      await expect(resolve(resolver)).rejects.toMatchObject({
+        code: 'non_streaming_mode_unsupported',
+        retryable: false,
+      });
+      expect(mockResolveApiKey).not.toHaveBeenCalled();
+      expect(mockListApiKeys).not.toHaveBeenCalled();
+      expect(mockBindPiStream).not.toHaveBeenCalled();
+    },
+  );
 
   test.each([
     {

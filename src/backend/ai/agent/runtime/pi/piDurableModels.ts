@@ -267,6 +267,7 @@ export function createPiDurableModels(
                 );
               }
             },
+            resolved.shouldStream !== false,
             options?.signal,
           );
           return tracedStream(protectedStream, trace, options?.signal);
@@ -312,6 +313,7 @@ async function* webStream(
   source: AsyncIterable<AssistantMessageEvent>,
   web: PiWebResponse | undefined,
   continueStream: (content: JsonObject[]) => Promise<AsyncIterable<AssistantMessageEvent>>,
+  shouldStream: boolean,
   signal?: AbortSignal,
 ): AsyncIterable<AssistantMessageEvent> {
   let previous: AssistantMessage | undefined;
@@ -347,7 +349,8 @@ async function* webStream(
         };
         return;
       }
-      if (event.type === 'start' && previous) continue;
+      // Finite responses can span several parser events. Publish their settled snapshot once.
+      if (!shouldStream || (event.type === 'start' && previous)) continue;
       yield {
         ...event,
         ...('contentIndex' in event ? { contentIndex: event.contentIndex + offset } : {}),

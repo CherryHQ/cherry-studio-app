@@ -80,7 +80,15 @@ export function createTranslationModule({
       } catch (error) {
         signal?.throwIfAborted();
         if (error instanceof TranslationError) throw error;
-        throw new TranslationError('failed', 'Translation generation failed.', { cause: error });
+        const cause = error instanceof Error ? error.cause : undefined;
+        const code =
+          cause !== null &&
+          typeof cause === 'object' &&
+          'code' in cause &&
+          cause.code === 'non_streaming_mode_unsupported'
+            ? cause.code
+            : 'failed';
+        throw new TranslationError(code, 'Translation generation failed.', { cause: error });
       } finally {
         signal?.removeEventListener('abort', release);
         release();

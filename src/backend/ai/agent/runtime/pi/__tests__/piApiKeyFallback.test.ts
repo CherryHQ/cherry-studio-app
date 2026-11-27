@@ -1,3 +1,4 @@
+import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import type {
   AssistantMessage,
   AssistantMessageEvent,
@@ -5,10 +6,24 @@ import type {
   Model,
 } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
+import { isRetryableAssistantError } from '@earendil-works/pi-ai/utils/retry';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
+import { modelService } from '@/backend/data/services/ModelService';
+import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
+import { providerService } from '@/backend/data/services/ProviderService';
+import type { Model as AppModel } from '@/shared/data/types/model';
+import { DEFAULT_API_FEATURES, type Provider } from '@/shared/data/types/provider';
+
 import { withPiApiKeyFallback } from '../piApiKeyFallback';
+import { readPiTerminalError } from '../piModelError';
+import { createPiModelResolver } from '../piModelResolver';
 import type { PiStreamFn as StreamFn } from '../piModelTypes';
+import {
+  PiNonStreamingResponseError,
+  PiNonStreamingUnsupportedError,
+} from '../piNonStreamingFetch';
+import { providerErrorEvent } from '../piStreamEvents';
 
 const MODEL: Model<'openai-completions'> = {
   api: 'openai-completions',
@@ -88,6 +103,52 @@ async function collect(streamFn: StreamFn, signal?: AbortSignal) {
 }
 
 describe('Pi API key failover', () => {
+  test.each([
+    new PiNonStreamingResponseError('invalid_response'),
+    new PiNonStreamingUnsupportedError('openai-codex-responses'),
+  ])('preserves a locally identified terminal failure without rotating keys: %p', async (error) => {
+    const terminal = providerErrorEvent(message(), error).error;
+    delete terminal.diagnostics!.at(-1)!.details!.retryable;
+    const fallback = jest.fn(async () => () => source(message()));
+    const stream = withPiApiKeyFallback([async () => () => source(terminal), fallback]);
+    expect((await collect(stream)).result).toBe(terminal);
+    expect(fallback).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    new PiNonStreamingResponseError('invalid_response'),
+    new PiNonStreamingUnsupportedError('openai-codex-responses'),
+  ])('does not rotate keys after a thrown local failure: %p', async (error) => {
+    const fallback = jest.fn(async () => () => source(message()));
+    const stream = withPiApiKeyFallback([
+      async () => {
+        throw error;
+      },
+      fallback,
+    ]);
+    const { result } = await collect(stream);
+    expect(result.errorMessage).toBe(error.message);
+    expect(result.diagnostics?.at(-1)?.error).toMatchObject({ name: error.name, code: error.code });
+    expect(fallback).not.toHaveBeenCalled();
+  });
+
+  test('continues provider failover when only the code and retryable flag resemble a local error', async () => {
+    const terminal = providerErrorEvent(
+      message(),
+      Object.assign(new Error('Limited'), {
+        code: 'non_streaming_response_invalid',
+        retryable: false,
+        status: 429,
+      }),
+    ).error;
+    const fallback = jest.fn(async () => () => source(message()));
+    expect(
+      (await collect(withPiApiKeyFallback([async () => () => source(terminal), fallback]))).result
+        .stopReason,
+    ).toBe('stop');
+    expect(fallback).toHaveBeenCalledTimes(1);
+  });
+
   test('does not repeat provider web work on another key before answer text arrives', async () => {
     const nextKey = jest.fn(() => source(message()));
     const first: StreamFn = async (model, _context, options) => {
@@ -454,5 +515,252 @@ describe('Pi API key failover', () => {
       stopReason: 'error',
       errorMessage: 'The model response ended without a terminal event.',
     });
+  });
+});
+
+const mockFiniteFetch = jest.fn();
+jest.mock('expo/fetch', () => ({ fetch: (...args: unknown[]) => mockFiniteFetch(...args) }));
+jest.mock('@/backend/data/services/ModelService', () => ({ modelService: { getById: jest.fn() } }));
+jest.mock('@/backend/data/services/ProviderService', () => ({
+  providerService: { getByProviderId: jest.fn(), resolveApiKey: jest.fn(), listApiKeys: jest.fn() },
+}));
+
+describe('resolved finite key failover', () => {
+  beforeEach(installProviderRegistryTestSnapshot);
+  afterEach(() => jest.restoreAllMocks());
+
+  async function resolveFinite(isCodex = false) {
+    const endpoint = isCodex
+      ? ENDPOINT_TYPE.OPENAI_RESPONSES
+      : ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
+    const keys = ['a', 'b'].map((id) => ({ id, key: `secret-${id}`, isEnabled: true }));
+    const provider: Provider = {
+      id: 'test',
+      name: 'Test',
+      isEnabled: true,
+      authType: 'api-key',
+      authMethods: ['api-key'],
+      apiFeatures: { ...DEFAULT_API_FEATURES },
+      apiKeys: keys,
+      settings: {},
+      defaultChatEndpoint: endpoint,
+      endpointConfigs: {
+        [endpoint]: {
+          baseUrl: isCodex ? 'https://chatgpt.com/backend-api' : 'https://provider.test/v1',
+          adapterFamily: isCodex ? 'openai-codex' : 'openai-compatible',
+        },
+      },
+      ...(isCodex ? { presetProviderId: 'openai-codex' } : {}),
+    };
+    const appModel: AppModel = {
+      id: 'test::model',
+      providerId: 'test',
+      modelId: 'model',
+      name: 'Model',
+      isEnabled: true,
+      isHidden: false,
+      capabilities: [MODEL_CAPABILITY.FUNCTION_CALL],
+      endpointTypes: [endpoint],
+      supportsStreaming: false,
+    };
+    jest.mocked(providerService.getByProviderId).mockResolvedValue(provider);
+    jest.mocked(modelService.getById).mockResolvedValue(appModel);
+    jest
+      .mocked(providerService.listApiKeys)
+      .mockReset()
+      .mockResolvedValue({ keys } as never);
+    jest
+      .mocked(providerService.resolveApiKey)
+      .mockReset()
+      .mockImplementation(async (_providerId, override) => ({
+        value: override ?? keys[0].key,
+        apiKeySelection: { attribution: 'explicit', id: override ? 'b' : 'a', masked: '****' },
+      }));
+    return createPiModelResolver().resolveModel(
+      { providerId: 'test', modelId: 'model' },
+      {},
+      'session',
+    );
+  }
+
+  test.each([
+    {
+      body: '{"choices":[]}',
+      status: 200,
+      contentType: 'application/json',
+      error: new PiNonStreamingResponseError('invalid_response'),
+    },
+    {
+      body: 'data: [DONE]\n\n',
+      status: 200,
+      contentType: 'text/event-stream',
+      error: new PiNonStreamingUnsupportedError('openai-completions'),
+    },
+    {
+      body: '{"error":{"message":"Streaming is required for this operation."}}',
+      status: 400,
+      contentType: 'application/json',
+      error: new PiNonStreamingUnsupportedError('openai-completions'),
+    },
+    {
+      body: '{"error":{"message":"This model only supports streaming."}}',
+      status: 422,
+      contentType: 'application/json',
+      error: new PiNonStreamingUnsupportedError('openai-completions'),
+    },
+    {
+      body: '{"error":{"message":"The model does not support stream=false"}}',
+      status: 422,
+      contentType: 'application/json',
+      error: new PiNonStreamingUnsupportedError('openai-completions'),
+    },
+    {
+      body: '{"error":{"message":"Unsupported value.","code":"streaming_required","param":"stream"}}',
+      status: 422,
+      contentType: 'application/json',
+      error: new PiNonStreamingUnsupportedError('openai-completions'),
+    },
+  ])(
+    'finite failure ($status, $contentType) stops the two-key ring after one request',
+    async ({ body, status, contentType, error }) => {
+      const adapterModule = jest.requireActual(
+        '../piApiAdapters',
+      ) as typeof import('../piApiAdapters');
+      const originalResolve = adapterModule.resolvePiApiAdapter;
+      jest.spyOn(adapterModule, 'resolvePiApiAdapter').mockImplementation((...args) => ({
+        ...originalResolve(...args),
+        loadStreamSimple: async () =>
+          jest.requireActual('@earendil-works/pi-ai/api/openai-completions').streamSimple,
+      }));
+      mockFiniteFetch.mockReset().mockImplementation(
+        async () =>
+          new Response(body, {
+            status,
+            headers: { 'content-type': contentType },
+          }),
+      );
+      const resolved = await resolveFinite();
+      const stream = await resolved.streamFn(
+        resolved.model,
+        normalizeContext({ messages: [{ role: 'user', content: 'Hello', timestamp: 1 }] }),
+      );
+      const result = await stream.result();
+      expect(result).toMatchObject({ stopReason: 'error', content: [] });
+      expect(result.diagnostics?.at(-1)).toMatchObject({
+        error: { name: error.name, code: error.code },
+        details: { retryable: false },
+      });
+      expect(readPiTerminalError(result)).toMatchObject({ code: error.code, retryable: false });
+      expect(isRetryableAssistantError(result)).toBe(false);
+      expect(mockFiniteFetch).toHaveBeenCalledTimes(1);
+      expect(new Headers(mockFiniteFetch.mock.calls[0][1].headers).get('authorization')).toBe(
+        'Bearer secret-a',
+      );
+      expect(providerService.resolveApiKey).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  test('keeps the original HTTP 400 when streaming is required to be disabled', async () => {
+    const adapterModule = jest.requireActual(
+      '../piApiAdapters',
+    ) as typeof import('../piApiAdapters');
+    const originalResolve = adapterModule.resolvePiApiAdapter;
+    jest.spyOn(adapterModule, 'resolvePiApiAdapter').mockImplementation((...args) => ({
+      ...originalResolve(...args),
+      loadStreamSimple: async () =>
+        jest.requireActual('@earendil-works/pi-ai/api/openai-completions').streamSimple,
+    }));
+    mockFiniteFetch
+      .mockReset()
+      .mockImplementation(async () =>
+        Response.json(
+          { error: { message: 'Streaming is required to be disabled for this parameter' } },
+          { status: 400 },
+        ),
+      );
+    const resolved = await resolveFinite();
+    const stream = await resolved.streamFn(
+      resolved.model,
+      normalizeContext({ messages: [{ role: 'user', content: 'Hello', timestamp: 1 }] }),
+    );
+    const result = await stream.result();
+    expect(result.errorMessage).toContain('Streaming is required to be disabled');
+    expect(readPiTerminalError(result)).toMatchObject({
+      code: 'provider_error',
+      context: { statusCode: 400 },
+    });
+    expect(mockFiniteFetch).toHaveBeenCalledTimes(1);
+    expect(providerService.resolveApiKey).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([
+    { status: 401, message: 'bad key' },
+    { status: 422, message: 'Non-streaming is required for this operation.' },
+  ])(
+    'rebound requests keep finite mode after the first key fails with $status',
+    async ({ status, message }) => {
+      // Keep production binding and fallback; supply the installed ESM parser through Jest.
+      const adapterModule = jest.requireActual(
+        '../piApiAdapters',
+      ) as typeof import('../piApiAdapters');
+      const originalResolve = adapterModule.resolvePiApiAdapter;
+      const resolveAdapter = jest
+        .spyOn(adapterModule, 'resolvePiApiAdapter')
+        .mockImplementation((...args) => ({
+          ...originalResolve(...args),
+          loadStreamSimple: async () =>
+            jest.requireActual('@earendil-works/pi-ai/api/openai-completions').streamSimple,
+        }));
+      const bind = jest.spyOn(adapterModule, 'bindPiStream');
+      mockFiniteFetch
+        .mockReset()
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ error: { message } }), {
+            status,
+            headers: { 'content-type': 'application/json' },
+          }),
+        )
+        .mockImplementation(
+          async () =>
+            new Response(
+              JSON.stringify({
+                choices: [{ message: { role: 'assistant', content: 'Recovered whole answer' } }],
+                usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 },
+              }),
+              { headers: { 'content-type': 'application/json' } },
+            ),
+        );
+      const resolved = await resolveFinite();
+      const stream = await resolved.streamFn(
+        resolved.model,
+        normalizeContext({ messages: [{ role: 'user', content: 'Hello', timestamp: 1 }] }),
+      );
+      expect((await stream.result()).content).toEqual([
+        { type: 'text', text: 'Recovered whole answer' },
+      ]);
+      expect(mockFiniteFetch).toHaveBeenCalledTimes(2);
+      expect(
+        mockFiniteFetch.mock.calls.map(([, init]) => JSON.parse(String(init.body)).stream),
+      ).toEqual([false, false]);
+      expect(
+        mockFiniteFetch.mock.calls.map(([, init]) =>
+          new Headers(init.headers).get('authorization'),
+        ),
+      ).toEqual(['Bearer secret-a', 'Bearer secret-b']);
+      expect(bind.mock.calls.map(([, binding]) => binding.shouldStream)).toEqual([false, false]);
+      expect(jest.mocked(providerService.resolveApiKey)).toHaveBeenCalledTimes(2);
+      resolveAdapter.mockRestore();
+    },
+  );
+
+  test('unsupported finite mode never dispatches or enters the credential ring', async () => {
+    mockFiniteFetch.mockReset();
+    await expect(resolveFinite(true)).rejects.toMatchObject({
+      code: 'non_streaming_mode_unsupported',
+      retryable: false,
+    });
+    expect(mockFiniteFetch).not.toHaveBeenCalled();
+    expect(providerService.resolveApiKey).not.toHaveBeenCalled();
+    expect(providerService.listApiKeys).not.toHaveBeenCalled();
   });
 });

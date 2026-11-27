@@ -67,6 +67,14 @@ describe('ErrorPart', () => {
 
   test.each([
     [
+      {
+        reasonCode: 'unknown',
+        source: { layer: 'provider', code: 'non_streaming_mode_unsupported' },
+      },
+      'streamingRequired',
+      'streamingRequired',
+    ],
+    [
       { reasonCode: 'quota', context: { providerId: 'deepseek' } },
       'quota',
       'providerQuota:DeepSeek',

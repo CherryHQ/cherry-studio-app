@@ -39,6 +39,28 @@ provider-wide shared transport adapter. This stream path remains independent of 
 external-service request/response infrastructure under `src/backend/services/http`; neither
 transport is a global replacement for the other.
 
+## Model Streaming Setting
+
+The model's **Supports streaming output** setting controls the provider wire request. During each
+`piModelResolver` resolution, the effective app model's `supportsStreaming: false` becomes the
+required internal binding field `shouldStream: false`; true or an unset value streams. Cloud
+models always stream, regardless of the stored model setting. OAuth bindings carry the same flag
+without relying on request parameters.
+
+Finite requests are supported for OpenAI Chat Completions, OpenAI Responses, Azure OpenAI
+Responses, Anthropic Messages (including Vertex), Google Generative AI, and Google Vertex. The
+fetch adapter requests a finite response and waits for the complete JSON body and EOF before
+translating it into Pi events. Durable conversations publish the settled response as one
+snapshot. Key failover and the existing response deadline remain outside the adapter.
+Incomplete body bytes do not count as stream activity.
+
+The Codex subscription transport requires streaming and rejects finite mode before dispatch.
+A provider that returns SSE in finite mode or explicitly requires streaming in an HTTP 400 or
+422 rejection produces the same non-retryable error asking the user to turn streaming on.
+For finite OpenAI Chat Completions, the resolved Pi model sets `compat.supportsFinishReason` to
+false because third-party endpoints may omit `finish_reason`. Pi then derives `toolUse` or `stop`
+when the reason is absent and still honors a provided reason; the fetch adapter does not invent one.
+
 ## Frontend Observation Boundary
 
 The main stack's `ChatProvider` (`frontend/features/chat/runtime`) owns the local

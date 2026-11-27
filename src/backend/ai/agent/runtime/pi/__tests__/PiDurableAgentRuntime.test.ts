@@ -1,3 +1,4 @@
+import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { Api, AssistantMessage, Model, TranscriptContext } from '@earendil-works/pi-ai';
 import { streamSimple as streamAnthropic } from '@earendil-works/pi-ai/api/anthropic-messages';
@@ -214,6 +215,364 @@ async function submitAndWait(
 }
 
 describe('Persistent Agent facade', () => {
+  test.each([false, true])(
+    'publishes partial text before the terminal event only when shouldStream=%s',
+    async (shouldStream) => {
+      const state = fixture();
+      const waitingForTerminal = deferred<void>();
+      const releaseTerminal = deferred<void>();
+      const completed = deferred<void>();
+      const model = {
+        ...wire,
+        api: 'openai-completions' as const,
+        baseUrl: 'https://provider.test/v1',
+      };
+      const usage = { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 };
+      const response = shouldStream
+        ? new Response(
+            'data: {"choices":[{"delta":{"content":"Answer"},"finish_reason":"stop"}]}\n\n' +
+              `data: ${JSON.stringify({ choices: [], usage })}\n\ndata: [DONE]\n\n`,
+            { headers: { 'content-type': 'text/event-stream' } },
+          )
+        : new Response(
+            JSON.stringify({
+              choices: [{ message: { content: 'Answer' }, finish_reason: 'stop' }],
+              usage,
+            }),
+            { headers: { 'content-type': 'application/json' } },
+          );
+      const fetch = jest.fn(async (_input: unknown, _init?: RequestInit) => response);
+      const streamFn = await bindPiStream(
+        {
+          ...resolvePiApiAdapter(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS),
+          loadStreamSimple: async () => streamCompletions as PiStreamFn,
+        },
+        { shouldStream, apiKey: 'key', fetch, headers: {}, maxRetries: 0, maxTokens: 256 },
+      );
+      const resolveModel = state.dependencies.resolveModel;
+      state.dependencies.resolveModel = async (...args) => ({
+        ...(await resolveModel(...args)),
+        model,
+        shouldStream,
+        streamFn: (model, context, options) =>
+          streamFn(model, context, {
+            ...options,
+            onProviderStreamEvent: async (event, wire) => {
+              await options?.onProviderStreamEvent?.(event, wire);
+              if ((event as { choices?: unknown[] }).choices?.length === 0) {
+                waitingForTerminal.resolve();
+                await releaseTerminal.promise;
+              }
+            },
+          }),
+      });
+      const runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      await runtime.ensureConversation(seed);
+      const updates: { status: string; text: string; state?: string }[] = [];
+      const observation = await runtime.observe(lane, (event) => {
+        if (event.type !== 'turn.updated' || event.turn.identity.requestId !== 'publication')
+          return;
+        const text = event.turn.parts.find((part) => part.type === 'text');
+        if (text?.type === 'text' && text.text)
+          updates.push({ status: event.turn.status, text: text.text, state: text.state });
+        if (event.turn.status === 'completed') completed.resolve();
+      });
+      try {
+        await runtime.submit(lane, input('publication'));
+        await waitingForTerminal.promise;
+        // Pi schedules a trailing progress commit after 100 ms.
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        const expected = shouldStream
+          ? [{ status: 'running', text: 'Answer', state: 'streaming' }]
+          : [];
+        expect(updates).toEqual(expected);
+        releaseTerminal.resolve();
+        await completed.promise;
+        expect(updates).toEqual([
+          ...expected,
+          { status: 'completed', text: 'Answer', state: 'done' },
+        ]);
+        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toMatchObject({
+          stream: shouldStream,
+        });
+      } finally {
+        releaseTerminal.resolve();
+        await observation.unsubscribe();
+        await runtime.close();
+      }
+    },
+  );
+
+  test('finite refusal remains visible in durable chat projection after reopening', async () => {
+    const state = fixture();
+    const model = {
+      ...wire,
+      api: 'openai-completions' as const,
+      baseUrl: 'https://provider.test/v1',
+      compat: { supportsFinishReason: false },
+    };
+    const fetch = jest.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: null, refusal: 'Declined' }, finish_reason: 'stop' }],
+          }),
+          { headers: { 'content-type': 'application/json' } },
+        ),
+    );
+    const streamFn = await bindPiStream(
+      {
+        ...resolvePiApiAdapter(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS),
+        loadStreamSimple: async () => streamCompletions as PiStreamFn,
+      },
+      { shouldStream: false, apiKey: 'key', fetch, headers: {}, maxRetries: 0, maxTokens: 256 },
+    );
+    const resolveModel = state.dependencies.resolveModel;
+    state.dependencies.resolveModel = async (...args) => ({
+      ...(await resolveModel(...args)),
+      model,
+      streamFn,
+    });
+    let runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    try {
+      await runtime.ensureConversation(seed);
+      await submitAndWait(runtime, input('refusal'));
+      expect((await runtime.message(lane, 'answer-refusal'))?.turn).toMatchObject({
+        status: 'completed',
+        parts: [{ type: 'text', text: 'Declined' }],
+      });
+      await runtime.close();
+      runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      expect((await runtime.message(lane, 'answer-refusal'))?.turn.parts).toEqual([
+        expect.objectContaining({ type: 'text', text: 'Declined' }),
+      ]);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test.each([
+    {
+      contentType: 'text/event-stream',
+      body: 'data: [DONE]\n\n',
+      code: 'non_streaming_mode_unsupported',
+    },
+    { contentType: 'application/json', body: 'bad JSON', code: 'non_streaming_response_invalid' },
+  ])(
+    'preserves non-retryable blocking compaction failure $code after reopening',
+    async ({ contentType, body, code }) => {
+      const state = fixture();
+      const model = {
+        ...wire,
+        api: 'openai-completions' as const,
+        baseUrl: 'https://provider.test/v1',
+        contextWindow: 4096,
+        maxTokens: 256,
+      };
+      state.dependencies.preflightModel = async () => ({
+        contextWindow: model.contextWindow,
+        maxInputTokens: 1024,
+        maxOutputTokens: model.maxTokens,
+        inputModalities: ['text'],
+        supportsTools: true,
+      });
+      const fetch = jest.fn(
+        async (_input: unknown, _init?: RequestInit) =>
+          new Response(body, { headers: { 'content-type': contentType } }),
+      );
+      const streamFn = await bindPiStream(
+        {
+          ...resolvePiApiAdapter(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS),
+          loadStreamSimple: async () => streamCompletions as PiStreamFn,
+        },
+        { shouldStream: false, apiKey: 'key', fetch, headers: {}, maxRetries: 0, maxTokens: 256 },
+      );
+      const resolveModel = state.dependencies.resolveModel;
+      state.dependencies.resolveModel = async (...args) => ({
+        ...(await resolveModel(...args)),
+        model,
+        streamFn,
+        shouldStream: false,
+      });
+      let runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      try {
+        await runtime.ensureConversation({
+          ...seed,
+          history: {
+            history: [
+              {
+                turnId: 'past',
+                messages: [
+                  { role: 'user', parts: [{ type: 'text', text: 'Old context '.repeat(400) }] },
+                  { role: 'assistant', parts: [{ type: 'text', text: 'Previous answer' }] },
+                ],
+              },
+            ],
+            contextCheckpoint: null,
+            referencedFileEntryIds: [],
+          },
+        });
+        await submitAndWait(
+          runtime,
+          {
+            ...input('finite-compaction'),
+            input: [{ type: 'text', text: 'Current question '.repeat(100) }],
+          },
+          'failed',
+        );
+        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toMatchObject({
+          stream: false,
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              content: expect.stringContaining('Write a conversation summary'),
+            }),
+          ]),
+        });
+        const failedTurn = {
+          status: 'failed',
+          error: { code, retryable: false },
+        };
+        expect((await runtime.message(lane, 'answer-finite-compaction'))?.turn).toMatchObject(
+          failedTurn,
+        );
+        await runtime.close();
+        runtime = state.create();
+        await runtime.initialize(state.database, state.ports);
+        expect((await runtime.message(lane, 'answer-finite-compaction'))?.turn).toMatchObject(
+          failedTurn,
+        );
+        expect(fetch).toHaveBeenCalledTimes(1);
+      } finally {
+        await runtime.close();
+      }
+    },
+  );
+
+  test('finite durable tool turn executes exactly once and makes a finite follow-up request', async () => {
+    const state = fixture();
+    const waitingForTerminal = deferred<void>();
+    const releaseTerminal = deferred<void>();
+    const completed = deferred<void>();
+    const execute = jest.fn(async () => ({ value: { saved: true }, artifacts: [] }));
+    const tool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'write_file' },
+      providerName: 'write_file',
+      displayName: 'Write file',
+      description: 'Save a file.',
+      inputSchema: { type: 'object', properties: {} },
+      approval: 'auto',
+      execute,
+    };
+    state.ports.resolveTool = async () => tool;
+    const payloads: Record<string, unknown>[] = [];
+    const model = {
+      ...wire,
+      api: 'openai-completions' as const,
+      baseUrl: 'https://provider.test/v1',
+      compat: { supportsFinishReason: false },
+    };
+    const fetch = jest.fn(async (_url: unknown, options?: RequestInit) => {
+      payloads.push(JSON.parse(String(options?.body)));
+      return new Response(
+        JSON.stringify({
+          choices: [
+            payloads.length === 1
+              ? {
+                  message: {
+                    tool_calls: [
+                      {
+                        id: 'save',
+                        type: 'function',
+                        function: { name: 'write_file', arguments: '{}' },
+                      },
+                    ],
+                  },
+                  finish_reason: 'tool_calls',
+                }
+              : { message: { content: 'Saved.' }, finish_reason: 'stop' },
+          ],
+          ...(payloads.length === 2
+            ? { usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 } }
+            : {}),
+        }),
+        { headers: { 'content-type': 'application/json' } },
+      );
+    });
+    const streamFn = await bindPiStream(
+      {
+        ...resolvePiApiAdapter(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS),
+        loadStreamSimple: async () => streamCompletions as PiStreamFn,
+      },
+      { shouldStream: false, apiKey: 'key', fetch, headers: {}, maxRetries: 0, maxTokens: 256 },
+    );
+    const resolveModel = state.dependencies.resolveModel;
+    state.dependencies.resolveModel = async (...args) => ({
+      ...(await resolveModel(...args)),
+      model,
+      shouldStream: false,
+      streamFn: (model, context, options) =>
+        streamFn(model, context, {
+          ...options,
+          onProviderStreamEvent: async (event, wire) => {
+            await options?.onProviderStreamEvent?.(event, wire);
+            if ((event as { choices?: unknown[] }).choices?.length === 0) {
+              waitingForTerminal.resolve();
+              await releaseTerminal.promise;
+            }
+          },
+        }),
+    });
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    await runtime.ensureConversation({
+      ...seed,
+      configuration: { ...seed.configuration, tools: [tool] },
+    });
+    const snapshots: { status: string; text: string; state?: string }[] = [];
+    const observation = await runtime.observe(lane, (event) => {
+      if (event.type !== 'turn.updated' || event.turn.identity.requestId !== 'finite-tool') return;
+      const text = event.turn.parts.find((part) => part.type === 'text');
+      if (text?.type === 'text' && text.text)
+        snapshots.push({ status: event.turn.status, text: text.text, state: text.state });
+      if (event.turn.status === 'completed') completed.resolve();
+    });
+    try {
+      await runtime.submit(lane, input('finite-tool'));
+      await waitingForTerminal.promise;
+      // Allow Pi's trailing progress commit to publish any leaked intermediate text.
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(snapshots).toEqual([]);
+      releaseTerminal.resolve();
+      await completed.promise;
+      expect(snapshots).toEqual([{ status: 'completed', text: 'Saved.', state: 'done' }]);
+      expect(execute).toHaveBeenCalledTimes(1);
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(payloads.map((payload) => payload.stream)).toEqual([false, false]);
+      expect(payloads.every((payload) => !('stream_options' in payload))).toBe(true);
+      expect(payloads[1]?.messages).toContainEqual(
+        expect.objectContaining({
+          role: 'tool',
+          tool_call_id: 'save',
+          content: expect.stringContaining('saved'),
+        }),
+      );
+      expect((await runtime.message(lane, 'answer-finite-tool'))?.turn.parts).toContainEqual(
+        expect.objectContaining({ type: 'text', text: 'Saved.' }),
+      );
+    } finally {
+      releaseTerminal.resolve();
+      await observation.unsubscribe();
+      await runtime.close();
+    }
+  });
+
   test.each(['storage', 'cancellation', 'unhandled-validation'] as const)(
     'does not isolate %s failures during configuration restore',
     async (source) => {
@@ -1408,6 +1767,7 @@ describe('Persistent Agent facade', () => {
       // Jest loads the same installed adapter through CommonJS; Metro uses its import entry.
       const loadStream = jest.spyOn(adapter, 'loadStreamSimple').mockResolvedValue(streamSimple);
       const capture = await bindPiStream(adapter, {
+        shouldStream: true,
         apiKey: 'test-key',
         fetch: async () => {
           throw new Error('This test must not contact a provider.');

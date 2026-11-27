@@ -13,12 +13,37 @@ import { DEFAULT_RETRY_POLICY, type CompactionPolicy } from '@earendil-works/pi-
 
 import { classifyAiFailureReason } from '@/shared/utils/aiFailure';
 
-import type { RuntimeModelPreflight } from '../types';
+import type { RuntimeError, RuntimeModelPreflight } from '../types';
 import { readPiTerminalError } from './piModelError';
+import { isPiNonStreamingError } from './piNonStreamingFetch';
 import { resolvePiConversationOutputBudget } from './piOutputReservation';
 
 const AUTO_COMPACTION_INPUT_RATIO = 0.8;
 const SUMMARY_INPUT_SAFETY_RATIO = 0.85;
+
+const FINITE_COMPACTION_FAILURES: readonly RuntimeError[] = [
+  {
+    code: 'non_streaming_mode_unsupported',
+    message: 'The summarization model requires streaming.',
+    retryable: false,
+    origin: 'provider',
+  },
+  {
+    code: 'non_streaming_response_invalid',
+    message: 'The provider returned an invalid non-streaming summary response.',
+    retryable: false,
+    origin: 'provider',
+  },
+];
+
+export class PiCompactionError extends Error {}
+
+export function readPiCompactionFailure(detail: unknown): RuntimeError | undefined {
+  // Pi persists the hook's failure text and prefixes it when the blocking generation fails.
+  return FINITE_COMPACTION_FAILURES.find(
+    (failure) => detail === `Compaction failed: ${failure.message}`,
+  );
+}
 
 type ModelLimits = Pick<
   RuntimeModelPreflight,
@@ -102,6 +127,12 @@ export async function summarizePiCompaction(
           );
           signal.throwIfAborted();
           const error = readPiTerminalError(result);
+          if (isPiNonStreamingError(error)) {
+            const failure = FINITE_COMPACTION_FAILURES.find(
+              (failure) => failure.code === error?.code,
+            );
+            if (failure) throw new PiCompactionError(failure.message);
+          }
           const reason = error
             ? classifyAiFailureReason({ ...error, ...error.context })
             : undefined;

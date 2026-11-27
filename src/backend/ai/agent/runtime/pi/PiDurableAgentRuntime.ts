@@ -49,7 +49,7 @@ import { estimatePiContextUsage, toPiConversation } from './modelMessages';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
 import { PI_CODEMODE_STORE_CHARACTERS, retainPiCodemodeOutput } from './piCodemodeOutput';
 import { createPiCodemodeSandbox } from './piCodemodeSandbox';
-import { summarizePiCompaction } from './piCompaction';
+import { PiCompactionError, summarizePiCompaction } from './piCompaction';
 import { cherryClientIdentity, createPiDurableModels, piDurableModelKey } from './piDurableModels';
 import { PiDurableObserver } from './PiDurableObserver';
 import {
@@ -983,9 +983,9 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
                 },
               );
               return summary ? { summary } : { failure };
-            } catch {
+            } catch (error) {
               signal.throwIfAborted();
-              return { failure };
+              return { failure: error instanceof PiCompactionError ? error.message : failure };
             }
           },
         }),
