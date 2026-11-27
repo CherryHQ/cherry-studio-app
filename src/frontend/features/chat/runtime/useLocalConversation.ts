@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type {
   ConversationHistoryView,
@@ -7,12 +7,11 @@ import type {
 } from '@/frontend/appShell/conversation';
 import { useApiClient, useBackendModule } from '@/frontend/data';
 import { useSshTarget } from '@/frontend/hooks/ssh';
-import { collectToolCitationSources, type CitationSource } from '@/frontend/utils/messageCitations';
 import type { AgentContextUsage } from '@/shared/contracts/agent';
-import type { ListAgentSessionMessagesQueryParams } from '@/shared/data/api/schemas/agentSessionMessages';
 
-import { mergeAgentMessageViews, toAgentMessageListItem } from './agentMessageProjection';
+import { mergeAgentMessageViews } from './agentMessageProjection';
 import { useAgentChatClient, useAgentSessionState } from './ChatProvider';
+import { createLocalCitationReader } from './localCitationReader';
 import { createLocalConversationProjector } from './localConversationView';
 import {
   type LiveSiblingViews,
@@ -118,50 +117,22 @@ export function useLocalConversation(input: {
     if (window.hasNewerMessages) return historyMessages;
     return branchMessages.map((message) => projector.message(message, state));
   }, [projector, branchMessages, historyMessages, state, window.hasNewerMessages]);
-  const liveMessagesRef = useRef(state.liveMessages);
-  useEffect(() => {
-    liveMessagesRef.current = state.liveMessages;
-  }, [state.liveMessages]);
-  const readCitations = useCallback<NonNullable<ConversationHistoryView['readCitations']>>(
-    async (messageId, ids, signal) => {
-      if (!sessionId) return [];
-      const missing = new Set(ids);
-      const sources: CitationSource[] = [];
-      let before = liveMessagesRef.current.some(
-        (message) => message.id === messageId && message.status === 'streaming',
-      );
-      let query: ListAgentSessionMessagesQueryParams = before
-        ? {}
-        : { aroundMessageId: messageId, aroundMode: 'exact' };
-      const visited = new Set<string>();
-      while (missing.size) {
-        const page = await apiClient.get(`/agent-sessions/${sessionId}/messages`, {
-          query: { ...query, limit: 200 },
-          signal,
-        });
-        signal.throwIfAborted();
-        for (const message of page.items) {
-          if (message.id === messageId) {
-            before = true;
-            continue;
-          }
-          if (!before) continue;
-          for (const source of collectToolCitationSources(
-            toAgentMessageListItem(message)?.data.parts ?? [],
-          ))
-            if (missing.delete(source.id)) sources.push(source);
-        }
-        if (!page.nextCursor || visited.has(page.nextCursor)) break;
-        visited.add(page.nextCursor);
-        query = { cursor: page.nextCursor, direction: 'older' };
-      }
-      return sources;
-    },
+  const citationReader = useMemo(
+    () => (sessionId ? createLocalCitationReader(apiClient, sessionId) : undefined),
     [apiClient, sessionId],
   );
+  const readCitations = useCallback<NonNullable<ConversationHistoryView['readCitations']>>(
+    (messageId, ids, signal) => {
+      if (!sessionId || !citationReader) return Promise.resolve([]);
+      const { liveMessages, transcriptRevision } = client.getState(sessionId);
+      return citationReader(messageId, ids, signal, liveMessages, transcriptRevision);
+    },
+    [citationReader, client, sessionId],
+  );
+  const citationRevision = state.transcriptRevision?.toString();
   const messageWindow = useMemo<ConversationHistoryView>(
-    () => ({ ...window, messages: historyMessages, readCitations }),
-    [window, historyMessages, readCitations],
+    () => ({ ...window, revision: citationRevision, messages: historyMessages, readCitations }),
+    [window, citationRevision, historyMessages, readCitations],
   );
   return {
     snapshot,
