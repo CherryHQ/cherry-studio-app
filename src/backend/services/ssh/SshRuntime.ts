@@ -404,6 +404,14 @@ export class SshRuntime extends BaseService implements SshModule {
       return result;
     });
 
+  private clearActiveTargetState(sessionId: string): boolean {
+    for (const run of [...this.active, ...this.transfers])
+      if (run.sessionId === sessionId) run.cancel();
+    const hadTarget = this.targets.delete(sessionId);
+    this.clearGrantTimer(sessionId);
+    return hadTarget;
+  }
+
   selectTarget = (sessionId: string, reference: SshReference | null) =>
     this.serialize(async () => {
       if (!sessionId || sessionId.length > 200) throw new SshError('invalid-input');
@@ -415,13 +423,19 @@ export class SshRuntime extends BaseService implements SshModule {
       const profile = row ? toSshProfile(row) : null;
       if (profile) this.assertTargetCapacity(sessionId);
       if (!sessionId.startsWith('draft:')) this.profiles.rememberTarget(sessionId, profile);
-      for (const run of [...this.active, ...this.transfers])
-        if (run.sessionId === sessionId) run.cancel();
-      this.targets.delete(sessionId);
-      this.clearGrantTimer(sessionId);
+      this.clearActiveTargetState(sessionId);
       if (profile) this.targets.set(sessionId, this.newTarget(profile));
       this.notifyTargets();
     });
+
+  /** Removes a deleted conversation's live target, active grant timer, and remembered binding. */
+  forgetSession = async (sessionId: string): Promise<void> => {
+    if (!sessionId || sessionId.length > 200) return;
+    await this.serialize(async () => {
+      if (!sessionId.startsWith('draft:')) this.profiles.rememberTarget(sessionId, null);
+      if (this.clearActiveTargetState(sessionId)) this.notifyTargets();
+    });
+  };
 
   getRememberedTarget = async (sessionId: string) => {
     if (this.targets.has(sessionId)) return null;

@@ -1756,6 +1756,11 @@ export class DurableAgentHost implements AgentProtocol {
       this.background.clearSession(sessionId);
       this.listeners.delete(sessionId);
       this.setStatus(sessionId, null);
+      try {
+        await this.ports.onSessionDeleted?.(sessionId);
+      } catch (error) {
+        logger.warn('Deferred deleted session cleanup failed', error as Error, { sessionId });
+      }
       this.ports.durableStorage?.notifyTranscript(sessionId);
     } finally {
       this.deleting.delete(sessionId);

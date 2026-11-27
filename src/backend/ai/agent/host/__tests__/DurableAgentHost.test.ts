@@ -5825,6 +5825,30 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test('deleteSession notifies onSessionDeleted best-effort only after deleting an existing session', async () => {
+    const onSessionDeleted = jest
+      .fn<Promise<void>, [string]>()
+      .mockRejectedValueOnce(new Error('cleanup failed'))
+      .mockResolvedValueOnce(undefined);
+    const state = fixture({ onSessionDeleted });
+    await state.reserve();
+    await state.host.initialize();
+    try {
+      await expect(
+        state.host.deleteSession({ sessionId: state.sessionId }),
+      ).resolves.toBeUndefined();
+      expect(onSessionDeleted).toHaveBeenCalledTimes(1);
+      expect(onSessionDeleted).toHaveBeenCalledWith(state.sessionId);
+
+      await expect(state.host.deleteSession({ sessionId: state.sessionId })).rejects.toMatchObject({
+        view: { code: 'SESSION_NOT_FOUND' },
+      });
+      expect(onSessionDeleted).toHaveBeenCalledTimes(1);
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test('a transcript deletion invalidates a leftover working copy even if cleanup never ran', async () => {
     const state = fixture();
     const turn = await state.reserve();
