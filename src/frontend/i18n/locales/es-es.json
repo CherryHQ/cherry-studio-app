@@ -259,7 +259,7 @@
   "attachments.issue.model-unsupported": "El modelo seleccionado no puede utilizar estos archivos adjuntos. Elija un modelo compatible o elimínelos.",
   "attachments.issue.nul-byte": "El archivo contiene bytes NUL y no se puede enviar como texto. Exportarlo como texto UTF-8 y agregarlo nuevamente.",
   "attachments.issue.parser-unavailable": "AnyDoc no está disponible en esta compilación de aplicación. Instale una versión de desarrollo que la incluya o seleccione Integrado en Configuración → Analizador de documentos y vuelva a intentarlo.",
-  "attachments.issue.parser-unsupported": "El analizador integrado no admite este formato de documento. Seleccione AnyDoc en Configuración → Analizador de documentos o convierta el archivo a DOCX, PPTX o XLSX.",
+  "attachments.issue.parser-unsupported": "El analizador integrado no admite este formato de archivo.",
   "attachments.issue.runtime-unsupported": "Esta sesión no admite archivos adjuntos. Quítelos y vuelva a intentarlo.",
   "attachments.issue.unavailable": "El archivo falta o no se puede leer. Selecciónelo nuevamente desde Mis archivos.",
   "attachments.issue.unsupported-type": "Este formato de archivo no es compatible con esta acción. Conviértalo a un formato compatible o elimínelo.",

@@ -259,7 +259,7 @@
   "attachments.issue.model-unsupported": "選択されたモデルでは、これらのアタッチメントは使用できません。互換性のあるモデルを選択するか、それらを削除してください。",
   "attachments.issue.nul-byte": "ファイルには NUL バイトが含まれているため、テキストとして送信できません。それを UTF-8 テキストとしてエクスポートし、再度追加します。",
   "attachments.issue.parser-unavailable": "AnyDoc はこのアプリ ビルドでは使用できません。それを含む開発ビルドをインストールするか、[設定] → [ドキュメント パーサー] の [組み込み] を選択して再試行します。",
-  "attachments.issue.parser-unsupported": "組み込みパーサーは、この文書形式をサポートしていません。 [設定] → [ドキュメント パーサー] で AnyDoc を選択するか、ファイルを DOCX、PPTX、または XLSX に変換します。",
+  "attachments.issue.parser-unsupported": "組み込みパーサーは、このファイル形式をサポートしていません。",
   "attachments.issue.runtime-unsupported": "このセッションは添付ファイルをサポートしていません。それらを削除して、もう一度試してください。",
   "attachments.issue.unavailable": "ファイルが見つからないか、読み取ることができません。 [マイ ファイル] から再度選択します。",
   "attachments.issue.unsupported-type": "このファイル形式はこのアクションではサポートされていません。サポートされている形式に変換するか、削除します。",
