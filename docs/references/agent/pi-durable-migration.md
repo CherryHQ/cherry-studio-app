@@ -511,9 +511,12 @@ Segmenter fallback and Han search terms, exact-name tool search, and the host Co
 hook with its final store-commit budget guard. The compaction hook can also fail the native task
 when the bounded summarizer fails, preventing a fallback to one unbounded request.
 `Tx.waitForEntryPublication()` uses Pi's conversation creation and append gates without loading a
-transcript entry. Cold history reads only load bodies for the selected turns. The SQLite adapter
-marks transcript and document revision reads so Android can stream those rows through the native
-boundary. Metadata queries and iOS use the normal bulk adapter.
+transcript entry. Cold history reads only load bodies for the selected turns. `SqliteStorage` accepts
+`maxPayloadReadBytes` (set to 8 MiB on Android by `AgentSqlDatabase` and unset on iOS) and uses
+a single-query byte-budgeted window CTE (`octet_length()`) for transcript entry scans and
+transactional document revision replay—executing zero extra queries when a page fits in budget
+while avoiding row-by-row bridge overhead and keeping Android JVM allocations bounded. Metadata
+queries and iOS use single bulk reads.
 The `declarations` import is upstream in 1.5.0. Upstream
 [conversation reclamation #11026](https://github.com/earendil-works/pi/issues/11026) is a separate
 storage-lifetime concern. Mobile's manual whole-file clearing

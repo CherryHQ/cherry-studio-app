@@ -1,9 +1,14 @@
 import { Directory } from 'expo-file-system';
 import * as SQLite from 'expo-sqlite';
-import type { SQLiteBindValue, SQLiteDatabase } from 'expo-sqlite';
+import type { SQLiteDatabase } from 'expo-sqlite';
 import { Platform } from 'react-native';
 
-import { AgentSqlDatabase, type AgentSqlExecutor } from '../AgentSqlDatabase';
+import {
+  AGENT_DATABASE_NAME,
+  ANDROID_MAX_PAYLOAD_READ_BYTES,
+  AgentSqlDatabase,
+  type AgentSqlExecutor,
+} from '../AgentSqlDatabase';
 
 jest.mock('expo-sqlite', () => ({
   ...jest.requireActual('expo-sqlite'),
@@ -35,11 +40,6 @@ function connection() {
     getAllAsync: jest.fn(async (sql: string) => {
       operations.push(sql);
       return [{ id: 2 }, { id: 1 }];
-    }),
-    getEachAsync: jest.fn(async function* (sql: string, _params: SQLiteBindValue[]) {
-      operations.push(sql);
-      yield { id: 2 };
-      yield { id: 1 };
     }),
     closeAsync: jest.fn(async () => {
       operations.push('close');
@@ -140,20 +140,6 @@ describe('AgentSqlDatabase', () => {
     expect(operations).toEqual(['BEGIN IMMEDIATE', 'inside', 'ROLLBACK', 'after failure']);
   });
 
-  test('rolls back a failed row stream and preserves the original error', async () => {
-    jest.replaceProperty(Platform, 'OS', 'android');
-    const { database, operations, sqlite } = connection();
-    const failure = new Error('row stream failed');
-    sqlite.getEachAsync.mockImplementationOnce(async function* (sql) {
-      operations.push(sql);
-      yield { id: 1 };
-      throw failure;
-    });
-    const transaction = database.transaction((tx) => tx.allPayloadRows('SELECT rows'));
-    await expect(transaction).rejects.toBe(failure);
-    expect(operations).toEqual(['BEGIN IMMEDIATE', 'SELECT rows', 'ROLLBACK']);
-  });
-
   test('reports failed rollback separately and prevents reuse of the uncertain connection', async () => {
     const { database, sqlite } = connection();
     const failure = new Error('callback failure');
@@ -181,11 +167,9 @@ describe('AgentSqlDatabase', () => {
     await expect(escaped.runCounted('late counted write')).rejects.toThrow('already settled');
     await expect(escaped.get('late read')).rejects.toThrow('already settled');
     await expect(escaped.all('late multi-row read')).rejects.toThrow('already settled');
-    await expect(escaped.allPayloadRows('late payload read')).rejects.toThrow('already settled');
     expect(sqlite.runAsync).not.toHaveBeenCalled();
     expect(sqlite.getFirstAsync).not.toHaveBeenCalled();
     expect(sqlite.getAllAsync).not.toHaveBeenCalled();
-    expect(sqlite.getEachAsync).not.toHaveBeenCalled();
   });
 
   test('seals admission immediately and drains accepted work before closing once', async () => {
@@ -217,32 +201,12 @@ describe('AgentSqlDatabase', () => {
   });
 
   test.each([
-    ['android', false],
-    ['android', true],
-    ['ios', false],
-    ['ios', true],
-  ] as const)(
-    'reads payload rows on %s (inside transaction: %s)',
-    async (platform, inTransaction) => {
-      jest.replaceProperty(Platform, 'OS', platform);
-      const { database, sqlite } = connection();
-      const blob = new Uint8Array([0, 255]);
-      const read = async (executor: AgentSqlExecutor) => {
-        await expect(executor.all('SELECT metadata')).resolves.toEqual([{ id: 2 }, { id: 1 }]);
-        await expect(
-          executor.allPayloadRows<{ id: number }>('SELECT payload rows', null, 'value', blob, 42n),
-        ).resolves.toEqual([{ id: 2 }, { id: 1 }]);
-        await expect(executor.allPayloadRows('unsafe', 9_007_199_254_740_993n)).rejects.toThrow(
-          'precision',
-        );
-      };
-      if (inTransaction) await database.transaction(read);
-      else await read(database);
-      const payload = ['SELECT payload rows', [null, 'value', blob, 42]];
-      expect(sqlite.getAllAsync.mock.calls).toEqual(
-        platform === 'android' ? [['SELECT metadata', []]] : [['SELECT metadata', []], payload],
-      );
-      expect(sqlite.getEachAsync.mock.calls).toEqual(platform === 'android' ? [payload] : []);
-    },
-  );
+    ['android', ANDROID_MAX_PAYLOAD_READ_BYTES],
+    ['ios', undefined],
+  ] as const)('sets maxPayloadReadBytes on %s (database %s)', async (platform, expectedBudget) => {
+    jest.replaceProperty(Platform, 'OS', platform);
+    const { database } = connection();
+    expect(AGENT_DATABASE_NAME).toBe('pi-agent.db');
+    expect(database.maxPayloadReadBytes).toBe(expectedBudget);
+  });
 });

@@ -7,6 +7,7 @@ import { databaseDirectory } from '@/backend/data/storage/storagePaths';
 import { captureDatabase } from './backupDatabase';
 
 export const AGENT_DATABASE_NAME = 'pi-agent.db';
+export const ANDROID_MAX_PAYLOAD_READ_BYTES = 8 * 1024 * 1024;
 const AGENT_DATABASE_FILES = ['', '-wal', '-shm'].map((suffix) => AGENT_DATABASE_NAME + suffix);
 
 /** Bytes of the Agent database and its SQLite sidecars in the active store. */
@@ -34,7 +35,6 @@ export interface AgentSqlExecutor {
   runCounted(sql: string, ...params: AgentSqlValue[]): Promise<number>;
   get<T extends object>(sql: string, ...params: AgentSqlValue[]): Promise<T | undefined>;
   all<T extends object>(sql: string, ...params: AgentSqlValue[]): Promise<T[]>;
-  allPayloadRows<T extends object>(sql: string, ...params: AgentSqlValue[]): Promise<T[]>;
 }
 
 /** Owns one connection. Unrelated reads and writes wait for an active transaction. */
@@ -44,6 +44,11 @@ export class AgentSqlDatabase implements AgentSqlExecutor {
   private failure: Error | undefined;
 
   constructor(private readonly sqlite: SQLiteDatabase) {}
+
+  /** Cap Android multi-row payload reads so expo-sqlite does not fill the JVM heap at once. */
+  get maxPayloadReadBytes(): number | undefined {
+    return Platform.OS === 'android' ? ANDROID_MAX_PAYLOAD_READ_BYTES : undefined;
+  }
 
   static async open(
     options: { directory?: string; name?: string; journal?: 'wal' | 'preserve' } = {},
@@ -96,10 +101,6 @@ export class AgentSqlDatabase implements AgentSqlExecutor {
     return this.enqueue(() => this.sqlite.getAllAsync<T>(sql, bindings(params)));
   }
 
-  allPayloadRows<T extends object>(sql: string, ...params: AgentSqlValue[]): Promise<T[]> {
-    return this.enqueue(() => this.readPayloadRows<T>(sql, params));
-  }
-
   transaction<T>(callback: (transaction: AgentSqlExecutor) => Promise<T>): Promise<T> {
     return this.enqueue(async () => {
       await this.sqlite.execAsync('BEGIN IMMEDIATE');
@@ -127,10 +128,6 @@ export class AgentSqlDatabase implements AgentSqlExecutor {
         all: async <Row extends object>(sql: string, ...params: AgentSqlValue[]) => {
           assertActive();
           return this.sqlite.getAllAsync<Row>(sql, bindings(params));
-        },
-        allPayloadRows: async <Row extends object>(sql: string, ...params: AgentSqlValue[]) => {
-          assertActive();
-          return this.readPayloadRows<Row>(sql, params);
         },
       };
       try {
@@ -160,17 +157,6 @@ export class AgentSqlDatabase implements AgentSqlExecutor {
       this.closing = this.tail.then(() => this.sqlite.closeAsync());
     }
     return this.closing;
-  }
-
-  private async readPayloadRows<T extends object>(
-    sql: string,
-    params: AgentSqlValue[],
-  ): Promise<T[]> {
-    const boundParams = bindings(params);
-    if (Platform.OS !== 'android') return this.sqlite.getAllAsync<T>(sql, boundParams);
-    const rows: T[] = [];
-    for await (const row of this.sqlite.getEachAsync<T>(sql, boundParams)) rows.push(row);
-    return rows;
   }
 
   private enqueue<T>(operation: () => Promise<T>): Promise<T> {
