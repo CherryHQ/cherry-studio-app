@@ -24,6 +24,7 @@ import {
   canPinTab,
   canUnpinTab,
   getNavHref,
+  hasDockPopoverActions,
   isRootNavPathname,
   type NavDestinationId,
   normalizePinnedTabs,
@@ -144,7 +145,10 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
     sidebar: 0,
   });
   const [isFileListCollapsed, setFileListCollapsed] = useState(false);
-  const [popover, setPopover] = useState<NavPinPopoverState | null>(null);
+  const [storedPopover, setStoredPopover] = useState<{
+    pinnedTabs: readonly NavigationPinTabId[];
+    popover: NavPinPopoverState;
+  } | null>(null);
   const [dragState, setDragState] = useState<NavDragState | null>(null);
 
   const dragPositionX = useSharedValue(0);
@@ -250,12 +254,16 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
   }, []);
 
   const openPinPopover = useCallback((next: NavPinPopoverState) => {
+    if (next.source === 'dock' && !hasDockPopoverActions(pinnedTabsRef.current, next.id)) {
+      setStoredPopover(null);
+      return;
+    }
     haptics.light();
-    setPopover(next);
+    setStoredPopover({ pinnedTabs: pinnedTabsRef.current, popover: next });
   }, []);
 
   const closePinPopover = useCallback(() => {
-    setPopover(null);
+    setStoredPopover(null);
   }, []);
 
   const pinTabToDock = useCallback((id: NavigationPinTabId, insertIndex?: number): boolean => {
@@ -300,7 +308,7 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
 
   const startDrag = useCallback(
     (input: { id: NavigationPinTabId; source: 'dock' | 'more'; x: number; y: number }) => {
-      setPopover(null);
+      setStoredPopover(null);
       dragPositionX.set(input.x);
       dragPositionY.set(input.y);
       haptics.medium();
@@ -395,7 +403,7 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
 
   const navigateToDestination = useCallback(
     (id: NavDestinationId, options?: NavigationNavigateOptions) => {
-      setPopover(null);
+      setStoredPopover(null);
       const href = getNavHref(id) as Href;
       const currentRouter = routerRef.current;
 
@@ -498,6 +506,18 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
       updateDrag,
     ],
   );
+
+  const popover = useMemo(() => {
+    if (!storedPopover || !isAtRoot || shellMode === 'wide-rail') return null;
+    if (
+      storedPopover.popover.source === 'dock' &&
+      (storedPopover.pinnedTabs !== pinnedTabs ||
+        !hasDockPopoverActions(pinnedTabs, storedPopover.popover.id))
+    ) {
+      return null;
+    }
+    return storedPopover.popover;
+  }, [isAtRoot, pinnedTabs, shellMode, storedPopover]);
 
   const interactionValue = useMemo<NavigationShellInteraction>(
     () => ({
