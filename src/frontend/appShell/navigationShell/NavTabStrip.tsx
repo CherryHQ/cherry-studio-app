@@ -1,9 +1,10 @@
 import { Surface } from '@cherrystudio/ui/components';
 import { haptics } from '@cherrystudio/ui/haptics';
 import { duration, easing } from '@cherrystudio/ui/motion';
-import { type RefObject, useCallback, useEffect, useMemo } from 'react';
+import { type RefObject, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  type LayoutChangeEvent,
   Platform,
   Pressable,
   type StyleProp,
@@ -55,14 +56,6 @@ const navPillExit = FadeOut.duration(duration.fast)
   .easing(easing.settle)
   .reduceMotion(ReduceMotion.System);
 
-/**
- * Horizontal bottom-dock pill & touch feedback:
- * - Active pill fill (`opacity: 1 | 0` on a persistent `collapsable={false}` layer) and the
- *   outline/filled icon swap happen instantaneously on commit with zero icon scaling, matching
- *   ChatGPT Android and keeping rounded corners uncollapsed across transitions (`#1899`).
- * - Touch press feedback uses bounded foreground `android_ripple` on Android and a UI-thread
- *   `pressWash` (`100ms` in / `180ms` out, `ReduceMotion.System`) on non-Android platforms.
- */
 const HORIZONTAL_PRESS_IN_TIMING = {
   duration: 100,
   easing: easing.settle,
@@ -75,6 +68,7 @@ const HORIZONTAL_PRESS_OUT_TIMING = {
 } as const;
 const ACTIVE_PILL_VISIBLE_STYLE: ViewStyle = { opacity: 1 };
 const ACTIVE_PILL_HIDDEN_STYLE: ViewStyle = { opacity: 0 };
+const SELECTION_TRACK_STYLE: ViewStyle = { direction: 'ltr' };
 
 const COLLAPSED_DETACHED_STYLE: ViewStyle = {
   height: 1,
@@ -214,10 +208,33 @@ function NavTabCapsule({ color, filled, id, isActive, isDragPreview = false }: N
   );
 }
 
+type HorizontalTabLayout = { width: number; x: number };
+
+/** The iOS dock keeps one selection pill and retargets its position as navigation commits. */
+function DockSelectionPill({ width, x }: HorizontalTabLayout) {
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: withTiming(x, navChromeTimingConfig) }],
+    width,
+  }));
+
+  // Layout events measure x from the physical left edge, even in a right-to-left row.
+  return (
+    <View className="absolute inset-0" pointerEvents="none" style={SELECTION_TRACK_STYLE}>
+      <Animated.View
+        className="bg-secondary dark:bg-secondary-active h-full rounded-full"
+        collapsable={false}
+        style={animatedStyle}
+        testID="floating-nav-selection-pill"
+      />
+    </View>
+  );
+}
+
 type NavHorizontalTabButtonProps = {
   accessibilityLabel: string;
   foregroundColor: string;
   gesture?: ReturnType<typeof usePinDragGesture>;
+  hasSlidingPill: boolean;
   isActive: boolean;
   isDragPreview: boolean;
   isDraggingOut: boolean;
@@ -232,6 +249,7 @@ function NavHorizontalTabButton({
   accessibilityLabel,
   foregroundColor,
   gesture,
+  hasSlidingPill,
   isActive,
   isDragPreview,
   isDraggingOut,
@@ -259,10 +277,14 @@ function NavHorizontalTabButton({
 
   const handlePress = useCallback(() => {
     if (!isActive && !isDraggingOut) {
+      if (hasSlidingPill) {
+        // Clear the pressed fill on commit so the target does not show a second selection pill.
+        pressWashOpacity.set(0);
+      }
       haptics.selection();
     }
     onPress();
-  }, [isActive, isDraggingOut, onPress]);
+  }, [hasSlidingPill, isActive, isDraggingOut, onPress, pressWashOpacity]);
 
   const pressWashStyle = useAnimatedStyle(() => ({
     opacity: pressWashOpacity.get() * 0.75,
@@ -287,11 +309,16 @@ function NavHorizontalTabButton({
         onPressOut={handlePressOut}
         testID={`${testIDPrefix}-tab-${tabId}`}
       >
+        {/* Preserve the local layer's rounded clipping across Android state changes (#1899). */}
         <View
           className="bg-secondary dark:bg-secondary-active absolute inset-0 rounded-full"
           collapsable={false}
           pointerEvents="none"
-          style={isVisualActive ? ACTIVE_PILL_VISIBLE_STYLE : ACTIVE_PILL_HIDDEN_STYLE}
+          style={
+            isDragPreview || (isActive && !hasSlidingPill)
+              ? ACTIVE_PILL_VISIBLE_STYLE
+              : ACTIVE_PILL_HIDDEN_STYLE
+          }
           testID={`${testIDPrefix}-active-pill-${tabId}`}
         />
         {!isAndroid ? (
@@ -327,6 +354,7 @@ type NavMiddleTabButtonProps = {
   accessibilityLabel: string;
   buttonSizeClass: string;
   foregroundColor: string;
+  hasSlidingPill: boolean;
   isActive: boolean;
   isDragPreview: boolean;
   isDraggingOut: boolean;
@@ -342,6 +370,7 @@ function NavMiddleTabButton({
   accessibilityLabel,
   buttonSizeClass,
   foregroundColor,
+  hasSlidingPill,
   isActive,
   isDragPreview,
   isDraggingOut,
@@ -360,6 +389,7 @@ function NavMiddleTabButton({
         accessibilityLabel={accessibilityLabel}
         foregroundColor={foregroundColor}
         gesture={panGesture}
+        hasSlidingPill={hasSlidingPill}
         isActive={isActive}
         isDragPreview={isDragPreview}
         isDraggingOut={isDraggingOut}
@@ -429,6 +459,12 @@ export function NavTabStrip({
 }: NavTabStripProps) {
   const { t } = useTranslation();
   const isHorizontal = orientation === 'horizontal';
+  const usesSlidingPill = isHorizontal && Platform?.OS === 'ios';
+  const [tabLayouts, setTabLayouts] = useState<Partial<Record<NavTabId, HorizontalTabLayout>>>({});
+  // During drag previews the slot layout transitions independently. Let each slot own its fill.
+  const activePillLayout =
+    usesSlidingPill && !dragState && activeDockTab ? tabLayouts[activeDockTab] : undefined;
+  const hasSlidingPill = activePillLayout !== undefined;
   const itemWrapperClassName = isHorizontal
     ? 'flex-1 max-w-[100px] items-center justify-center'
     : undefined;
@@ -447,12 +483,28 @@ export function NavTabStrip({
     return items;
   }, [dragState, isDragOutUnpinning, pinnedTabs, preview.tabs]);
 
+  function recordTabLayout(id: NavTabId, event: LayoutChangeEvent) {
+    const { width, x } = event.nativeEvent.layout;
+    if (width > 0) {
+      setTabLayouts((layouts) =>
+        layouts[id]?.x === x && layouts[id]?.width === width
+          ? layouts
+          : { ...layouts, [id]: { width, x } },
+      );
+    }
+  }
+
   return (
     <>
+      {activePillLayout ? <DockSelectionPill {...activePillLayout} /> : null}
       {renderedTabs.map(({ detached, id: tabId }) => {
         const isActive = !detached && activeDockTab === tabId;
         const label = t(getNavTitleKey(tabId));
         const handlePress = () => onSelectDestination(tabId);
+        const onLayout =
+          usesSlidingPill && !detached
+            ? (event: LayoutChangeEvent) => recordTabLayout(tabId, event)
+            : undefined;
 
         if (!detached && tabId === preview.previewTabId && dragState?.source === 'more') {
           return (
@@ -461,6 +513,7 @@ export function NavTabStrip({
               className={itemWrapperClassName}
               entering={navPreviewEnter}
               layout={navTabLayout}
+              onLayout={onLayout}
               style={itemWrapperStyle}
               testID={`${testIDPrefix}-preview-${tabId}`}
             >
@@ -491,12 +544,14 @@ export function NavTabStrip({
               key={tabId}
               className={itemWrapperClassName}
               layout={navTabLayout}
+              onLayout={onLayout}
               style={itemWrapperStyle}
             >
               {isHorizontal ? (
                 <NavHorizontalTabButton
                   accessibilityLabel={label}
                   foregroundColor={foregroundColor}
+                  hasSlidingPill={hasSlidingPill}
                   isActive={isActive}
                   isDragPreview={false}
                   isDraggingOut={false}
@@ -538,6 +593,7 @@ export function NavTabStrip({
             key={tabId}
             className={detached ? undefined : itemWrapperClassName}
             layout={detached ? undefined : navTabLayout}
+            onLayout={onLayout}
             style={detached ? COLLAPSED_DETACHED_STYLE : itemWrapperStyle}
             testID={detached ? `${testIDPrefix}-detached-${tabId}` : undefined}
           >
@@ -545,6 +601,7 @@ export function NavTabStrip({
               accessibilityLabel={label}
               buttonSizeClass={buttonSizeClass}
               foregroundColor={foregroundColor}
+              hasSlidingPill={hasSlidingPill}
               isActive={isActive}
               isDragPreview={isDockDragPreview}
               isDraggingOut={detached}

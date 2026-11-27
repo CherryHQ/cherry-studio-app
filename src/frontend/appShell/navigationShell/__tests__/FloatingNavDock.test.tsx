@@ -321,7 +321,8 @@ describe('FloatingNavDock drag preview', () => {
     );
   });
 
-  test('keeps active background pill classNames stable and uncollapsed while swapping state instantaneously on tab switches', () => {
+  test('keeps active background pills uncollapsed while swapping state instantly on Android', () => {
+    mockPlatformOS = 'android';
     mockShellState.activeDestination = 'chat';
     mockShellState.activeDockTab = 'chat';
 
@@ -383,6 +384,46 @@ describe('FloatingNavDock drag preview', () => {
     expect(reselectedChatPill.props.collapsable).toBe(false);
     expect(reselectedChatPill.props.className).toBe(initialClassName);
     expect(reselectedChatPill.props.style).toEqual({ opacity: 1 });
+  });
+
+  test('moves a single iOS selection pill between measured tabs while icons switch immediately', () => {
+    mockShellState.activeDestination = 'chat';
+    mockShellState.activeDockTab = 'chat';
+    act(() => {
+      renderer = create(<FloatingNavDock />);
+    });
+
+    const slots = renderer!.root
+      .findAllByType(View)
+      .filter((view) => view.props.className?.split(' ').includes('max-w-[100px]'));
+    act(() => {
+      slots[0].props.onLayout({ nativeEvent: { layout: { x: 43, width: 100 } } });
+      slots[2].props.onLayout({ nativeEvent: { layout: { x: 259, width: 100 } } });
+    });
+
+    const pill = renderer!.root.findByProps({ testID: 'floating-nav-selection-pill' });
+    expect(readAnimatedStyle(pill.props.style)).toEqual({
+      transform: [{ translateX: 43 }],
+      width: 100,
+    });
+
+    mockShellState.activeDestination = 'more';
+    mockShellState.activeDockTab = 'more';
+    act(() => {
+      renderer!.update(<FloatingNavDock />);
+    });
+
+    expect(renderer!.root.findByProps({ testID: 'floating-nav-selection-pill' })).toBe(pill);
+    expect(readAnimatedStyle(pill.props.style)).toEqual({
+      transform: [{ translateX: 259 }],
+      width: 100,
+    });
+    expect(
+      renderer!.root.findByProps({ testID: 'floating-nav-active-pill-more' }).props.style,
+    ).toEqual({ opacity: 0 });
+    expect(
+      renderer!.root.findByProps({ testID: 'floating-nav-tab-more' }).findByType(NavIcon).props,
+    ).toMatchObject({ filled: true, size: 24 });
   });
 
   test('uses non-scaling press wash on iOS, selection haptics on inactive switches, and bounded ripple on Android', () => {
