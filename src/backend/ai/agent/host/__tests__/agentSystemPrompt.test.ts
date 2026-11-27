@@ -33,6 +33,17 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).toContain('`ask_user_question`');
     expect(prompt).toContain('keep helping in this local conversation');
     expect(prompt).toContain('dispatched by this local conversation');
+    expect(prompt).toContain('request approval in the mobile app through `desktop_dispatch_task`');
+    expect(prompt).toContain(
+      '`dispatched` means the desktop accepted the task and dispatch approval is complete',
+    );
+    expect(prompt).toContain(
+      "`pending_confirmation` means the desktop's acceptance is still unconfirmed",
+    );
+    expect(prompt).toContain('Check the original dispatch before considering another');
+    expect(prompt).toContain(
+      'Report a separate remote interaction approval only when the readback reports a pending interaction via `pendingApprovalTitle`',
+    );
     expect(
       buildAgentSystemPrompt({
         ...context,

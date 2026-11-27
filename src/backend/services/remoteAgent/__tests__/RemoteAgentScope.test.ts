@@ -441,6 +441,104 @@ it('starts tracking a titled handoff with no remote conversation screen', async 
   await test.source.drain();
 });
 
+it('hydrates only the confirmed assistant when a fast handoff checkpoint has no reply body', async () => {
+  const onTerminalPreview = jest.fn();
+  const test = backgroundFixture(onTerminalPreview);
+  test.connection.agentMessageSummariesVersion = 1;
+  test.projection.executions.e = {
+    executionId: 'e',
+    status: 'completed',
+    durable: true,
+    messageId: 'm',
+    history: { historyRevision: '1', messageRevision: '2' },
+  };
+  const request = test.request.getMockImplementation()!;
+  let resolveParts!: (page: unknown) => void;
+  const parts = new Promise((resolve) => {
+    resolveParts = resolve;
+  });
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.sessions.get') return { session: test.projection.session };
+    if (method === 'agent.sessions.create' || method === 'agent.messages.send')
+      return {
+        commandId: params.commandId,
+        method,
+        status: 'applied',
+        sessionId: 's',
+        admittedAt: '2026-09-22T00:00:00.000Z',
+      };
+    if (method === 'agent.messages.list')
+      return {
+        items: [
+          {
+            messageId: 'm',
+            revision: '2',
+            role: 'assistant',
+            status: 'success',
+            partsMode: 'paged',
+          },
+          {
+            messageId: 'older',
+            revision: '2',
+            role: 'assistant',
+            status: 'success',
+            partsMode: 'paged',
+          },
+        ],
+        nextCursor: 'older',
+      };
+    if (method === 'agent.parts.list') return parts;
+    return request(method, params);
+  });
+
+  await test.source.start({
+    draftId: 'handoff',
+    agentId: 'a',
+    title: 'Desktop task',
+    workspaceId: 'w',
+    text: 'Work',
+  });
+  await settle();
+  expect(test.source.getLiveSessionPreview('s')).toMatchObject({ executionState: 'completed' });
+  expect(test.source.getLiveSessionPreview('s')?.previewText).toBeUndefined();
+  expect(test.source.hasPendingExecution()).toBe(true);
+  expect(test.request.mock.calls.filter(([method]) => method === 'agent.messages.list')).toEqual([
+    [
+      'agent.messages.list',
+      { sessionId: 's', historyRevision: '1', partsMode: 'paged' },
+      expect.any(AbortSignal),
+    ],
+  ]);
+  expect(test.request.mock.calls.filter(([method]) => method === 'agent.parts.list')).toEqual([
+    [
+      'agent.parts.list',
+      { sessionId: 's', messageId: 'm', messageRevision: '2' },
+      expect.any(AbortSignal),
+    ],
+  ]);
+  const tail = 'x'.repeat(224) + 'HANDOFF-1934-OK';
+  resolveParts({
+    items: [
+      {
+        partId: 'reply',
+        revision: '1',
+        kind: 'text',
+        state: 'completed',
+        content: { text: `Earlier reply text ${tail}` },
+      },
+    ],
+    nextCursor: null,
+  });
+  await settle();
+  expect(onTerminalPreview).toHaveBeenLastCalledWith(
+    's',
+    expect.objectContaining({ executionState: 'completed', previewText: tail }),
+  );
+  expect(test.source.hasPendingExecution()).toBe(false);
+  test.source.dispose();
+  await test.source.drain();
+});
+
 it('retains an active desktop execution after its screen leaves and releases demand on a terminal checkpoint', async () => {
   const onLivePreviewReleased = jest.fn();
   const test = backgroundFixture(onLivePreviewReleased);

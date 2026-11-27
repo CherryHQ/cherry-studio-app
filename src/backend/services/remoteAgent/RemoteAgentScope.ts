@@ -68,6 +68,42 @@ import {
 } from './remoteUploads';
 import { SessionSync } from './SessionSync';
 
+type Execution = RemoteSessionSnapshot['executions'][number];
+export type SessionLivePreview = RemoteSessionLivePreview & {
+  terminal?: { id: string; epoch?: string; version: string };
+};
+
+function activeExecution(snapshot: RemoteSessionSnapshot | undefined) {
+  return snapshot?.executions.find(({ state }) =>
+    ['running', 'awaiting-approval', 'finalizing'].includes(state),
+  );
+}
+
+function terminalExecution(snapshot: RemoteSessionSnapshot | undefined) {
+  return snapshot?.executions.findLast(({ state }) =>
+    ['completed', 'cancelled', 'failed', 'interrupted'].includes(state),
+  );
+}
+
+function replyExcerpt(text: string[]) {
+  return (
+    text
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .join('\n')
+      .slice(-240)
+      .trim() || undefined
+  );
+}
+
+function historyReplyExcerpt(parts: readonly AgentPart[]) {
+  return replyExcerpt(
+    parts.flatMap((part) =>
+      part.kind === 'text' && 'text' in part.content ? [part.content.text] : [],
+    ),
+  );
+}
+
 export type RemoteBackgroundExecution = {
   replies: BackgroundReplyLifecycle;
   keepAlive: KeepAliveSource;
@@ -81,6 +117,10 @@ type Observation = {
   pendingCommandId?: string;
   reply?: BackgroundReplyTurn;
   executionId?: string;
+  previousTerminalId?: string;
+  previewRead?: AbortController;
+  previewAttempt?: string;
+  terminalReply?: { executionId: string; messageRevision?: string; epoch?: string; text: string };
   backgroundInteractionKey?: string;
   listeners: Set<(snapshot: RemoteSessionSnapshot) => void>;
   sync?: SessionSync;
@@ -127,7 +167,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
   private state: RemoteSourceState;
   private readonly stateListeners = new Set<() => void>();
   private readonly liveListeners = new Map<string, Set<() => void>>();
-  private readonly livePreviewCache = new Map<string, RemoteSessionLivePreview>();
+  private readonly livePreviewCache = new Map<string, SessionLivePreview>();
   private readonly observations = new Map<string, Observation>();
   private readonly resources = new Map<
     string,
@@ -183,10 +223,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
     private readonly readCache: RemoteSessionReadCache,
     private readonly background?: RemoteBackgroundExecution,
     private readonly files?: RemoteUploadFiles,
-    private readonly onLivePreviewReleased?: (
-      sessionId: string,
-      preview: RemoteSessionLivePreview | undefined,
-    ) => void,
+    private readonly onTerminalPreview?: (sessionId: string, preview: SessionLivePreview) => void,
   ) {
     this.scope = `${lease.scope}:${randomUUID()}`;
     this.draftScope = lease.scope;
@@ -292,7 +329,9 @@ export class RemoteAgentScope implements RemoteAgentSource {
     this.preparing > 0 ||
     Boolean(this.attachmentDrafts?.hasPending()) ||
     this.hasPendingCommands() ||
-    [...this.observations.values()].some((observation) => observation.tracking);
+    [...this.observations.values()].some(
+      (observation) => observation.tracking || observation.previewRead,
+    );
   subscribeExecution = (listener: () => void) => {
     this.executionListeners.add(listener);
     return () => {
@@ -427,14 +466,19 @@ export class RemoteAgentScope implements RemoteAgentSource {
       if (!listeners.delete(listener) || listeners.size) return;
       this.liveListeners.delete(sessionId);
       const observation = this.observations.get(sessionId);
-      if (observation && !observation.tracking && !observation.listeners.size)
+      if (
+        observation &&
+        !observation.tracking &&
+        !observation.previewRead &&
+        !observation.listeners.size
+      )
         this.removeObservation(sessionId);
     };
   }
   getLivePreviewSessionIds(): string[] {
     return [...new Set([...this.observations.keys(), ...this.liveListeners.keys()])];
   }
-  getLiveSessionPreview(sessionId: string): RemoteSessionLivePreview | undefined {
+  getLiveSessionPreview(sessionId: string): SessionLivePreview | undefined {
     const observation = this.observations.get(sessionId);
     const start = this.actions.getStarts().findLast((item) => item.sessionId === sessionId);
     const command = this.actions.get().find((item) => item.sessionId === sessionId);
@@ -444,13 +488,9 @@ export class RemoteAgentScope implements RemoteAgentSource {
     }
 
     const snapshot = observation?.snapshot;
-    const active = snapshot?.executions.find((execution) =>
-      ['running', 'awaiting-approval', 'finalizing'].includes(execution.state),
-    );
-    const terminal = snapshot?.executions.findLast((execution) =>
-      ['completed', 'cancelled', 'failed', 'interrupted'].includes(execution.state),
-    );
+    const active = activeExecution(snapshot);
     const pending =
+      observation?.pendingSubmission ||
       start?.status === 'pending' ||
       this.actions
         .get()
@@ -458,6 +498,11 @@ export class RemoteAgentScope implements RemoteAgentSource {
           (item) =>
             item.sessionId === sessionId && item.kind === 'send' && item.status === 'pending',
         );
+    const terminal =
+      !active && !pending && !observation?.awaitingCheckpoint
+        ? terminalExecution(snapshot)
+        : undefined;
+    const confirmed = terminal?.id === observation?.previousTerminalId ? undefined : terminal;
     const interaction = snapshot?.interactions.find((item) => item.state === 'pending');
     const assistants = snapshot?.messages.filter((message) => message.role === 'assistant') ?? [];
     const recentTools: RemoteSessionLivePreview['recentTools'] = assistants
@@ -466,21 +511,40 @@ export class RemoteAgentScope implements RemoteAgentSource {
       .slice(-2)
       .toReversed()
       .map(({ name, state }) => ({ name, state }));
-    const previewText = assistants
-      .at(-1)
-      ?.parts.flatMap((part) =>
-        part.kind === 'text' && part.text.trim() ? [part.text.trim()] : [],
-      )
-      .join('\n')
-      .slice(-240)
-      .trim();
-    const preview: RemoteSessionLivePreview = {
+    const messageId = (active ?? confirmed)?.messageId;
+    const message = messageId
+      ? assistants.find((message) => message.id === messageId)
+      : (active || !observation?.tracking) && !confirmed && !pending
+        ? assistants.at(-1)
+        : undefined;
+    const read = observation?.terminalReply;
+    const committedText =
+      confirmed &&
+      (read?.executionId === confirmed.id &&
+      read.messageRevision === confirmed.history?.messageRevision &&
+      read.epoch === snapshot?.historyEpoch
+        ? read.text
+        : this.cachedTerminalReply(sessionId, confirmed));
+    const liveMessage = message && observation?.projection?.messages[message.id];
+    const complete =
+      !confirmed ||
+      ((!confirmed.history || message?.version === confirmed.history.messageRevision) &&
+        liveMessage?.partIds.every((id) => !!observation?.projection?.parts[id]) &&
+        message?.parts.every((part) => part.kind !== 'text' || part.complete));
+    const previewText =
+      committedText ??
+      (complete
+        ? replyExcerpt(
+            message?.parts.flatMap((part) => (part.kind === 'text' ? [part.text] : [])) ?? [],
+          )
+        : undefined);
+    const preview: SessionLivePreview = {
       connectionStatus: this.state.status,
       current: Boolean(snapshot?.current),
       sessionTitle: snapshot?.session.title || start?.title || undefined,
       executionState:
         active?.state ??
-        terminal?.state ??
+        confirmed?.state ??
         (pending ? 'pending-confirm' : observation?.tracking ? 'running' : undefined),
       pendingInteraction: interaction && {
         id: interaction.id,
@@ -488,18 +552,31 @@ export class RemoteAgentScope implements RemoteAgentSource {
         kind: interaction.kind ?? 'decision',
       },
       recentTools,
-      previewText: previewText || undefined,
+      previewText,
       updatedAt: snapshot ? Date.parse(snapshot.session.updatedAt) || undefined : undefined,
+      ...(confirmed && snapshot
+        ? {
+            terminal: {
+              id: confirmed.id,
+              epoch: snapshot.historyEpoch,
+              version: confirmed.history?.historyRevision ?? snapshot.session.historyVersion,
+            },
+          }
+        : {}),
     };
     const cached = this.livePreviewCache.get(sessionId);
     if (cached && deepEqual(cached, preview)) return cached;
     this.livePreviewCache.set(sessionId, preview);
     return preview;
   }
+  private publishTerminalPreview(sessionId: string) {
+    if (!this.onTerminalPreview || this.state.status !== 'ready') return;
+    const preview = this.getLiveSessionPreview(sessionId);
+    if (preview?.current && preview.terminal) this.onTerminalPreview(sessionId, preview);
+  }
+
   private removeObservation(sessionId: string) {
-    // The last execution can settle and release its observation before the runtime closes the scope.
-    if (this.state.status !== 'retired')
-      this.onLivePreviewReleased?.(sessionId, this.getLiveSessionPreview(sessionId));
+    this.publishTerminalPreview(sessionId);
     this.observations.delete(sessionId);
     if (this.livePreviewCache.has(sessionId)) this.getLiveSessionPreview(sessionId);
   }
@@ -514,6 +591,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
   private onConnectionChanged() {
     this.state = { ...this.state, ...this.lease.getSnapshot() };
     for (const [sessionId, observation] of this.observations) {
+      observation.previewRead?.abort();
       this.stopObservation(observation);
       this.withdrawTargets(sessionId, observation);
     }
@@ -578,6 +656,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
         this.lease.connectionId,
       );
     this.updateExecution(sessionId, observation);
+    if (this.observations.get(sessionId) === observation) this.publishTerminalPreview(sessionId);
     for (const listener of observation.listeners) listener(observation.snapshot);
     this.notifyLiveListeners(sessionId);
   }
@@ -822,6 +901,104 @@ export class RemoteAgentScope implements RemoteAgentSource {
       },
     );
   }
+  private cachedTerminalReply(sessionId: string, execution: Execution) {
+    const revision = execution.history?.messageRevision;
+    const entry = this.readCache.find(this.draftScope, sessionId);
+    if (!entry || !revision || !execution.messageId) return;
+    const key = this.readCache.partsKey({ messageId: execution.messageId, revision });
+    const parts = this.readCache.get<AgentPart[]>(entry, key);
+    if (parts) return historyReplyExcerpt(parts);
+  }
+
+  private readTerminalReply(sessionId: string, observation: Observation, execution: Execution) {
+    const snapshot = observation.snapshot!;
+    const { messageId, history } = execution;
+    const preview = this.getLiveSessionPreview(sessionId);
+    if (
+      !messageId ||
+      execution.persistenceFailure ||
+      preview?.terminal?.id !== execution.id ||
+      preview.previewText
+    )
+      return;
+    const epoch = snapshot.historyEpoch;
+    const version =
+      history && BigInt(history.historyRevision) > BigInt(snapshot.session.historyVersion)
+        ? history.historyRevision
+        : snapshot.session.historyVersion;
+    const attempt = JSON.stringify([epoch, execution.id]);
+    if (observation.previewAttempt === attempt) return;
+    const entry = this.cacheEntry(sessionId);
+    if (!this.readCache.beginHistory(entry, version)) return;
+    observation.previewAttempt = attempt;
+    const generation = entry.generation;
+    const release = this.readCache.retain(entry);
+    const controller = new AbortController();
+    const linked = linkAbortSignals([
+      controller.signal,
+      this.lease.signal,
+      AbortSignal.timeout(5000),
+    ]);
+    const signal = linked.signal;
+    observation.previewRead = controller;
+    const read = async () => {
+      // Use the head page shared with the conversation. Only hydrate the confirmed assistant.
+      const { items } = await this.listHistoryPage(sessionId, version, undefined, signal);
+      if (signal.aborted || !this.readCache.valid(entry, generation)) return;
+      const message = items.find(
+        (item) =>
+          item.messageId === messageId &&
+          item.role === 'assistant' &&
+          (!history || item.revision === history.messageRevision),
+      );
+      if (!message) return;
+      const text = historyReplyExcerpt(await this.messageParts(sessionId, message, signal));
+      const current = observation.snapshot;
+      const latest = terminalExecution(current);
+      if (
+        !text ||
+        signal.aborted ||
+        this.stopped ||
+        observation.previewRead !== controller ||
+        this.observations.get(sessionId) !== observation ||
+        !current?.current ||
+        current.historyEpoch !== epoch ||
+        BigInt(current.session.historyVersion) > BigInt(version) ||
+        activeExecution(current) ||
+        observation.pendingSubmission ||
+        observation.awaitingCheckpoint ||
+        latest?.id !== execution.id ||
+        !deepEqual(latest.history, history) ||
+        !this.readCache.valid(entry, generation)
+      )
+        return;
+      observation.terminalReply = {
+        executionId: execution.id,
+        messageRevision: history?.messageRevision,
+        epoch,
+        text,
+      };
+      this.publishTerminalPreview(sessionId);
+      this.notifyLiveListeners(sessionId);
+    };
+    this.track(
+      read().finally(() => {
+        linked.dispose();
+        release();
+        if (observation.previewRead !== controller) return;
+        observation.previewRead = undefined;
+        if (
+          !observation.tracking &&
+          !observation.listeners.size &&
+          !this.liveListeners.has(sessionId) &&
+          this.observations.get(sessionId) === observation
+        )
+          this.removeObservation(sessionId);
+        this.publishExecution();
+      }),
+    ).catch(() => undefined);
+  }
+
   history(sessionId: string, version: string, cursor: string | undefined, signal: AbortSignal) {
     return this.reads.share(
       JSON.stringify(['history', sessionId, version, cursor]),
@@ -912,7 +1089,13 @@ export class RemoteAgentScope implements RemoteAgentSource {
     signal.throwIfAborted();
     if (entry.invalidated || entry.generation !== generation)
       throw new RemoteAgentError('REVISION_EXPIRED');
-    if (!cursor) this.readCache.put(entry, generation, 'window', window);
+    if (!cursor) {
+      this.readCache.put(entry, generation, 'window', window);
+      if (this.observations.has(sessionId)) {
+        this.publishTerminalPreview(sessionId);
+        this.notifyLiveListeners(sessionId);
+      }
+    }
     return { items, next: page.nextCursor ?? undefined };
   }
   private issueResource = (sessionId: string, value: RemoteResourceDescriptor): string => {
@@ -1023,6 +1206,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
       if (!retained.listeners.size && !retained.tracking) {
         this.stopObservation(retained);
         if (this.observations.get(sessionId) === retained) {
+          if (retained.previewRead) return;
           if (this.liveListeners.has(sessionId)) this.withdrawTargets(sessionId, retained);
           else this.removeObservation(sessionId);
         }
@@ -1035,6 +1219,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
       observation = { listeners: new Set() };
       this.observations.set(sessionId, observation);
     }
+    observation.previewRead?.abort();
     observation.tracking = true;
     observation.awaitingCheckpoint = true;
     if (!observation.reply && this.background && !this.backgroundBlocked) {
@@ -1060,9 +1245,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
   private updateExecution(sessionId: string, observation: Observation): void {
     const snapshot = observation.snapshot;
     if (!snapshot?.current || this.backgroundBlocked) return;
-    const execution = snapshot.executions.find((execution) =>
-      ['running', 'awaiting-approval', 'finalizing'].includes(execution.state),
-    );
+    const execution = activeExecution(snapshot);
     if (execution) {
       if (observation.executionId && observation.executionId !== execution.id) {
         observation.reply?.finish('completed');
@@ -1113,6 +1296,13 @@ export class RemoteAgentScope implements RemoteAgentSource {
       const terminal =
         snapshot.executions.find((execution) => execution.id === observation.executionId) ??
         snapshot.executions.at(-1);
+      if (
+        !observation.executionId &&
+        observation.previousTerminalId === terminal?.id &&
+        observation.previousTerminalId !== undefined
+      )
+        return;
+      if (terminal?.state === 'completed') this.readTerminalReply(sessionId, observation, terminal);
       this.endTracking(
         sessionId,
         observation,
@@ -1217,6 +1407,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
   /** A send the desktop never admitted must not settle as the previous turn's outcome. */
   private settleUnadmittedSend(sessionId: string, observation: Observation): void {
     observation.awaitingCheckpoint = false;
+    observation.previousTerminalId = undefined;
     if (observation.tracking && !observation.executionId && !observation.pendingSubmission)
       this.endTracking(sessionId, observation, 'failed');
     else this.updateExecution(sessionId, observation);
@@ -1232,10 +1423,15 @@ export class RemoteAgentScope implements RemoteAgentSource {
     observation.tracking = false;
     observation.awaitingCheckpoint = false;
     observation.executionId = undefined;
+    observation.previousTerminalId = undefined;
     this.publishExecution();
     if (!observation.listeners.size) {
       this.stopObservation(observation);
-      if (this.observations.get(sessionId) === observation && !this.liveListeners.has(sessionId))
+      if (
+        !observation.previewRead &&
+        this.observations.get(sessionId) === observation &&
+        !this.liveListeners.has(sessionId)
+      )
         this.removeObservation(sessionId);
     }
   }
@@ -1419,7 +1615,9 @@ export class RemoteAgentScope implements RemoteAgentSource {
         : {}),
     });
     const observation = this.trackExecution(params.sessionId);
+    observation.previousTerminalId = terminalExecution(observation.snapshot)?.id;
     observation.pendingSubmission = true;
+    this.notifyLiveListeners(params.sessionId);
     return this.track(
       this.withPreparation(async () => {
         try {
@@ -1515,6 +1713,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
     this.actions.stop();
     this.attachmentDrafts?.stop();
     for (const observation of this.observations.values()) {
+      observation.previewRead?.abort();
       observation.reply?.finish('cancelled');
       this.stopObservation(observation);
     }

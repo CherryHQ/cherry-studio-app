@@ -79,10 +79,15 @@ const dispatchSchema = z.strictObject({
   text: z.string().trim().min(1),
   file_entry_ids: z.array(FileEntryIdSchema).max(DESKTOP_DISPATCH_MAX_ATTACHMENTS).optional(),
 });
-const readSessionSchema = z.union([
-  z.strictObject({ connection_id: connectionIdSchema, session_id: z.string().min(1) }),
-  z.strictObject({ connection_id: connectionIdSchema, draft_id: z.string().min(1) }),
-]);
+const readSessionSchema = z
+  .strictObject({
+    connection_id: connectionIdSchema,
+    session_id: z.string().min(1).optional(),
+    draft_id: z.string().min(1).optional(),
+  })
+  .refine(({ session_id, draft_id }) => (session_id !== undefined) !== (draft_id !== undefined), {
+    message: 'Provide exactly one of session_id or draft_id.',
+  });
 
 class DesktopDispatchError extends Error {
   constructor(
@@ -385,16 +390,15 @@ export function createDesktopDispatchTools(
       capabilityId: 'desktop_read_session',
       displayName: 'Read a dispatched desktop session',
       description:
-        'Read the latest reply and execution status of a desktop session dispatched from this local conversation. Use the connection_id and session_id returned by desktop_dispatch_task. If confirmation is pending without a session ID, use connection_id and draft_id to look up that exact dispatch.',
+        'Read the latest reply and execution status of a desktop session dispatched from this local conversation. Provide connection_id and exactly one of session_id or draft_id using the IDs returned by desktop_dispatch_task. Use draft_id while the session ID is unknown to look up that exact dispatch.',
       schema: readSessionSchema,
-      async run(input, signal) {
-        const connectionId = input.connection_id;
+      async run({ connection_id: connectionId, session_id, draft_id }, signal) {
         const ref = allowedSessions.find(
           (candidate) =>
             candidate.connectionId === connectionId &&
-            ('session_id' in input
-              ? candidate.sessionId === input.session_id
-              : candidate.draftId === input.draft_id),
+            (session_id !== undefined
+              ? candidate.sessionId === session_id
+              : candidate.draftId === draft_id),
         );
         if (!ref)
           return result({
@@ -560,7 +564,9 @@ async function readDesktopSession(
     const page = await source.history(sessionId, session.historyVersion, undefined, signal);
     assistant = page.items.find(({ role }) => role === 'assistant');
   }
-  const pending = snapshot?.interactions.find(({ state }) => state === 'pending');
+  const pendingApproval = snapshot?.interactions.find(
+    ({ state, kind }) => state === 'pending' && kind !== 'question',
+  );
   const pendingSend =
     source
       .getStarts()
@@ -588,7 +594,7 @@ async function readDesktopSession(
     sessionId,
     sessionTitle: session.title,
     executionStatus,
-    ...(pending ? { pendingApprovalTitle: pending.title } : {}),
+    ...(pendingApproval ? { pendingApprovalTitle: pendingApproval.title } : {}),
     latestReply: await latestReply(source, assistant, signal),
     recentTools,
   });

@@ -17,9 +17,14 @@ import type {
   RemoteDispatchReceipt,
   RemoteSessionLivePreview,
 } from '@/shared/contracts/remoteAgent';
+import { deepEqual } from '@/shared/utils/deepEqual';
 
 import { RemoteAgentError } from './RemoteAgentError';
-import { RemoteAgentScope, type RemoteBackgroundExecution } from './RemoteAgentScope';
+import {
+  RemoteAgentScope,
+  type RemoteBackgroundExecution,
+  type SessionLivePreview,
+} from './RemoteAgentScope';
 import { projectAgentPage } from './remoteAgentViews';
 import { RemoteSessionReadCache } from './RemoteSessionReadCache';
 import type { RemoteUploadFiles } from './remoteUploads';
@@ -69,7 +74,7 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
   >();
   private readonly terminalPreviews = new Map<
     string,
-    { connectionId: string; preview: RemoteSessionLivePreview }
+    { connectionId: string; grantId: string; binding: string; preview: SessionLivePreview }
   >();
   private readonly opening = new Map<string, Opening>();
   private readonly drains = new Set<Promise<void>>();
@@ -83,11 +88,11 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
     this.dependencies = dependencies;
     this.uninvalidate = dependencies.connections.subscribeInvalidation((event) => {
       if (!event.domain || event.domain === 'agent') {
-        this.readCache.invalidate(event.connectionId, event.grantId);
-        this.clearTerminalPreviews(event.connectionId);
-        this.clearSettledDispatches(event.connectionId, event.grantId);
         const entry = this.sources.get(event.connectionId);
         if (entry && (!event.grantId || event.grantId === entry.grantId)) entry.invalidated = true;
+        this.clearTerminalPreviews(event.connectionId, event.grantId);
+        this.readCache.invalidate(event.connectionId, event.grantId);
+        this.clearSettledDispatches(event.connectionId, event.grantId);
         this.notifyDispatches(event.connectionId);
         this.notifyLiveScope(event.connectionId);
       }
@@ -212,28 +217,67 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
     const entry = this.sources.get(connectionId);
     if (entry?.invalidated || entry?.scope.getState().status === 'retired') return undefined;
     const live = entry?.scope.getLiveSessionPreview?.(sessionId);
-    if (live) {
-      if (live.connectionStatus !== 'retired') this.recordTerminalPreview(key, connectionId, live);
-      return live;
-    }
-    return this.terminalPreviews.get(key)?.preview;
+    const cached = this.terminalPreviews.get(key);
+    const saved =
+      !entry ||
+      (cached && cached.grantId === entry.grantId && cached.binding === entry.scope.draftScope)
+        ? cached?.preview
+        : undefined;
+    if (!live) return saved;
+    if (live.connectionStatus !== 'ready' || live.pendingInteraction) return live;
+    if (!live.executionState) return saved ?? live;
+    if (!isTerminalExecutionState(live.executionState)) return live;
+    if (saved && this.preferSavedTerminal(saved, live)) return saved;
+    return live;
   }
+  private preferSavedTerminal(saved: SessionLivePreview, live: SessionLivePreview) {
+    if (!saved.terminal || !live.terminal || saved.terminal.epoch !== live.terminal.epoch)
+      return false;
+    return (
+      BigInt(saved.terminal.version) > BigInt(live.terminal.version) ||
+      (saved.terminal.id === live.terminal.id &&
+        saved.terminal.version === live.terminal.version &&
+        (deepEqual(saved, live) ||
+          (saved.executionState === live.executionState &&
+            !!saved.previewText &&
+            !live.previewText)))
+    );
+  }
+
   private recordTerminalPreview(
     key: string,
     connectionId: string,
-    preview: RemoteSessionLivePreview | undefined,
+    entry: Entry,
+    preview: SessionLivePreview | undefined,
   ) {
+    if (
+      entry.invalidated ||
+      !preview?.current ||
+      preview.connectionStatus !== 'ready' ||
+      preview.pendingInteraction ||
+      !isTerminalExecutionState(preview.executionState)
+    )
+      return;
+    const previous = this.terminalPreviews.get(key);
+    const binding = entry.scope.draftScope;
+    if (
+      previous &&
+      previous.grantId === entry.grantId &&
+      previous.binding === binding &&
+      (deepEqual(previous.preview, preview) || this.preferSavedTerminal(previous.preview, preview))
+    )
+      return;
     this.terminalPreviews.delete(key);
-    if (!preview || !isTerminalExecutionState(preview.executionState)) return;
-    this.terminalPreviews.set(key, { connectionId, preview });
+    this.terminalPreviews.set(key, { connectionId, grantId: entry.grantId, binding, preview });
     if (this.terminalPreviews.size > MAX_TERMINAL_PREVIEWS) {
       const oldest = this.terminalPreviews.keys().next().value;
       if (oldest !== undefined) this.terminalPreviews.delete(oldest);
     }
   }
-  private clearTerminalPreviews(connectionId: string) {
+  private clearTerminalPreviews(connectionId: string, grantId?: string) {
     for (const [key, entry] of this.terminalPreviews) {
-      if (entry.connectionId === connectionId) this.terminalPreviews.delete(key);
+      if (entry.connectionId === connectionId && (!grantId || entry.grantId === grantId))
+        this.terminalPreviews.delete(key);
     }
   }
   subscribeLiveSession(connectionId: string, sessionId: string, listener: () => void): () => void {
@@ -298,8 +342,15 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
                   this.readCache,
                   dependencies.background,
                   dependencies.files,
-                  (sessionId, preview) =>
-                    this.recordTerminalPreview(JSON.stringify([id, sessionId]), id, preview),
+                  (sessionId, preview) => {
+                    if (!lease.signal.aborted && this.sources.get(id) === created)
+                      this.recordTerminalPreview(
+                        JSON.stringify([id, sessionId]),
+                        id,
+                        created,
+                        preview,
+                      );
+                  },
                 );
                 const created: Entry = {
                   scope,
@@ -515,7 +566,7 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
     if (isCurrent) {
       this.sources.delete(id);
       if (entry.invalidated || entry.scope.getState().status === 'retired')
-        this.clearTerminalPreviews(id);
+        this.clearTerminalPreviews(id, entry.grantId);
       else {
         const sessionIds = new Set(entry.scope.getLivePreviewSessionIds?.());
         for (const group of this.liveSessionListeners.values()) {
@@ -523,7 +574,7 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
         }
         for (const sessionId of sessionIds) {
           const preview = entry.scope.getLiveSessionPreview?.(sessionId);
-          if (preview) this.recordTerminalPreview(JSON.stringify([id, sessionId]), id, preview);
+          this.recordTerminalPreview(JSON.stringify([id, sessionId]), id, entry, preview);
         }
       }
     }

@@ -2,7 +2,7 @@ import type { DesktopConnections, DesktopDomainLease } from '@/backend/services/
 import type { RemoteSessionLivePreview } from '@/shared/contracts/remoteAgent';
 
 import { RemoteAgentRuntime } from '../RemoteAgentRuntime';
-import { RemoteAgentScope } from '../RemoteAgentScope';
+import { RemoteAgentScope, type SessionLivePreview } from '../RemoteAgentScope';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -85,7 +85,11 @@ let lease: DesktopDomainLease;
 let invalidate: Parameters<DesktopConnections['subscribeInvalidation']>[0];
 beforeEach(async () => {
   mockScopes.length = 0;
-  lease = { scope: 'binding', release: jest.fn() } as unknown as DesktopDomainLease;
+  lease = {
+    scope: 'binding',
+    grantId: 'grant',
+    release: jest.fn(),
+  } as unknown as DesktopDomainLease;
   retain = jest.fn(async () => lease);
   prewarmAgent = jest.fn();
   runtime = new RemoteAgentRuntime();
@@ -314,6 +318,59 @@ it.each([
     unsubscribe();
   },
 );
+
+it('preserves confirmed status and reply through sparse scopes while showing newer execution state', async () => {
+  const terminal: SessionLivePreview = {
+    connectionStatus: 'ready',
+    current: true,
+    executionState: 'completed',
+    recentTools: [],
+    previewText: 'HANDOFF-1934-OK',
+    terminal: { id: 'first', epoch: 'epoch', version: '1' },
+  };
+  const sparse: SessionLivePreview = { connectionStatus: 'ready', current: false, recentTools: [] };
+  let live = terminal;
+  const mockLiveScope = (lease: DesktopDomainLease) => {
+    const scope = Object.assign(mockScope(lease), {
+      getLivePreviewSessionIds: () => ['session'],
+      getLiveSessionPreview: () => live,
+    });
+    mockScopes.push(scope);
+    return scope as unknown as RemoteAgentScope;
+  };
+  jest
+    .mocked(RemoteAgentScope)
+    .mockImplementationOnce(mockLiveScope)
+    .mockImplementationOnce(mockLiveScope);
+  (await runtime.open('pc', signal())).dispose();
+  live = sparse;
+  const reopened = await runtime.open('pc', signal());
+  expect(runtime.peekLiveSession('pc', 'session')).toBe(terminal);
+  expect(runtime.peekLiveSession('pc', 'session')).toBe(terminal);
+  live = { ...terminal, previewText: undefined };
+  expect(runtime.peekLiveSession('pc', 'session')).toBe(terminal);
+  live = { ...sparse, connectionStatus: 'suspended' };
+  expect(runtime.peekLiveSession('pc', 'session')).toBe(live);
+  live = { ...sparse, executionState: 'pending-confirm' };
+  expect(runtime.peekLiveSession('pc', 'session')).toBe(live);
+  live = { ...sparse, executionState: 'running' };
+  expect(runtime.peekLiveSession('pc', 'session')).toBe(live);
+  live = { ...sparse, pendingInteraction: { id: 'approval', title: 'Approve', kind: 'decision' } };
+  expect(runtime.peekLiveSession('pc', 'session')).toBe(live);
+  live = {
+    ...terminal,
+    terminal: { id: 'second', epoch: 'epoch', version: '2' },
+    previewText: undefined,
+  };
+  expect(runtime.peekLiveSession('pc', 'session')).toBe(live);
+  live = { ...live, previewText: 'HANDOFF-1934-FOLLOWUP' };
+  const followup = live;
+  reopened.dispose();
+  invalidate({ connectionId: 'pc', domain: 'agent', grantId: 'other-grant' });
+  expect(runtime.peekLiveSession('pc', 'session')).toBe(followup);
+  invalidate({ connectionId: 'pc', domain: 'agent', grantId: 'grant' });
+  expect(runtime.peekLiveSession('pc', 'session')).toBeUndefined();
+});
 
 it("retires a released caller's task capability while another caller retains the shared scope", async () => {
   const first = await runtime.open('pc', signal());

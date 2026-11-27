@@ -209,6 +209,42 @@ function fixture(initialDispatchedSessions: DesktopDispatchSessionRef[] = []) {
   };
 }
 
+it('publishes readback parameters as a strict object schema', () => {
+  expect(fixture().tool('read_session').inputSchema).toEqual({
+    type: 'object',
+    properties: {
+      connection_id: { type: 'string', minLength: 1 },
+      session_id: { type: 'string', minLength: 1 },
+      draft_id: { type: 'string', minLength: 1 },
+    },
+    required: ['connection_id'],
+    additionalProperties: false,
+  });
+});
+
+it('rejects malformed readback parameters before looking up a device or dialing', async () => {
+  const test = fixture([
+    { connectionId: 'pc', sessionId: 'session' },
+    { connectionId: 'pc', draftId: 'draft', operationId: 'operation' },
+  ]);
+  const inputs: RuntimeJsonValue[] = [
+    { connection_id: 'pc' },
+    { connection_id: 'pc', session_id: 'session', draft_id: 'draft' },
+    { connection_id: 'pc', session_id: '' },
+    { connection_id: 'pc', draft_id: '' },
+    { session_id: 'session' },
+    { connection_id: 'pc', session_id: 'session', operation_id: 'operation' },
+  ];
+  for (const input of inputs) {
+    expect((await test.run('read_session', input)).value).toMatchObject({
+      status: 'error',
+      error: 'INVALID_INPUT',
+    });
+  }
+  expect(test.getById).not.toHaveBeenCalled();
+  expect(test.open).not.toHaveBeenCalled();
+});
+
 it('reuses the approved call identity and reads an exact draft receipt before and after Session creation', async () => {
   const test = fixture();
   test.source.start.mockImplementationOnce(async (input) => ({
@@ -517,6 +553,29 @@ it('refuses foreign desktop session pairs before opening and reads the same-turn
   expect(test.source.readResource).toHaveBeenCalledWith('reply-text', expect.any(AbortSignal));
   expect(test.unobserve).toHaveBeenCalledTimes(1);
   expect(test.source.dispose).toHaveBeenCalledTimes(2);
+});
+
+it('keeps a pending remote question out of the approval field', async () => {
+  const test = fixture([{ connectionId: 'pc', sessionId: 'session' }]);
+  test.source.observe.mockImplementationOnce((_id, listener) => {
+    listener({
+      ...LIVE_SNAPSHOT,
+      interactions: [
+        {
+          id: 'question',
+          kind: 'question',
+          title: 'Choose a directory',
+          state: 'pending',
+          input: 'question-input',
+        },
+      ],
+    });
+    return test.unobserve;
+  });
+
+  const { value } = await test.run('read_session', { connection_id: 'pc', session_id: 'session' });
+  expect(value).toMatchObject({ status: 'ok', executionStatus: 'awaiting-approval' });
+  expect(value).not.toHaveProperty('pendingApprovalTitle');
 });
 
 it('uses newest persisted assistant history for an authorized session with no live checkpoint', async () => {
