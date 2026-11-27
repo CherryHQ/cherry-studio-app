@@ -222,6 +222,14 @@ jobs:
       android_production_error: ${{ steps.build.outputs.android_production_error }}
 
     steps:
+      - name: Clean stale git hooks
+        run: |
+          for repo_dir in "$GITHUB_WORKSPACE/src" "$GITHUB_WORKSPACE/tools"; do
+            if [[ -d "$repo_dir/.git/hooks" ]]; then
+              find "$repo_dir/.git/hooks" -type f ! -name '*.sample' -delete
+            fi
+          done
+
       - name: Checkout PR or branch source
         uses: actions/checkout@v5
         with:
@@ -303,7 +311,11 @@ jobs:
 
       - name: Install PR dependencies
         working-directory: src
-        run: pnpm install --frozen-lockfile
+        run: |
+          pnpm install --frozen-lockfile
+          if [[ -d .git/hooks ]]; then
+            find .git/hooks -type f ! -name '*.sample' -delete
+          fi
 
       - name: Build and verify PR targets
         id: build
