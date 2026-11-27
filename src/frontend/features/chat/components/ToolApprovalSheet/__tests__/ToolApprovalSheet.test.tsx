@@ -294,18 +294,12 @@ describe('ToolApprovalSheet', () => {
     expect(renderer.root.findByType(BottomSheet).props.size).toBe('large');
     expect(renderedTexts()).toEqual(
       expect.arrayContaining([
-        'desktopDispatch.approval.desktop',
         input.connectionName,
-        'desktopDispatch.approval.agent',
         input.agentName,
-        'desktopDispatch.approval.workspace',
         input.workspaceName,
-        'desktopDispatch.approval.taskTitle',
         input.title,
-        'desktopDispatch.approval.brief',
         `desktopDispatch.approval.characterCount ${JSON.stringify({ count: text.length })}`,
         'desktopDispatch.approval.spillHint {"extension":".md"}',
-        'desktopDispatch.approval.attachments',
         'report.pdf',
       ]),
     );

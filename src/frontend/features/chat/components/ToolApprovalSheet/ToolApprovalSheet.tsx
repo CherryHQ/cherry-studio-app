@@ -1,3 +1,5 @@
+import FileTextIcon from '@cherrystudio/app-icons/icons/file-text';
+import ImageIcon from '@cherrystudio/app-icons/icons/image';
 import { BottomSheet, Button, Section } from '@cherrystudio/ui/components';
 import { type ReactNode, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -230,6 +232,15 @@ function DesktopDispatchApproval({ input }: { input: DesktopDispatchApprovalInpu
   const { t } = useTranslation();
   const { connectionName, agentName, workspaceName, title, text, textCharLength, attachments } =
     input;
+  const resolvedWorkspace =
+    input.workspace.kind === 'system'
+      ? t('desktopDispatch.workspace.systemDefault')
+      : workspaceName;
+  const targetSummary = [
+    `${t('desktopDispatch.approval.desktop')}: ${connectionName}`,
+    `${t('desktopDispatch.approval.agent')}: ${agentName}`,
+    `${t('desktopDispatch.approval.workspace')}: ${resolvedWorkspace}`,
+  ].join(', ');
   const preview =
     text.length > DESKTOP_BRIEF_PREVIEW_LENGTH
       ? `${text.slice(0, DESKTOP_BRIEF_PREVIEW_LENGTH)}…`
@@ -238,45 +249,68 @@ function DesktopDispatchApproval({ input }: { input: DesktopDispatchApprovalInpu
   return (
     <>
       <Section>
-        <Section.Item label={t('desktopDispatch.approval.desktop')} description={connectionName} />
-        <Section.Item label={t('desktopDispatch.approval.agent')} description={agentName} />
-        <Section.Item
-          label={t('desktopDispatch.approval.workspace')}
-          description={
-            input.workspace.kind === 'system'
-              ? t('desktopDispatch.workspace.systemDefault')
-              : workspaceName
-          }
-        />
+        <View
+          accessibilityLabel={targetSummary}
+          accessible
+          className="flex-row items-center gap-2 px-4 py-3"
+        >
+          <View className="size-1.5 shrink-0 rounded-full bg-primary" />
+          <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
+            <Text className="shrink font-medium text-sm text-foreground" numberOfLines={1}>
+              {connectionName}
+            </Text>
+            <Text className="shrink-0 text-sm text-foreground-tertiary">›</Text>
+            <Text className="shrink text-sm text-foreground" numberOfLines={1}>
+              {agentName}
+            </Text>
+            <Text className="shrink-0 text-sm text-foreground-tertiary">·</Text>
+            <Text className="min-w-0 shrink text-sm text-muted-foreground" numberOfLines={1}>
+              {resolvedWorkspace}
+            </Text>
+          </View>
+        </View>
       </Section>
       <Section>
-        <Section.Item label={t('desktopDispatch.approval.taskTitle')} description={title} />
-        <Section.Item>
-          <View className="gap-2">
-            <Text className="font-medium text-base text-foreground">
-              {t('desktopDispatch.approval.brief')}
+        <View className="gap-3 p-4">
+          <View className="flex-row items-start justify-between gap-3">
+            <Text className="min-w-0 flex-1 font-semibold text-base text-foreground" selectable>
+              {title}
             </Text>
-            <Text className="text-xs text-muted-foreground">
+            <Text className="shrink-0 pt-0.5 font-mono text-xs text-foreground-tertiary">
               {t('desktopDispatch.approval.characterCount', { count: textCharLength })}
             </Text>
-            <Text className="text-sm text-foreground" selectable>
-              {preview}
-            </Text>
-            {textCharLength > DESKTOP_DISPATCH_MAX_TEXT_LENGTH ? (
-              <Text className="text-xs text-muted-foreground">
-                {t('desktopDispatch.approval.spillHint', { extension: '.md' })}
-              </Text>
-            ) : null}
           </View>
-        </Section.Item>
+          <MarkdownText markdown={preview} />
+          {textCharLength > DESKTOP_DISPATCH_MAX_TEXT_LENGTH ? (
+            <Text className="text-xs text-muted-foreground">
+              {t('desktopDispatch.approval.spillHint', { extension: '.md' })}
+            </Text>
+          ) : null}
+          {attachments.length ? (
+            <View
+              accessibilityLabel={t('desktopDispatch.approval.attachments')}
+              className="flex-row flex-wrap gap-2"
+            >
+              {attachments.map((file) => {
+                const Icon = file.mediaType.toLowerCase().startsWith('image/')
+                  ? ImageIcon
+                  : FileTextIcon;
+                return (
+                  <View
+                    key={file.fileEntryId}
+                    className="flex-row items-center gap-1.5 rounded-lg bg-secondary px-2.5 py-1"
+                  >
+                    <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+                    <Text className="max-w-48 text-xs text-foreground" numberOfLines={1}>
+                      {file.name}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
+        </View>
       </Section>
-      {attachments.length ? (
-        <Section title={t('desktopDispatch.approval.attachments')}>
-          {attachments.map((file) => (
-            <Section.Item key={file.fileEntryId} label={file.name} />
-          ))}
-        </Section>
-      ) : null}
     </>
   );
 }
@@ -294,18 +328,20 @@ function ToolApprovalArguments({
   const [expanded, setExpanded] = useState(false);
   return (
     <View className="gap-2">
-      <Button
-        accessibilityState={{ expanded }}
-        onPress={() => setExpanded((value) => !value)}
-        size="sm"
-        variant="ghost"
-      >
-        <Button.Label>
-          {expanded
-            ? (hideLabel ?? t('skills.approval.hideDetails'))
-            : (showLabel ?? t('skills.approval.showDetails'))}
-        </Button.Label>
-      </Button>
+      <View className="items-start px-1">
+        <Button
+          accessibilityState={{ expanded }}
+          onPress={() => setExpanded((value) => !value)}
+          size="inline"
+          variant="ghost"
+        >
+          <Button.Label>
+            {expanded
+              ? (hideLabel ?? t('skills.approval.hideDetails'))
+              : (showLabel ?? t('skills.approval.showDetails'))}
+          </Button.Label>
+        </Button>
+      </View>
       {expanded ? <MessageDetailValue title={t('chat.tool.arguments')} value={value} /> : null}
     </View>
   );

@@ -70,6 +70,7 @@ type ChatWorkspaceProps = {
   connectionId?: string;
   /** Translation is enabled only when its source can identify a stable message origin. */
   isTranslationEnabled?: boolean;
+  surface?: 'default' | 'sheet';
   renderUsage?: (message: MessageListItem) => ReactNode;
 };
 
@@ -101,6 +102,7 @@ export function ChatWorkspace({
   connectionId,
   isTranslationEnabled = false,
   readingAidScope,
+  surface = 'default',
   renderUsage,
 }: ChatWorkspaceProps) {
   const { beginSelection } = useChatShareSelectionActions();
@@ -343,6 +345,7 @@ export function ChatWorkspace({
                   <ChatTranscript
                     onTargetRestored={onQuoteTargetRestored}
                     onReady={onQuoteWindowReady}
+                    surface={surface}
                     turnNavigator={editing ? undefined : turnNavigator}
                     requiresInitialLayout={requiresInitialHistoryLayout}
                     isLoadingMore={isLoadingOlder || isLoadingNewer}

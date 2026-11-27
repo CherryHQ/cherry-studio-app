@@ -27,6 +27,7 @@ type ChatTranscriptProps = Omit<
   hiddenUserTurnCount?: number;
   isLoadingMore: boolean;
   requiresInitialLayout: boolean;
+  surface?: 'default' | 'sheet';
   turnNavigator?: ChatTurnNavigator;
 };
 
@@ -38,6 +39,7 @@ export function ChatTranscript({
   requiresInitialLayout,
   isLoadingMore,
   onReady,
+  surface = 'default',
   turnNavigator,
   contentTopInset: topInsetOverride,
   ...list
@@ -87,7 +89,11 @@ export function ChatTranscript({
     !composer?.state.isPresented,
   );
   return (
-    <View className="min-h-0 flex-1 bg-chat-background">
+    <View
+      className={
+        surface === 'sheet' ? 'min-h-0 flex-1 bg-transparent' : 'min-h-0 flex-1 bg-chat-background'
+      }
+    >
       <ChatOlderMessagesIndicator isLoading={isLoadingMore} />
       <ChatShareDragSelection
         listRef={listRef}

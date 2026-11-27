@@ -202,8 +202,11 @@ function RootStack() {
       <Stack.Screen
         name="remote-session-modal"
         options={{
+          contentStyle: { backgroundColor: 'transparent' },
           headerShown: false,
-          presentation: Platform.OS === 'ios' ? 'pageSheet' : 'modal',
+          presentation: 'transparentModal',
+          animation: 'none',
+          gestureEnabled: false,
         }}
       />
       <Stack.Screen name="uu-remote/callback" options={{ headerShown: false, animation: 'none' }} />

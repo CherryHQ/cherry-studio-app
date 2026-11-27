@@ -1,11 +1,20 @@
 import Maximize2Icon from '@cherrystudio/app-icons/icons/maximize-2';
 import XIcon from '@cherrystudio/app-icons/icons/x';
-import { BottomSheetProvider, ContentState } from '@cherrystudio/ui/components';
+import { BottomSheet, BottomSheetProvider, ContentState } from '@cherrystudio/ui/components';
+import { ambientMotion } from '@cherrystudio/ui/motion';
 import { router, useLocalSearchParams } from 'expo-router';
-import { createContext, use, useCallback, useMemo, useSyncExternalStore } from 'react';
+import {
+  createContext,
+  use,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { type CSSAnimationProperties, useReducedMotion } from 'react-native-reanimated';
 
 import {
   type ConversationRef,
@@ -23,6 +32,8 @@ import {
   type RemoteChatRouteParams,
   type RemoteChatTarget,
 } from '@/frontend/appShell/navigation/chat';
+import { AgentAvatar } from '@/frontend/components/Avatar';
+import { useBackendModule } from '@/frontend/data';
 import { useDesktopConnection } from '@/frontend/hooks/useDesktopConnections';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
@@ -30,13 +41,35 @@ import { RemoteConversationBody, useRemoteConversation } from './RemoteConversat
 
 type SessionTarget = RemoteChatTarget & { connectionId: string; sessionId: string };
 
+const PULSE_ANIMATION = {
+  animationDuration: ambientMotion.pulseDuration,
+  animationFillMode: 'both',
+  animationIterationCount: 'infinite',
+  animationName: {
+    from: { opacity: 1 },
+    '50%': { opacity: 0.4 },
+    to: { opacity: 1 },
+  },
+  animationTimingFunction: 'ease-in-out',
+} satisfies CSSAnimationProperties;
+const IDLE_DOT_STYLE = { animationName: 'none' } satisfies CSSAnimationProperties;
+
+const ModalConnectionContext = createContext<string | undefined>(undefined);
+
 const ModalHeaderContext = createContext<{
+  agentEmoji?: string;
   title?: string;
   connectionName?: string;
   status?: string;
   dotClassName?: string;
+  isRunning?: boolean;
   expandTarget?: SessionTarget;
+  onExpand?: (target: SessionTarget) => void;
 }>({});
+
+function renderModalFallback(state: 'loading' | 'error') {
+  return <ModalContentState state={state} />;
+}
 
 export function RemoteSessionModalScreen() {
   const params = useLocalSearchParams<
@@ -44,37 +77,67 @@ export function RemoteSessionModalScreen() {
   >();
   const target = parseRemoteChatRoute(params);
   const { connectionId, sessionId, draftId } = target;
-  if (!connectionId || (!sessionId && !draftId)) return <ModalContentState state="missing" />;
+  const [isOpen, setIsOpen] = useState(true);
+  const hasExpandedRef = useRef(false);
+
+  const handleClose = useCallback(() => setIsOpen(false), []);
+  const handleClosed = useCallback(() => {
+    if (!hasExpandedRef.current) closeModal();
+  }, []);
+  const handleExpand = useCallback((sessionTarget: SessionTarget) => {
+    hasExpandedRef.current = true;
+    Keyboard.dismiss();
+    router.replace(remoteChatHref(sessionTarget));
+  }, []);
 
   return (
-    // Keep approval and question sheets above this native modal's own view controller.
+    // Keep approval and question sheets above this transparent modal's own view controller.
     <BottomSheetProvider>
-      <ConversationSourceBoundary
-        key={connectionId}
-        source={{ kind: 'desktop', connectionId }}
-        fallback={renderModalFallback}
-      >
-        {sessionId ? (
-          <RemoteSession target={{ ...target, connectionId, sessionId }} />
-        ) : (
-          <PendingDispatch
-            target={{ ...target, connectionId, draftId: draftId! }}
-            operationId={getSingleRouteParam(params.operationId)}
-          />
-        )}
-      </ConversationSourceBoundary>
+      <ModalConnectionContext value={connectionId}>
+        <View className="flex-1">
+          <BottomSheet
+            bodyInset="none"
+            onClose={handleClose}
+            onClosed={handleClosed}
+            open={isOpen}
+            size="large"
+            testID="remote-session-sheet"
+          >
+            {!connectionId || (!sessionId && !draftId) ? (
+              <ModalContentState state="missing" />
+            ) : (
+              <ConversationSourceBoundary
+                key={connectionId}
+                source={{ kind: 'desktop', connectionId }}
+                fallback={renderModalFallback}
+              >
+                {sessionId ? (
+                  <RemoteSession
+                    onExpand={handleExpand}
+                    target={{ ...target, connectionId, sessionId }}
+                  />
+                ) : (
+                  <PendingDispatch
+                    onExpand={handleExpand}
+                    operationId={getSingleRouteParam(params.operationId)}
+                    target={{ ...target, connectionId, draftId: draftId! }}
+                  />
+                )}
+              </ConversationSourceBoundary>
+            )}
+          </BottomSheet>
+        </View>
+      </ModalConnectionContext>
     </BottomSheetProvider>
   );
 }
 
-function renderModalFallback(state: 'loading' | 'error') {
-  return <ModalContentState state={state} />;
-}
-
 function PendingDispatch({
+  onExpand,
   target,
   operationId,
 }: {
+  onExpand: (target: SessionTarget) => void;
   target: RemoteChatTarget & { connectionId: string; draftId: string };
   operationId?: string;
 }) {
@@ -85,13 +148,16 @@ function PendingDispatch({
     [source, target.draftId, operationId],
   );
   const receipt = useSyncExternalStore(source.subscribeDispatches, getReceipt, getReceipt);
-  if (!receipt) return <ModalContentState state="missing" />;
+  if (!receipt) return <ModalContentState connectionId={target.connectionId} state="missing" />;
   if (receipt.status === 'rejected' || receipt.status === 'interrupted')
-    return <ModalContentState state="failed" />;
+    return <ModalContentState connectionId={target.connectionId} state="failed" />;
   if (receipt.sessionId)
-    return <RemoteSession target={{ ...target, sessionId: receipt.sessionId }} />;
+    return (
+      <RemoteSession onExpand={onExpand} target={{ ...target, sessionId: receipt.sessionId }} />
+    );
   return (
     <ModalContentState
+      connectionId={target.connectionId}
       state={
         availability.state === 'disabled' && availability.reason !== 'synchronizing'
           ? 'offline'
@@ -102,38 +168,67 @@ function PendingDispatch({
 }
 
 function ModalContentState({
+  connectionId,
   state,
 }: {
+  connectionId?: string;
   state: 'missing' | 'loading' | 'error' | 'pending' | 'offline' | 'failed';
 }) {
   const { t } = useTranslation();
+  const contextConnectionId = use(ModalConnectionContext);
+  const resolvedConnectionId = connectionId ?? contextConnectionId;
+  const desktopConnections = useBackendModule('desktopConnections');
+  const { connection } = useDesktopConnection(resolvedConnectionId);
+  const header = useMemo(
+    () => ({
+      connectionName: connection?.name,
+    }),
+    [connection?.name],
+  );
+
   return (
-    <View className="flex-1 bg-chat-background">
-      <ModalHeader />
-      <View className="flex-1 justify-center px-8">
-        {state === 'loading' ? (
-          <ContentState.Loading title={t('remoteAgent.connecting')} />
-        ) : state === 'pending' ? (
-          <ContentState.Loading title={t('desktopDispatch.pip.status.pending-confirm')} />
-        ) : state === 'missing' ? (
-          <ContentState.Empty title={t('desktopDispatch.modal.sessionUnavailable')} />
-        ) : (
-          <ContentState.Error
-            title={t(
-              state === 'offline'
-                ? 'desktopDispatch.pip.status.offline'
-                : state === 'failed'
-                  ? 'desktopDispatch.pip.status.failed'
-                  : 'remoteAgent.loadFailed',
-            )}
-          />
-        )}
+    <ModalHeaderContext value={header}>
+      <View className="flex-1">
+        <ModalHeader />
+        <View className="flex-1 justify-center px-8">
+          {state === 'loading' ? (
+            <ContentState.Loading title={t('remoteAgent.connecting')} />
+          ) : state === 'pending' ? (
+            <ContentState.Loading title={t('desktopDispatch.pip.status.pending-confirm')} />
+          ) : state === 'missing' ? (
+            <ContentState.Empty title={t('desktopDispatch.modal.sessionUnavailable')} />
+          ) : (
+            <ContentState.Error
+              primaryAction={
+                state === 'offline' && resolvedConnectionId
+                  ? {
+                      children: t('remoteAgent.reconnect'),
+                      onPress: () => void desktopConnections.reconnect(resolvedConnectionId),
+                    }
+                  : undefined
+              }
+              title={t(
+                state === 'offline'
+                  ? 'desktopDispatch.pip.status.offline'
+                  : state === 'failed'
+                    ? 'desktopDispatch.pip.status.failed'
+                    : 'remoteAgent.loadFailed',
+              )}
+            />
+          )}
+        </View>
       </View>
-    </View>
+    </ModalHeaderContext>
   );
 }
 
-function RemoteSession({ target }: { target: SessionTarget }) {
+function RemoteSession({
+  onExpand,
+  target,
+}: {
+  onExpand: (target: SessionTarget) => void;
+  target: SessionTarget;
+}) {
   const { t } = useTranslation();
   const { connectionId, sessionId } = target;
   const source = useRemoteConversationSource();
@@ -145,8 +240,12 @@ function RemoteSession({ target }: { target: SessionTarget }) {
   const { connection } = useDesktopConnection(connectionId);
   const identity = `session:${sessionId}`;
 
+  const isRunningExecution = snapshot.executions.some(
+    ({ state }) => state === 'running' || state === 'finalizing',
+  );
   let status = t('desktopDispatch.modal.status.connected');
   let dotClassName = 'bg-primary';
+  let isRunning = false;
   if (availability.state === 'disabled') {
     status = t(
       availability.reason === 'synchronizing'
@@ -165,25 +264,39 @@ function RemoteSession({ target }: { target: SessionTarget }) {
   ) {
     status = t('desktopDispatch.pip.status.awaiting-approval');
     dotClassName = 'bg-warning';
-  } else if (
-    snapshot.executions.some(({ state }) => state === 'running' || state === 'finalizing')
-  ) {
+  } else if (isRunningExecution) {
     status = t('desktopDispatch.pip.status.running');
+    isRunning = true;
   }
 
   const confirmedSessionId = opened.session?.ref.sessionId ?? sessionId;
   const agentId = agent?.id ?? target.agentId;
+  const agentEmoji = agent?.emoji;
   const title = agent?.name || snapshot.title;
   const connectionName = connection?.name;
   const header = useMemo(
     () => ({
+      agentEmoji,
       title,
       connectionName,
       status,
       dotClassName,
+      isRunning,
       expandTarget: { connectionId, sessionId: confirmedSessionId, agentId },
+      onExpand,
     }),
-    [title, connectionName, status, dotClassName, connectionId, confirmedSessionId, agentId],
+    [
+      agentEmoji,
+      title,
+      connectionName,
+      status,
+      dotClassName,
+      isRunning,
+      connectionId,
+      confirmedSessionId,
+      agentId,
+      onExpand,
+    ],
   );
   const onSessionCreated = (ref: ConversationRef) => {
     router.setParams({ sessionId: ref.sessionId, draftId: undefined });
@@ -204,6 +317,7 @@ function RemoteSession({ target }: { target: SessionTarget }) {
         onSessionCreated={onSessionCreated}
         header={ModalHeader}
         headerPlacement="inline"
+        surface="sheet"
       />
     </ModalHeaderContext>
   );
@@ -214,62 +328,97 @@ function closeModal() {
   else router.back();
 }
 
-function expandModal(target: SessionTarget) {
-  Keyboard.dismiss();
-  router.replace(remoteChatHref(target));
+function BreathingStatusDot({
+  dotClassName,
+  isRunning,
+}: {
+  dotClassName?: string;
+  isRunning?: boolean;
+}) {
+  const reducedMotion = useReducedMotion();
+
+  return (
+    <Animated.View
+      className={`size-1.5 shrink-0 rounded-full ${dotClassName ?? ''}`}
+      style={isRunning && !reducedMotion ? PULSE_ANIMATION : IDLE_DOT_STYLE}
+    />
+  );
 }
 
 function ModalHeader({ selection }: { selection?: { selectedCount: number; onExit(): void } }) {
   const { t } = useTranslation();
-  const { title, connectionName, status, dotClassName, expandTarget } = use(ModalHeaderContext);
-  return (
-    <SafeAreaView
-      edges={['top', 'left', 'right']}
-      className="border-b border-border-subtle bg-card"
-    >
-      <View className="min-h-14 flex-row items-center gap-2 px-2 py-1">
+  const {
+    agentEmoji,
+    title,
+    connectionName,
+    status,
+    dotClassName,
+    isRunning,
+    expandTarget,
+    onExpand,
+  } = use(ModalHeaderContext);
+  const displayTitle = title || t('desktopDispatch.modal.title');
+
+  if (selection) {
+    return (
+      <View className="min-h-14 flex-row items-center gap-2.5 px-5 py-1.5">
         <Pressable
-          accessibilityLabel={t(selection ? 'common.cancel' : 'common.close')}
+          accessibilityLabel={t('common.cancel')}
           accessibilityRole="button"
-          className="size-12 items-center justify-center rounded-full active:bg-secondary"
-          onPress={selection?.onExit ?? closeModal}
+          className="-ml-2.5 size-11 items-center justify-center rounded-full active:bg-secondary"
+          onPress={selection.onExit}
           testID="remote-session-modal-close"
         >
-          <XIcon className="size-5 text-foreground" />
+          <XIcon className="size-6 text-foreground" />
         </Pressable>
-        <View className="min-w-0 flex-1 items-center">
+        <Text
+          accessibilityRole="header"
+          className="min-w-0 flex-1 font-semibold text-base text-foreground"
+          numberOfLines={1}
+        >
+          {t('common.selection.count', { count: selection.selectedCount })}
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View className="min-h-14 flex-row items-center gap-2.5 px-5 py-1.5">
+      <View className="min-w-0 flex-1 flex-row items-center gap-2.5">
+        <AgentAvatar emoji={agentEmoji} name={displayTitle} size={28} />
+        <View className="min-w-0 flex-1">
           <Text
             accessibilityRole="header"
             className="font-semibold text-base text-foreground"
             numberOfLines={1}
           >
-            {selection
-              ? t('common.selection.count', { count: selection.selectedCount })
-              : title || t('desktopDispatch.modal.title')}
+            {displayTitle}
           </Text>
-          {!selection && status ? (
+          {status ? (
             <View className="flex-row items-center gap-1.5">
-              <View className={`size-1.5 shrink-0 rounded-full ${dotClassName ?? ''}`} />
-              <Text className="shrink text-xs text-muted-foreground" numberOfLines={1}>
+              <BreathingStatusDot dotClassName={dotClassName} isRunning={isRunning} />
+              <Text className="min-w-0 shrink text-xs text-muted-foreground" numberOfLines={1}>
                 {connectionName ? `${connectionName} · ${status}` : status}
               </Text>
             </View>
-          ) : null}
-        </View>
-        <View className="size-12">
-          {expandTarget && !selection ? (
-            <Pressable
-              accessibilityLabel={t('desktopDispatch.modal.expand')}
-              accessibilityRole="button"
-              className="flex-1 items-center justify-center rounded-full active:bg-secondary"
-              onPress={() => expandModal(expandTarget)}
-              testID="remote-session-modal-expand"
-            >
-              <Maximize2Icon className="size-5 text-foreground" />
-            </Pressable>
+          ) : connectionName ? (
+            <Text className="min-w-0 shrink text-xs text-muted-foreground" numberOfLines={1}>
+              {connectionName}
+            </Text>
           ) : null}
         </View>
       </View>
-    </SafeAreaView>
+      {expandTarget && onExpand ? (
+        <Pressable
+          accessibilityLabel={t('desktopDispatch.modal.expand')}
+          accessibilityRole="button"
+          className="-mr-2.5 size-11 items-center justify-center rounded-full active:bg-secondary"
+          onPress={() => onExpand(expandTarget)}
+          testID="remote-session-modal-expand"
+        >
+          <Maximize2Icon className="size-5 text-foreground" />
+        </Pressable>
+      ) : null}
+    </View>
   );
 }

@@ -21,12 +21,13 @@ export function ChatScreenFrame({
   children,
   header: Header,
   headerPlacement,
+  surface,
 }: ChatScreenFrameProps) {
   return (
     <ChatShareSelectionScope>
       <Composer.Expansion>
         <FullScreenLayerProvider>
-          <ChatScreenContent header={Header} headerPlacement={headerPlacement}>
+          <ChatScreenContent header={Header} headerPlacement={headerPlacement} surface={surface}>
             {children}
           </ChatScreenContent>
         </FullScreenLayerProvider>
@@ -38,12 +39,14 @@ export function ChatScreenFrame({
 type ChatScreenFrameProps = PropsWithChildren<{
   header: ComponentType<ChatHeaderProps>;
   headerPlacement?: 'overlay' | 'inline';
+  surface?: 'default' | 'sheet';
 }>;
 
 function ChatScreenContent({
   children,
   header: Header,
   headerPlacement = 'overlay',
+  surface = 'default',
 }: ChatScreenFrameProps) {
   const blurTarget = useRef<ViewInstance>(null);
   const expansion = useComposerExpansion();
@@ -65,7 +68,9 @@ function ChatScreenContent({
     <>
       {headerPlacement === 'inline' ? <ChatHeader header={Header} blurTarget={blurTarget} /> : null}
       <BlurTargetView ref={blurTarget} style={{ flex: 1 }}>
-        <View className="flex-1 bg-chat-background">
+        <View
+          className={surface === 'sheet' ? 'flex-1 bg-transparent' : 'flex-1 bg-chat-background'}
+        >
           <ReadingContentFrame>{children}</ReadingContentFrame>
         </View>
       </BlurTargetView>

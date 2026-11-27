@@ -1,6 +1,7 @@
 import {
   composerContentGap,
   ContentState,
+  getComposerBottomPadding,
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
 import { router } from 'expo-router';
@@ -91,6 +92,7 @@ export function RemoteConversationBody({
   agents,
   header,
   headerPlacement,
+  surface = 'default',
 }: ReturnType<typeof useRemoteConversation> &
   Pick<ComponentProps<typeof ChatScreenFrame>, 'header' | 'headerPlacement'> & {
     source: RemoteConversationSource;
@@ -102,13 +104,15 @@ export function RemoteConversationBody({
     identity: string;
     onSessionCreated?(ref: ConversationRef): boolean;
     agents: ReturnType<typeof useConversationAgents>;
+    surface?: 'default' | 'sheet';
   }) {
+  const isSheet = surface === 'sheet';
   const { availability } = useConversationSourceState();
   const desktopConnections = useBackendModule('desktopConnections');
   const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
   const dockClearance = useNavigationDockClearance();
-  const extraBottomOffset = getComposerExtraBottomOffset(bottom, dockClearance);
+  const extraBottomOffset = isSheet ? 0 : getComposerExtraBottomOffset(bottom, dockClearance);
   const composerHeight = useSharedValue(0);
   const setComposerHeight = useCallback(
     (height: number) => composerHeight.set(height),
@@ -121,7 +125,7 @@ export function RemoteConversationBody({
   );
 
   return (
-    <ChatScreenFrame header={header} headerPlacement={headerPlacement}>
+    <ChatScreenFrame header={header} headerPlacement={headerPlacement} surface={surface}>
       <ChatShareSelectionProvider target={shareTarget} messages={messages}>
         <ComposerSessionProvider
           key={`${source.scope}:${identity}`}
@@ -138,6 +142,7 @@ export function RemoteConversationBody({
               <ChatWorkspace
                 executionSource="desktop"
                 contentTopInset={headerPlacement === 'inline' ? 0 : undefined}
+                surface={surface}
                 turnNavigator={turns.navigator}
                 isTranslationEnabled={Boolean(opened.session?.readingAidScope)}
                 readingAidScope={opened.session?.readingAidScope}
@@ -159,11 +164,20 @@ export function RemoteConversationBody({
           </ComposerDismissArea>
           <ChatShareComposerGuard>
             <ComposerDock
-              backgroundClassName="bg-chat-background"
+              backgroundClassName={isSheet ? undefined : 'bg-chat-background'}
               layoutMode="expandable-overlay"
               onHeightChange={setComposerHeight}
             >
               <View>
+                {isSheet ? (
+                  <View
+                    className="absolute -inset-x-4 top-6 bg-background dark:bg-popover"
+                    pointerEvents="none"
+                    style={{ bottom: -getComposerBottomPadding(bottom) }}
+                  >
+                    <View className="absolute inset-0 dark:bg-secondary" />
+                  </View>
+                ) : null}
                 <ConversationStatus
                   availability={availability}
                   onRepair={() => router.push('/settings/device-connections')}
