@@ -1,6 +1,5 @@
 import TrashIcon from '@cherrystudio/app-icons/icons/trash-2';
 import { Spinner, Surface } from '@cherrystudio/ui/components';
-import { cn } from '@cherrystudio/ui/utils';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { Platform, StyleSheet, Text, View } from 'react-native';
@@ -9,8 +8,6 @@ import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useResolveClassNames, useUniwind } from 'uniwind';
 
 import { useOptionalNavigationShell } from '@/frontend/appShell/navigationShell/state';
-import { ProfileAvatarImage } from '@/frontend/components/Avatar';
-import { usePreference } from '@/frontend/data/hooks';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { appSidebar } from '@/frontend/utils/constants';
 
@@ -19,13 +16,20 @@ import { useDockMetrics } from '../hooks/useDockMetrics';
 import { useSidebarDestination } from '../hooks/useSidebarDestination';
 import { useSidebarSelection, useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
 import { SidebarFade } from './SidebarFade/SidebarFade';
-import { SidebarPlanBadge } from './SidebarPlanBadge';
+import { SidebarProfileButton } from './SidebarProfileButton';
 
 // Floats over the session list while the body owns enough bottom padding to
 // keep its final row reachable.
-export function SidebarFooter() {
+export function SidebarFooter({
+  covered,
+  dockHeight,
+  onDockHeightChange,
+}: {
+  covered: boolean;
+  dockHeight: number;
+  onDockHeightChange: (height: number) => void;
+}) {
   const { t } = useTranslation();
-  const [userName] = usePreference('app.user.name');
   const { bottomPadding, insetEnd, insetStart } = useDockMetrics();
   const { theme } = useUniwind();
   const surfaceColor = useThemeColor(theme === 'dark' ? 'sidebar' : 'background');
@@ -36,9 +40,8 @@ export function SidebarFooter() {
   const fadeStartColor =
     Platform.OS === 'ios' ? (transparentSurfaceColor ?? 'transparent') : 'transparent';
   const fadeHeight = appSidebar.headerGapY * 2;
-  const backgroundHeight = bottomPadding + appSidebar.dockHeight + fadeHeight;
+  const backgroundHeight = bottomPadding + dockHeight + fadeHeight;
   const { openSettings } = useSidebarActions('SidebarFooter');
-  const displayName = userName.trim();
   const isSettingsOpen = useSidebarDestination() === 'settings';
   const selection = useSidebarSelection();
   const { progress } = selection;
@@ -83,45 +86,19 @@ export function SidebarFooter() {
           style={[StyleSheet.absoluteFill, { opacity: 0.9 }]}
         />
       </View>
-      <View style={{ height: appSidebar.dockHeight }}>
+      <View onLayout={(event) => onDockHeightChange(event.nativeEvent.layout.height)}>
         <Animated.View
           accessibilityElementsHidden={isSelecting}
-          className="absolute inset-0 flex-row items-center justify-between"
+          className="flex-row items-center"
           importantForAccessibility={isSelecting ? 'no-hide-descendants' : 'auto'}
           pointerEvents={isSelecting ? 'none' : 'auto'}
           style={normalStyle}
         >
-          <Pressable
-            accessibilityLabel={t('navigation.settings')}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: isSelecting || isDeleting, selected: isSettingsOpen }}
-            disabled={isSelecting || isDeleting}
+          <SidebarProfileButton
+            disabled={covered || isSelecting || isDeleting}
             onPress={openSettings}
-            style={{ flex: 1 }}
-            testID="sidebar-settings"
-          >
-            {({ pressed }) => (
-              <View
-                className={cn(
-                  'min-h-11 flex-row items-center gap-3 rounded-xl px-1',
-                  isSettingsOpen && 'bg-secondary',
-                  pressed && 'opacity-60',
-                )}
-              >
-                <ProfileAvatarImage
-                  accessibilityLabel={displayName || t('settings.profile.avatar')}
-                  size={36}
-                />
-                <Text
-                  className="min-w-0 flex-1 font-medium text-base text-sidebar-foreground"
-                  numberOfLines={1}
-                >
-                  {displayName || t('settings.profile.title')}
-                </Text>
-                <SidebarPlanBadge />
-              </View>
-            )}
-          </Pressable>
+            selected={isSettingsOpen}
+          />
         </Animated.View>
         <Animated.View
           accessibilityElementsHidden={!isSelecting}
