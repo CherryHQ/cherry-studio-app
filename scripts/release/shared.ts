@@ -20,11 +20,12 @@ function addUrlCredentialCandidates(candidates: Set<string>, rawValue: string, m
 }
 
 function collectRedactionCandidates(
-  secrets: Iterable<string> = [],
-  env: Record<string, string | undefined> = process.env,
+  secrets: Iterable<string>,
+  env: Record<string, string | undefined>,
+  minEnvironmentSecretLength: number,
 ): string[] {
   const candidates = new Set<string>();
-  const addSecret = (value: string | undefined, minLength = 4) => {
+  const addSecret = (value: string, minLength: number) => {
     if (!value || value.length < minLength) return;
     candidates.add(value);
     addUrlCredentialCandidates(candidates, value, minLength);
@@ -35,7 +36,7 @@ function collectRedactionCandidates(
   }
   for (const [key, value] of Object.entries(env)) {
     if (value && /token|secret|password|dsn/i.test(key)) {
-      addSecret(value, /dsn/i.test(key) ? 1 : 4);
+      addSecret(value, /dsn/i.test(key) ? 1 : minEnvironmentSecretLength);
     }
   }
 
@@ -45,20 +46,24 @@ function collectRedactionCandidates(
 
 function redactKnownSecrets(
   text: string,
-  secrets: Iterable<string> = [],
-  env: Record<string, string | undefined> = process.env,
+  secrets: Iterable<string>,
+  env: Record<string, string | undefined>,
+  minEnvironmentSecretLength: number,
 ): string {
   let redacted = text;
-  for (const value of collectRedactionCandidates(secrets, env)) {
+  for (const value of collectRedactionCandidates(secrets, env, minEnvironmentSecretLength)) {
     redacted = redacted.split(value).join('[redacted]');
   }
-  return redacted
-    .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
-    .replace(
-      /\b(key|token|sig|signature|X-Amz-[a-z0-9-]+)=(?:"[^"\s]*"|'[^'\s]*'|[^\s&#"']*)/gi,
-      '$1=[redacted]',
-    )
-    .replace(/(?:sntrys_|sntryu_)[a-zA-Z0-9_]+/g, '[redacted]');
+  return (
+    redacted
+      .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+      // The fallback includes escaped or incomplete quotes in raw server diagnostics.
+      .replace(
+        /\b(key|token|sig|signature|X-Amz-[a-z0-9-]+)=(?:"[^"\s]*"|'[^'\s]*'|[^\s&#]*)/gi,
+        '$1=[redacted]',
+      )
+      .replace(/(?:sntrys_|sntryu_)[a-zA-Z0-9_]+/g, '[redacted]')
+  );
 }
 
 export function redactSecretsInStream(
@@ -66,7 +71,7 @@ export function redactSecretsInStream(
   secrets: Iterable<string> = [],
   env: Record<string, string | undefined> = process.env,
 ): string {
-  return redactKnownSecrets(text, secrets, env);
+  return redactKnownSecrets(text, secrets, env, 4);
 }
 
 export function sanitizeDiagnostic(
@@ -74,7 +79,7 @@ export function sanitizeDiagnostic(
   env: Record<string, string | undefined> = process.env,
   secrets: Iterable<string> = [],
 ): string {
-  return redactKnownSecrets(text, secrets, env)
+  return redactKnownSecrets(text, secrets, env, 1)
     .replace(/[a-z][a-z0-9+.-]*:\/\/[^\s]+/gi, '[url redacted]')
     .replace(/[a-z][a-z0-9+.-]*:\/[^\s?]*\?[^\s]*/gi, '[url redacted]')
     .replace(/[a-f0-9]{32,}/gi, '[redacted]')

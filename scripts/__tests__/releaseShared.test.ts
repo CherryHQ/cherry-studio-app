@@ -40,6 +40,23 @@ describe('release shared helpers', () => {
     expect(sanitizeSecrets(`commit=${sha}`, [], {})).toBe('commit=[redacted]');
   });
 
+  it('redacts quoted credentials in JSON diagnostics', () => {
+    const credential = 'example-signing-value';
+    const detail = JSON.stringify({ message: 'Request rejected for key="' + credential + '"' });
+
+    const diagnostic = sanitizeDiagnostic(detail, {});
+    expect(diagnostic).toContain('key=[redacted]');
+    expect(diagnostic).not.toContain(credential);
+  });
+
+  it('redacts short environment secrets from saved diagnostics', () => {
+    const env = { CHERRYAI_CLIENT_SECRET: 'q7!' };
+    const message = 'Submission declined: q7!';
+
+    expect(sanitizeDiagnostic(message, env)).toBe('Submission declined: [redacted]');
+    expect(redactSecretsInStream(message, [], env)).toBe(message);
+  });
+
   it('parses release tags and computes fileEvidence', async () => {
     expect(parseReleaseTag('v0.6.3')).toEqual({
       tag: 'v0.6.3',
