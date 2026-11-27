@@ -76,6 +76,10 @@ describe('resolved architecture boundaries', () => {
       "import '@/frontend/appShell/navigationShell/dockTabs';",
     ],
     ['src/app/probe.ts', "import '@/frontend/appShell/navigationShell/FloatingNavDock';"],
+    [
+      'src/bootstrap/runtime/probe.ts',
+      "import '@/frontend/appShell/navigationShell/navRouteManifest';",
+    ],
     ['src/shared/utils/probe.ts', "import '../../frontend/data';"],
     ['src/shared/data/probe.ts', "import 'react-native';"],
     ['src/shared/utils/probe.ts', "import 'expo-file-system';"],
@@ -159,6 +163,10 @@ describe('resolved architecture boundaries', () => {
     [
       'src/frontend/appShell/sidebar/probe.ts',
       "import { NAV_ROUTE_MANIFEST, useOptionalNavigationShell } from '@/frontend/appShell/navigationShell/state';",
+    ],
+    [
+      'src/bootstrap/runtime/probe.ts',
+      "import { NAV_ROUTE_MANIFEST } from '@/frontend/appShell/navigationShell/state';",
     ],
     ['src/frontend/appShell/navigationShell/probe.ts', "import './navRouteManifest';"],
     [

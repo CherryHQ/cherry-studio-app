@@ -208,6 +208,7 @@ const frontendPublicSurfaceZones = [
   {
     target: [
       'src/app',
+      'src/bootstrap/runtime',
       'src/frontend/!(appShell)/**/*',
       'src/frontend/appShell/!(navigationShell)/**/*',
     ],
