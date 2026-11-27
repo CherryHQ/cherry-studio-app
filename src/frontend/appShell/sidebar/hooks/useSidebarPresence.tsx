@@ -5,8 +5,8 @@ import { useSidebarColumn } from '../SidebarColumn';
 
 /**
  * Where the sidebar stands relative to the content. A permanent drawer still reports `closed`
- * through navigation state, so visibility combines the column with the overlay's status; a column
- * yielded to the file pane is hidden like a closed overlay.
+ * through navigation state, so visibility combines the column with the overlay's status; a hidden
+ * column is treated like a closed overlay.
  */
 export type SidebarPresence = 'persistent' | 'open' | 'closed';
 
