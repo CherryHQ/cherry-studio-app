@@ -1,9 +1,9 @@
-import type { Context } from '@earendil-works/chord';
+import type { Context } from '@earendil-works/chord/context';
 import type { CodemodeStoreWrites } from '@earendil-works/pi-codemode';
 import type { ToolExecutionApi, ToolExecutionResult } from '@earendil-works/pi-durable';
-import { CodemodeStoreDoc } from '@earendil-works/pi-durable/codemode';
+import { CodemodeStoreDoc, type CodemodeToolOptions } from '@earendil-works/pi-durable/codemode';
 
-// Pi 1.5's native entry does not export its store limits. Match its 256 Ki-character
+// Pi's native entry does not export its store limits. Match its 256 Ki-character
 // JSON value limit and reserve 256 Ki characters in the 1 Mi-character store for scripts/receipts.
 const MAX_OUTPUT_JSON_CHARACTERS = 256 * 1024;
 export const PI_CODEMODE_STORE_CHARACTERS = 4 * MAX_OUTPUT_JSON_CHARACTERS;
@@ -16,12 +16,15 @@ export async function retainPiCodemodeOutput(
   api: ToolExecutionApi,
   context: Context,
   storeWrites?: CodemodeStoreWrites,
-): Promise<{ path: string } | { error: string }> {
+): ReturnType<NonNullable<CodemodeToolOptions['writeOutput']>> {
   // Avoid serializing text already known to exceed the limit.
   const outputCharacters =
     text.length > MAX_OUTPUT_JSON_CHARACTERS ? text.length : JSON.stringify(text).length;
   if (outputCharacters > MAX_OUTPUT_JSON_CHARACTERS)
-    return { error: 'Text output exceeds the working cache limit. Print a smaller result.' };
+    return {
+      kind: 'failed',
+      error: 'Text output exceeds the working cache limit. Print a smaller result.',
+    };
   const key = `codemode-output:${api.taskId}:${name}`;
   return api.commit(async (tx) => {
     const store = await tx.doc(CodemodeStoreDoc, api.conversationId);
@@ -39,11 +42,14 @@ export async function retainPiCodemodeOutput(
           ) > MAX_OUTPUT_STORE_CHARACTERS,
       );
       if (exceedsBudget)
-        return { error: 'Working cache has no room for this output. Print a smaller result.' };
+        return {
+          kind: 'failed',
+          error: 'Working cache has no room for this output. Print a smaller result.',
+        };
       // CodemodeSandboxBase serializes JsonValues before load() sees them; retain the raw text.
       store.values[key] = text;
     }
-    return { path: `store:${key}` };
+    return { kind: 'saved', path: `store:${key}` };
   }, context);
 }
 

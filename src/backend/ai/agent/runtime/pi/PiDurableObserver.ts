@@ -285,7 +285,9 @@ export class PiDurableObserver {
               : 'ok'
             : tool.status === 'done'
               ? 'interrupted'
-              : tool.status,
+              : tool.status === 'waiting' || tool.status === 'sleeping'
+                ? 'pending'
+                : tool.status,
         });
       }
       if (initial) return;

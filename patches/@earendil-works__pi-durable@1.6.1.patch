@@ -1,32 +1,35 @@
 diff --git a/dist/codemode/codemode.d.ts b/dist/codemode/codemode.d.ts
-index 429bfd1e491008edca6b9ff146ab25a50baa1d9e..f86f44ea2c36804fc734051092ab9eaa911558ea 100644
+index 05ee22665d..c28be351f4 100644
 --- a/dist/codemode/codemode.d.ts
 +++ b/dist/codemode/codemode.d.ts
-@@ -35,7 +35,7 @@
-  * call with an error result.
+@@ -36,9 +36,10 @@
   */
- import { type Context, type JsonValue } from "@earendil-works/chord";
+ import type { Context } from "@earendil-works/chord/context";
+ import { type JsonValue } from "@earendil-works/chord/json";
 -import type { CodemodeSandboxBase } from "@earendil-works/pi-codemode/portable";
 +import type { CodemodeSandboxBase, CodemodeStoreWrites } from "@earendil-works/pi-codemode/portable";
  import { type Static } from "@earendil-works/pi-schema";
  import type { Extension, ToolExecutionApi, ToolRegistration } from "../harness/types.ts";
++import type { OutputFile } from "./output.ts";
  import type { JsonObject } from "../types.ts";
-@@ -152,6 +152,10 @@ declare const codemodeSchema: import("@earendil-works/pi-schema").Schema<{
+ /**
+  * Version of everything in this module that turns stored results into what a script sees: result mapping, globals,
+@@ -155,6 +156,10 @@ declare const codemodeSchema: import("@earendil-works/pi-schema").Schema<{
  }>;
  export type CodemodeToolInput = Static<typeof codemodeSchema>;
  export type CodemodeToolOptions = {
 +    /** Host-managed output storage, for environments without device filesystem paths. */
-+    readonly writeOutput?: (name: string, data: string | Uint8Array, api: ToolExecutionApi, context: Context, storeWrites?: CodemodeStoreWrites) => Promise<{ path: string } | { error: string }>;
++    readonly writeOutput?: (name: string, data: string | Uint8Array, api: ToolExecutionApi, context: Context, storeWrites?: CodemodeStoreWrites) => ReturnType<OutputFile>;
 +    /** Final conversation store budget, including concurrent host writes, in key and JSON characters. */
 +    readonly maxStoreCharacters?: number;
      /** Runs the scripts: `CodemodeSandbox` on Node, `RemoteCodemodeSandbox` on Cloudflare. */
      readonly sandbox: CodemodeSandboxBase;
-     /** Groups of tools by name prefix, such as MCP servers, for the `codemode` section and tool search. */
+     /** Estimated tokens the tool declarations in the `codemode` section may use. Default 3000. */
 diff --git a/dist/codemode/codemode.js b/dist/codemode/codemode.js
-index 9ef1da0d2b59fd84ee03aae503c308cf73f6d641..181ff0060b96eba2467ba5bc470b36bde1aea4f3 100644
+index 6a3a2b9283..cb480b960a 100644
 --- a/dist/codemode/codemode.js
 +++ b/dist/codemode/codemode.js
-@@ -385,13 +385,14 @@ class CodemodeCall {
+@@ -342,13 +342,14 @@ class CodemodeCall {
      /** The script's own outcome, stored with its store writes in one transaction. */
      async complete(result) {
          const details = this.details();
@@ -42,7 +45,7 @@ index 9ef1da0d2b59fd84ee03aae503c308cf73f6d641..181ff0060b96eba2467ba5bc470b36bd
          });
          const tool = {
              output: formatted.content,
-@@ -401,24 +402,41 @@ class CodemodeCall {
+@@ -358,24 +359,41 @@ class CodemodeCall {
                  ...(formatted.fullOutputPath === undefined ? {} : { fullOutputPath: formatted.fullOutputPath }),
              },
          };
@@ -91,14 +94,14 @@ index 9ef1da0d2b59fd84ee03aae503c308cf73f6d641..181ff0060b96eba2467ba5bc470b36bd
          let directory;
          return async (name, data) => {
 diff --git a/dist/harness/compaction.js b/dist/harness/compaction.js
-index e8eded74921ab86f7641bffb0a96e7371021fb55..8753649b3db3fc4f610ed5933bd1c4cca6954de9 100644
+index c403297c5d..4a62d83b7f 100644
 --- a/dist/harness/compaction.js
 +++ b/dist/harness/compaction.js
 @@ -85,6 +85,14 @@ export const CompactionTask = defineTask({
                  if (decision === undefined)
                      decision = await hook(compaction, runtime, context);
              });
-+            if (decision !== undefined && "failure" in decision) {
++            if (decision?.kind === "failure") {
 +                const message = decision.failure;
 +                await runtime.commit(async (tx) => {
 +                    failCompactionStatus(await tx.doc(LiveDoc, conversationId), runtime.taskId, message);
@@ -106,24 +109,25 @@ index e8eded74921ab86f7641bffb0a96e7371021fb55..8753649b3db3fc4f610ed5933bd1c4cc
 +                }, context);
 +                return;
 +            }
-             if (decision !== undefined && "decline" in decision)
+             if (decision?.kind === "decline")
                  return complete(runtime, context);
-             if (decision !== undefined)
+             if (decision?.kind === "summary")
 diff --git a/dist/harness/types.d.ts b/dist/harness/types.d.ts
-index eb64e474162b158a43563e6c68d8ffea8c18b74a..b160611dfd9a169937ad6bf7c6ee7933911a9947 100644
+index b122613225..81734132e0 100644
 --- a/dist/harness/types.d.ts
 +++ b/dist/harness/types.d.ts
-@@ -988,6 +988,8 @@ export interface CompactionHooks {
-         readonly decline: true;
+@@ -1140,6 +1140,9 @@ export interface CompactionHooks {
      } | {
+         readonly kind: "summary";
          readonly summary: string;
 +    } | {
++        readonly kind: "failure";
 +        readonly failure: string;
      }>;
  }
  export {};
 diff --git a/dist/search.js b/dist/search.js
-index 7b05ef0be2e825d0428d6a3867afb098a46c8317..3d53359e9d9b8df1bfa44c7a8e9f831c7c6811b0 100644
+index 7b05ef0be2..3d53359e9d 100644
 --- a/dist/search.js
 +++ b/dist/search.js
 @@ -79,7 +79,10 @@ function indexDocument(document) {
@@ -157,7 +161,7 @@ index 7b05ef0be2e825d0428d6a3867afb098a46c8317..3d53359e9d9b8df1bfa44c7a8e9f831c
          .map((word) => (/^[a-z0-9]+$/.test(word) ? stem(word) : word));
  }
 diff --git a/dist/session/session.js b/dist/session/session.js
-index e9ae9ebfc2c45765ccda141d7e60cdc9a15a0894..25b3dfae9ccbfe485ba717c3fe408f3377b771f2 100644
+index 86978d80b5..32c4d98f0d 100644
 --- a/dist/session/session.js
 +++ b/dist/session/session.js
 @@ -226,7 +226,8 @@ export class SessionImpl {
@@ -171,10 +175,10 @@ index e9ae9ebfc2c45765ccda141d7e60cdc9a15a0894..25b3dfae9ccbfe485ba717c3fe408f33
          };
      }
 diff --git a/dist/session/transaction.d.ts b/dist/session/transaction.d.ts
-index 5508fa2d021d2153f4f104b4ef69b99ef98a6a74..6a085ca774783774ce021ab3b95ea422c7ae0460 100644
+index 8bdc8172d9..5adf8b4dea 100644
 --- a/dist/session/transaction.d.ts
 +++ b/dist/session/transaction.d.ts
-@@ -51,7 +51,9 @@ export interface TransactionHost {
+@@ -53,7 +53,9 @@ export interface TransactionHost {
      /** Stage writes that belong to every newly created or forked conversation, in its creating transaction. */
      conversationCreated(tx: Transaction, record: ConversationRecord): Promise<void>;
      /** The newest entry ID visible from a conversation, known from the Session's commits. */
@@ -185,7 +189,7 @@ index 5508fa2d021d2153f4f104b4ef69b99ef98a6a74..6a085ca774783774ce021ab3b95ea422
      /**
       * The current documents of a live task when the Session knows all of them (it created the task), else `undefined`.
       */
-@@ -98,7 +100,8 @@ export declare class Transaction implements Tx {
+@@ -100,7 +102,8 @@ export declare class Transaction implements Tx {
      latestHeadMarker(conversationId: ConversationId): Promise<(EntryRecord & {
          readonly head: EntryId;
      }) | undefined>;
@@ -193,13 +197,13 @@ index 5508fa2d021d2153f4f104b4ef69b99ef98a6a74..6a085ca774783774ce021ab3b95ea422
 +    waitForEntryPublication(conversationId: ConversationId): Promise<void>;
 +    latestEntryId(id: ConversationId): Promise<EntryId | undefined>;
      scanTasks(query: TaskQuery, limit: number, cursor?: Cursor): Promise<import("../types.ts").Page<TaskRecord<JsonValue, JsonValue, JsonValue>, Readonly<Record<string, JsonValue>>>>;
-     /** Internal: committed submission record. */
+     /** Committed submission record. */
      submission(id: SubmissionId): Promise<SubmissionRecord | undefined>;
 diff --git a/dist/session/transaction.js b/dist/session/transaction.js
-index 7fbe75b11bb2a9ab28f4f23800143231172d71b7..67c209ef4582e78eea0b24fa69f3a74d5bc396d3 100644
+index c8dda056cc..b64f689131 100644
 --- a/dist/session/transaction.js
 +++ b/dist/session/transaction.js
-@@ -102,8 +102,11 @@ export class Transaction {
+@@ -103,8 +103,11 @@ export class Transaction {
      latestHeadMarker(conversationId) {
          return this.#read("latestHeadMarker", () => this.#host.latestHeadMarker(conversationId, this.#context));
      }
@@ -214,10 +218,10 @@ index 7fbe75b11bb2a9ab28f4f23800143231172d71b7..67c209ef4582e78eea0b24fa69f3a74d
      scanTasks(query, limit, cursor) {
          return this.#read("scanTasks", () => this.#host.storage.scanTasks(query, limit, cursor, this.#context));
 diff --git a/dist/storage/sqlite/storage.d.ts b/dist/storage/sqlite/storage.d.ts
-index bdf2b1f550f601fc12f33cf9ab3835772f89e7a7..b8948ff492c1ab602e272e73b1acf39afbab04eb 100644
+index 22a6246735..09b9a826b1 100644
 --- a/dist/storage/sqlite/storage.d.ts
 +++ b/dist/storage/sqlite/storage.d.ts
-@@ -2,25 +2,32 @@ import type { Context, JsonValue } from "@earendil-works/chord";
+@@ -3,25 +3,32 @@ import type { JsonValue } from "@earendil-works/chord/json";
  import type { SqliteDatabase } from "@earendil-works/chord/sqlite";
  import type { CommitResult, ConversationId, ConversationQuery, ConversationRecord, Cursor, DocumentAddress, DocumentId, DocumentPoint, DocumentQuery, DocumentRecord, EntryId, EntryQuery, EntryRecord, Id, Page, Seq, Storage, StorageWrite, StoredDocument, SubmissionId, SubmissionQuery, SubmissionRecord, TaskId, TaskQuery, TaskRecord } from "../../types.ts";
  type StoredTask = TaskRecord<JsonValue, JsonValue, JsonValue>;
@@ -251,7 +255,7 @@ index bdf2b1f550f601fc12f33cf9ab3835772f89e7a7..b8948ff492c1ab602e272e73b1acf39a
      /**
       * Commit `batches` in one SQL transaction, each with its own seq. Each batch is checked before it writes anything,
       * against the state the earlier ones left, and the first one refused ends the batch: the transaction commits the ones
-@@ -52,6 +59,7 @@ export declare class SqliteStorage implements Storage {
+@@ -60,6 +67,7 @@ export declare class SqliteStorage implements Storage {
      private readEntries;
      /** Oldest first: the fork chain's segments from the root conversation forward, each up to its fork point. */
      private readEntriesAscending;
@@ -260,10 +264,10 @@ index bdf2b1f550f601fc12f33cf9ab3835772f89e7a7..b8948ff492c1ab602e272e73b1acf39a
      scanTasks(query: TaskQuery, limit: number, cursor: Cursor | undefined, _context: Context): Promise<Page<StoredTask, Cursor>>;
      submission(id: SubmissionId, _context: Context): Promise<SubmissionRecord | undefined>;
 diff --git a/dist/storage/sqlite/storage.js b/dist/storage/sqlite/storage.js
-index 890f1428f8855e05f18007ab3ca70218a7a32ef8..6132da9ccce138538a85d9048f4b439e87ec098d 100644
+index 5167818422..53a7ed0225 100644
 --- a/dist/storage/sqlite/storage.js
 +++ b/dist/storage/sqlite/storage.js
-@@ -92,29 +92,37 @@ function watchCalls(executor, calls) {
+@@ -51,29 +51,37 @@ function watchCalls(executor, calls) {
          all: (sql, ...params) => watched(() => executor.all(sql, ...params)),
      };
  }
@@ -303,7 +307,7 @@ index 890f1428f8855e05f18007ab3ca70218a7a32ef8..6132da9ccce138538a85d9048f4b439e
          }
          catch (error) {
              try {
-@@ -291,19 +299,7 @@ export class SqliteStorage {
+@@ -266,19 +274,7 @@ export class SqliteStorage {
              upper = Math.min(upper ?? Number.MAX_SAFE_INTEGER, after - 1);
          const values = [];
          while (true) {
@@ -324,7 +328,7 @@ index 890f1428f8855e05f18007ab3ca70218a7a32ef8..6132da9ccce138538a85d9048f4b439e
              if (values.length > limit || conversation.parent === undefined)
                  break;
              upper = upper === undefined ? conversation.parent.at : Math.min(upper, conversation.parent.at);
-@@ -334,23 +330,78 @@ export class SqliteStorage {
+@@ -309,23 +305,78 @@ export class SqliteStorage {
              lower = Math.max(lower ?? after + 1, after + 1);
          const values = [];
          for (const segment of segments.reverse()) {
@@ -412,7 +416,7 @@ index 890f1428f8855e05f18007ab3ca70218a7a32ef8..6132da9ccce138538a85d9048f4b439e
      }
      async task(id, _context) {
          this.assertOpen();
-@@ -507,15 +558,58 @@ export class SqliteStorage {
+@@ -482,15 +533,58 @@ export class SqliteStorage {
          if (base === undefined)
              throw new Error(`Document ${id} is missing a required base`);
          let value = parseJson(base.content);
@@ -478,10 +482,10 @@ index 890f1428f8855e05f18007ab3ca70218a7a32ef8..6132da9ccce138538a85d9048f4b439e
      candidateNextId(writes) {
          let nextId = this.nextId;
 diff --git a/dist/tool-search/tool-search.js b/dist/tool-search/tool-search.js
-index 1c5c127ea6b007eb4033486fcbde0d5e6b20cc16..762d61c9d02dbe38509e922ff821c3f36bba726c 100644
+index 117f75ef28..aa9d25d82d 100644
 --- a/dist/tool-search/tool-search.js
 +++ b/dist/tool-search/tool-search.js
-@@ -59,7 +59,9 @@ export function createToolSearchTool() {
+@@ -71,7 +71,9 @@ export function createToolSearchTool() {
                  throw new Error("limit must be a positive integer");
              const candidates = (await api.agent(context)).deferred;
              const documents = candidates.map((tool) => ({ name: tool.name, text: searchText(tool) }));
@@ -493,10 +497,10 @@ index 1c5c127ea6b007eb4033486fcbde0d5e6b20cc16..762d61c9d02dbe38509e922ff821c3f3
                  ? "No matching tools found."
                  : `Loaded ${loaded.length} tool${loaded.length === 1 ? "" : "s"}. They are available from your next call:\n${loaded
 diff --git a/dist/types.d.ts b/dist/types.d.ts
-index b43143c5e7998b36034ffe9577f74f3d88ab932b..3c4202eb3f17a2f4da06473306f66b96a729ef42 100644
+index 2bc11e93fb..1794a67042 100644
 --- a/dist/types.d.ts
 +++ b/dist/types.d.ts
-@@ -902,7 +902,9 @@ export interface Tx {
+@@ -950,7 +950,9 @@ export interface Tx {
      latestHeadMarker(conversationId: ConversationId): Promise<(EntryRecord & {
          readonly head: EntryId;
      }) | undefined>;
@@ -506,4 +510,4 @@ index b43143c5e7998b36034ffe9577f74f3d88ab932b..3c4202eb3f17a2f4da06473306f66b96
 +    /** ID of the newest published entry visible from the conversation; `undefined` when it has none. */
      latestEntryId(conversationId: ConversationId): Promise<EntryId | undefined>;
      scanTasks(query: TaskQuery, limit: number, cursor?: Cursor): Promise<Page<TaskRecord<JsonValue, JsonValue, JsonValue>, Cursor>>;
-     /** Committed submission with a conversation-scoped request ID. */
+     /** Committed submission record, such as one of `pi.live.run.inputs`; a placed input's `entry` is its transcript entry. */
