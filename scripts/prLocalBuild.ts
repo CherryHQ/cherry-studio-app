@@ -21,6 +21,8 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { parseArgs } from 'node:util';
 
+import { readApkSignerSha256 } from './androidApkSigning';
+
 export type PrBuildTargetId = 'android-dev' | 'ios-dev' | 'android-production';
 
 export interface PrBuildTargetConfig {
@@ -541,9 +543,15 @@ async function inspectApk({
     env,
     secrets,
   });
-  const certMatch = /Signer #1 certificate SHA-256 digest:\s*([a-f0-9]+)/i.exec(certs.stdout);
-  if (!certMatch?.[1]) {
-    throw new Error('Could not read APK Signer #1 SHA-256 certificate digest.');
+  const certificateSha256 = readApkSignerSha256(certs.stdout);
+  if (!certificateSha256) {
+    const preview = sanitizeSecrets(`${certs.stdout}\n${certs.stderr}`, secrets, env)
+      .trim()
+      .replace(/\s+/g, ' ')
+      .slice(0, 400);
+    throw new Error(
+      `Could not read APK signer SHA-256 from apksigner (${preview || 'empty output'}).`,
+    );
   }
 
   let badging: LocalCommandResult;
@@ -580,7 +588,7 @@ async function inspectApk({
 
   return {
     nativeBuildVersion: versionCodeMatch[1],
-    signingCertificateSha256: certMatch[1].toLowerCase(),
+    signingCertificateSha256: certificateSha256,
   };
 }
 
@@ -929,15 +937,9 @@ export async function runPrBuildTarget(options: RunPrBuildTargetOptions) {
     delete buildEnv.CHERRY_LOCAL_BUILD_ID;
     delete buildEnv.CHERRY_SOURCE_SHA;
 
-    const proxyShimPath = join(__dirname, 'easProxyShim.cjs');
-    const useProxyShim =
-      Boolean(buildEnv.https_proxy?.trim() || buildEnv.HTTPS_PROXY?.trim()) &&
-      existsSync(proxyShimPath);
-
     const buildResult = await run(
       process.execPath,
       [
-        ...(useProxyShim ? ['--require', proxyShimPath] : []),
         resolvedBins.easCliPath,
         'build',
         '--local',
@@ -983,7 +985,7 @@ export async function runPrBuildTarget(options: RunPrBuildTargetOptions) {
             artifactPath: stagedArtifactPath,
             expectedPackage: expectedIdentifier,
             expectInstallPermission: target.expectInstallPermission === true,
-            env: buildEnv,
+            env: baseEnv,
             run,
             secrets: secretValues,
           })
@@ -991,7 +993,7 @@ export async function runPrBuildTarget(options: RunPrBuildTargetOptions) {
             artifactPath: stagedArtifactPath,
             stagingDir,
             expectedBundleId: expectedIdentifier,
-            env: buildEnv,
+            env: baseEnv,
             run,
             secrets: secretValues,
           });
@@ -1240,7 +1242,6 @@ export function formatPrBatchOutputs(
     outputs[`${prefix}_status`] = outcome.status;
     outputs[`${prefix}_dir`] = isReady ? outcome.dir : '';
     outputs[`${prefix}_artifact_name`] = isReady ? outcome.artifactName : '';
-    outputs[`${prefix}_artifact_path`] = isReady ? outcome.artifactPath : '';
     outputs[`${prefix}_native_build_version`] = isReady ? outcome.nativeBuildVersion : '';
     outputs[`${prefix}_sha256`] = isReady ? outcome.sha256 : '';
     outputs[`${prefix}_error`] =

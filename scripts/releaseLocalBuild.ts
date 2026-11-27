@@ -23,6 +23,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { parseArgs } from 'node:util';
 
+import { readApkSignerSha256 } from './androidApkSigning';
 import { sanitizeDiagnostic } from './uploadIosSymbols';
 import { verifyIosSymbolPackage } from './verifyIosSymbolPackage';
 
@@ -520,9 +521,9 @@ async function inspectApk({
     env,
     secrets,
   });
-  const certMatch = /Signer #1 certificate SHA-256 digest:\s*([a-f0-9]+)/i.exec(certs.stdout);
-  if (!certMatch?.[1]) {
-    throw new Error('Could not read APK Signer #1 SHA-256 certificate digest.');
+  const certificateSha256 = readApkSignerSha256(certs.stdout);
+  if (!certificateSha256) {
+    throw new Error('Could not read APK signer SHA-256 certificate digest.');
   }
 
   let badging: LocalCommandResult;
@@ -559,7 +560,7 @@ async function inspectApk({
 
   return {
     nativeBuildVersion: versionCodeMatch[1],
-    signingCertificateSha256: certMatch[1].toLowerCase(),
+    signingCertificateSha256: certificateSha256,
   };
 }
 
