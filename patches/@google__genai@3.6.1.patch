@@ -1,0 +1,35 @@
+diff --git a/dist/web/index.mjs b/dist/web/index.mjs
+index 900591c5ad..4731d5211d 100644
+--- a/dist/web/index.mjs
++++ b/dist/web/index.mjs
+@@ -31549,7 +31549,7 @@ class GoogleGenAI {
+     }
+     constructor(options = {}) {
+         var _a;
+-        if (options.apiKey == null) {
++        if (options.apiKey == null && !options.auth) {
+             throw new Error('An API Key must be set when running in a browser');
+         }
+         // Web client only supports API key mode for Vertex AI.
+@@ -31571,7 +31571,7 @@ class GoogleGenAI {
+         }
+         this.apiVersion = options.apiVersion;
+         this.httpOptions = options.httpOptions;
+-        const auth = new WebAuth(this.apiKey);
++        const auth = options.auth ?? new WebAuth(this.apiKey);
+         this.apiClient = new ApiClient({
+             auth: auth,
+             apiVersion: this.apiVersion,
+diff --git a/dist/web/web.d.ts b/dist/web/web.d.ts
+index 303edbde45..df8b91abdc 100644
+--- a/dist/web/web.d.ts
++++ b/dist/web/web.d.ts
+@@ -8539,6 +8539,8 @@ export declare type GoogleGenAIInteraction = GoogleGenAIResponseWithSdkHttpRespo
+  * See {@link GoogleGenAI} for usage samples.
+  */
+ export declare interface GoogleGenAIOptions {
++    /** Mobile host-owned authentication, without API keys or Node ADC. */
++    auth?: Auth;
+     /**
+      * Optional. Determines whether to use the Vertex AI or the Gemini API.
+      *

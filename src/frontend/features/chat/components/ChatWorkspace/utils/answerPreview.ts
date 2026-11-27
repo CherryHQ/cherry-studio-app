@@ -1,4 +1,4 @@
-import { partitionMessageParts } from '@/frontend/components/Message/parts/partitionMessageParts';
+import { selectAssistantBodyTextParts } from '@/frontend/components/Message/body';
 import { resolveMessageCitations } from '@/frontend/utils/messageCitations';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
@@ -19,11 +19,11 @@ export type AnswerPreview = Readonly<{
  */
 export function answerPreview(parts: readonly CherryMessagePart[] | undefined): AnswerPreview {
   const all = parts ?? [];
-  const { textByPartIndex } = resolveMessageCitations(all);
-  const texts = partitionMessageParts(all).body.flatMap(({ index, part }) =>
-    part.type === 'text'
-      ? [textByPartIndex.get(index) ?? { markdown: part.text, plainText: part.text }]
-      : [],
+  const { parts: normalizedParts, bodyTextParts } = selectAssistantBodyTextParts(all);
+  const { textByPartIndex } = resolveMessageCitations(normalizedParts);
+  const texts = bodyTextParts.map(
+    ({ index, part }) =>
+      textByPartIndex.get(index) ?? { markdown: part.text, plainText: part.text },
   );
   const text = texts.map((resolved) => resolved.markdown).join('\n\n');
   // Count and cut without materializing the answer as character arrays; the cut scans only the preview.

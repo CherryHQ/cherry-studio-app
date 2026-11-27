@@ -102,9 +102,13 @@ assert.ok(
 );
 assert.equal(result.usage.input, 10);
 
+let errorStatus;
 const forbidden = await streamSimple(model, context, {
   accessToken: 'host-token',
   maxRetries: 0,
+  onResponse: ({ status }) => {
+    errorStatus = status;
+  },
   fetch: async () =>
     new Response(
       JSON.stringify({
@@ -114,8 +118,38 @@ const forbidden = await streamSimple(model, context, {
     ),
 }).result();
 assert.equal(forbidden.stopReason, 'error');
+assert.equal(errorStatus, 403);
 assert.ok(forbidden.errorMessage.includes('403'));
 assert.ok(JSON.stringify(forbidden.diagnostics).includes('403'));
+
+let requests = 0;
+const continuation = await streamSimple(
+  { ...model, id: 'gemini-4-hydrogen', thinkingLevelMap: { xhigh: 'XHIGH' } },
+  context,
+  {
+    accessToken: 'host-token',
+    reasoning: 'xhigh',
+    maxRetries: 0,
+    fetch: async (_url, init) => {
+      assert.equal(++requests, 1);
+      assert.equal(JSON.parse(init.body).generationConfig.thinkingConfig.thinkingLevel, 'XHIGH');
+      return new Response(
+        `data: ${JSON.stringify({
+          continuationToken: 'resume-token',
+          candidates: [
+            {
+              content: { role: 'model', parts: [{ text: 'Partial answer' }] },
+              finishReason: 'CONTINUATION',
+            },
+          ],
+        })}\n\n`,
+        { headers: { 'Content-Type': 'text/event-stream' } },
+      );
+    },
+  },
+).result();
+assert.equal(continuation.stopReason, 'length', continuation.errorMessage);
+assert.equal(requests, 1);
 
 const controller = new AbortController();
 controller.abort();

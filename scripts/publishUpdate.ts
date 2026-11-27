@@ -3,7 +3,7 @@ import { appendFileSync, readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 
 // Matches package.json devDependencies["eas-cli"] and eas.json cli.version; update them together.
-export const EAS_CLI_VERSION = '24.4.2';
+export const EAS_CLI_VERSION = '27.11.0';
 
 type PlatformSettings = { channel?: string; env?: Record<string, string> };
 type BuildProfile = PlatformSettings & {

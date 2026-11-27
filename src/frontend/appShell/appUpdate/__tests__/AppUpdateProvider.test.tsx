@@ -1,5 +1,5 @@
 import type { AlertConfirmOptions, ToastShowOptions } from '@cherrystudio/ui/components';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useLayoutEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -22,6 +22,7 @@ const mockToast = { show: jest.fn((_options: ToastShowOptions) => 'update') };
 const mockUpdate = {
   channel: 'apk' as AppUpdateModule['channel'],
   isEnabled: true,
+  checkRequiredVersion: jest.fn<Promise<string | null>, []>(),
   check: jest.fn<Promise<AppUpdateResult>, [AbortSignal?]>(),
   getDownload: jest.fn((): AppUpdateDownload => ({ status: 'idle' })),
   subscribeDownload: jest.fn(() => () => {}),
@@ -49,10 +50,8 @@ jest.mock('../AppUpdateDialog', () => ({
     return null;
   },
 }));
-const mockSetPersist = jest.fn();
-jest.mock('@/frontend/data/CacheService', () => ({
-  cacheService: { setPersist: (...args: unknown[]) => mockSetPersist(...args) },
-}));
+jest.mock('@/frontend/appShell/privacy', () => ({ usePrivacyConsentPending: () => false }));
+jest.mock('@/frontend/appShell/startup', () => ({ useStartupCoverVisible: () => false }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
 const oldRelease: ApkUpdateRelease = {
@@ -99,33 +98,36 @@ const recordAvailable = (release: AppUpdateRelease) =>
 beforeEach(() => {
   jest.clearAllMocks();
   mockUpdate.channel = 'apk';
+  mockUpdate.checkRequiredVersion.mockReset().mockResolvedValue(null);
   mockUpdate.check.mockReset().mockResolvedValue({ status: 'available', ...latestRelease });
   mockUpdate.getDownload.mockReturnValue({ status: 'idle' });
   mockUpdate.install.mockResolvedValue('opened');
   queryClient = new QueryClient();
-  act(() => {
+});
+async function launch() {
+  await act(async () => {
     renderer = create(tree());
   });
-});
+  await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+}
+
 afterEach(() => {
   act(() => renderer.unmount());
   queryClient.clear();
 });
 
-test('a recorded release opens the dialog without another request and counts as its reminder', async () => {
+test('a recorded release opens the dialog without another request', async () => {
+  await launch();
   recordAvailable(latestRelease);
 
   await act(async () => actions.check());
 
   expect(mockUpdate.check).not.toHaveBeenCalled();
   expect(mockDialog.release).toMatchObject({ id: latestRelease.id });
-  expect(mockSetPersist).toHaveBeenCalledWith('app_update.last_reminder', {
-    releaseId: latestRelease.id,
-    remindedAt: expect.any(Number),
-  });
 });
 
 test('a manual App Store check does not reopen an offer from a previous storefront', async () => {
+  await launch();
   mockUpdate.channel = 'app-store';
   recordAvailable({
     channel: 'app-store',
@@ -145,6 +147,7 @@ test('a manual App Store check does not reopen an offer from a previous storefro
 });
 
 test('an unknown result is checked, and an up-to-date result is reported without a dialog', async () => {
+  await launch();
   mockUpdate.check.mockResolvedValue({ status: 'upToDate', currentVersion: '1.0.0' });
 
   await act(async () => actions.check());
@@ -154,6 +157,7 @@ test('an unknown result is checked, and an up-to-date result is reported without
 });
 
 test('an active or finished transfer reopens its own release', async () => {
+  await launch();
   mockUpdate.getDownload.mockReturnValue({
     status: 'failed',
     release: oldRelease,
@@ -164,14 +168,15 @@ test('an active or finished transfer reopens its own release', async () => {
   await act(async () => actions.check());
 
   expect(mockUpdate.check).not.toHaveBeenCalled();
-  expect(mockDialog.release).toBe(oldRelease);
+  expect(mockDialog.release).toMatchObject(oldRelease);
 });
 
 test('retrying a failed download refreshes discovery and downloads the latest release', async () => {
+  await launch();
   recordAvailable(oldRelease);
-  act(() => actions.open(oldRelease));
+  await act(async () => actions.check());
 
-  await act(async () => mockDialog.actions.retry());
+  await act(async () => mockDialog.actions.checkAndStart());
 
   expect(mockUpdate.check).toHaveBeenCalledTimes(1);
   expect(mockUpdate.check).toHaveBeenCalledWith(expect.any(AbortSignal), { force: true });
@@ -180,10 +185,12 @@ test('retrying a failed download refreshes discovery and downloads the latest re
 });
 
 test('a withdrawn release closes the dialog on retry instead of downloading it again', async () => {
-  act(() => actions.open(oldRelease));
+  await launch();
+  recordAvailable(oldRelease);
+  await act(async () => actions.check());
   mockUpdate.check.mockResolvedValue({ status: 'unavailable', reason: 'noRelease' });
 
-  await act(async () => mockDialog.actions.retry());
+  await act(async () => mockDialog.actions.checkAndStart());
 
   expect(mockDialog.release).toBeNull();
   expect(mockUpdate.download).not.toHaveBeenCalled();
@@ -191,6 +198,7 @@ test('a withdrawn release closes the dialog on retry instead of downloading it a
 });
 
 test('store releases close the dialog and open the store', async () => {
+  await launch();
   const store = {
     channel: 'app-store',
     id: 'app-store:1:2.1.0',
@@ -199,7 +207,8 @@ test('store releases close the dialog and open the store', async () => {
     latestVersion: '2.1.0',
     storeUrl: 'https://apps.apple.com/us/app/id1',
   } as const;
-  act(() => actions.open(store));
+  recordAvailable(store);
+  await act(async () => actions.check());
 
   act(() => mockDialog.actions.start(store));
 
@@ -208,10 +217,12 @@ test('store releases close the dialog and open the store', async () => {
 });
 
 test('installation asks for permission outside the dialog and keeps it open for a rejected package', async () => {
-  act(() => actions.open(oldRelease));
+  await launch();
+  recordAvailable(oldRelease);
+  await act(async () => actions.check());
   mockUpdate.install.mockResolvedValueOnce('invalidPackage');
   await act(async () => mockDialog.actions.install());
-  expect(mockDialog.release).toBe(oldRelease);
+  expect(mockDialog.release).toMatchObject(oldRelease);
   expect(mockAlert.confirm).not.toHaveBeenCalled();
 
   mockUpdate.install.mockResolvedValueOnce('permissionRequired');
@@ -223,6 +234,7 @@ test('installation asks for permission outside the dialog and keeps it open for 
 });
 
 test('concurrent manual checks share one request and one dialog even across provider rerenders', async () => {
+  await launch();
   const response = Promise.withResolvers<AppUpdateResult>();
   mockUpdate.check.mockReturnValue(response.promise);
   let first!: Promise<void>;
@@ -243,11 +255,11 @@ test('concurrent manual checks share one request and one dialog even across prov
   });
 
   expect(mockUpdate.check).toHaveBeenCalledTimes(1);
-  expect(mockSetPersist).toHaveBeenCalledTimes(1);
   expect(mockToast.show).toHaveBeenCalledTimes(1);
 });
 
 test('a failed manual check releases its guard so a later attempt can succeed', async () => {
+  await launch();
   mockUpdate.check.mockRejectedValueOnce(new Error('Offline'));
 
   await act(async () => actions.check());
@@ -262,18 +274,20 @@ test('a failed manual check releases its guard so a later attempt can succeed', 
 });
 
 test('another trigger preserves the open prompt until it closes', async () => {
-  act(() => actions.open(oldRelease));
-  act(() => actions.open(latestRelease));
-  expect(mockDialog.release).toBe(oldRelease);
-  expect(mockSetPersist).toHaveBeenCalledTimes(1);
+  await launch();
+  recordAvailable(oldRelease);
+  await act(async () => actions.check());
+  recordAvailable(latestRelease);
+  await act(async () => actions.check());
+  expect(mockDialog.release).toMatchObject(oldRelease);
   act(() => mockDialog.actions.close());
   recordAvailable(oldRelease);
   await act(async () => actions.check());
   expect(mockDialog.release).toMatchObject({ id: oldRelease.id });
-  expect(mockSetPersist).toHaveBeenCalledTimes(2);
 });
 
 test('domestic updates use the existing dialog and only open the store after confirmation', async () => {
+  await launch();
   const release = {
     channel: 'domestic-stores',
     store: 'oppo',
@@ -292,4 +306,39 @@ test('domestic updates use the existing dialog and only open the store after con
   expect(mockDialog.release).toBeNull();
   expect(mockUpdate.openStore).toHaveBeenCalledWith(release);
   expect(mockUpdate.download).not.toHaveBeenCalled();
+});
+
+test('a supported launch stays silent without checking any release channel', async () => {
+  await launch();
+  expect(mockDialog.requiredVersion).toBeNull();
+  expect(mockDialog.release).toBeNull();
+  expect(mockUpdate.checkRequiredVersion).toHaveBeenCalledTimes(1);
+  expect(mockUpdate.check).not.toHaveBeenCalled();
+});
+
+test('a required launch waits for the update action and keeps its store destination on return', async () => {
+  mockUpdate.checkRequiredVersion.mockResolvedValue('2.0.0');
+  mockUpdate.channel = 'app-store';
+  const store = {
+    channel: 'app-store',
+    id: 'app-store:123:2.0.0',
+    currentVersion: '1.0.0',
+    latestVersion: '2.0.0',
+    notes: null,
+    storeUrl: 'https://apps.apple.com/us/app/id123',
+  } as const;
+  mockUpdate.check.mockResolvedValue({ status: 'available', ...store });
+  await launch();
+  expect(mockDialog.requiredVersion).toBe('2.0.0');
+  expect(mockUpdate.check).not.toHaveBeenCalled();
+  await act(async () => mockDialog.actions.checkAndStart());
+  expect(mockUpdate.openStore).toHaveBeenCalledWith(expect.objectContaining(store));
+  await act(async () => {
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+  });
+  expect(mockUpdate.checkRequiredVersion).toHaveBeenCalledTimes(1);
+  expect(mockUpdate.check).toHaveBeenCalledTimes(1);
+  expect(mockDialog.release).toMatchObject(store);
+  focusManager.setFocused(undefined);
 });

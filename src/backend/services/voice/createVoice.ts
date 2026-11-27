@@ -29,7 +29,8 @@ import { createVoiceRuntime } from './VoiceRuntime';
 type VoicePreferences = {
   get(key: (typeof VOICE_ENGINE_PREFERENCE)[VoiceCapability]): Promise<VoiceEngineId | null>;
   get(key: 'feature.voice.system_voice' | 'feature.voice.deepseek_voice'): Promise<string>;
-  readCached(key: 'app.background_audio.consent'): boolean | null;
+  readCached(key: 'feature.voice.background_reading'): boolean;
+  subscribeChange?(key: 'feature.voice.background_reading'): (listener: () => void) => () => void;
 };
 
 /**
@@ -52,6 +53,9 @@ export function createVoice({
   getRegion(): Promise<NetworkRegion>;
 }) {
   const model = createVoiceModel(getRegion);
+  const isBackgroundReadingAllowed = () =>
+    preference.readCached('feature.voice.background_reading');
+
   const bindTranscription = (engine: {
     status(signal: AbortSignal): Promise<VoiceEngineStatus>;
     transcribe(
@@ -100,35 +104,85 @@ export function createVoice({
     preference,
     language,
     dictationLanguage,
-    canSpeakInBackground: () =>
-      Platform.OS === 'ios' && preference.readCached('app.background_audio.consent') === true,
-    beginBackgroundPlayback(labels, stop) {
-      if (
-        Platform.OS !== 'android' ||
-        preference.readCached('app.background_audio.consent') !== true
-      )
-        return;
+    canSpeakInBackground: () => Platform.OS === 'ios' && isBackgroundReadingAllowed(),
+    isBackgrounded: () => AppState.currentState === 'background',
+    beginBackgroundPlayback(labels, handlers) {
+      if ((Platform.OS !== 'android' && Platform.OS !== 'ios') || !isBackgroundReadingAllowed()) {
+        return undefined;
+      }
       const native = getVoiceInput();
-      if (!native?.beginPlayback || !native.endPlayback) return;
+      if (!native?.beginPlayback || !native.endPlayback) return undefined;
       const endPlayback = native.endPlayback.bind(native);
+      const requestPlaybackFocus = native.requestPlaybackFocus?.bind(native);
+      const updatePlaybackState = native.updatePlaybackState?.bind(native);
       const id = globalThis.crypto.randomUUID();
-      const subscription = native.addListener('playbackStopped', (event) => {
-        if (event.id === id) stop();
+      let isAdmitted = false;
+      let isEnded = false;
+      let endPromise: Promise<void> | undefined;
+
+      const commandSubscription = native.addListener('playbackCommand', (event) => {
+        if (event.id !== id || isEnded) return;
+        if (event.action === 'pause') handlers.onPause();
+        else if (event.action === 'resume') handlers.onResume();
+        else if (event.action === 'interrupt') handlers.onInterrupt();
+        else if (event.action === 'resume-interruption') handlers.onInterruptionEnded();
+        else if (event.action === 'stop') handlers.onStop();
       });
-      return native.beginPlayback(id, labels.title, labels.stop).then(
-        () => async () => {
-          subscription.remove();
+
+      const end = () => {
+        endPromise ??= (async () => {
+          isEnded = true;
+          commandSubscription.remove();
           try {
-            await voiceAudioSession.playback(false);
+            if (Platform.OS === 'android' && isAdmitted) {
+              await voiceAudioSession.playback(false).catch(() => {});
+            }
           } finally {
-            await endPlayback(id);
+            await endPlayback(id).catch(() => {});
           }
+        })();
+        return endPromise;
+      };
+
+      const admitted = native
+        .beginPlayback({
+          id,
+          title: labels.title,
+          subtitle: labels.subtitle,
+          channelName: labels.channelName,
+          playLabel: labels.play,
+          pauseLabel: labels.pause,
+          stopLabel: labels.stop,
+          deepLinkUrl: labels.deepLinkUrl,
+        })
+        .then(
+          () => {
+            if (isEnded) return false;
+            isAdmitted = true;
+            return true;
+          },
+          () => {
+            commandSubscription.remove();
+            return false;
+          },
+        );
+
+      return {
+        admitted,
+        ...(Platform.OS === 'android' && requestPlaybackFocus
+          ? {
+              async requestResume() {
+                if (isEnded || !isAdmitted) return true;
+                return (await requestPlaybackFocus(id).catch(() => false)) === true;
+              },
+            }
+          : {}),
+        async updateState(phase) {
+          if (isEnded || !isAdmitted) return;
+          await updatePlaybackState?.(id, phase);
         },
-        (error: unknown) => {
-          subscription.remove();
-          throw error;
-        },
-      );
+        end,
+      };
     },
     onBackground(listener) {
       const subscription = AppState.addEventListener('change', (state) => {
@@ -138,9 +192,17 @@ export function createVoice({
       return () => subscription.remove();
     },
   });
+
+  const unsubscribePreference = preference.subscribeChange?.('feature.voice.background_reading')(
+    () => {
+      if (!isBackgroundReadingAllowed()) runtime.revokeBackgroundPlayback();
+    },
+  );
+
   return {
     module: { ...runtime.module, localModel: model.module },
     async dispose() {
+      unsubscribePreference?.();
       // Stop admission/downloads immediately; runtime joins native recognition before disposal ends.
       await Promise.all([runtime.dispose(), model.dispose()]);
     },

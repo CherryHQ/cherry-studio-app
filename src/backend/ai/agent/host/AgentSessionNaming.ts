@@ -134,8 +134,7 @@ export class AgentSessionNaming {
       const uniqueModelId = await this.resolveNamingModelId();
       if (!uniqueModelId) return null;
       this.dependencies.signal?.throwIfAborted();
-      const system = await this.resolveNamingPrompt();
-      this.dependencies.signal?.throwIfAborted();
+      const system = this.resolveNamingPrompt();
       const prompt = JSON.stringify([
         { mainText: userText, role: 'user' },
         { mainText: assistantText, role: 'assistant' },
@@ -223,9 +222,7 @@ export class AgentSessionNaming {
     return null;
   }
 
-  private async resolveNamingPrompt(): Promise<string> {
-    const configuredPrompt = await this.dependencies.preference.get('agent.session_naming.prompt');
-    const language = this.dependencies.appLanguage();
-    return (configuredPrompt || FALLBACK_PROMPT).replaceAll('{{language}}', language);
+  private resolveNamingPrompt(): string {
+    return FALLBACK_PROMPT.replaceAll('{{language}}', this.dependencies.appLanguage());
   }
 }

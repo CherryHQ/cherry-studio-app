@@ -622,7 +622,7 @@ it.each(['remote-verification', 'bare-credentials'])(
     const m = new Module(filename, module);
     m.filename = filename; m.paths = Module._nodeModulePaths(require('node:path').dirname(filename));
     require.cache[filename] = m;
-    m._compile(code + '\\nresolveBuildContext = () => ({kind:"active"}); runUploadIosSymbols = async () => { ${mode === 'bare-credentials' ? `throw new GateError("TEST_DIAGNOSTIC", process.env.SENTRY_AUTH_TOKEN + " " + new URL(process.env.EXPO_PUBLIC_SENTRY_DSN).username);` : ''} let clock = 0; return waitForRemoteDebug({uuids:[{uuid:"${uuid}",arch:"arm64"}],fetchRecords:async()=>[],now:()=>clock,sleep:async(ms)=>{clock+=ms},deadlineMs:1000}); };', filename);
+    m._compile(code + '\\nresolveBuildContext = () => ({kind:"active"}); runUploadIosSymbols = async () => { ${mode === 'bare-credentials' ? `throw new exports.GateError("TEST_DIAGNOSTIC", process.env.SENTRY_AUTH_TOKEN + " " + new URL(process.env.EXPO_PUBLIC_SENTRY_DSN).username);` : ''} let clock = 0; return exports.waitForRemoteDebug({uuids:[{uuid:"${uuid}",arch:"arm64"}],fetchRecords:async()=>[],now:()=>clock,sleep:async(ms)=>{clock+=ms},deadlineMs:1000}); };', filename);
     m.exports.main();
   `,
     );
@@ -1506,7 +1506,7 @@ it('a Sentry upload cut off at the hook deadline leaves the build repairable', (
     const m = new Module(filename, module); m.filename = filename; m.paths = Module._nodeModulePaths(require('node:path').dirname(filename));
     require.cache[filename] = m;
     // Mirror boundedRun: a real native upload is bounded by the remaining hook budget.
-    m._compile(code + '\\nresolveBuildContext = () => ({kind:"active",buildId:"${f.ctx.buildId}"}); runUploadIosSymbols = async ({ deadlineMs }) => { const result = await runCommand("/bin/sleep", ["30"], { timeoutMs: deadlineMs - Date.now() }); throw new PendingSymbolUpload(result.timedOut ? "HOOK_DEADLINE" : "UNEXPECTED"); };', filename);
+    m._compile(code + '\\nresolveBuildContext = () => ({kind:"active",buildId:"${f.ctx.buildId}"}); runUploadIosSymbols = async ({ deadlineMs }) => { const result = await exports.runCommand("/bin/sleep", ["30"], { timeoutMs: deadlineMs - Date.now() }); throw new exports.PendingSymbolUpload(result.timedOut ? "HOOK_DEADLINE" : "UNEXPECTED"); };', filename);
     m.exports.main();
   `,
   );

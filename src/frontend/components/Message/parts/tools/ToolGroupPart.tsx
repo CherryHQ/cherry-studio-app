@@ -27,6 +27,10 @@ type ToolGroupPartProps = {
   startedAt?: number;
 };
 
+function ToolElapsedText({ startedAt }: { startedAt: number }) {
+  return useToolElapsed(startedAt, true) ?? null;
+}
+
 /** Keep the lightweight summary visible; tool detail readers only mount after a press. */
 export function ToolGroupPart({
   children,
@@ -85,7 +89,13 @@ export function ToolGroupPart({
     isRunning && summary.approvalCount === 0 && summary.dangerCount === 0,
   );
   const title = stableActivity ?? t('chat.toolGroup.activity');
-  const elapsed = useToolElapsed(startedAt, isRunning && summary.approvalCount === 0);
+  const staticStatusText = summary.approvalCount
+    ? t('chat.toolGroup.approvalCount', { count: summary.approvalCount })
+    : (ocrStatus ?? transcriptionStatus);
+  const hasValidStart = startedAt !== undefined && Number.isFinite(startedAt);
+  const statusText =
+    staticStatusText ??
+    (isRunning && hasValidStart ? <ToolElapsedText startedAt={startedAt} /> : undefined);
 
   return (
     <MessagePart.ToolGroup
@@ -93,11 +103,7 @@ export function ToolGroupPart({
       onDisclosureToggle={handleDisclosureToggle}
       onExpandedChange={onExpandedChange}
       state={isRunning ? 'running' : 'complete'}
-      statusText={
-        summary.approvalCount
-          ? t('chat.toolGroup.approvalCount', { count: summary.approvalCount })
-          : (ocrStatus ?? transcriptionStatus ?? elapsed)
-      }
+      statusText={statusText}
       statusTone={summary.approvalCount ? 'warning' : 'default'}
       title={title}
     >

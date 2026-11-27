@@ -4,7 +4,7 @@ import {
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
 import { useFocusEffect, useIsFocused, useIsPreview, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
@@ -196,10 +196,6 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     [api, isPreview, openTurn, sessionId],
   );
   const readCitations = messageWindow.readCitations;
-  const readCitationsRef = useRef(readCitations);
-  useEffect(() => {
-    readCitationsRef.current = readCitations;
-  }, [readCitations]);
   const shareTarget = useMemo<ChatShareTarget | undefined>(
     () =>
       sessionId
@@ -240,7 +236,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                     ...message,
                     modelName: resolveMessageModel(message)?.name,
                     citationSources: missing.length
-                      ? await readCitationsRef.current?.(message.id, missing, signal)
+                      ? await readCitations?.(message.id, missing, signal)
                       : undefined,
                   };
                 }),
@@ -253,7 +249,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
             },
           }
         : undefined,
-    [api, sessionId],
+    [api, readCitations, sessionId],
   );
   const isSessionAvailable =
     Boolean(sessionId) && !session.error && (session.isLoading || Boolean(session.data));

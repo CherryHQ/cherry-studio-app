@@ -8,11 +8,11 @@ did not establish a runtime crash or an installation failure.
 
 ## Build And Reporting Configuration
 
-- `scripts/buildLocal.ts` resolves the pinned EAS CLI 24.4.2 and local build plugin 24.3.0 from
+- `scripts/buildLocal.ts` resolves the pinned EAS CLI 27.11.0 and local build plugin 27.11.0 from
   project dependencies. The CLI's `@expo/eas-build-job` version selects that plugin version.
   Direct plugin execution avoids the nested `npx` command affected by an enclosing
   `npm exec --package` invocation. Global EAS installations and personal cache paths are not used.
-- `eas.json` requires CLI 24.4.2, matching the release workflows, and supplies `SENTRY_URL` in
+- `eas.json` requires CLI 27.11.0, matching the release workflows, and supplies `SENTRY_URL` in
   production alongside the environment-sourced token. Tokens remain outside Git. Sentry CLI
   [3.8.0 reconciles URL and token sources together](https://github.com/getsentry/sentry-cli/blob/3.8.0/src/config.rs).
   The direct CLI dependency matches the React Native SDK's upload CLI (3.8.2 after the warning

@@ -1,6 +1,7 @@
 import type { FetchFunction } from '@ai-sdk/provider-utils';
 
 import type { ImageGenerationSubmitInput, ImageGenerationTransport } from '../imageGenerationModel';
+import { createTimeoutSignal } from '../transportUtils';
 
 /**
  * Ollama single-shot image transport. POSTs `${baseURL}/generate` — the same
@@ -22,25 +23,6 @@ import type { ImageGenerationSubmitInput, ImageGenerationTransport } from '../im
 // longer one. The timeout is expressed as an AbortSignal so the transport stays
 // portable across browser, Expo and server fetch implementations.
 const IMAGE_GENERATION_TIMEOUT_MS = 15 * 60 * 1000;
-
-function createTimeoutSignal(parent?: AbortSignal): { signal: AbortSignal; cleanup: () => void } {
-  const controller = new AbortController();
-  const abortFromParent = () => controller.abort(parent?.reason);
-  if (parent?.aborted) abortFromParent();
-  else parent?.addEventListener('abort', abortFromParent, { once: true });
-  const timer = setTimeout(
-    () => controller.abort(new Error('Ollama image generation timed out')),
-    IMAGE_GENERATION_TIMEOUT_MS,
-  );
-
-  return {
-    signal: controller.signal,
-    cleanup: () => {
-      clearTimeout(timer);
-      parent?.removeEventListener('abort', abortFromParent);
-    },
-  };
-}
 
 export interface OllamaTransportSettings {
   /** Already carries the `/api` suffix, matching `ollama-ai-provider-v2`'s own baseURL convention. */
@@ -67,7 +49,11 @@ class OllamaTransport implements ImageGenerationTransport {
     const [width, height] = input.size?.split('x').map(Number) ?? [];
     const steps = input.providerParams.steps;
     const fetchImpl = this.fetch ?? fetch;
-    const timeout = createTimeoutSignal(input.signal);
+    const timeout = createTimeoutSignal(
+      input.signal,
+      IMAGE_GENERATION_TIMEOUT_MS,
+      'Ollama image generation timed out',
+    );
     let response: Response;
     try {
       response = await fetchImpl(`${this.baseURL}/generate`, {

@@ -1,5 +1,7 @@
+import { Dialog } from '@cherrystudio/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
+import { BackHandler, Platform } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type {
@@ -13,6 +15,7 @@ import { AppUpdateDialog } from '../AppUpdateDialog';
 const mockIdle = { status: 'idle' } as const;
 let mockDownload: AppUpdateDownload = mockIdle;
 const mockUpdate = {
+  channel: 'apk',
   getDownload: () => mockDownload,
   subscribeDownload: () => () => {},
   releaseNotes: jest.fn(async () => 'Release notes'),
@@ -53,19 +56,20 @@ const actions = {
   cancel: jest.fn(),
   close: jest.fn(),
   install: jest.fn(),
-  retry: jest.fn(),
+  checkAndStart: jest.fn(),
   start: jest.fn(),
 };
 let client: QueryClient;
 let renderer: ReactTestRenderer;
-const tree = (current: AppUpdateRelease | null) => (
+const tree = (current: AppUpdateRelease | null, requiredVersion?: string) => (
   <QueryClientProvider client={client}>
-    <AppUpdateDialog actions={actions} release={current} />
+    <AppUpdateDialog actions={actions} release={current} requiredVersion={requiredVersion} />
   </QueryClientProvider>
 );
 const rendered = () => JSON.stringify(renderer.toJSON());
 beforeEach(() => {
   jest.clearAllMocks();
+  actions.cancel.mockResolvedValue(undefined);
   mockDownload = mockIdle;
   mockUpdate.releaseNotes.mockResolvedValue('Release notes');
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -73,6 +77,38 @@ beforeEach(() => {
 afterEach(() => {
   act(() => renderer.unmount());
   client.clear();
+  jest.restoreAllMocks();
+});
+
+test.each(['android', 'ios'] as const)(
+  'mandatory update on %s cannot be dismissed into the app',
+  async (os) => {
+    jest.replaceProperty(Platform, 'OS', os);
+    const exit = jest.spyOn(BackHandler, 'exitApp').mockImplementation(() => {});
+    const required = '2.0.0';
+    await act(async () => {
+      renderer = create(tree(null, required));
+    });
+    expect(rendered()).toContain('appUpdate.download');
+    expect(rendered()).not.toContain('appUpdate.later');
+    expect(rendered().includes('appUpdate.exit')).toBe(os === 'android');
+    await act(async () => renderer.root.findByType(Dialog).props.onOpenChange(false));
+    expect(exit).toHaveBeenCalledTimes(os === 'android' ? 1 : 0);
+    expect(actions.close).not.toHaveBeenCalled();
+
+    mockDownload = { status: 'downloading', release: apkRelease, receivedBytes: 5, totalBytes: 10 };
+    await act(async () => renderer.update(tree(apkRelease, required)));
+    expect(rendered()).not.toContain('appUpdate.downloadInBackground');
+  },
+);
+
+test('a previous APK transfer is not offered by the startup prompt', async () => {
+  mockDownload = { status: 'ready', release: apkRelease };
+  await act(async () => {
+    renderer = create(tree(null, '3.0.0'));
+  });
+  expect(rendered()).toContain('appUpdate.download');
+  expect(rendered()).not.toContain('appUpdate.install');
 });
 
 test('an open update dialog requests and displays release notes', async () => {

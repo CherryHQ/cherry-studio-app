@@ -4,11 +4,12 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { MessageListItem } from '@/frontend/components/Message';
 
 import { MessageTranslationContent } from '../MessageTranslation';
+import type { MessageTranslationState } from '../MessageTranslationStore';
 
 const mockSetStringAsync = jest.fn().mockResolvedValue(true);
 let mockTranslationState: {
   source: { messageId: string; sourceHash: string; text: string };
-  state: { visible: boolean; status: 'success'; language: 'zh-CN'; content: string };
+  state: Pick<MessageTranslationState, 'visible' | 'status' | 'language' | 'content' | 'error'>;
   store: { start: jest.Mock; cancel: jest.Mock; toggle: jest.Mock };
 };
 
@@ -96,4 +97,32 @@ it('retains duplicate-URL citation alias IDs in translated display and clipboard
   });
   expect(mockSetStringAsync).toHaveBeenCalledWith('第二个别名 [1]，第一个 [1]。');
   await act(async () => renderer.unmount());
+});
+
+it.each([
+  { error: 'non_streaming_mode_unsupported', key: 'chat.errorPart.message.streamingRequired' },
+  { error: 'failed', key: 'translation.error.failed' },
+] as const)('shows $key for translation error $error', async ({ error, key }) => {
+  mockTranslationState = {
+    source: { messageId: 'm1', sourceHash: 'hash', text: 'Original' },
+    state: { visible: true, status: 'error', language: 'zh-CN', content: '', error },
+    store: { start: jest.fn(), cancel: jest.fn(), toggle: jest.fn() },
+  };
+  const message: MessageListItem = {
+    id: 'm1',
+    role: 'assistant',
+    status: 'success',
+    data: { parts: [{ type: 'text', text: 'Original' }] },
+  };
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(<MessageTranslationContent message={message} />);
+  });
+  try {
+    expect(renderer.root.findByProps({ accessibilityLiveRegion: 'polite' }).props.children).toBe(
+      key,
+    );
+  } finally {
+    await act(async () => renderer.unmount());
+  }
 });

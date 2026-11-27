@@ -28,7 +28,7 @@ type RegisterEndReachedHandler = (handler?: () => void) => void;
  * both. `ScrollShadow` dissolves rows into the sidebar surface at the top, and
  * the header's blur lives in its `SidebarFade` layer.
  */
-export function SidebarBody() {
+export function SidebarBody({ dockHeight }: { dockHeight: number }) {
   const insets = useSafeAreaInsets();
   const shell = useOptionalNavigationShell();
   const isSelecting = useSidebarSelectionSnapshot((state) => state.isSelecting);
@@ -44,7 +44,7 @@ export function SidebarBody() {
   const footerHiddenInWide = shell?.shellMode === 'wide-rail' && !isSelecting;
   const bodyBottomPadding = footerHiddenInWide
     ? insets.bottom + 12
-    : dockBottomPadding + appSidebar.dockHeight + appSidebar.headerGapY;
+    : dockBottomPadding + dockHeight + appSidebar.headerGapY;
 
   return (
     <ScrollShadow className="flex-1" color={backgroundColor} size={headerInset} visibility="top">

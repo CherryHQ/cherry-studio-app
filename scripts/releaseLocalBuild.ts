@@ -1,11 +1,10 @@
 import { spawn, type StdioOptions } from 'node:child_process';
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import {
   appendFileSync,
   chmodSync,
   copyFileSync,
   cpSync,
-  createReadStream,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -24,8 +23,25 @@ import { StringDecoder } from 'node:string_decoder';
 import { parseArgs } from 'node:util';
 
 import { requireCliPath, requireSafeId } from './cliInput';
-import { sanitizeDiagnostic } from './uploadIosSymbols';
+import {
+  SHA_RE,
+  TAG_RE,
+  assertNoSecretLeak,
+  fileEvidence,
+  parseReleaseTag,
+  redactSecretsInStream,
+  sanitizeDiagnostic,
+  sanitizeSecrets,
+} from './release/shared';
 import { verifyIosSymbolPackage } from './verifyIosSymbolPackage';
+
+export {
+  assertNoSecretLeak,
+  fileEvidence,
+  parseReleaseTag,
+  redactSecretsInStream,
+  sanitizeSecrets,
+} from './release/shared';
 
 export type ReleaseTargetId =
   | 'android-public'
@@ -105,8 +121,6 @@ export const DEFAULT_ANDROID_GRADLE_OPTS =
 export const DEFAULT_PNPM_VIRTUAL_STORE_MAX_LENGTH = '40';
 
 const INSTALL_PERMISSION = 'android.permission.REQUEST_INSTALL_PACKAGES';
-const TAG_RE = /^v([0-9]+\.[0-9]+\.[0-9]+)(?:-([0-9A-Za-z.-]+))?$/;
-const SHA_RE = /^[a-f0-9]{40}$/i;
 
 export interface LocalCommandResult {
   stdout: string;
@@ -116,43 +130,6 @@ export interface LocalCommandResult {
 
 const MAX_CAPTURE_BYTES = 64 * 1024 * 1024;
 const MAX_STREAM_TAIL_CHARS = 256 * 1024;
-
-export function redactSecretsInStream(
-  text: string,
-  secrets: Iterable<string> = [],
-  env: NodeJS.ProcessEnv = process.env,
-): string {
-  const candidates = new Set<string>();
-  const addSecret = (value: string | undefined) => {
-    if (!value || value.length < 4) return;
-    candidates.add(value);
-    try {
-      const parsed = new URL(value);
-      for (const cred of [parsed.username, parsed.password]) {
-        for (const part of [cred, decodeURIComponent(cred)]) {
-          if (part && part.length >= 4) candidates.add(part);
-        }
-      }
-    } catch {
-      // Non-URL secret value.
-    }
-  };
-  for (const value of secrets) addSecret(value);
-  for (const [key, value] of Object.entries(env)) {
-    if (value && /token|secret|password|dsn/i.test(key)) {
-      addSecret(value);
-    }
-  }
-  let redacted = text;
-  // Mask longest values first so full URLs/DSNs redact before component secrets.
-  for (const value of [...candidates].sort((a, b) => b.length - a.length)) {
-    redacted = redacted.split(value).join('[redacted]');
-  }
-  return redacted
-    .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
-    .replace(/\b(key|token|sig|signature|X-Amz-[a-z0-9-]+)=([^\s&#"']*)/gi, '$1=[redacted]')
-    .replace(/(?:sntrys_|sntryu_)[a-zA-Z0-9_]+/g, '[redacted]');
-}
 
 export type RunLocalCommand = (
   command: string,
@@ -335,28 +312,6 @@ export function resolveRepoReleasesDir(
   return join(releaseRoot, repoNamespace);
 }
 
-export function assertNoSecretLeak(text: string, secrets: Iterable<string>) {
-  for (const secret of secrets) {
-    if (secret && secret.length >= 4 && text.includes(secret)) {
-      throw new Error('Refusing to persist manifest containing secret material.');
-    }
-  }
-}
-
-export function sanitizeSecrets(
-  text: string,
-  secrets: Iterable<string> = [],
-  env: NodeJS.ProcessEnv = process.env,
-): string {
-  let redacted = text;
-  for (const value of secrets) {
-    if (value && value.length >= 4) {
-      redacted = redacted.split(value).join('[redacted]');
-    }
-  }
-  return sanitizeDiagnostic(redacted, env);
-}
-
 /**
  * Validates that all required release secrets and build configuration variables are present
  * in the process environment without echoing secret values.
@@ -378,24 +333,6 @@ export function assertReleaseEnv(
     throw new Error(`Missing required release environment variables: ${missing.join(', ')}`);
   }
   return resolved;
-}
-
-export function parseReleaseTag(tag: string): {
-  tag: string;
-  releaseVersion: string;
-  baseVersion: string;
-  isPrerelease: boolean;
-} {
-  const match = TAG_RE.exec(tag);
-  if (!match) {
-    throw new Error(`Invalid release tag: ${tag}. Expected v<major>.<minor>.<patch>[-prerelease].`);
-  }
-  return {
-    tag,
-    releaseVersion: tag.slice(1),
-    baseVersion: match[1]!,
-    isPrerelease: Boolean(match[2]),
-  };
 }
 
 export function assertDiskSpace(
@@ -420,14 +357,6 @@ export function assertDiskSpace(
     );
   }
   return { availableBytes, requiredBytes };
-}
-
-export async function fileEvidence(filePath: string): Promise<{ size: number; sha256: string }> {
-  const hash = createHash('sha256');
-  for await (const chunk of createReadStream(filePath)) {
-    hash.update(chunk);
-  }
-  return { size: statSync(filePath).size, sha256: hash.digest('hex') };
 }
 
 function readAppIdentifiers(projectDir: string) {

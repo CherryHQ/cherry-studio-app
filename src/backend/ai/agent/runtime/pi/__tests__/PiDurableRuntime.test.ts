@@ -3,12 +3,14 @@ import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
 import { createModels } from '@earendil-works/pi-ai/models';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 import {
+  AssistantEntry,
   CompactionTask,
   createRegistry,
   CompactionEntry,
   ResetEntry,
   defineDocFamily,
   defineTask,
+  defineTool,
   Harness,
   hook,
   InboxDoc,
@@ -16,6 +18,7 @@ import {
   GenerationTask,
   MemoryStorage,
   ProviderDoc,
+  ToolTask,
   UserEntry,
   type ConversationId,
   type TaskGraphNode,
@@ -61,6 +64,28 @@ test('execution protection follows runnable work, including due sleeps and cance
   };
   expect(hasRunnablePiTasks({ tasks: { '1': task } }, 1000)).toBe(false);
   expect(hasRunnablePiTasks({ tasks: { '1': task } }, 2000)).toBe(true);
+  const signalSleep: TaskGraphNode = {
+    ...task,
+    state: { status: 'sleeping', phase: 'generate', signals: [{ signal: 'resume', key: 'key' }] },
+  };
+  expect(hasRunnablePiTasks({ tasks: { '1': signalSleep } }, 3000)).toBe(false);
+  const joining = {
+    ...task,
+    id: 3 as TaskId,
+    state: { status: 'waiting', phase: 'generate', on: [task.id, 2 as TaskId], policy: 'any' },
+  } satisfies TaskGraphNode;
+  expect(hasRunnablePiTasks({ tasks: { '1': task, '3': joining } }, 1000)).toBe(true);
+  expect(
+    hasRunnablePiTasks(
+      {
+        tasks: {
+          '1': task,
+          '3': { ...joining, state: { ...joining.state, policy: 'allSettled' } },
+        },
+      },
+      1000,
+    ),
+  ).toBe(false);
   expect(hasRunnablePiTasks({ tasks: { '1': { ...task, abortRequested: true } } }, 1000)).toBe(
     true,
   );
@@ -76,6 +101,35 @@ test('execution protection follows runnable work, including due sleeps and cance
 });
 
 describe('PiDurableRuntime identity and handoff', () => {
+  test('repeated usage delivery checkpoints every change to the pending list', async () => {
+    const storage = new MemoryStorage();
+    const runtime = await PiDurableRuntime.open(storage, options());
+    const commit = jest.spyOn(storage, 'commit');
+    try {
+      for (let index = 0; index < 5; index++) {
+        const id = `usage-${index}`;
+        const value = { tokens: index + 1 };
+        await runtime.saveUsage(id, value);
+        expect(await runtime.pendingUsage()).toEqual([{ id, value }]);
+        await runtime.acknowledgeUsage(id);
+        expect(await runtime.pendingUsage()).toEqual([]);
+      }
+      const pending = await storage.findDocument(
+        { kind: 'cherry.usage-pending', scope: { kind: 'session' }, key: 'pending' },
+        'current',
+        BACKGROUND_CONTEXT,
+      );
+      const revisionKinds = commit.mock.calls
+        .flatMap(([batches]) => batches.flat())
+        .flatMap((write) =>
+          write.type === 'document.change' && write.id === pending!.id ? [write.content.kind] : [],
+        );
+      expect(revisionKinds).toEqual(Array(9).fill('base'));
+    } finally {
+      await runtime.close();
+    }
+  });
+
   test('withdrawal uses the current predecessor after a different queued input is steered', async () => {
     class ReopenableStorage extends MemoryStorage {
       override async close() {}
@@ -494,13 +548,48 @@ describe('PiDurableRuntime identity and handoff', () => {
     }
   });
 
+  test('file grants use bounded deltas and keep all grants at the next checkpoint', async () => {
+    const storage = new MemoryStorage();
+    const runtime = await PiDurableRuntime.open(storage, options());
+    try {
+      const conversation = await runtime.ensureConversation(seed);
+      const document = await storage.findDocument(
+        {
+          kind: 'cherry.resources',
+          scope: { kind: 'conversation', conversationId: conversation.id },
+        },
+        'current',
+        BACKGROUND_CONTEXT,
+      );
+      if (!document) throw new Error('Expected a file grant document');
+
+      const fileIds = Array.from({ length: 32 }, (_, index) => `file-${index}`);
+      for (const id of fileIds) await runtime.grantFiles(seed.sessionId, [id]);
+      const before = await storage.document(document.id, 'current', BACKGROUND_CONTEXT);
+      expect(before?.deltasSinceBase).toBe(32);
+
+      await runtime.grantFiles(seed.sessionId, ['last-file']);
+      const after = await storage.document(document.id, 'current', BACKGROUND_CONTEXT);
+      expect(after).toMatchObject({
+        deltasSinceBase: 0,
+        value: { fileEntryIds: [...fileIds, 'last-file'] },
+      });
+    } finally {
+      await runtime.close();
+    }
+  });
+
   test.each(['1.4.0', '1.5.0'])(
     'reopens a %s run and advances waiting input after a missing-model failure',
     async (version) => {
       class ReopenableStorage extends MemoryStorage {
         override async close() {}
       }
-      const legacyGeneration = defineTask({ ...GenerationTask.definition, version: 1 });
+      const generationVersion = version === '1.4.0' ? 1 : 2;
+      const legacyGeneration = defineTask({
+        ...GenerationTask.definition,
+        version: generationVersion,
+      });
       const storage = new ReopenableStorage();
       const first = await Harness.open(storage, options(), BACKGROUND_CONTEXT);
       const conversation = await first.createConversation(
@@ -519,7 +608,7 @@ describe('PiDurableRuntime identity and handoff', () => {
           entry: entry.id,
         });
         const taskId = await tx.createTask(
-          version === '1.4.0' ? legacyGeneration : GenerationTask,
+          legacyGeneration,
           {},
           {
             ownership: { kind: 'conversation' },
@@ -561,8 +650,10 @@ describe('PiDurableRuntime identity and handoff', () => {
           BACKGROUND_CONTEXT,
         );
         expect((await storage.document(live!.id, 'current', BACKGROUND_CONTEXT))?.version).toBe(1);
-        expect((await storage.task(savedRun.taskId, BACKGROUND_CONTEXT))?.version).toBe(1);
       }
+      expect((await storage.task(savedRun.taskId, BACKGROUND_CONTEXT))?.version).toBe(
+        generationVersion,
+      );
       const reopened = await Harness.open(storage, options(), BACKGROUND_CONTEXT);
       try {
         const inspected = await reopened.inspect(BACKGROUND_CONTEXT);
@@ -575,6 +666,9 @@ describe('PiDurableRuntime identity and handoff', () => {
           (await reopened.snapshot(LiveDoc, conversation.id, BACKGROUND_CONTEXT))?.run?.turns,
         ).toBe(0);
         reopened.resume();
+        expect(await reopened.waitForTask(savedRun.taskId, BACKGROUND_CONTEXT)).toMatchObject({
+          version: 3,
+        });
         await reopened.waitForIdle(BACKGROUND_CONTEXT);
         const records = await Promise.all(
           inspected.submissions.map(async ({ id }) =>
@@ -590,6 +684,78 @@ describe('PiDurableRuntime identity and handoff', () => {
     },
   );
 
+  test('reopens a 1.5.0 tool task at v4 and preserves its unoffered flag', async () => {
+    class ReopenableStorage extends MemoryStorage {
+      override async close() {}
+    }
+    const storage = new ReopenableStorage();
+    const configuration = options();
+    const execute = jest.fn(async () => ({
+      output: [{ type: 'text' as const, text: 'Executed' }],
+    }));
+    configuration.registry.install({
+      name: 'test.lookup',
+      tools: [
+        defineTool({
+          name: 'lookup',
+          description: 'Look up an item.',
+          parameters: { type: 'object' },
+          execute,
+        }),
+      ],
+    });
+    const first = await Harness.open(storage, configuration, BACKGROUND_CONTEXT);
+    const conversation = await first.createConversation(
+      { ownership: { kind: 'ownerless' } },
+      BACKGROUND_CONTEXT,
+    );
+    const taskId = await conversation.commit(async (tx) => {
+      const assistant = await tx.appendEntry(AssistantEntry, conversation.id, {
+        model: [
+          {
+            ...emptyAssistantMessage({
+              api: 'openai-responses',
+              provider: 'test',
+              id: 'model',
+              name: 'Model',
+              baseUrl: '',
+              input: ['text'],
+              reasoning: false,
+              contextWindow: 1024,
+              maxTokens: 128,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            }),
+            stopReason: 'toolUse',
+            content: [{ type: 'toolCall', id: 'call', name: 'lookup', arguments: {} }],
+          },
+        ],
+      });
+      const legacyTool = defineTask({ ...ToolTask.definition, version: 3 });
+      return tx.createTask(
+        legacyTool,
+        { kind: 'model', assistant: assistant.id, callId: 'call', unoffered: true },
+        { ownership: { kind: 'conversation' } },
+      );
+    }, BACKGROUND_CONTEXT);
+    await first.close(BACKGROUND_CONTEXT);
+    expect(await storage.task(taskId, BACKGROUND_CONTEXT)).toMatchObject({ version: 3 });
+
+    const reopened = await Harness.open(storage, configuration, BACKGROUND_CONTEXT);
+    try {
+      reopened.resume();
+      expect(await reopened.waitForTask(taskId, BACKGROUND_CONTEXT)).toMatchObject({ version: 4 });
+      const restored = (await reopened.conversation(conversation.id, BACKGROUND_CONTEXT))!;
+      expect((await restored.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
+        role: 'toolResult',
+        toolCallId: 'call',
+        isError: true,
+      });
+      expect(execute).not.toHaveBeenCalled();
+    } finally {
+      await reopened.close(BACKGROUND_CONTEXT);
+    }
+  });
+
   test.each(['provider', 'hook'])('settles failed compaction (%s)', async (source) => {
     const configuration = options();
     if (source === 'hook') {
@@ -597,7 +763,7 @@ describe('PiDurableRuntime identity and handoff', () => {
         name: 'test.summary-failure',
         hooks: [
           hook(CompactionTask, {
-            beforeCompact: () => ({ failure: 'Compaction provider failed' }),
+            beforeCompact: () => ({ kind: 'failure', failure: 'Compaction provider failed' }),
           }),
         ],
       });
@@ -831,10 +997,12 @@ describe('PiDurableRuntime identity and handoff', () => {
           }),
         BACKGROUND_CONTEXT,
       );
+      const scanEntries = jest.spyOn(storage, 'scanEntries');
       expect(await runtime.latestInput(seed.sessionId, compaction.id)).toEqual({
         record,
         metadata,
       });
+      expect(scanEntries).not.toHaveBeenCalled();
       await runtime.history(seed.sessionId, 1);
       expect(
         scan.mock.calls.filter(([query]) => query.conversationId === conversation.id),
@@ -843,6 +1011,163 @@ describe('PiDurableRuntime identity and handoff', () => {
       expect(await runtime.withdrawInput(seed.sessionId, 'missing')).toBe('not_found');
       expect(await runtime.sessions()).toEqual([
         { sessionId: seed.sessionId, binding: await runtime.binding(seed.sessionId) },
+      ]);
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('latest input waits for a stored submission to reach the warm index', async () => {
+    class PublicationStorage extends MemoryStorage {
+      publishing(publish: () => void) {
+        publish();
+      }
+    }
+    const storage = new PublicationStorage();
+    const configuration = options();
+    const harness = await Harness.open(storage, configuration, BACKGROUND_CONTEXT);
+    const open = jest.spyOn(Harness, 'open').mockResolvedValueOnce(harness);
+    const runtime = await PiDurableRuntime.open(storage, configuration).finally(() =>
+      open.mockRestore(),
+    );
+    let releasePublication: (() => void) | undefined;
+    try {
+      const conversation = await runtime.ensureConversation(seed);
+      expect(await runtime.placedInputs(seed.sessionId, { limit: 1 })).toEqual([]);
+
+      const publication = Promise.withResolvers<() => void>();
+      jest.spyOn(storage, 'publishing').mockImplementationOnce(publication.resolve);
+      const submitted = conversation.commit(async (tx) => {
+        const entry = await tx.appendEntry(conversation.id, seed.entries[0]!);
+        return tx.createSubmission({
+          conversationId: conversation.id,
+          type: 'input',
+          status: 'placed',
+          requestId: 'stored-input',
+          entry: entry.id,
+        });
+      }, BACKGROUND_CONTEXT);
+      const publish = await Promise.race([publication.promise, submitted.then(() => undefined)]);
+      if (!publish) throw new Error('Expected publication to be held');
+      releasePublication = publish;
+      const stored = await storage.submissionByRequest(
+        conversation.id,
+        'stored-input',
+        BACKGROUND_CONTEXT,
+      );
+      if (stored?.entry === undefined)
+        throw new Error('Expected a stored input before publication');
+
+      // Model a lookup that resolved the session before the writer was admitted.
+      jest.spyOn(runtime, 'conversation').mockResolvedValueOnce(conversation);
+      const commit = harness.commit.bind(harness);
+      jest.spyOn(harness, 'commit').mockImplementationOnce((read, context, commitOptions) =>
+        commit(
+          async (tx) => {
+            const waitForEntryPublication = tx.waitForEntryPublication.bind(tx);
+            jest.spyOn(tx, 'waitForEntryPublication').mockImplementationOnce((id) => {
+              const publicationWait = waitForEntryPublication(id);
+              publish();
+              return publicationWait;
+            });
+            try {
+              return await read(tx);
+            } finally {
+              // If the gate is omitted, release only after the callback has selected from the stale index.
+              publish();
+            }
+          },
+          context,
+          commitOptions,
+        ),
+      );
+      const latest = await runtime.latestInput(seed.sessionId, stored.entry);
+      expect(latest?.record).toEqual(await submitted);
+    } finally {
+      releasePublication?.();
+      await runtime.close();
+    }
+  });
+
+  test('placed inputs respect fork boundaries and avoid bulk entry scans', async () => {
+    const storage = new MemoryStorage();
+    const runtime = await PiDurableRuntime.open(storage, options());
+    const place = async (sessionId: string, requestId: string) => {
+      const metadata = { requestId };
+      const submission = await runtime.submit(
+        sessionId,
+        { type: 'input', requestId, content: requestId },
+        metadata,
+      );
+      return { record: await submission.wait(BACKGROUND_CONTEXT), metadata };
+    };
+    try {
+      const root = await runtime.ensureConversation(seed);
+      const inherited = await place(seed.sessionId, 'inherited');
+      const hidden = await place(seed.sessionId, 'hidden');
+      const child = await runtime.forkConversation(seed.sessionId, {
+        ...seed,
+        sessionId: 'child',
+        at: inherited.record.entry!,
+        resourceFileEntryIds: [],
+      });
+      const newer = await place('child', 'newer');
+      expect(newer.record.entry!).toBeGreaterThan(hidden.record.entry!);
+      const grandchild = await runtime.forkConversation('child', {
+        ...seed,
+        sessionId: 'grandchild',
+        at: newer.record.entry!,
+        resourceFileEntryIds: [],
+      });
+      await grandchild.commit(async (tx) => {
+        await tx.createSubmission({
+          conversationId: grandchild.id,
+          type: 'input',
+          status: 'queued',
+          requestId: 'queued',
+        });
+      }, BACKGROUND_CONTEXT);
+      const scanEntries = jest.spyOn(storage, 'scanEntries');
+      const readEntry = jest.spyOn(storage, 'entry');
+      const scanSubmissions = jest.spyOn(storage, 'scanSubmissions');
+      const byRequest = jest.spyOn(storage, 'submissionByRequest');
+      const readMetadata = jest.spyOn(runtime, 'submissionMetadata');
+      expect(
+        await runtime.placedInputs('grandchild', {
+          limit: 2,
+          requestIds: ['inherited', 'hidden', 'inherited', 'newer', 'queued'],
+        }),
+      ).toEqual([newer, inherited]);
+      expect(byRequest).toHaveBeenCalledTimes(3 * 4);
+      expect(scanSubmissions).not.toHaveBeenCalled();
+      expect(scanEntries).not.toHaveBeenCalled();
+      expect(
+        await runtime.placedInputs('grandchild', {
+          limit: 2,
+          maxEntryId: hidden.record.entry!,
+          requestIds: ['newer', 'inherited'],
+        }),
+      ).toEqual([inherited]);
+      expect(await runtime.placedInputs('grandchild', { limit: 1, requestIds: [] })).toEqual([]);
+      readMetadata.mockClear();
+      expect(await runtime.placedInputs('grandchild', { limit: 1 })).toEqual([newer]);
+      expect(readMetadata).toHaveBeenCalledTimes(1);
+      expect(scanSubmissions.mock.calls.map(([query]) => query.conversationId)).toEqual([
+        grandchild.id,
+        child.id,
+      ]);
+      expect(await runtime.placedInputs('grandchild', { limit: 3 })).toEqual([newer, inherited]);
+      expect(await runtime.latestInput('grandchild', hidden.record.entry!)).toEqual(inherited);
+      expect(scanEntries).not.toHaveBeenCalled();
+      expect(readEntry).not.toHaveBeenCalledWith(
+        grandchild.id,
+        hidden.record.entry,
+        BACKGROUND_CONTEXT,
+      );
+      expect(scanSubmissions.mock.calls.map(([query]) => query.conversationId)).toEqual([
+        grandchild.id,
+        child.id,
+        root.id,
       ]);
     } finally {
       await runtime.close();
@@ -1109,7 +1434,7 @@ describe('PiDurableRuntime identity and handoff', () => {
 
   test('joins an idle background compaction instead of reporting busy and spares it on caller abort', async () => {
     const configuration = options();
-    let resolveSummary!: (decision: { summary: string }) => void;
+    let resolveSummary!: (decision: { kind: 'summary'; summary: string }) => void;
     let compactSignal!: AbortSignal;
     let markStarted!: () => void;
     const compactStarted = new Promise<void>((resolve) => {
@@ -1120,7 +1445,7 @@ describe('PiDurableRuntime identity and handoff', () => {
         _compaction: unknown,
         _api: unknown,
         context: { abortSignal?: AbortSignal },
-      ): Promise<{ summary: string }> => {
+      ): Promise<{ kind: 'summary'; summary: string }> => {
         compactSignal = context.abortSignal!;
         markStarted();
         return new Promise((resolve) => {
@@ -1196,7 +1521,7 @@ describe('PiDurableRuntime identity and handoff', () => {
 
       const joined = runtime.compactContext(seed.sessionId, new AbortController().signal);
       expect(beforeCompact).toHaveBeenCalledTimes(1);
-      resolveSummary({ summary: 'Background compacted summary' });
+      resolveSummary({ kind: 'summary', summary: 'Background compacted summary' });
       await expect(joined).resolves.toBe('compacted');
       expect((await conversation.context(BACKGROUND_CONTEXT)).messages).toEqual(
         expect.arrayContaining([
@@ -1212,7 +1537,7 @@ describe('PiDurableRuntime identity and handoff', () => {
         ]),
       );
     } finally {
-      resolveSummary?.({ summary: 'Cleanup' });
+      resolveSummary?.({ kind: 'summary', summary: 'Cleanup' });
       await runtime.close();
     }
   });

@@ -1,5 +1,4 @@
-import type { Context } from '@earendil-works/chord';
-import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+import { BACKGROUND_CONTEXT, type Context } from '@earendil-works/chord/context';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { estimateTextTokens } from '@earendil-works/pi-ai/utils/estimate';
 import type { CodemodeSandboxBase } from '@earendil-works/pi-codemode/native';
@@ -10,8 +9,8 @@ import {
   hook,
   section,
   type AgentChange,
-  type Cursor,
   type EntryId,
+  type Extension,
   CompactionEntry,
   ResetEntry,
   type HookApi,
@@ -28,6 +27,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import {
   LANES_PER_SESSION,
+  RuntimeCorruptLaneError,
   laneKey,
   parseLaneKey,
   runtimeLane,
@@ -49,7 +49,7 @@ import { estimatePiContextUsage, toPiConversation } from './modelMessages';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
 import { PI_CODEMODE_STORE_CHARACTERS, retainPiCodemodeOutput } from './piCodemodeOutput';
 import { createPiCodemodeSandbox } from './piCodemodeSandbox';
-import { summarizePiCompaction } from './piCompaction';
+import { PiCompactionError, summarizePiCompaction } from './piCompaction';
 import { cherryClientIdentity, createPiDurableModels, piDurableModelKey } from './piDurableModels';
 import { PiDurableObserver } from './PiDurableObserver';
 import {
@@ -226,7 +226,6 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
           steeringMode: 'all',
           followUpMode: 'one-at-a-time',
           afterFailedRun: 'continue',
-          progress: { persistWithinMs: 0 },
           compaction: { modelOverrides: this.models.compactionOverrides },
         }),
         identity: cherryClientIdentity(),
@@ -264,7 +263,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
           await this.restoreLane(lane, signal);
         } catch (error) {
           signal?.throwIfAborted();
-          if (!(error instanceof ZodError) || !ports.onRecoveryFailure) throw error;
+          if (!(error instanceof RuntimeCorruptLaneError) || !ports.onRecoveryFailure) throw error;
           await ports.onRecoveryFailure(lane, error);
         }
       }
@@ -423,11 +422,22 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       .map(({ sessionId }) => parseLaneKey(sessionId));
   }
 
+  private wrapCorruptLaneError(error: unknown, lane?: RuntimeLane): unknown {
+    return error instanceof ZodError
+      ? new RuntimeCorruptLaneError(error.message, { lane, cause: error })
+      : error;
+  }
+
   async configuration(lane: RuntimeLane): Promise<RuntimeConversationConfiguration> {
     const key = laneKey(lane);
-    const stored =
-      this.configurations.get(key) ??
-      PiConfigurationSchema.parse(await this.requireRuntime().configuration(key));
+    let stored: PiStoredConfiguration;
+    try {
+      stored =
+        this.configurations.get(key) ??
+        PiConfigurationSchema.parse(await this.requireRuntime().configuration(key));
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
     return {
       kind: stored.kind,
       model: { ...stored.model },
@@ -561,18 +571,22 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
 
   async observe(lane: RuntimeLane, listener: (event: RuntimeConversationEvent) => void) {
     const runtime = this.requireRuntime();
-    // Idle copies also need validation before the Host can admit more input to them.
-    await this.configuration(lane);
-    const observer = new PiDurableObserver(runtime, lane, listener);
-    const snapshot = await observer.start();
-    this.observers.add(observer);
-    return {
-      snapshot,
-      unsubscribe: async () => {
-        this.observers.delete(observer);
-        await observer.stop();
-      },
-    };
+    try {
+      // Idle copies also need validation before the Host can admit more input to them.
+      await this.configuration(lane);
+      const observer = new PiDurableObserver(runtime, lane, listener);
+      const snapshot = await observer.start();
+      this.observers.add(observer);
+      return {
+        snapshot,
+        unsubscribe: async () => {
+          this.observers.delete(observer);
+          await observer.stop();
+        },
+      };
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
   }
 
   async history(
@@ -582,64 +596,71 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 128)
       throw new Error('A history page must contain between 1 and 128 turns.');
     const runtime = this.requireRuntime();
-    let maxEntryId = query.cursor !== undefined ? parseBoundary(query.cursor) : undefined;
-    const turns: RuntimeDurableTurn[] = [];
-    let nextCursor: string | undefined;
-    let cursor: Cursor | undefined;
-    do {
-      const page = await runtime.history(
-        laneKey(lane),
-        256,
-        cursor,
-        BACKGROUND_CONTEXT,
-        maxEntryId !== undefined ? { maxEntryId } : {},
-      );
-      const visible = new Set(page.entries.map((entry) => entry.id));
-      for (const { record, metadata } of [...page.submissions].sort(
-        (a, b) => (b.record.entry ?? 0) - (a.record.entry ?? 0),
-      )) {
-        if (record.type !== 'input' || record.entry === undefined || !visible.has(record.entry))
-          continue;
-        if (query.requestIds && (!record.requestId || !query.requestIds.includes(record.requestId)))
-          continue;
+    const maxEntryId = query.cursor !== undefined ? parseBoundary(query.cursor) : undefined;
+    try {
+      const matched = await runtime.placedInputs(laneKey(lane), {
+        limit: query.limit,
+        ...(maxEntryId !== undefined ? { maxEntryId } : {}),
+        ...(query.requestIds ? { requestIds: query.requestIds } : {}),
+      });
+      const turns: RuntimeDurableTurn[] = [];
+      for (const { record, metadata } of matched)
         turns.push(await this.project(lane, record, metadata));
-        if (turns.length === query.limit) {
-          maxEntryId = (Number(record.entry) - 1) as EntryId;
-          nextCursor = `pi:${maxEntryId}`;
-          break;
-        }
-      }
-      if (turns.length === query.limit || !page.next) break;
-      cursor = page.next;
-    } while (cursor !== undefined);
-    return { turns, ...(nextCursor ? { nextCursor } : {}) };
+      return {
+        turns,
+        ...(turns.length === query.limit
+          ? { nextCursor: `pi:${Number(matched.at(-1)!.record.entry) - 1}` }
+          : {}),
+      };
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
+  }
+
+  async assistantMessageIdForRequest(
+    lane: RuntimeLane,
+    requestId: string,
+  ): Promise<string | undefined> {
+    try {
+      const [match] = await this.requireRuntime().placedInputs(laneKey(lane), {
+        limit: 1,
+        requestIds: [requestId],
+      });
+      return match ? readPiSubmission(match.metadata).assistantMessageId : undefined;
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
   }
 
   async message(lane: RuntimeLane, messageId: string, options?: { fullReasoning?: boolean }) {
     const runtime = this.requireRuntime();
-    if (options?.fullReasoning) {
-      for (const observer of this.observers) {
-        const turn = observer.readReasoningTurn(lane, messageId);
-        if (turn) return { turn, role: 'assistant' as const };
+    try {
+      if (options?.fullReasoning) {
+        for (const observer of this.observers) {
+          const turn = observer.readReasoningTurn(lane, messageId);
+          if (turn) return { turn, role: 'assistant' as const };
+        }
       }
+      const selected = await runtime.submissionForMessage(laneKey(lane), messageId);
+      if (!selected) return undefined;
+      const turn = await this.project(lane, selected.record, selected.metadata, options);
+      if (
+        selected.role === 'assistant' &&
+        !turn.hasAssistant &&
+        turn.status !== 'queued' &&
+        turn.status !== 'running'
+      )
+        return undefined;
+      // Forking would drop that edit; Cherry rebuilds the edited history instead.
+      if (
+        turn.answerBoundary &&
+        (await runtime.editedAfter(laneKey(lane), parseBoundary(turn.answerBoundary)))
+      )
+        return { turn: { ...turn, answerBoundary: null }, role: selected.role };
+      return { turn, role: selected.role };
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
     }
-    const selected = await runtime.submissionForMessage(laneKey(lane), messageId);
-    if (!selected) return undefined;
-    const turn = await this.project(lane, selected.record, selected.metadata, options);
-    if (
-      selected.role === 'assistant' &&
-      !turn.hasAssistant &&
-      turn.status !== 'queued' &&
-      turn.status !== 'running'
-    )
-      return undefined;
-    // Forking would drop that edit; Cherry rebuilds the edited history instead.
-    if (
-      turn.answerBoundary &&
-      (await runtime.editedAfter(laneKey(lane), parseBoundary(turn.answerBoundary)))
-    )
-      return { turn: { ...turn, answerBoundary: null }, role: selected.role };
-    return { turn, role: selected.role };
   }
 
   async exportTurn(
@@ -648,21 +669,25 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     options: { currentContext?: boolean } = {},
   ) {
     const runtime = this.requireRuntime();
-    const record = await runtime.inputRecord(laneKey(lane), requestId);
-    if (!record || record.type !== 'input' || record.status !== 'done')
-      return { contextCheckpoint: null };
-    const stored = readPiSubmission(await runtime.submissionMetadata(record));
-    const conversation = await runtime.conversation(laneKey(lane));
-    if (!conversation) throw new Error('The working copy is missing.');
-    const view = await conversation.context(
-      BACKGROUND_CONTEXT,
-      options.currentContext ? {} : { at: await runtime.answerBoundary(laneKey(lane), record) },
-    );
-    const contextCheckpoint =
-      view.head && (CompactionEntry.is(view.head) || ResetEntry.is(view.head))
-        ? createPiContextCheckpoint(stored.turnId, view.messages)
-        : null;
-    return { contextCheckpoint };
+    try {
+      const record = await runtime.inputRecord(laneKey(lane), requestId);
+      if (!record || record.type !== 'input' || record.status !== 'done')
+        return { contextCheckpoint: null };
+      const stored = readPiSubmission(await runtime.submissionMetadata(record));
+      const conversation = await runtime.conversation(laneKey(lane));
+      if (!conversation) throw new Error('The working copy is missing.');
+      const view = await conversation.context(
+        BACKGROUND_CONTEXT,
+        options.currentContext ? {} : { at: await runtime.answerBoundary(laneKey(lane), record) },
+      );
+      const contextCheckpoint =
+        view.head && (CompactionEntry.is(view.head) || ResetEntry.is(view.head))
+          ? createPiContextCheckpoint(stored.turnId, view.messages)
+          : null;
+      return { contextCheckpoint };
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
   }
 
   async editReply(lane: RuntimeLane, input: Parameters<DurableAgentRuntime['editReply']>[1]) {
@@ -728,8 +753,10 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     for (const [providerId, owner] of this.providerOwners)
       if (sameLane(owner, lane)) this.providerOwners.delete(providerId);
     const name = `cherry.capabilities:${key}`;
-    for (const extension of this.registry.snapshot().installed())
-      if (extension.name === name) this.registry.uninstall(extension);
+    for (const extensionName of [name, `cherry.mcp:${key}`]) {
+      const extension = this.registry.snapshot().extension(extensionName);
+      if (extension) this.registry.uninstall(extension);
+    }
   }
   async withdraw(lane: RuntimeLane, requestId: string) {
     const result = await this.requireRuntime().withdrawInput(laneKey(lane), requestId);
@@ -743,7 +770,11 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     return this.requireRuntime().steerInput(laneKey(lane), requestId);
   }
   async inputParents(lane: RuntimeLane, userMessageIds: readonly string[]) {
-    return this.requireRuntime().inputParents(laneKey(lane), userMessageIds);
+    try {
+      return await this.requireRuntime().inputParents(laneKey(lane), userMessageIds);
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
   }
   async hasUnfinishedWork() {
     const state = await this.requireRuntime().inspect();
@@ -784,19 +815,31 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const runtime = this.requireRuntime();
     const key = laneKey(lane);
     signal?.throwIfAborted();
-    const stored = await runtime.configuration(key);
-    signal?.throwIfAborted();
-    const configuration = PiConfigurationSchema.parse(stored);
-    const agent = await this.installConfiguration(lane, configuration, true, signal);
+    let stored: Awaited<ReturnType<PiDurableRuntime['configuration']>>;
+    let configuration: PiStoredConfiguration;
     try {
+      stored = await runtime.configuration(key);
       signal?.throwIfAborted();
-      if (stored?.version === 1)
-        await runtime.restoreConfiguration(key, serializePiConfiguration(configuration), agent);
+      configuration = PiConfigurationSchema.parse(stored);
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
+    try {
+      const agent = await this.installConfiguration(lane, configuration, true, signal);
+      signal?.throwIfAborted();
+      if (stored?.version === 1 || agent.extensions.length > 1) {
+        // Older working copies selected just the shared capability extension.
+        await runtime.restoreConfiguration(
+          key,
+          serializePiConfiguration(configuration),
+          stored?.version === 1 ? agent : { extensions: agent.extensions },
+        );
+      }
       signal?.throwIfAborted();
       await this.bindProvider(lane);
     } catch (error) {
       this.configurations.delete(key);
-      throw error;
+      throw this.wrapCorruptLaneError(error, lane);
     }
   }
 
@@ -805,7 +848,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     configuration: PiStoredConfiguration,
     rehydrating = false,
     signal?: AbortSignal,
-  ): Promise<AgentChange> {
+  ): Promise<AgentChange & { extensions: readonly Extension[] }> {
     const key = laneKey(lane);
     try {
       const existing = rehydrating
@@ -820,6 +863,13 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     signal?.throwIfAborted();
     const routes = configuration.webRoutes ?? { search: 'client', fetch: 'client' };
     const nativeWeb = routes.search === 'server' || routes.fetch === 'server';
+    const tools = selectPiClientTools(
+      configuration.tools.map((blueprint) => this.toolTemplate(blueprint)),
+      routes,
+    );
+    const mcpNames = new Set(
+      tools.filter((tool) => tool.ref.source === 'mcp').map((tool) => tool.providerName),
+    );
     const extension = createPiDurableToolExtension({
       name: `cherry.capabilities:${key}`,
       acceptsImages:
@@ -833,11 +883,6 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
               // Every inlined declaration repeats a direct tool's schema; scripts discover signatures instead.
               inlineBudget: 0,
               maxStoreCharacters: PI_CODEMODE_STORE_CHARACTERS,
-              // MCP provider names share this prefix. Earlier tool_search results also named the
-              // group "mcp", so scripts in migrated conversations filter by it.
-              namespaces: [
-                { name: 'mcp', prefix: 'mcp_', description: 'Tools of the connected MCP servers.' },
-              ],
               writeOutput: async (name, data, api, context, storeWrites) => {
                 const signal = requireSignal(context);
                 const identity = await this.taskIdentity(lane, api, context);
@@ -846,7 +891,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
                 if (typeof data === 'string')
                   return retainPiCodemodeOutput(name, data, api, context, storeWrites);
                 const writer = this.requirePorts().writeToolOutput;
-                if (!writer) return { error: 'Managed output storage is unavailable.' };
+                if (!writer)
+                  return { kind: 'failed', error: 'Managed output storage is unavailable.' };
                 try {
                   const previous = await api.snapshot(PiCodemodeFiles, api.taskId, context);
                   const artifact =
@@ -858,20 +904,17 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
                   await this.requirePorts().admitArtifacts(identity, [artifact], signal);
                   await this.requireRuntime().grantFiles(key, [artifact.ref.fileEntryId], context);
                   await retainPiCodemodeArtifacts(api, api.taskId, api.callId, [artifact], context);
-                  return { path: `managed-file:${artifact.ref.fileEntryId}` };
+                  return { kind: 'saved', path: `managed-file:${artifact.ref.fileEntryId}` };
                 } catch {
                   signal.throwIfAborted();
-                  return { error: 'Could not save the managed output file.' };
+                  return { kind: 'failed', error: 'Could not save the managed output file.' };
                 }
               },
             }),
           }
         : {}),
       // A web capability reaches the model through one route: its function or the native tool.
-      tools: selectPiClientTools(
-        configuration.tools.map((blueprint) => this.toolTemplate(blueprint)),
-        routes,
-      ),
+      tools,
       previousFailures: async (api, context) => {
         const inputs = await this.requireRuntime().inputsForTask(api, context);
         const input = inputs.at(-1);
@@ -950,8 +993,17 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         );
       },
     });
+    const mcp: Extension = {
+      name: `cherry.mcp:${key}`,
+      namespace: { name: 'mcp', description: 'Tools of the connected MCP servers.' },
+      tools: extension.tools?.filter((tool) => mcpNames.has(tool.name)),
+    };
+    if (mcp.tools?.length) this.registry.install(mcp);
+    else this.registry.uninstall(mcp);
     this.registry.install({
       ...extension,
+      // Keep the shared hooks and catalog so authorization and failure groups span both owners.
+      tools: extension.tools?.filter((tool) => !mcpNames.has(tool.name)),
       sections: [
         section(
           'cherry-runtime',
@@ -969,7 +1021,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
             const failure = 'The conversation could not be summarized.';
             try {
               const providerSessionId = await this.requireRuntime().providerSessionId(key, context);
-              if (!providerSessionId) return { failure };
+              if (!providerSessionId) return { kind: 'failure', failure };
               const configuration = this.requireConfiguration(key);
               const summary = await summarizePiCompaction(
                 messages,
@@ -982,10 +1034,17 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
                   instructions,
                 },
               );
-              return summary ? { summary } : { failure };
-            } catch {
+              return summary ? { kind: 'summary', summary } : { kind: 'failure', failure };
+            } catch (error) {
               signal.throwIfAborted();
-              return { failure };
+              logger.warn('Pi compaction summarization failed', {
+                error,
+                operation: 'pi.compaction',
+              });
+              return {
+                kind: 'failure',
+                failure: error instanceof PiCompactionError ? error.message : failure,
+              };
             }
           },
         }),
@@ -1009,7 +1068,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       },
       // The reserved instructions section renders last; the extension keeps fixed rules first.
       instructions: null,
-      extensions: [extension],
+      extensions: mcp.tools?.length ? [extension, mcp] : [extension],
     };
   }
 
@@ -1111,7 +1170,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       } catch (error) {
         // A malformed historical owner must not block startup or later valid receipts.
         // Leave this receipt pending so repairing its owner can deliver it on a later pass.
-        if (!(error instanceof ZodError)) throw error;
+        if (!(error instanceof RuntimeCorruptLaneError) && !(error instanceof ZodError))
+          throw error;
         logger.warn('Pi durable usage delivery failed', {
           error,
           operation: 'pi.usage_delivery',

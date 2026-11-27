@@ -20,6 +20,7 @@ const signedOutCloud: CloudState = {
   plans: null,
 };
 let mockCloudState = signedOutCloud;
+const mockCloudPress = jest.fn();
 let mockListProps:
   | {
       bottomInset?: number;
@@ -28,6 +29,7 @@ let mockListProps:
       cherryAiEntry?: ReactNode;
       listItems: readonly ModelPickerListItem[];
       maxSelectedCount?: number;
+      onCloudOffer?: (id: string) => void;
       selectedModelIds?: readonly string[];
     }
   | undefined;
@@ -48,11 +50,6 @@ const chosenModelId = 'provider::chosen';
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 34, left: 0, right: 0, top: 59 }),
-}));
-
-jest.mock('expo-router', () => ({
-  ...jest.requireActual('expo-router'),
-  useGlobalSearchParams: () => ({}),
 }));
 
 jest.mock('@/frontend/components/ModelRegistry', () => ({
@@ -141,7 +138,7 @@ jest.mock('@/frontend/appShell/cloud', () => ({
     offers: jest
       .requireActual('@/frontend/appShell/cloud/cloudModelOffers')
       .getCloudModelOffers(mockCloudState, use),
-    press: jest.fn(),
+    press: mockCloudPress,
     refresh: jest.fn(),
   }),
   useReturnedCloudModel: () => {},
@@ -175,6 +172,7 @@ describe('ModelPickerDrawer', () => {
 
   beforeEach(() => {
     mockCloudState = signedOutCloud;
+    mockCloudPress.mockClear();
     mockGroups = [];
     mockEnabledProviders = [{ id: CLOUD_PROVIDER_ID }];
     mockListProps = undefined;
@@ -548,5 +546,40 @@ describe('ModelPickerDrawer', () => {
     expect(mockListProps).toMatchObject({ maxSelectedCount: 8, selectedModelIds: [chosenModelId] });
     act(() => toggle().props.onPress());
     expect(multiSelect.onEnabledChange).toHaveBeenLastCalledWith(false);
+  });
+
+  test('forwards loginReturnTo or falls back to root when activating a cloud offer', () => {
+    const onClose = jest.fn();
+    const renderChatOffer = (loginReturnTo?: string) =>
+      act(() => {
+        renderer = create(
+          <ModelPickerDrawer
+            loginReturnTo={loginReturnTo}
+            modelType="text"
+            onClose={onClose}
+            onSelect={jest.fn()}
+            open
+            selectedModelId={null}
+            variant="chat"
+          />,
+        );
+      });
+
+    renderChatOffer('/chat?sessionId=s1');
+    mockListProps?.onCloudOffer?.('offer-1');
+    expect(mockCloudPress).toHaveBeenLastCalledWith(
+      'offer-1',
+      '/chat?sessionId=s1',
+      expect.any(Function),
+      true,
+    );
+    act(() => {
+      (mockCloudPress.mock.calls.at(-1)?.[2] as (() => void) | undefined)?.();
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    renderChatOffer(undefined);
+    mockListProps?.onCloudOffer?.('offer-2');
+    expect(mockCloudPress).toHaveBeenLastCalledWith('offer-2', '/', expect.any(Function), false);
   });
 });

@@ -73,7 +73,7 @@ side-effect imports in the root layout, ordinary app code uses only `src/bootstr
 - creates an `ApplicationHost` and configures its platform-facing activity environment;
 - creates one stable workflow `Backend`, `ApiClient`, and `PreferenceClient`;
 - installs the host, whose dependency graph initializes SQLite seeding before preferences, then
-  waits for the native splash handoff before applying boot theme and i18n;
+  applies boot theme and i18n;
 - starts best-effort post-ready tasks after the gate opens;
 - uninstalls the host on unmount; reverse dependency order drains consumers before their
   infrastructure.
@@ -89,11 +89,9 @@ providers: `DataApiProvider` for typed resource endpoints, `PreferenceProvider` 
 `StartupFailureScreen` after an initialization error, so a failed start never becomes a crash
 loop. The provider has already logged the failure and initialized translations for that screen
 when an earlier step failed. Render failures after the gate opens are contained by the app-shell
-`AppErrorBoundary`. The root layout retains the native splash, while the app-shell
-`StartupCoordinator` hides it only after its matching React Native cover has laid out and crossed
-two composited frames. The provider owns initialization state and post-ready work; it does not own
-splash visibility. `startupCoverHandoff` prevents Uniwind's native appearance synchronization from
-running until the native surface is gone.
+`AppErrorBoundary`. The root layout retains the native splash, while the app-shell `StartupCoordinator` hides it once
+bootstrap and initial route content are ready. The provider owns initialization state and post-ready
+work; it does not own splash visibility.
 
 ## Query Runtime
 
@@ -299,9 +297,9 @@ user-owned verification policy.
 
 ## Startup Work
 
-`initializeAppRuntime()` reads cached boot preferences, waits for the native-to-React cover handoff,
-then applies the frontend theme and initializes i18n. It must not refresh catalogs, prefetch history,
-repair data, or run diagnostics.
+`initializeAppRuntime()` reads cached boot preferences, initializes i18n, seeds the initial Agent,
+and applies the frontend theme. It must not refresh catalogs, prefetch history, repair data, or run
+diagnostics.
 
 The bootstrap runtime's `runPostReadyTasks()` starts the host PostReady phase after status becomes
 `ready`. Agent reconciliation, MCP initialization, and the job cold-start pump stay off the

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 
 import { requireCliPath } from './cliInput';
-import { parseReleaseTag } from './releaseLocalBuild';
+import { parseReleaseTag } from './release/shared';
 
 export type PublishReleaseTarget = 'both' | 'github' | 'gitcode';
 

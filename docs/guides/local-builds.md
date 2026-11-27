@@ -23,7 +23,7 @@ metrics. Changing native reporting policy requires a new installation package. S
 ## Prerequisites
 
 - Install the repository dependencies with Node.js 24 and `pnpm@12.2.1`.
-- `pnpm install` installs the pinned EAS CLI (24.4.2) and local build plugin (24.3.0).
+- `pnpm install` installs the pinned EAS CLI (27.11.0) and local build plugin (27.11.0).
   Authenticate with `pnpm exec eas login`, or provide `EXPO_TOKEN` in the process environment.
 - Install the native build tools for the selected platform: Xcode, CocoaPods, and fastlane for
   iOS; the Android SDK and NDK for Android.
@@ -42,7 +42,7 @@ local plugin's executable path. It does not depend on a global `eas`, a personal
 or a nested `npx` download. Invoke `pnpm build:local` directly; wrapping it in `npm exec --package`
 can leak npm's package-selection settings into child tools. An explicit
 `EAS_LOCAL_BUILD_PLUGIN_PATH` remains available for intentional upstream-plugin development.
-Keep both pinned packages compatible: EAS CLI 24.4.2 uses `@expo/eas-build-job` 24.3.0, which
+Keep both pinned packages compatible: EAS CLI 27.11.0 uses `@expo/eas-build-job` 27.11.0, which
 determines the local plugin version. Release workflows and `eas.json` require the same CLI version.
 
 `@siteed/sherpa-onnx.rn`'s patched installation script verifies the pinned SHA-256 of the
@@ -341,6 +341,19 @@ removing a plugin from app config does not clean its hooks out of an existing na
 
 Successful compilation alone does not verify production Sentry event delivery or source-map
 matching; those require a separate runtime check.
+
+## Branch Builds on Mac Studio
+
+Open **Actions → Branch Build → Run workflow** and use the workflow from `main`. Enter the
+repository branch to build, such as `feature/chat`, and select one package. The task runs the
+selected branch's `pnpm build:local`. [Workflow source](../../.github/workflows/branch-build.yml)
+
+- `android-dev` (default) builds the Android development APK.
+- `ios-dev` builds the iOS development IPA for physical devices.
+- `android-production` builds an APK with the production profile and increments the remote Android
+  `versionCode`. The workflow disables Sentry build uploads.
+
+Download the package from **Artifacts** on the workflow run page within 7 days.
 
 ## Tablet Device Configuration
 

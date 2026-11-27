@@ -1,6 +1,6 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { STARTUP_CONTENT_TIMEOUT_MS, STARTUP_MINIMUM_VISIBLE_MS } from '../startupState';
+import { STARTUP_CONTENT_TIMEOUT_MS } from '../startupState';
 import { useStartupLifecycle } from '../useStartupLifecycle';
 
 const mockHideAsync = jest.fn(async (): Promise<void> => undefined);
@@ -22,12 +22,12 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
 
 type Lifecycle = ReturnType<typeof useStartupLifecycle>;
 
-function renderLifecycle(bootstrapReady: boolean, onCoverPresented?: () => void) {
+function renderLifecycle(bootstrapReady: boolean) {
   let current: Lifecycle | undefined;
   let renderer: ReactTestRenderer | undefined;
 
   function Probe({ ready }: { ready: boolean }) {
-    current = useStartupLifecycle(ready, onCoverPresented);
+    current = useStartupLifecycle(ready);
     return null;
   }
 
@@ -51,17 +51,6 @@ function renderLifecycle(bootstrapReady: boolean, onCoverPresented?: () => void)
   };
 }
 
-function advanceTwoFrames() {
-  act(() => jest.advanceTimersToNextTimer());
-  act(() => jest.advanceTimersToNextTimer());
-}
-
-async function advanceToCoverPresented() {
-  advanceTwoFrames();
-  await act(async () => Promise.resolve());
-  advanceTwoFrames();
-}
-
 describe('useStartupLifecycle', () => {
   beforeEach(() => {
     jest.useFakeTimers();
@@ -77,43 +66,20 @@ describe('useStartupLifecycle', () => {
     jest.useRealTimers();
   });
 
-  test('hides the native splash only after the laid-out cover crosses two frames', () => {
-    const lifecycle = renderLifecycle(false);
-
+  test('does not hide the native splash before both bootstrap and initial content are ready', () => {
+    const waitingBootstrap = renderLifecycle(false);
+    act(() => waitingBootstrap.current.reportContentReady());
     expect(mockHideAsync).not.toHaveBeenCalled();
-    act(() => lifecycle.current.handleCoverLayout());
-    act(() => lifecycle.current.handleCoverLayout());
+    expect(waitingBootstrap.current.coverVisible).toBe(true);
+    waitingBootstrap.unmount();
+
+    const waitingContent = renderLifecycle(true);
     expect(mockHideAsync).not.toHaveBeenCalled();
-
-    act(() => jest.advanceTimersToNextTimer());
-    expect(mockHideAsync).not.toHaveBeenCalled();
-
-    act(() => jest.advanceTimersToNextTimer());
-
-    expect(mockHideAsync).toHaveBeenCalledTimes(1);
-    lifecycle.unmount();
+    expect(waitingContent.current.coverVisible).toBe(true);
+    waitingContent.unmount();
   });
 
-  test('reports presentation after the native splash finishes hiding', async () => {
-    const onCoverPresented = jest.fn();
-    const lifecycle = renderLifecycle(false, onCoverPresented);
-
-    act(() => lifecycle.current.handleCoverLayout());
-    advanceTwoFrames();
-    expect(mockHideAsync).toHaveBeenCalledTimes(1);
-    expect(lifecycle.current.coverPresented).toBe(false);
-    expect(onCoverPresented).not.toHaveBeenCalled();
-
-    await act(async () => Promise.resolve());
-    expect(onCoverPresented).not.toHaveBeenCalled();
-
-    advanceTwoFrames();
-    expect(lifecycle.current.coverPresented).toBe(true);
-    expect(onCoverPresented).toHaveBeenCalledTimes(1);
-    lifecycle.unmount();
-  });
-
-  test('starts the minimum only after the native splash finishes hiding', async () => {
+  test('hides the native splash once ready and clears coverVisible after hideAsync settles', async () => {
     let finishHiding: (() => void) | undefined;
     mockHideAsync.mockImplementation(
       () =>
@@ -121,129 +87,93 @@ describe('useStartupLifecycle', () => {
           finishHiding = resolve;
         }),
     );
-    const lifecycle = renderLifecycle(true);
-    act(() => {
-      lifecycle.current.handleCoverLayout();
-      lifecycle.current.reportContentReady();
-    });
-    advanceTwoFrames();
 
-    act(() => jest.advanceTimersByTime(STARTUP_MINIMUM_VISIBLE_MS * 2));
-    expect(lifecycle.current.exitRequested).toBe(false);
+    const lifecycle = renderLifecycle(false);
+    act(() => lifecycle.current.reportContentReady());
+    expect(mockHideAsync).not.toHaveBeenCalled();
+
+    lifecycle.rerender(true);
+    expect(mockHideAsync).toHaveBeenCalledTimes(1);
+    expect(lifecycle.current.coverVisible).toBe(true);
+
+    // Repeated readiness reports or bootstrap toggles do not trigger a second hide.
+    act(() => lifecycle.current.reportContentReady());
+    lifecycle.rerender(false);
+    lifecycle.rerender(true);
+    expect(mockHideAsync).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       finishHiding?.();
       await Promise.resolve();
     });
-    act(() => jest.advanceTimersToNextTimer());
-    expect(lifecycle.current.exitRequested).toBe(false);
-
-    act(() => jest.advanceTimersToNextTimer());
-    act(() => jest.advanceTimersByTime(STARTUP_MINIMUM_VISIBLE_MS - 1));
-    expect(lifecycle.current.exitRequested).toBe(false);
-
-    act(() => jest.advanceTimersByTime(1));
-    expect(lifecycle.current.exitRequested).toBe(true);
+    expect(lifecycle.current.coverVisible).toBe(false);
     lifecycle.unmount();
   });
 
-  test('waits for bootstrap, content, cover layout, and the minimum duration', async () => {
-    const lifecycle = renderLifecycle(false);
-    act(() => {
-      lifecycle.current.handleCoverLayout();
-      lifecycle.current.reportContentReady();
-    });
-    expect(lifecycle.current.exitRequested).toBe(false);
-
-    await advanceToCoverPresented();
-    lifecycle.rerender(true);
-    act(() => jest.advanceTimersByTime(STARTUP_MINIMUM_VISIBLE_MS - 1));
-    expect(lifecycle.current.exitRequested).toBe(false);
-
-    act(() => jest.advanceTimersByTime(1));
-    expect(lifecycle.current.exitRequested).toBe(true);
-    lifecycle.unmount();
-  });
-
-  test('warns and exits when content does not report within three seconds of bootstrap', async () => {
-    const lifecycle = renderLifecycle(true);
-    act(() => lifecycle.current.handleCoverLayout());
-    await advanceToCoverPresented();
-    act(() => jest.advanceTimersByTime(STARTUP_MINIMUM_VISIBLE_MS));
-    expect(lifecycle.current.exitRequested).toBe(false);
-
-    const remainingUntilTimeout = 10_000 + STARTUP_CONTENT_TIMEOUT_MS - Date.now();
-    act(() => jest.advanceTimersByTime(remainingUntilTimeout - 1));
-    expect(mockWarn).not.toHaveBeenCalled();
-    expect(lifecycle.current.exitRequested).toBe(false);
-
-    act(() => jest.advanceTimersByTime(1));
-    expect(mockWarn).toHaveBeenCalledTimes(1);
-    expect(lifecycle.current.exitRequested).toBe(true);
-    lifecycle.unmount();
-  });
-
-  test('starts the content timeout only after bootstrap becomes ready', () => {
+  test('starts the content timeout only after bootstrap becomes ready, warns, and hides splash on timeout', async () => {
     const lifecycle = renderLifecycle(false);
     act(() => jest.advanceTimersByTime(STARTUP_CONTENT_TIMEOUT_MS));
     expect(mockWarn).not.toHaveBeenCalled();
+    expect(mockHideAsync).not.toHaveBeenCalled();
 
     lifecycle.rerender(true);
     act(() => jest.advanceTimersByTime(STARTUP_CONTENT_TIMEOUT_MS - 1));
     expect(mockWarn).not.toHaveBeenCalled();
+    expect(mockHideAsync).not.toHaveBeenCalled();
 
     act(() => jest.advanceTimersByTime(1));
     expect(mockWarn).toHaveBeenCalledTimes(1);
+    expect(mockWarn).toHaveBeenCalledWith(
+      'Initial content did not report readiness before the startup timeout',
+      { operation: 'startup.content.timeout' },
+    );
+    expect(mockHideAsync).toHaveBeenCalledTimes(1);
+
+    await act(async () => Promise.resolve());
+    expect(lifecycle.current.coverVisible).toBe(false);
     lifecycle.unmount();
   });
 
-  test('retains cover and content milestones in startup order without repeating content readiness', async () => {
+  test('records content and splash milestones in startup order without repeating content readiness', async () => {
     const lifecycle = renderLifecycle(false);
-    act(() => lifecycle.current.handleCoverLayout());
-    await advanceToCoverPresented();
     lifecycle.rerender(true);
     act(() => {
       lifecycle.current.reportContentReady();
       lifecycle.current.reportContentReady();
-      jest.advanceTimersByTime(STARTUP_MINIMUM_VISIBLE_MS);
     });
-    act(() => lifecycle.current.handleCoverExitComplete());
+    await act(async () => Promise.resolve());
 
     expect(mockInfo.mock.calls.map(([, facts]) => facts.operation)).toEqual([
-      'startup.cover.layout',
-      'startup.cover.presented',
       'startup.content.ready',
-      'startup.cover.minimum_elapsed',
-      'startup.cover.hidden',
+      'startup.splash.hidden',
     ]);
     lifecycle.unmount();
   });
 
-  test('cleans up minimum and fallback timers when unmounted', async () => {
+  test('cleans up the fallback timer when unmounted', () => {
     const lifecycle = renderLifecycle(true);
-    act(() => lifecycle.current.handleCoverLayout());
-    await advanceToCoverPresented();
     const timerCountBeforeUnmount = jest.getTimerCount();
 
     lifecycle.unmount();
 
-    expect(jest.getTimerCount()).toBe(timerCountBeforeUnmount - 2);
+    expect(jest.getTimerCount()).toBe(timerCountBeforeUnmount - 1);
     act(() => jest.advanceTimersByTime(STARTUP_CONTENT_TIMEOUT_MS));
     expect(mockWarn).not.toHaveBeenCalled();
+    expect(mockHideAsync).not.toHaveBeenCalled();
   });
 
   test('ignores native splash completion after unmount', async () => {
     let finishHiding: (() => void) | undefined;
-    const onCoverPresented = jest.fn();
     mockHideAsync.mockImplementation(
       () =>
         new Promise<void>((resolve) => {
           finishHiding = resolve;
         }),
     );
-    const lifecycle = renderLifecycle(false, onCoverPresented);
-    act(() => lifecycle.current.handleCoverLayout());
-    advanceTwoFrames();
+
+    const lifecycle = renderLifecycle(true);
+    act(() => lifecycle.current.reportContentReady());
+    expect(mockHideAsync).toHaveBeenCalledTimes(1);
 
     lifecycle.unmount();
     await act(async () => {
@@ -251,30 +181,8 @@ describe('useStartupLifecycle', () => {
       await Promise.resolve();
     });
 
-    expect(onCoverPresented).not.toHaveBeenCalled();
-  });
-
-  test('cancels pending cover commit frames when unmounted', () => {
-    const lifecycle = renderLifecycle(false);
-    act(() => lifecycle.current.handleCoverLayout());
-
-    lifecycle.unmount();
-    act(() => jest.runOnlyPendingTimers());
-
-    expect(mockHideAsync).not.toHaveBeenCalled();
-  });
-
-  test('cancels pending post-hide frames when unmounted', async () => {
-    const onCoverPresented = jest.fn();
-    const lifecycle = renderLifecycle(false, onCoverPresented);
-    act(() => lifecycle.current.handleCoverLayout());
-    advanceTwoFrames();
-    await act(async () => Promise.resolve());
-
-    lifecycle.unmount();
-    act(() => jest.runOnlyPendingTimers());
-
-    expect(mockHideAsync).toHaveBeenCalledTimes(1);
-    expect(onCoverPresented).not.toHaveBeenCalled();
+    expect(mockInfo.mock.calls.map(([, facts]) => facts.operation)).toEqual([
+      'startup.content.ready',
+    ]);
   });
 });

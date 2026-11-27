@@ -1,18 +1,19 @@
-import { queryOptions } from '@tanstack/react-query';
+import { queryOptions, skipToken } from '@tanstack/react-query';
 import { useSyncExternalStore } from 'react';
 
 import { queryKeys } from '@/frontend/data';
 import type { AppUpdateModule, AppUpdateRelease } from '@/shared/contracts/appUpdate';
 
-/**
- * The app-shell observer owns automatic checks; other surfaces observe or explicitly refetch.
- */
-export function appUpdateQueryOptions(appUpdate: AppUpdateModule) {
+/** About and user-initiated updates share release discovery for the installed channel. */
+export function appUpdateQueryOptions(
+  appUpdate: AppUpdateModule,
+  { force = false }: { force?: boolean } = {},
+) {
   return queryOptions({
     queryKey: queryKeys.appUpdate.latest(appUpdate.channel),
-    queryFn: ({ signal }) => appUpdate.check(signal),
+    queryFn: ({ signal }) => appUpdate.check(signal, { force }),
     enabled: appUpdate.isEnabled,
-    staleTime: 6 * 60 * 60 * 1000,
+    staleTime: force ? 0 : 6 * 60 * 60 * 1000,
     gcTime: 6 * 60 * 60 * 1000,
     // The backend owns failure cooldowns; an immediate retry only consumes the same quota.
     retry: false,
@@ -22,12 +23,12 @@ export function appUpdateQueryOptions(appUpdate: AppUpdateModule) {
 /** Notes may be corrected after publication, so refresh them after six hours. */
 export function appUpdateReleaseNotesQueryOptions(
   appUpdate: AppUpdateModule,
-  release: AppUpdateRelease,
+  release: AppUpdateRelease | null,
   language: string,
 ) {
   return queryOptions({
     queryKey: queryKeys.appUpdate.notes(release, language),
-    queryFn: () => appUpdate.releaseNotes(release, language),
+    queryFn: release ? () => appUpdate.releaseNotes(release, language) : skipToken,
     staleTime: 6 * 60 * 60 * 1000,
     gcTime: 6 * 60 * 60 * 1000,
   });

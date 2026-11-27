@@ -101,11 +101,14 @@ export function AiFailureMessage({
   const streamDisconnected =
     code === 'stream_disconnected' &&
     (reasonCode === 'network' || reasonCode === 'stream_interrupted');
-  const titleKey = rejectedRequest
-    ? 'chat.errorPart.reason.requestRejected'
-    : streamDisconnected
-      ? AI_FAILURE_TITLE_KEYS.stream_interrupted
-      : aiFailureReasonTitleKey(reasonCode);
+  const streamingRequired = code === 'non_streaming_mode_unsupported';
+  const titleKey = streamingRequired
+    ? 'chat.errorPart.reason.streamingRequired'
+    : rejectedRequest
+      ? 'chat.errorPart.reason.requestRejected'
+      : streamDisconnected
+        ? AI_FAILURE_TITLE_KEYS.stream_interrupted
+        : aiFailureReasonTitleKey(reasonCode);
   const title = titleKey ? t(titleKey) : (fallbackTitle ?? t('chat.errorPart.title'));
   const cloudMessage =
     code === 'account_disabled' || code === 'cloud_account_disabled'
@@ -115,26 +118,28 @@ export function AiFailureMessage({
         : code === 'cloud_activation_required'
           ? 'cloud.activationRequired'
           : undefined;
-  const message = cloudMessage
-    ? t(cloudMessage)
-    : (fallbackMessage ??
-      t(
-        code === 'amd_activation_required' || code === 'cloud_amd_activation_required'
-          ? 'cloud.amd.activationRequired'
-          : code === 'amd_credential_invalid'
-            ? 'cloud.amd.checkStatus'
-            : rejectedRequest
-              ? 'chat.errorPart.message.requestRejected'
-              : streamDisconnected
-                ? 'chat.errorPart.message.streamInterrupted'
-                : providerName
-                  ? 'chat.errorPart.message.providerQuota'
-                  : ((isAiFailureReason(reasonCode)
-                      ? AI_FAILURE_MESSAGE_KEYS[reasonCode]
-                      : undefined) ??
-                    (retryable === true ? 'chat.errorPart.retryable' : 'chat.errorPart.message')),
-        { provider: providerName },
-      ));
+  const message = streamingRequired
+    ? t('chat.errorPart.message.streamingRequired')
+    : cloudMessage
+      ? t(cloudMessage)
+      : (fallbackMessage ??
+        t(
+          code === 'amd_activation_required' || code === 'cloud_amd_activation_required'
+            ? 'cloud.amd.activationRequired'
+            : code === 'amd_credential_invalid'
+              ? 'cloud.amd.checkStatus'
+              : rejectedRequest
+                ? 'chat.errorPart.message.requestRejected'
+                : streamDisconnected
+                  ? 'chat.errorPart.message.streamInterrupted'
+                  : providerName
+                    ? 'chat.errorPart.message.providerQuota'
+                    : ((isAiFailureReason(reasonCode)
+                        ? AI_FAILURE_MESSAGE_KEYS[reasonCode]
+                        : undefined) ??
+                      (retryable === true ? 'chat.errorPart.retryable' : 'chat.errorPart.message')),
+          { provider: providerName },
+        ));
 
   return (
     <>

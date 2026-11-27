@@ -31,10 +31,10 @@ import {
   GateError,
   resolveSentryCli,
   runCommand,
-  sanitizeDiagnostic,
   type Run,
   type UuidArch,
-} from './uploadIosSymbols';
+} from './release/iosSymbolShared';
+import { sanitizeDiagnostic } from './release/shared';
 
 function requirePackage(condition: unknown, code: string, message = code): asserts condition {
   if (!condition) throw new GateError(code, message);

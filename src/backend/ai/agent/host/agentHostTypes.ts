@@ -78,5 +78,6 @@ export type MobileAgentHostPorts = {
   usage: Pick<AgentSessionUsageRecorder, 'drain' | 'record'>;
   tools: SystemCapabilitySource;
   webTools?(): Promise<RuntimeWebTools>;
+  onSessionDeleted?(sessionId: string): Promise<void> | void;
   traces?: TraceRecorder;
 };

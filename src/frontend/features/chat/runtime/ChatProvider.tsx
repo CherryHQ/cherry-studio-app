@@ -294,7 +294,7 @@ export function useAgentChatControls(
   const resolveComposer = () => ({
     composerKey,
     sessionId,
-    composer: composers.open(sessionId, input),
+    composer: composers.peek(sessionId) ?? composers.create(input),
   });
   const [owner, setOwner] = useState(resolveComposer);
   const currentOwner =
@@ -303,6 +303,7 @@ export function useAgentChatControls(
   const { composer } = currentOwner;
   const mountedComposer = useRef<typeof composer | null>(composer);
   useLayoutEffect(() => composer.mount(), [composer]);
+  useLayoutEffect(() => composers.attach(sessionId, composer), [composers, sessionId, composer]);
   useLayoutEffect(() => {
     mountedComposer.current = isFocused ? composer : null;
     return () => {

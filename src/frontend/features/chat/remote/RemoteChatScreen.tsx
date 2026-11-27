@@ -251,6 +251,7 @@ export function RemoteChatSession({ target, opened, navigation }: RemoteChatSess
                   messages={messages}
                   snapshot={snapshot}
                   messageWindow={history}
+                  connectionId={connectionId}
                   sessionId={target.sessionId}
                   assistantEmoji={agent?.emoji}
                   assistantName={agent?.name}

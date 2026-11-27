@@ -49,6 +49,12 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 
+jest.mock('@cherrystudio/ui/haptics', () => ({
+  haptics: {
+    selection: jest.fn(),
+  },
+}));
+
 jest.mock('@cherrystudio/ui/motion', () => ({
   duration: { fast: 200 },
   easing: { settle: 'settle' },
@@ -75,6 +81,7 @@ jest.mock('react-native-reanimated', () => {
     ReduceMotion: { System: 'system' },
     ZoomIn: transition,
     useAnimatedStyle: (factory: () => object) => factory(),
+    useSharedValue: <T,>(initialValue: T) => createMockSharedValue(initialValue),
     withTiming: (value: number) => value,
   };
 });

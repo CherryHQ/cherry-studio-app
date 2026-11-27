@@ -67,7 +67,7 @@ the native version/build. See the [APK update service](../../src/backend/service
 ## One-Time Setup
 
 Use the existing Expo project, authentication, and EAS environments in
-[Native Releases](./cloud-releases.md), with the pinned release CLI version, currently `24.4.2`.
+[Native Releases](./cloud-releases.md), with the pinned release CLI version, currently `27.11.0`.
 The OTA Update workflow uses the existing `EXPO_TOKEN` Actions secret.
 
 Run `eas channel:list`, then create any missing channels and their same-named branches:

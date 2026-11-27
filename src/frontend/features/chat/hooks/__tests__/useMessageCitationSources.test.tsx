@@ -125,3 +125,86 @@ it('does not reuse earlier lookup facts across a history revision or desktop sco
   await act(async () => row.unmount());
   client.clear();
 });
+
+it('keeps settled rows referentially stable and avoids re-scanning unchanged parts during streaming', async () => {
+  const messageCitations = jest.requireActual<typeof import('@/frontend/utils/messageCitations')>(
+    '@/frontend/utils/messageCitations',
+  );
+  const citationIdsSpy = jest.spyOn(messageCitations, 'citationIds');
+  const settledParts = [{ type: 'text' as const, text: 'Settled [cite:lookup-1]' }];
+  const settled: ConversationMessage = {
+    key: 'settled',
+    state: 'success',
+    completeness: 'complete',
+    actions: {},
+    display: {
+      id: 'settled',
+      role: 'assistant',
+      status: 'success',
+      data: { parts: settledParts },
+    },
+    tools: [
+      {
+        key: 'call-1',
+        title: 'mcp__cherry-tools__web_search',
+        state: 'completed',
+        output: {
+          kind: 'inline',
+          value: {
+            kind: 'json',
+            complete: true,
+            value: [{ id: 'lookup-1', title: 'Source', url: 'https://example.com' }],
+          },
+        },
+      },
+    ],
+  };
+  const streaming1: ConversationMessage = {
+    key: 'streaming',
+    state: 'pending',
+    completeness: 'complete',
+    actions: {},
+    display: {
+      id: 'streaming',
+      role: 'assistant',
+      status: 'pending',
+      data: { parts: [{ type: 'text', text: 'First token' }] },
+    },
+  };
+  const streaming2: ConversationMessage = {
+    ...streaming1,
+    display: {
+      ...streaming1.display,
+      data: { parts: [{ type: 'text', text: 'First token second token' }] },
+    },
+  };
+  const client = new QueryClient();
+  let row!: ReactTestRenderer;
+  await act(async () => {
+    row = create(
+      <QueryClientProvider client={client}>
+        <Probe messages={[settled, streaming1]} />
+      </QueryClientProvider>,
+    );
+  });
+  await act(settle);
+  const firstSettledRow = current[0];
+  expect(firstSettledRow.display.data.citationSources).toHaveLength(1);
+  citationIdsSpy.mockClear();
+
+  await act(async () => {
+    row.update(
+      <QueryClientProvider client={client}>
+        <Probe messages={[settled, streaming2]} />
+      </QueryClientProvider>,
+    );
+  });
+  await act(settle);
+  expect(current[0]).toBe(firstSettledRow);
+  const settledPartCalls = citationIdsSpy.mock.calls.filter(([parts]) => parts === settledParts);
+  expect(settledPartCalls).toHaveLength(0);
+
+  citationIdsSpy.mockRestore();
+  await act(async () => row.unmount());
+  client.clear();
+});

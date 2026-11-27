@@ -5,10 +5,10 @@ export type NavigationShellMode = 'compact-dock' | 'wide-rail' | 'vertical-rail'
 export const WIDE_RAIL_WIDTH = 60;
 export const VERTICAL_RAIL_WIDTH = 64;
 export const FILES_MASTER_WIDTH = 288;
-export const DEFAULT_FLOATING_DOCK_ROW_HEIGHT = 44;
-export const FLOATING_DOCK_CLEARANCE_GAP = 10;
+export const DEFAULT_FLOATING_DOCK_ROW_HEIGHT = 46;
+export const FLOATING_DOCK_CLEARANCE_GAP = 12;
 export const FLOATING_DOCK_SAFE_AREA_OFFSET = 16;
-export const FLOATING_DOCK_ANDROID_BOTTOM_GAP = 6;
+export const FLOATING_DOCK_ANDROID_BOTTOM_GAP = 8;
 export const FLOATING_DOCK_MIN_BOTTOM_PADDING = 12;
 
 export function resolveFloatingDockBottomPadding(
@@ -24,7 +24,7 @@ export function resolveFloatingDockBottomPadding(
   return Math.max(bottomInset - FLOATING_DOCK_SAFE_AREA_OFFSET, FLOATING_DOCK_MIN_BOTTOM_PADDING);
 }
 
-/** Bottom clearance above `bottomInset` needed for overlays/composers to rest 8pt clear of the dock. */
+/** Bottom clearance above `bottomInset` needed for overlays/composers to rest 12pt clear of the dock. */
 export function resolveFloatingDockClearance(
   rowHeight: number,
   bottomInset: number,

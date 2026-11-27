@@ -164,8 +164,8 @@ and a stable WebView source prevent status writes from reloading the page.
   numbers, email addresses and credentials are not read into this context. Unknown identity at early
   boot stays unknown. IDs are technical metadata, not a claim of anonymity.
 - Startup metadata: JS entry, bootstrap, host/service phases, database open/configuration/migrations/
-  seeding, cover handoff, theme/i18n, default Agent and skill initialization, first-content readiness,
-  minimum cover duration and cover exit. Stages retain starts, terminal outcomes and monotonic
+  seeding, theme/i18n, default Agent and skill initialization, first-content readiness,
+  and native splash dismissal. Stages retain starts, terminal outcomes and monotonic
   durations; service phase promotions retain the service, requiring service and old/new phases.
   Every event carries `startupStartedAt`, identifying the JS launch by wall time, and `elapsedMs`
   since JS entry; the JS entry event alone carries `jsEntryStartMs`, its monotonic clock reading. Available React Native startup/runtime/bundle-entry milestones

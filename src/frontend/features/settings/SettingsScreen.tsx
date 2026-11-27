@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { accountSignInHref, organizationLabel, useAccount } from '@/frontend/appShell/account';
 import { RouteHeader } from '@/frontend/appShell/header';
+import { useSpeechPlaybackInset } from '@/frontend/appShell/speechPlayback';
 import { CapabilityLabel } from '@/frontend/components/Policy';
 import { usePreference } from '@/frontend/data/hooks';
 
@@ -38,11 +39,15 @@ export default function SettingsScreen() {
         ? { label: t('account.enterprise') }
         : undefined;
   const { openProviderList, prepareProviderList } = useProviderListNavigation();
+  const speechInset = useSpeechPlaybackInset();
 
   const openProfileSettings = useCallback(() => {
     router.push('/settings/profile');
   }, [router]);
-  const contentContainerStyle = useMemo(() => ({ paddingBottom: insets.bottom }), [insets.bottom]);
+  const contentContainerStyle = useMemo(
+    () => ({ paddingBottom: insets.bottom, paddingTop: speechInset }),
+    [insets.bottom, speechInset],
+  );
 
   return (
     <View className="flex-1">

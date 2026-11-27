@@ -1,5 +1,8 @@
+import MarkdownIt, { type Env } from 'markdown-it';
+
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { readCherryToolMetadata } from '@/shared/data/types/uiParts';
+import { replaceInlineTextRanges } from '@/shared/utils/replaceInlineTextRanges';
 
 const CITABLE_TOOL_NAMES = new Set(['web_search', 'web_fetch', 'kb_search', 'kb_read']);
 const CIRCLED_CITATION_MARKERS = [
@@ -59,24 +62,7 @@ export function resolveMessageCitations(
     const source = sourceById.get(id);
     if (source && !numberBySource.has(source)) numberBySource.set(source, number);
   });
-  const toolIds = new Set(collectToolCitationSources(parts).map((source) => source.id));
-  const native = parts.filter(
-    (part): part is Extract<CherryMessagePart, { type: 'source-url' }> =>
-      part.type === 'source-url' && !toolIds.has(part.sourceId),
-  );
-  const nativeByNumber = new Map<number, string>();
-  const unnumbered: { index: number; sourceId: string }[] = [];
-  native.forEach((part, index) => {
-    const number = nativeSourceNumber(part.sourceId);
-    if (number !== undefined) {
-      if (!nativeByNumber.has(number)) nativeByNumber.set(number, part.sourceId);
-    } else {
-      unnumbered.push({ index, sourceId: part.sourceId });
-    }
-  });
-  for (const item of unnumbered) {
-    if (!nativeByNumber.has(item.index + 1)) nativeByNumber.set(item.index + 1, item.sourceId);
-  }
+  const nativeByNumber = collectNativeCitationNumbers(parts);
   const textByPartIndex = new Map<number, ResolvedCitationText>();
   let nextNumber = Math.max(0, ...numberBySource.values()) + 1;
 
@@ -141,6 +127,179 @@ export function resolveMessageCitations(
   });
 
   return { sourceNumberById, textByPartIndex };
+}
+
+const citationLinkParser = new MarkdownIt({ html: false, linkify: false });
+const CITATION_OR_LINK_LABEL = /\[(?:(\d{1,3})\]|cite:([^\]\r\n]+)\])?|cite([^]+)/g;
+
+function normalizeLineEndingsWithIndexMap(text: string): {
+  normalizedText: string;
+  toOriginalIndex: readonly number[];
+} {
+  const chunks: string[] = [];
+  const toOriginalIndex: number[] = [];
+  let plainStart = 0;
+  for (let index = 0; index < text.length; index++) {
+    const charCode = text.charCodeAt(index);
+    if (charCode !== 13) {
+      toOriginalIndex.push(index);
+      continue;
+    }
+    if (index > plainStart) chunks.push(text.slice(plainStart, index));
+    chunks.push('\n');
+    toOriginalIndex.push(index);
+    if (text.charCodeAt(index + 1) === 10) index += 1;
+    plainStart = index + 1;
+  }
+  if (plainStart < text.length) chunks.push(text.slice(plainStart));
+  toOriginalIndex.push(text.length);
+  return { normalizedText: chunks.join(''), toOriginalIndex };
+}
+
+/** Cap link probing at paragraph boundaries and unescaped table-row cell pipes. */
+function findLinkProbeLimit(text: string, start: number, paragraphEnd: number): number {
+  const newline = text.indexOf('\n', start);
+  const lineEnd = newline === -1 || newline > paragraphEnd ? paragraphEnd : newline;
+  let escaped = false;
+  let codeFenceLength = 0;
+  for (let index = start; index < lineEnd; index++) {
+    const char = text[index];
+    if (char === '\\' && codeFenceLength === 0) {
+      escaped = !escaped;
+      continue;
+    }
+    if (!escaped && char === '`') {
+      let run = 1;
+      while (index + run < lineEnd && text[index + run] === '`') run += 1;
+      if (codeFenceLength === 0) codeFenceLength = run;
+      else if (codeFenceLength === run) codeFenceLength = 0;
+      index += run - 1;
+      escaped = false;
+      continue;
+    }
+    if (!escaped && codeFenceLength === 0 && char === '|') return index;
+    escaped = false;
+  }
+  return paragraphEnd;
+}
+
+/** Remove confirmed citation markers from speech Markdown while preserving literal examples. */
+export function stripMessageCitations(
+  parts: readonly CherryMessagePart[],
+  additionalSources: readonly CitationSource[] = [],
+  targetIndices?: ReadonlySet<number>,
+): ReadonlyMap<number, string> {
+  const textByPartIndex = new Map<number, string>();
+  const sourceById = collectCitationSources(parts, additionalSources);
+  if (!sourceById.size) return textByPartIndex;
+  const nativeByNumber = collectNativeCitationNumbers(parts);
+
+  parts.forEach((part, index) => {
+    if (part.type !== 'text' || (targetIndices !== undefined && !targetIndices.has(index))) return;
+    const { text } = part;
+    if (!/\[(?:\d{1,3}\]|cite:)|cite/.test(text)) return;
+
+    const crlfMap = text.includes('\r') ? normalizeLineEndingsWithIndexMap(text) : undefined;
+    const normalizedText = crlfMap ? crlfMap.normalizedText : text;
+    const mapOffset = (offset: number) => (crlfMap ? crlfMap.toOriginalIndex[offset]! : offset);
+
+    const env: Env = {};
+    if (normalizedText.includes(']:'))
+      citationLinkParser.block.parse(normalizedText, citationLinkParser, env, []);
+    const linkState = new citationLinkParser.inline.State(
+      normalizedText,
+      citationLinkParser,
+      env,
+      [],
+    );
+    const paragraphBreak = /\n[ \t]*\n/g;
+    const unresolvedReference = /\[(?!\d{1,3}\](?![(:])|cite:)[^[\]\r\n]*\]/y;
+    let paragraphEnd = -1;
+    let linkEnd = 0;
+    const edits: { start: number; end: number; replacement?: string }[] = [];
+
+    mapMarkdownOutsideCode(normalizedText, (prose, offset) => {
+      for (const match of prose.matchAll(CITATION_OR_LINK_LABEL)) {
+        const [marker, number, names, providerIds] = match;
+        const start = offset + match.index;
+        if (start < linkEnd) continue;
+        const end = start + marker.length;
+        if (!providerIds) {
+          if (start >= paragraphEnd) {
+            paragraphBreak.lastIndex = start;
+            paragraphEnd = paragraphBreak.exec(normalizedText)?.index ?? normalizedText.length;
+          }
+          if (!number && !names) {
+            // Bare '[' opens a potential enclosing Markdown link such as [Label [1]](url).
+            linkState.pos = start;
+            linkState.posMax = findLinkProbeLimit(normalizedText, start, paragraphEnd);
+            citationLinkParser.inline.skipToken(linkState);
+            if (linkState.pos > start + 1) linkEnd = linkState.pos;
+            continue;
+          }
+        }
+        const editStart = mapOffset(start);
+        const editEnd = mapOffset(end);
+        if (number) {
+          if (normalizedText[end] === ':' || normalizedText[end] === '(') continue;
+          linkState.pos = start;
+          linkState.posMax = findLinkProbeLimit(normalizedText, start, paragraphEnd);
+          citationLinkParser.inline.skipToken(linkState);
+          if (linkState.pos > start + 1) {
+            linkEnd = linkState.pos;
+            continue;
+          }
+          unresolvedReference.lastIndex = end;
+          if (unresolvedReference.test(normalizedText)) continue;
+          const id = nativeByNumber.get(Number(number));
+          if (id !== undefined && sourceById.has(id))
+            edits.push({ start: editStart, end: editEnd });
+        } else if (providerIds) {
+          if (providerIds.split('').every((id) => sourceById.has(id)))
+            edits.push({ start: editStart, end: editEnd });
+        } else {
+          const ids = names
+            .split(/[\s,;]+/)
+            .filter(Boolean)
+            .map((id) => id.replace(/^cite:/, ''));
+          if (!ids.every((id) => /^[\w-]+$/.test(id))) continue;
+          const unknown = ids.filter((id) => !sourceById.has(id));
+          if (unknown.length < ids.length)
+            edits.push({
+              start: editStart,
+              end: editEnd,
+              replacement: unknown.length ? '[cite:' + unknown.join(', ') + ']' : '',
+            });
+        }
+      }
+      return prose;
+    });
+    if (edits.length) textByPartIndex.set(index, replaceInlineTextRanges(text, edits));
+  });
+
+  return textByPartIndex;
+}
+
+function collectNativeCitationNumbers(parts: readonly CherryMessagePart[]) {
+  const toolIds = new Set(collectToolCitationSources(parts).map((source) => source.id));
+  const native = parts.filter(
+    (part): part is Extract<CherryMessagePart, { type: 'source-url' }> =>
+      part.type === 'source-url' && !toolIds.has(part.sourceId),
+  );
+  const nativeByNumber = new Map<number, string>();
+  const unnumbered: { index: number; sourceId: string }[] = [];
+  native.forEach((part, index) => {
+    const number = nativeSourceNumber(part.sourceId);
+    if (number !== undefined) {
+      if (!nativeByNumber.has(number)) nativeByNumber.set(number, part.sourceId);
+    } else {
+      unnumbered.push({ index, sourceId: part.sourceId });
+    }
+  });
+  for (const item of unnumbered) {
+    if (!nativeByNumber.has(item.index + 1)) nativeByNumber.set(item.index + 1, item.sourceId);
+  }
+  return nativeByNumber;
 }
 
 export function collectCitationSources(
@@ -330,7 +489,10 @@ function toCitationSource(value: unknown): CitationSource | null {
   return { content, id: String(value.id), title, url };
 }
 
-function mapMarkdownOutsideCode(source: string, transform: (text: string) => string): string {
+function mapMarkdownOutsideCode(
+  source: string,
+  transform: (text: string, offset: number) => string,
+): string {
   let fence: { character: string; count: number } | undefined;
   let offset = 0;
   let inlineEnd = -1;
@@ -366,7 +528,8 @@ function mapMarkdownOutsideCode(source: string, transform: (text: string) => str
       while (position < line.length) {
         if (line.charCodeAt(position) === 92) {
           result +=
-            transform(line.slice(plainStart, position)) + line.slice(position, position + 2);
+            transform(line.slice(plainStart, position), start + plainStart) +
+            line.slice(position, position + 2);
           position += 2;
           plainStart = position;
           continue;
@@ -382,7 +545,9 @@ function mapMarkdownOutsideCode(source: string, transform: (text: string) => str
           if (closing) {
             inlineEnd = closing.index + run.length;
             const end = Math.min(line.length, inlineEnd - start);
-            result += transform(line.slice(plainStart, position)) + line.slice(position, end);
+            result +=
+              transform(line.slice(plainStart, position), start + plainStart) +
+              line.slice(position, end);
             position = end;
             plainStart = position;
             continue;
@@ -392,7 +557,7 @@ function mapMarkdownOutsideCode(source: string, transform: (text: string) => str
         }
         position++;
       }
-      return result + transform(line.slice(plainStart));
+      return result + transform(line.slice(plainStart), start + plainStart);
     })
     .join('');
 }

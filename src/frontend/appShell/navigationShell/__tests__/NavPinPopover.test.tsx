@@ -5,10 +5,14 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { NavigationPinTabId } from '@/shared/data/preference/preferenceSchema';
 
 import { NavPinPopover } from '../NavPinPopover';
+import type { NavPinPopoverState } from '../state';
 
 const mockClosePinPopover = jest.fn();
 const mockPinTabToDock = jest.fn();
+const mockReorderMiddleTab = jest.fn();
+const mockUnpinTabFromDock = jest.fn();
 let mockPinnedTabs: NavigationPinTabId[];
+let mockPopover: NavPinPopoverState | null = { id: 'drawings', source: 'more', x: 100, y: 200 };
 
 jest.mock('@cherrystudio/app-icons/icons/chevron-left', () => 'ChevronLeftIcon');
 jest.mock('@cherrystudio/app-icons/icons/chevron-right', () => 'ChevronRightIcon');
@@ -32,14 +36,20 @@ jest.mock('../state', () => ({
   useNavigationShellActions: () => ({
     closePinPopover: mockClosePinPopover,
     pinTabToDock: mockPinTabToDock,
+    reorderMiddleTab: mockReorderMiddleTab,
+    unpinTabFromDock: mockUnpinTabFromDock,
   }),
   useNavigationShellInteraction: () => ({
-    popover: { id: 'drawings', source: 'more', x: 100, y: 200 },
+    popover: mockPopover,
   }),
 }));
 
 describe('NavPinPopover opened from More', () => {
   let renderer: ReactTestRenderer | undefined;
+
+  beforeEach(() => {
+    mockPopover = { id: 'drawings', source: 'more', x: 100, y: 200 };
+  });
 
   afterEach(() => {
     act(() => renderer?.unmount());
@@ -73,5 +83,90 @@ describe('NavPinPopover opened from More', () => {
     expect(button.props.className).not.toContain('bg-secondary-active');
     expect(button.findByType(Text).props.className).toContain('text-muted-foreground');
     expect(button.findByType('PinIcon' as never).props.color).toBe('#666666');
+  });
+});
+
+describe('NavPinPopover opened from Dock', () => {
+  let renderer: ReactTestRenderer | undefined;
+
+  afterEach(() => {
+    act(() => renderer?.unmount());
+    renderer = undefined;
+    jest.clearAllMocks();
+  });
+
+  function renderDockPopover(pinnedTabs: NavigationPinTabId[], id: NavigationPinTabId) {
+    mockPinnedTabs = pinnedTabs;
+    mockPopover = { id, source: 'dock', x: 160, y: 740 };
+    act(() => {
+      renderer = create(<NavPinPopover />);
+    });
+    return renderer!;
+  }
+
+  test('renders nothing when the required agents tab is the only middle tab', () => {
+    const tree = renderDockPopover(['agents'], 'agents');
+
+    expect(tree.root.findAllByProps({ testID: 'nav-pin-popover' })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ testID: 'nav-pin-popover-backdrop' })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ testID: 'nav-popover-unpin-agents' })).toHaveLength(0);
+  });
+
+  test('hides unpin while keeping move-right when agents is first of multiple middle tabs', () => {
+    const tree = renderDockPopover(['agents', 'drawings'], 'agents');
+
+    expect(tree.root.findByProps({ testID: 'nav-popover-move-right-agents' })).toBeTruthy();
+    expect(tree.root.findAllByProps({ testID: 'nav-popover-move-left-agents' })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ testID: 'nav-popover-unpin-agents' })).toHaveLength(0);
+  });
+
+  test('hides unpin while keeping move-left when agents is not first', () => {
+    const tree = renderDockPopover(['drawings', 'agents'], 'agents');
+
+    expect(tree.root.findByProps({ testID: 'nav-popover-move-left-agents' })).toBeTruthy();
+    expect(tree.root.findAllByProps({ testID: 'nav-popover-move-right-agents' })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ testID: 'nav-popover-unpin-agents' })).toHaveLength(0);
+  });
+
+  test('renders both move actions without unpin when agents sits in the middle of three tabs', () => {
+    const tree = renderDockPopover(['drawings', 'agents', 'files'], 'agents');
+
+    const moveLeft = tree.root.findByProps({ testID: 'nav-popover-move-left-agents' });
+    const moveRight = tree.root.findByProps({ testID: 'nav-popover-move-right-agents' });
+    expect(moveLeft.props.className).toContain('active:opacity-70');
+    expect(moveRight.props.className).toContain('active:opacity-70');
+    expect(tree.root.findAllByProps({ testID: 'nav-popover-unpin-agents' })).toHaveLength(0);
+
+    act(() => moveLeft.props.onPress());
+    expect(mockReorderMiddleTab).toHaveBeenCalledWith('agents', 0);
+    expect(mockClosePinPopover).toHaveBeenCalledTimes(1);
+
+    act(() => moveRight.props.onPress());
+    expect(mockReorderMiddleTab).toHaveBeenCalledWith('agents', 2);
+    expect(mockClosePinPopover).toHaveBeenCalledTimes(2);
+  });
+
+  test('renders move and unpin actions for removable dock tabs and unpins before closing', () => {
+    const tree = renderDockPopover(['agents', 'drawings'], 'drawings');
+
+    const moveLeft = tree.root.findByProps({ testID: 'nav-popover-move-left-drawings' });
+    expect(moveLeft.props.className).toContain('active:opacity-70');
+    const unpinButton = tree.root.findByProps({ testID: 'nav-popover-unpin-drawings' });
+    expect(unpinButton.props.className).toContain('active:opacity-70');
+
+    act(() => moveLeft.props.onPress());
+    expect(mockReorderMiddleTab).toHaveBeenCalledWith('drawings', 0);
+
+    act(() => unpinButton.props.onPress());
+    expect(mockUnpinTabFromDock).toHaveBeenCalledWith('drawings');
+    expect(mockClosePinPopover).toHaveBeenCalledTimes(2);
+  });
+
+  test('derives move index from normalized pinned tabs even when input omits agents', () => {
+    const tree = renderDockPopover(['drawings'], 'drawings');
+
+    const moveLeft = tree.root.findByProps({ testID: 'nav-popover-move-left-drawings' });
+    act(() => moveLeft.props.onPress());
+    expect(mockReorderMiddleTab).toHaveBeenCalledWith('drawings', 0);
   });
 });

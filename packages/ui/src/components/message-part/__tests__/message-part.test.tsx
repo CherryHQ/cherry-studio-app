@@ -412,6 +412,33 @@ describe('MessagePart', () => {
     expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(1);
   });
 
+  it('renders dynamic statusText nodes with tabular-nums and falls back to title for accessibilityLabel', () => {
+    function DynamicElapsed() {
+      return 'Elapsed 3s';
+    }
+
+    act(() => {
+      renderer = create(
+        <MessagePart.ToolGroup
+          state="running"
+          statusText={<DynamicElapsed />}
+          testID="group"
+          title="Working with tools…"
+        >
+          <Text>step</Text>
+        </MessagePart.ToolGroup>,
+      );
+    });
+
+    const trigger = renderer!.root.findByProps({ testID: 'group-trigger' });
+    expect(trigger.props.accessibilityLabel).toBe('Working with tools…');
+    const statusTextNode = trigger
+      .findAllByType(Text)
+      .find((node) => node.props.className?.includes('tabular-nums'));
+    expect(statusTextNode).toBeDefined();
+    expect(statusTextNode!.findByType(DynamicElapsed)).toBeDefined();
+  });
+
   it('preserves reading an open run when it first enters the completed process', () => {
     act(() => {
       renderer = create(

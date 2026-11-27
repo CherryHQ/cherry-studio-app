@@ -1,5 +1,5 @@
-import type { Context, JsonValue } from '@earendil-works/chord';
-import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/chord/context';
+import { BACKGROUND_CONTEXT, withAbortSignal, type Context } from '@earendil-works/chord/context';
+import type { JsonValue } from '@earendil-works/chord/json';
 import {
   configure,
   defineDoc,
@@ -24,6 +24,7 @@ import {
   ProviderDoc,
   type Storage,
   type TaskGraph,
+  type TaskId,
 } from '@earendil-works/pi-durable';
 
 import type { RuntimeInputParent, RuntimeQueueSelection } from '../durableTypes';
@@ -43,7 +44,7 @@ const SessionBinding = defineDocFamily<PiSessionBinding, number>({
   kind: 'cherry.session',
   version: 1,
   scope: 'session',
-  checkpointWhen: () => false,
+  checkpointWhen: () => true,
   family: true,
   initial: (revision) => ({ conversationId: null, revision }),
 });
@@ -59,7 +60,7 @@ const SubmissionMetadata = defineDocFamily<
   kind: 'cherry.submission',
   version: 1,
   scope: 'session',
-  checkpointWhen: () => false,
+  checkpointWhen: () => true,
   family: true,
   initial: (value) => ({ value }),
 });
@@ -72,7 +73,7 @@ const MessageBinding = defineDocFamily<
   kind: 'cherry.message-binding',
   version: 1,
   scope: 'session',
-  checkpointWhen: () => false,
+  checkpointWhen: () => true,
   family: true,
   initial: (identity) => identity,
 });
@@ -82,7 +83,7 @@ const RequestOptions = defineDocFamily<{ value: JsonObject }, JsonObject>({
   kind: 'cherry.request-options',
   version: 1,
   scope: 'session',
-  checkpointWhen: () => false,
+  checkpointWhen: () => true,
   family: true,
   initial: (value) => ({ value }),
 });
@@ -92,7 +93,7 @@ const Configuration = defineDocFamily<{ value: JsonObject }, JsonObject>({
   kind: 'cherry.configuration',
   version: 1,
   scope: 'session',
-  checkpointWhen: () => false,
+  checkpointWhen: () => true,
   family: true,
   initial: (value) => ({ value }),
 });
@@ -101,7 +102,7 @@ const UsageDelivery = defineDocFamily<{ value: JsonObject; delivered: boolean },
   kind: 'cherry.usage-delivery',
   version: 1,
   scope: 'session',
-  checkpointWhen: () => false,
+  checkpointWhen: () => true,
   family: true,
   initial: (value) => ({ value, delivered: false }),
 });
@@ -111,7 +112,7 @@ const UsagePending = defineDocFamily<{ ids: string[] }, null>({
   kind: 'cherry.usage-pending',
   version: 1,
   scope: 'session',
-  checkpointWhen: () => false,
+  checkpointWhen: () => true,
   family: true,
   initial: () => ({ ids: [] }),
 });
@@ -121,7 +122,7 @@ const ResourceScope = defineDoc<{ fileEntryIds: string[] }>({
   kind: 'cherry.resources',
   version: 1,
   scope: 'conversation',
-  checkpointWhen: () => false,
+  checkpointWhen: (_value, _ops, { deltasSinceBase }) => deltasSinceBase >= 32,
   history: 'latest',
   fork: 'current',
   initial: () => ({ fileEntryIds: [] }),
@@ -827,7 +828,7 @@ export class PiDurableRuntime {
       inbox.items = inbox.items.filter(
         (entry) => entry.id !== original.id && entry.mode !== 'followUp',
       );
-      await conversation.submit(tx, {
+      await conversation.admit(tx, {
         type: 'input',
         requestId: replacementId,
         content: item.content,
@@ -933,18 +934,55 @@ export class PiDurableRuntime {
 
   /** Restore an idle observer's branch anchor, even when compaction removed the input from context. */
   async latestInput(sessionId: string, through: EntryId) {
-    let cursor: Cursor | undefined;
-    do {
-      const page = await this.history(sessionId, 256, cursor, BACKGROUND_CONTEXT, {
-        maxEntryId: through,
-      });
-      const latest = page.submissions
-        .filter(({ record }) => record.type === 'input' && record.entry !== undefined)
-        .sort((a, b) => Number(b.record.entry) - Number(a.record.entry))[0];
-      if (latest) return latest;
-      cursor = page.next;
-    } while (cursor);
-    return undefined;
+    const [latest] = await this.placedInputs(sessionId, { limit: 1, maxEntryId: through });
+    return latest;
+  }
+
+  async placedInputs(
+    sessionId: string,
+    query: { limit: number; maxEntryId?: EntryId; requestIds?: readonly string[] },
+    context: Context = BACKGROUND_CONTEXT,
+  ): Promise<{ record: SubmissionRecord; metadata?: JsonObject }[]> {
+    const requestIds = query.requestIds && new Set(query.requestIds);
+    if (!Number.isSafeInteger(query.limit) || query.limit < 1 || requestIds?.size === 0) return [];
+    const conversation = await this.requireSession(sessionId, context);
+    const matched = await this.harness.commit(async (tx) => {
+      // The publication observer updates the submission index before the wait resolves.
+      if (!requestIds) await tx.waitForEntryPublication(conversation.id);
+
+      const records: SubmissionRecord[] = [];
+      // Global entry IDs increase. Each fork's own entries are newer than its inherited prefix.
+      for await (const { origin, upper } of this.forkLineage(
+        conversation.id,
+        query.maxEntryId,
+        context,
+      )) {
+        const candidates: SubmissionRecord[] = [];
+        if (requestIds) {
+          for (const requestId of requestIds) {
+            const input = await tx.submissionByRequest(origin, requestId);
+            if (input?.type === 'input' && input.entry !== undefined && input.entry <= upper)
+              candidates.push(input);
+          }
+        } else {
+          const index = await this.submissionIndex(origin, context);
+          for (const [entry, input] of index.entries)
+            if (input.type === 'input' && entry <= upper) candidates.push(input);
+        }
+        for (const candidate of candidates.sort((a, b) => b.entry! - a.entry!)) {
+          if (!(await this.storage.entry(conversation.id, candidate.entry!, context))) continue;
+          records.push(candidate);
+          if (records.length === query.limit) return records;
+        }
+      }
+      return records;
+    }, context);
+    return Promise.all(
+      matched.map(async (record) => ({
+        record,
+        metadata: await this.submissionMetadata(record, context),
+      })),
+    );
   }
 
   /** Register before attaching the view: a coalesced watch can miss a whole short run. */
@@ -1027,6 +1065,21 @@ export class PiDurableRuntime {
     } finally {
       this.unsubscribeCommits();
       this.submissionIndexes.clear();
+    }
+  }
+
+  private async *forkLineage(
+    origin: ConversationId,
+    maxEntryId: EntryId | undefined,
+    context: Context,
+  ) {
+    let upper = maxEntryId ?? Number.POSITIVE_INFINITY;
+    while (true) {
+      yield { origin, upper };
+      const parent = (await this.storage.conversation(origin, context))?.parent;
+      if (!parent) return;
+      upper = Math.min(upper, parent.at);
+      origin = parent.conversationId;
     }
   }
 
@@ -1174,9 +1227,13 @@ export function hasRunnablePiTasks(graph: TaskGraph, now = Date.now()): boolean 
       case 'running':
         return true;
       case 'sleeping':
-        return task.state.until <= now;
-      case 'waiting':
-        return task.state.on.every((id) => graph.tasks[String(id)] === undefined);
+        return task.state.until !== undefined && task.state.until <= now;
+      case 'waiting': {
+        const isSettled = (id: TaskId) => graph.tasks[String(id)] === undefined;
+        return task.state.policy === 'any'
+          ? task.state.on.some(isSettled)
+          : task.state.on.every(isSettled);
+      }
     }
   });
 }

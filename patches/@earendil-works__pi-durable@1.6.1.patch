@@ -1,0 +1,513 @@
+diff --git a/dist/codemode/codemode.d.ts b/dist/codemode/codemode.d.ts
+index 05ee22665d..c28be351f4 100644
+--- a/dist/codemode/codemode.d.ts
++++ b/dist/codemode/codemode.d.ts
+@@ -36,9 +36,10 @@
+  */
+ import type { Context } from "@earendil-works/chord/context";
+ import { type JsonValue } from "@earendil-works/chord/json";
+-import type { CodemodeSandboxBase } from "@earendil-works/pi-codemode/portable";
++import type { CodemodeSandboxBase, CodemodeStoreWrites } from "@earendil-works/pi-codemode/portable";
+ import { type Static } from "@earendil-works/pi-schema";
+ import type { Extension, ToolExecutionApi, ToolRegistration } from "../harness/types.ts";
++import type { OutputFile } from "./output.ts";
+ import type { JsonObject } from "../types.ts";
+ /**
+  * Version of everything in this module that turns stored results into what a script sees: result mapping, globals,
+@@ -155,6 +156,10 @@ declare const codemodeSchema: import("@earendil-works/pi-schema").Schema<{
+ }>;
+ export type CodemodeToolInput = Static<typeof codemodeSchema>;
+ export type CodemodeToolOptions = {
++    /** Host-managed output storage, for environments without device filesystem paths. */
++    readonly writeOutput?: (name: string, data: string | Uint8Array, api: ToolExecutionApi, context: Context, storeWrites?: CodemodeStoreWrites) => ReturnType<OutputFile>;
++    /** Final conversation store budget, including concurrent host writes, in key and JSON characters. */
++    readonly maxStoreCharacters?: number;
+     /** Runs the scripts: `CodemodeSandbox` on Node, `RemoteCodemodeSandbox` on Cloudflare. */
+     readonly sandbox: CodemodeSandboxBase;
+     /** Estimated tokens the tool declarations in the `codemode` section may use. Default 3000. */
+diff --git a/dist/codemode/codemode.js b/dist/codemode/codemode.js
+index 6a3a2b9283..cb480b960a 100644
+--- a/dist/codemode/codemode.js
++++ b/dist/codemode/codemode.js
+@@ -342,13 +342,14 @@ class CodemodeCall {
+     /** The script's own outcome, stored with its store writes in one transaction. */
+     async complete(result) {
+         const details = this.details();
++        const writes = result.ok ? result.storeWrites : undefined;
+         const formatted = await formatResult(result, {
+             generatedImages: this.generatedImages,
+             wallMs: this.api.now() - this.start.startedAt,
+             maxOutputTokens: this.start.maxOutputTokens,
+             calls: details.calls,
+             limits: OUTPUT_LIMITS,
+-            write: this.outputFiles(),
++            write: this.outputFiles(writes),
+         });
+         const tool = {
+             output: formatted.content,
+@@ -358,24 +359,41 @@ class CodemodeCall {
+                 ...(formatted.fullOutputPath === undefined ? {} : { fullOutputPath: formatted.fullOutputPath }),
+             },
+         };
+-        const writes = result.ok ? result.storeWrites : undefined;
+         return this.api.commit(async (tx) => {
+             const run = await tx.doc(CodemodeRunDoc, this.api.taskId);
+             if (run.result !== undefined)
+                 return run.result;
+-            run.result = copyJson(tool, { omitUndefinedProperties: true });
++            let settled = tool;
+             if (writes !== undefined && (Object.keys(writes.set).length > 0 || writes.delete.length > 0)) {
+                 const store = await tx.doc(CodemodeStoreDoc, this.api.conversationId);
++                const values = Object.assign(Object.create(null), store.values);
+                 for (const key of writes.delete)
+-                    delete store.values[key];
++                    delete values[key];
+                 for (const [key, value] of Object.entries(writes.set))
+-                    store.values[key] = value;
++                    values[key] = value;
++                const characters = Object.entries(values).reduce((total, [key, value]) => total + key.length + JSON.stringify(value).length, 0);
++                if (this.options.maxStoreCharacters !== undefined && characters > this.options.maxStoreCharacters) {
++                    settled = {
++                        ...tool,
++                        isError: true,
++                        output: [...tool.output, { type: "text", text: "Script error:\nWorking cache is full after concurrent writes. This script's cache writes were not saved. Completed tool calls were not undone; inspect their receipts before retrying." }],
++                    };
++                }
++                else {
++                    for (const key of writes.delete)
++                        delete store.values[key];
++                    for (const [key, value] of Object.entries(writes.set))
++                        store.values[key] = value;
++                }
+             }
+-            return tool;
++            run.result = copyJson(settled, { omitUndefinedProperties: true });
++            return settled;
+         }, this.context);
+     }
+     /** Writes the result's files under fixed names into the run's output directory, so a rerun overwrites them. */
+-    outputFiles() {
++    outputFiles(storeWrites) {
++        if (this.options.writeOutput)
++            return (name, data) => this.options.writeOutput(name, data, this.api, this.context, storeWrites);
+         const env = this.api.env;
+         let directory;
+         return async (name, data) => {
+diff --git a/dist/harness/compaction.js b/dist/harness/compaction.js
+index c403297c5d..4a62d83b7f 100644
+--- a/dist/harness/compaction.js
++++ b/dist/harness/compaction.js
+@@ -85,6 +85,14 @@ export const CompactionTask = defineTask({
+                 if (decision === undefined)
+                     decision = await hook(compaction, runtime, context);
+             });
++            if (decision?.kind === "failure") {
++                const message = decision.failure;
++                await runtime.commit(async (tx) => {
++                    failCompactionStatus(await tx.doc(LiveDoc, conversationId), runtime.taskId, message);
++                    return { status: "terminal", outcome: { status: "failed", error: { message, detail: { reason: "model_error" } } } };
++                }, context);
++                return;
++            }
+             if (decision?.kind === "decline")
+                 return complete(runtime, context);
+             if (decision?.kind === "summary")
+diff --git a/dist/harness/types.d.ts b/dist/harness/types.d.ts
+index b122613225..81734132e0 100644
+--- a/dist/harness/types.d.ts
++++ b/dist/harness/types.d.ts
+@@ -1140,6 +1140,9 @@ export interface CompactionHooks {
+     } | {
+         readonly kind: "summary";
+         readonly summary: string;
++    } | {
++        readonly kind: "failure";
++        readonly failure: string;
+     }>;
+ }
+ export {};
+diff --git a/dist/search.js b/dist/search.js
+index 7b05ef0be2..3d53359e9d 100644
+--- a/dist/search.js
++++ b/dist/search.js
+@@ -79,7 +79,10 @@ function indexDocument(document) {
+         namespaceTerms: new Set(tokenize(document.namespaceText ?? "")),
+     };
+ }
+-const wordSegmenter = new Intl.Segmenter(undefined, { granularity: "word" });
++// Native runtimes without Segmenter still support the existing Unicode/Han search contract.
++const wordSegmenter = typeof Intl.Segmenter === "function"
++    ? new Intl.Segmenter(undefined, { granularity: "word" })
++    : undefined;
+ const STOP_WORDS = new Set([
+     "a",
+     "an",
+@@ -113,10 +116,15 @@ export function tokenize(text) {
+         .replace(/[^\p{L}\p{M}\p{N}]+/gu, " ");
+     // The segmenter costs about 15 times a split. Plain ASCII splits into the same words at spaces, so only other
+     // text, such as Chinese written without spaces, goes through it.
+-    const words = /^[a-z0-9 ]*$/.test(normalized)
++    const words = /^[a-z0-9 ]*$/.test(normalized) || wordSegmenter === undefined
+         ? normalized.split(" ")
+         : Array.from(wordSegmenter.segment(normalized), (segment) => (segment.isWordLike ? segment.segment : ""));
+-    return words
++    // Retain whole Han names and adjacent pairs independently of dictionary segmentation.
++    const hanTerms = (normalized.match(/\p{Script=Han}+/gu) ?? []).flatMap((term) => {
++        const chars = [...term];
++        return chars.length > 2 ? [term, ...chars.slice(1).map((next, index) => chars[index] + next)] : [term];
++    });
++    return [...words, ...hanTerms.filter((term) => !words.includes(term))]
+         .filter((word) => word.length > 0 && !STOP_WORDS.has(word))
+         .map((word) => (/^[a-z0-9]+$/.test(word) ? stem(word) : word));
+ }
+diff --git a/dist/session/session.js b/dist/session/session.js
+index 86978d80b5..32c4d98f0d 100644
+--- a/dist/session/session.js
++++ b/dist/session/session.js
+@@ -226,7 +226,8 @@ export class SessionImpl {
+             },
+             conversationCreated: (tx, record) => this.conversationCreated(tx, record),
+             taskDocuments: (taskId) => this.#taskDocuments.get(taskId)?.values(),
+-            latestEntryId: (conversationId, context) => this.latestEntryId(conversationId, context),
++            waitForEntryPublication: (id) => this.#touchEntries(id) ?? SETTLED,
++            latestEntryId: (id, context) => this.latestEntryId(id, context),
+             latestHeadMarker: (conversationId, context) => this.latestHeadMarker(conversationId, undefined, context),
+         };
+     }
+diff --git a/dist/session/transaction.d.ts b/dist/session/transaction.d.ts
+index 8bdc8172d9..5adf8b4dea 100644
+--- a/dist/session/transaction.d.ts
++++ b/dist/session/transaction.d.ts
+@@ -53,7 +53,9 @@ export interface TransactionHost {
+     /** Stage writes that belong to every newly created or forked conversation, in its creating transaction. */
+     conversationCreated(tx: Transaction, record: ConversationRecord): Promise<void>;
+     /** The newest entry ID visible from a conversation, known from the Session's commits. */
+-    latestEntryId(conversationId: ConversationId, context: Context): Promise<EntryId | undefined>;
++    latestEntryId(id: ConversationId, context: Context): Promise<EntryId | undefined>;
++    /** Wait for the conversation's creation and appends to publish without loading entries. */
++    waitForEntryPublication(conversationId: ConversationId): Promise<void>;
+     /**
+      * The current documents of a live task when the Session knows all of them (it created the task), else `undefined`.
+      */
+@@ -100,7 +102,8 @@ export declare class Transaction implements Tx {
+     latestHeadMarker(conversationId: ConversationId): Promise<(EntryRecord & {
+         readonly head: EntryId;
+     }) | undefined>;
+-    latestEntryId(conversationId: ConversationId): Promise<EntryId | undefined>;
++    waitForEntryPublication(conversationId: ConversationId): Promise<void>;
++    latestEntryId(id: ConversationId): Promise<EntryId | undefined>;
+     scanTasks(query: TaskQuery, limit: number, cursor?: Cursor): Promise<import("../types.ts").Page<TaskRecord<JsonValue, JsonValue, JsonValue>, Readonly<Record<string, JsonValue>>>>;
+     /** Committed submission record. */
+     submission(id: SubmissionId): Promise<SubmissionRecord | undefined>;
+diff --git a/dist/session/transaction.js b/dist/session/transaction.js
+index c8dda056cc..b64f689131 100644
+--- a/dist/session/transaction.js
++++ b/dist/session/transaction.js
+@@ -103,8 +103,11 @@ export class Transaction {
+     latestHeadMarker(conversationId) {
+         return this.#read("latestHeadMarker", () => this.#host.latestHeadMarker(conversationId, this.#context));
+     }
+-    latestEntryId(conversationId) {
+-        return this.#read("latestEntryId", () => this.#host.latestEntryId(conversationId, this.#context));
++    waitForEntryPublication(conversationId) {
++        return this.#read("waitForEntryPublication", () => this.#host.waitForEntryPublication(conversationId));
++    }
++    latestEntryId(id) {
++        return this.#read("latestEntryId", () => this.#host.latestEntryId(id, this.#context));
+     }
+     scanTasks(query, limit, cursor) {
+         return this.#read("scanTasks", () => this.#host.storage.scanTasks(query, limit, cursor, this.#context));
+diff --git a/dist/storage/sqlite/storage.d.ts b/dist/storage/sqlite/storage.d.ts
+index 22a6246735..09b9a826b1 100644
+--- a/dist/storage/sqlite/storage.d.ts
++++ b/dist/storage/sqlite/storage.d.ts
+@@ -3,25 +3,32 @@ import type { JsonValue } from "@earendil-works/chord/json";
+ import type { SqliteDatabase } from "@earendil-works/chord/sqlite";
+ import type { CommitResult, ConversationId, ConversationQuery, ConversationRecord, Cursor, DocumentAddress, DocumentId, DocumentPoint, DocumentQuery, DocumentRecord, EntryId, EntryQuery, EntryRecord, Id, Page, Seq, Storage, StorageWrite, StoredDocument, SubmissionId, SubmissionQuery, SubmissionRecord, TaskId, TaskQuery, TaskRecord } from "../../types.ts";
+ type StoredTask = TaskRecord<JsonValue, JsonValue, JsonValue>;
++interface DurableSqliteDatabase extends SqliteDatabase {
++    /** Optional UTF-8 byte budget per multi-row payload read for transcript entries and document revisions. */
++    readonly maxPayloadReadBytes?: number;
++}
+ export type SqliteStorageOptions = {
+     /**
+      * Prefix for every table and index in the durable schema. It must be a SQLite identifier and must not use
+      * SQLite's reserved `sqlite_` prefix. Existing data is not migrated when this changes.
+      */
+     readonly prefix?: string;
++    /** Optional UTF-8 byte budget per multi-row payload read for transcript entries and document revisions. */
++    readonly maxPayloadReadBytes?: number;
+ };
+ /** Portable SQLite implementation of the Pico storage contract. */
+ export declare class SqliteStorage implements Storage {
+     private readonly db;
+     private readonly schema;
+     private nextId;
++    private readonly maxPayloadReadBytes;
+     private closed;
+     private closing;
+     private admittedReads;
+     private readsDrained;
+     private constructor();
+     /** Initialize storage over an owned SQLite database facade. */
+-    static open(db: SqliteDatabase, options?: SqliteStorageOptions): Promise<SqliteStorage>;
++    static open(db: DurableSqliteDatabase, options?: SqliteStorageOptions): Promise<SqliteStorage>;
+     /**
+      * Commit `batches` in one SQL transaction, each with its own seq. Each batch is checked before it writes anything,
+      * against the state the earlier ones left, and the first one refused ends the batch: the transaction commits the ones
+@@ -60,6 +67,7 @@ export declare class SqliteStorage implements Storage {
+     private readEntries;
+     /** Oldest first: the fork chain's segments from the root conversation forward, each up to its fork point. */
+     private readEntriesAscending;
++    private readEntrySegment;
+     task(id: TaskId, _context: Context): Promise<StoredTask | undefined>;
+     scanTasks(query: TaskQuery, limit: number, cursor: Cursor | undefined, _context: Context): Promise<Page<StoredTask, Cursor>>;
+     submission(id: SubmissionId, _context: Context): Promise<SubmissionRecord | undefined>;
+diff --git a/dist/storage/sqlite/storage.js b/dist/storage/sqlite/storage.js
+index 5167818422..53a7ed0225 100644
+--- a/dist/storage/sqlite/storage.js
++++ b/dist/storage/sqlite/storage.js
+@@ -51,29 +51,37 @@ function watchCalls(executor, calls) {
+         all: (sql, ...params) => watched(() => executor.all(sql, ...params)),
+     };
+ }
++const PAYLOAD_ROW_OVERHEAD_BYTES = 512;
++const DOCUMENT_REVISION_CHUNK_LIMIT = 4096;
+ /** Portable SQLite implementation of the Pico storage contract. */
+ export class SqliteStorage {
+     db;
+     schema;
+     nextId;
++    maxPayloadReadBytes;
+     closed = false;
+     closing;
+     admittedReads = 0;
+     readsDrained;
+-    constructor(db, schema, nextId) {
++    constructor(db, schema, nextId, maxPayloadReadBytes) {
+         this.db = db;
+         this.schema = schema;
+         this.nextId = nextId;
++        this.maxPayloadReadBytes = maxPayloadReadBytes;
+     }
+     /** Initialize storage over an owned SQLite database facade. */
+     static async open(db, options = {}) {
+         try {
++            const maxPayloadReadBytes = options.maxPayloadReadBytes ?? db.maxPayloadReadBytes;
++            if (maxPayloadReadBytes !== undefined && (!Number.isFinite(maxPayloadReadBytes) || maxPayloadReadBytes < 1)) {
++                throw new RangeError("maxPayloadReadBytes must be a positive finite number");
++            }
+             const schema = createSqliteSchema(options.prefix);
+             await applySqliteMigrationsForSchema(db, schema);
+             const metadata = await db.get(`SELECT next_id, next_seq FROM ${schema.tables.durableMetadata} WHERE singleton = 1`);
+             if (metadata === undefined)
+                 throw new Error("Durable SQLite metadata is missing");
+-            return new SqliteStorage(db, schema, Number(metadata.next_id));
++            return new SqliteStorage(db, schema, Number(metadata.next_id), maxPayloadReadBytes);
+         }
+         catch (error) {
+             try {
+@@ -266,19 +274,7 @@ export class SqliteStorage {
+             upper = Math.min(upper ?? Number.MAX_SAFE_INTEGER, after - 1);
+         const values = [];
+         while (true) {
+-            const clauses = ["conversation_id = ?"];
+-            const params = [conversation.id];
+-            if (query.minEntryId !== undefined) {
+-                clauses.push("id >= ?");
+-                params.push(query.minEntryId);
+-            }
+-            if (upper !== undefined) {
+-                clauses.push("id <= ?");
+-                params.push(upper);
+-            }
+-            params.push(limit + 1 - values.length);
+-            const rows = await this.db.all(`SELECT record FROM ${this.schema.tables.entries} WHERE ${clauses.join(" AND ")} ORDER BY id DESC LIMIT ?`, ...params);
+-            values.push(...rows.map((row) => parseJson(row.record)));
++            await this.readEntrySegment(conversation.id, query.minEntryId, upper, limit + 1 - values.length, "DESC", values);
+             if (values.length > limit || conversation.parent === undefined)
+                 break;
+             upper = upper === undefined ? conversation.parent.at : Math.min(upper, conversation.parent.at);
+@@ -309,23 +305,78 @@ export class SqliteStorage {
+             lower = Math.max(lower ?? after + 1, after + 1);
+         const values = [];
+         for (const segment of segments.reverse()) {
++            await this.readEntrySegment(segment.conversationId, lower, segment.upper, limit + 1 - values.length, "ASC", values);
++            if (values.length > limit)
++                break;
++        }
++        return page(values, limit, "ascending");
++    }
++    async readEntrySegment(conversationId, minEntryId, maxEntryId, fetchLimit, direction, values) {
++        let lower = minEntryId;
++        let upper = maxEntryId;
++        let remaining = fetchLimit;
++        while (remaining > 0) {
+             const clauses = ["conversation_id = ?"];
+-            const params = [segment.conversationId];
++            const params = [conversationId];
+             if (lower !== undefined) {
+                 clauses.push("id >= ?");
+                 params.push(lower);
+             }
+-            if (segment.upper !== undefined) {
++            if (upper !== undefined) {
+                 clauses.push("id <= ?");
+-                params.push(segment.upper);
++                params.push(upper);
++            }
++            params.push(remaining);
++            if (this.maxPayloadReadBytes === undefined || remaining <= 1) {
++                const rows = await this.db.all(`SELECT record FROM ${this.schema.tables.entries} WHERE ${clauses.join(" AND ")} ORDER BY id ${direction} LIMIT ?`, ...params);
++                for (const row of rows)
++                    values.push(parseJson(row.record));
++                return;
++            }
++            const rows = await this.db.all(`WITH candidate AS MATERIALIZED (
++                    SELECT id, octet_length(record) + ${PAYLOAD_ROW_OVERHEAD_BYTES} AS row_bytes
++                    FROM ${this.schema.tables.entries}
++                    WHERE ${clauses.join(" AND ")}
++                    ORDER BY id ${direction}
++                    LIMIT ?
++                ),
++                budgeted AS (
++                    SELECT id,
++                        SUM(row_bytes) OVER (ORDER BY id ${direction} ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cum_bytes,
++                        ROW_NUMBER() OVER (ORDER BY id ${direction}) AS rn
++                    FROM candidate
++                ),
++                picked AS MATERIALIZED (
++                    SELECT MIN(id) AS min_id, MAX(id) AS max_id, (SELECT COUNT(*) FROM candidate) AS total
++                    FROM budgeted
++                    WHERE rn = 1 OR cum_bytes <= ?
++                )
++                SELECT e.id, e.record, (SELECT total FROM picked) AS total
++                FROM ${this.schema.tables.entries} e
++                WHERE e.conversation_id = ?
++                    AND e.id >= (SELECT min_id FROM picked)
++                    AND e.id <= (SELECT max_id FROM picked)
++                ORDER BY e.id ${direction}`, ...params, this.maxPayloadReadBytes, conversationId);
++            if (rows.length === 0)
++                return;
++            for (const row of rows)
++                values.push(parseJson(row.record));
++            const total = Number(rows[0].total ?? 0);
++            if (rows.length >= total)
++                return;
++            remaining -= rows.length;
++            const lastId = rows.at(-1).id;
++            if (direction === "DESC") {
++                upper = lastId - 1;
++                if (lower !== undefined && upper < lower)
++                    return;
++            }
++            else {
++                lower = lastId + 1;
++                if (upper !== undefined && lower > upper)
++                    return;
+             }
+-            params.push(limit + 1 - values.length);
+-            const rows = await this.db.all(`SELECT record FROM ${this.schema.tables.entries} WHERE ${clauses.join(" AND ")} ORDER BY id ASC LIMIT ?`, ...params);
+-            values.push(...rows.map((row) => parseJson(row.record)));
+-            if (values.length > limit)
+-                break;
+         }
+-        return page(values, limit, "ascending");
+     }
+     async task(id, _context) {
+         this.assertOpen();
+@@ -482,15 +533,58 @@ export class SqliteStorage {
+         if (base === undefined)
+             throw new Error(`Document ${id} is missing a required base`);
+         let value = parseJson(base.content);
+-        const tail = await executor.all(`SELECT seq, kind, version, content FROM ${this.schema.tables.documentRevisions}
++        let deltasSinceBase = 0;
++        const applyRevisions = (revisions) => {
++            for (const revision of revisions) {
++                if (revision.kind !== "delta" || revision.version !== base.version) {
++                    throw new Error(`Document ${id} crosses a stored version boundary without a base`);
++                }
++                value = apply(value, parseJson(revision.content));
++                deltasSinceBase++;
++            }
++        };
++        if (this.maxPayloadReadBytes === undefined) {
++            const tail = await executor.all(`SELECT seq, kind, version, content FROM ${this.schema.tables.documentRevisions}
+ 				WHERE document_id = ? AND seq > ? AND seq <= ? ORDER BY seq`, id, base.seq, upper);
+-        for (const revision of tail) {
+-            if (revision.kind !== "delta" || revision.version !== base.version) {
+-                throw new Error(`Document ${id} crosses a stored version boundary without a base`);
++            applyRevisions(tail);
++        }
++        else {
++            let afterSeq = base.seq;
++            while (afterSeq < upper) {
++                const revisions = await executor.all(`WITH candidate AS MATERIALIZED (
++                        SELECT seq, octet_length(content) + ${PAYLOAD_ROW_OVERHEAD_BYTES} AS row_bytes
++                        FROM ${this.schema.tables.documentRevisions}
++                        WHERE document_id = ? AND seq > ? AND seq <= ?
++                        ORDER BY seq ASC
++                        LIMIT ${DOCUMENT_REVISION_CHUNK_LIMIT}
++                    ),
++                    budgeted AS (
++                        SELECT seq,
++                            SUM(row_bytes) OVER (ORDER BY seq ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cum_bytes,
++                            ROW_NUMBER() OVER (ORDER BY seq ASC) AS rn
++                        FROM candidate
++                    ),
++                    picked AS MATERIALIZED (
++                        SELECT MIN(seq) AS min_seq, MAX(seq) AS max_seq, (SELECT COUNT(*) FROM candidate) AS total
++                        FROM budgeted
++                        WHERE rn = 1 OR cum_bytes <= ?
++                    )
++                    SELECT d.seq, d.kind, d.version, d.content, (SELECT total FROM picked) AS total
++                    FROM ${this.schema.tables.documentRevisions} d
++                    WHERE d.document_id = ?
++                        AND d.seq >= (SELECT min_seq FROM picked)
++                        AND d.seq <= (SELECT max_seq FROM picked)
++                    ORDER BY d.seq ASC`, id, afterSeq, upper, this.maxPayloadReadBytes, id);
++                if (revisions.length === 0)
++                    break;
++                applyRevisions(revisions);
++                const total = Number(revisions[0].total ?? 0);
++                if (revisions.length >= total && total < DOCUMENT_REVISION_CHUNK_LIMIT)
++                    break;
++                afterSeq = revisions.at(-1).seq;
+             }
+-            value = apply(value, parseJson(revision.content));
+         }
+-        return { record, version: base.version, value, deltasSinceBase: tail.length };
++        return { record, version: base.version, value, deltasSinceBase };
+     }
+     candidateNextId(writes) {
+         let nextId = this.nextId;
+diff --git a/dist/tool-search/tool-search.js b/dist/tool-search/tool-search.js
+index 117f75ef28..aa9d25d82d 100644
+--- a/dist/tool-search/tool-search.js
++++ b/dist/tool-search/tool-search.js
+@@ -71,7 +71,9 @@ export function createToolSearchTool() {
+                 throw new Error("limit must be a positive integer");
+             const candidates = (await api.agent(context)).deferred;
+             const documents = candidates.map((tool) => ({ name: tool.name, text: searchText(tool) }));
+-            const loaded = rankDocuments(query, documents, max);
++            // Explicit deferred names are admitted before ranked matches, even when their count exceeds limit.
++            const named = [...new Set(query.split(/[\s,]+/))].filter((term) => candidates.some((tool) => tool.name === term));
++            const loaded = [...named, ...rankDocuments(query, documents, max).filter((name) => !named.includes(name))].slice(0, Math.max(max, named.length));
+             const text = loaded.length === 0
+                 ? "No matching tools found."
+                 : `Loaded ${loaded.length} tool${loaded.length === 1 ? "" : "s"}. They are available from your next call:\n${loaded
+diff --git a/dist/types.d.ts b/dist/types.d.ts
+index 2bc11e93fb..1794a67042 100644
+--- a/dist/types.d.ts
++++ b/dist/types.d.ts
+@@ -950,7 +950,9 @@ export interface Tx {
+     latestHeadMarker(conversationId: ConversationId): Promise<(EntryRecord & {
+         readonly head: EntryId;
+     }) | undefined>;
+-    /** ID of the newest entry visible from the conversation; `undefined` when it has none. */
++    /** Wait for this conversation's creation and appends to publish without reading entries. */
++    waitForEntryPublication(conversationId: ConversationId): Promise<void>;
++    /** ID of the newest published entry visible from the conversation; `undefined` when it has none. */
+     latestEntryId(conversationId: ConversationId): Promise<EntryId | undefined>;
+     scanTasks(query: TaskQuery, limit: number, cursor?: Cursor): Promise<Page<TaskRecord<JsonValue, JsonValue, JsonValue>, Cursor>>;
+     /** Committed submission record, such as one of `pi.live.run.inputs`; a placed input's `entry` is its transcript entry. */

@@ -1,7 +1,8 @@
 import { constants, createContext, runInContext } from 'node:vm';
 
-import type { Context, JsonValue } from '@earendil-works/chord';
+import type { Context } from '@earendil-works/chord/context';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+import type { JsonValue } from '@earendil-works/chord/json';
 import { createModels } from '@earendil-works/pi-ai/models';
 import { parseToolCallArguments } from '@earendil-works/pi-ai/utils/json-parse';
 import { validateToolArguments } from '@earendil-works/pi-ai/utils/validation';
@@ -146,7 +147,10 @@ async function toolTask(
   name = 'create_file',
   args: Record<string, JsonValue> = { name: 'note.txt' },
   callId = 'call',
-  legacyCheckpoint?: ToolTaskCheckpoint,
+  legacy?: {
+    version: 1 | 3;
+    checkpoint: Extract<ToolTaskCheckpoint, { phase: 'call' | 'execute' }>;
+  },
   unoffered = false,
   argumentsError?: string,
 ): Promise<TaskId> {
@@ -180,21 +184,29 @@ async function toolTask(
         },
       ],
     });
-    if (legacyCheckpoint) {
-      // Seed the 1.1 persisted shape; only the installed 1.5 ToolTask may execute it after reopen.
+    if (legacy) {
+      // Seed the published 1.1 or 1.5 record; the installed ToolTask migrates it on reopen.
       const unexpectedExecution = async () => {
         throw new Error('The legacy fixture must never execute.');
       };
-      const legacy = defineTask<{ assistant: EntryId; callId: string }, ToolTaskCheckpoint, never>({
+      const legacyTask = defineTask<
+        { kind?: 'model'; assistant: EntryId; callId: string },
+        Extract<ToolTaskCheckpoint, { phase: 'call' | 'execute' }>,
+        never
+      >({
         name: 'pi.tool',
-        version: 1,
-        initial: () => legacyCheckpoint,
+        version: legacy.version,
+        initial: () => legacy.checkpoint,
         phases: { call: unexpectedExecution, execute: unexpectedExecution },
         abort: unexpectedExecution,
       });
       return tx.createTask(
-        legacy,
-        { assistant: assistant.id, callId },
+        legacyTask,
+        {
+          ...(legacy.version === 3 ? { kind: 'model' as const } : {}),
+          assistant: assistant.id,
+          callId,
+        },
         { ownership: { kind: 'conversation' } },
       );
     }
@@ -1241,9 +1253,14 @@ describe('durable capability boundary', () => {
     }
   });
 
-  test.each(['call', 'execute'] as const)(
-    'reopens a 1.1 tool task at %s without losing output or replaying an unsafe intent',
-    async (phase) => {
+  test.each([
+    [1, 'call'],
+    [1, 'execute'],
+    [3, 'call'],
+    [3, 'execute'],
+  ] as const)(
+    'reopens a version %i tool task at %s without losing output or replaying an unsafe intent',
+    async (version, phase) => {
       const storage = new ReopenableMemoryStorage();
       const execute = jest.fn(async () => ({ value: 'Created', artifacts: [] }));
       const extension = capabilityExtension({
@@ -1256,16 +1273,14 @@ describe('durable capability boundary', () => {
         { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
         BACKGROUND_CONTEXT,
       );
-      const id = await toolTask(
-        conversation,
-        'create_file',
-        { name: 'note.txt' },
-        'legacy',
-        phase === 'call'
-          ? { phase: 'call' }
-          : { phase: 'execute', arguments: { name: 'note.txt' }, replay: 'unsafe' },
-      );
-      expect(await first.getTask(id, BACKGROUND_CONTEXT)).toMatchObject({ version: 1 });
+      const id = await toolTask(conversation, 'create_file', { name: 'note.txt' }, 'legacy', {
+        version,
+        checkpoint:
+          phase === 'call'
+            ? { phase: 'call' }
+            : { phase: 'execute', arguments: { name: 'note.txt' }, replay: 'unsafe' },
+      });
+      expect(await first.getTask(id, BACKGROUND_CONTEXT)).toMatchObject({ version });
       await first.close(BACKGROUND_CONTEXT);
       const reopened = await open(storage, extension);
       try {
@@ -1734,7 +1749,7 @@ test('retains console overflow in the native store across parent failure and reo
               ),
             ).toMatchObject({ error: expect.stringContaining('working cache limit') });
             const saved = await retainPiCodemodeOutput('output.txt', log, api, context);
-            if (!('path' in saved)) throw new Error(saved.error);
+            if (saved.kind !== 'saved') throw new Error(saved.error);
             expect(saved.path).toMatch(/^store:/);
             outputKey = saved.path.slice('store:'.length);
             expect(await retainPiCodemodeOutput('output.txt', log, api, context)).toEqual(saved);
@@ -1799,6 +1814,7 @@ test('bounds overflow by encoded value and total cache size while preserving scr
         async execute(_raw, api, context) {
           for (const oversized of ['x'.repeat(2 * 1024 * 1024), '\n'.repeat(150 * 1024)]) {
             expect(await retainPiCodemodeOutput('oversized.txt', oversized, api, context)).toEqual({
+              kind: 'failed',
               error: expect.stringContaining('working cache limit'),
             });
           }
@@ -1808,10 +1824,10 @@ test('bounds overflow by encoded value and total cache size while preserving scr
               retainPiCodemodeOutput(name, text, api, context),
             ),
           );
-          expect(outputs.filter((output) => 'error' in output)).toHaveLength(1);
-          const savedIndex = outputs.findIndex((output) => 'path' in output);
+          expect(outputs.filter((output) => output.kind === 'failed')).toHaveLength(1);
+          const savedIndex = outputs.findIndex((output) => output.kind === 'saved');
           const saved = outputs[savedIndex];
-          if (!saved || !('path' in saved)) throw new Error('Expected one saved output');
+          if (saved?.kind !== 'saved') throw new Error('Expected one saved output');
           outputKey = saved.path.slice('store:'.length);
           expect(
             await retainPiCodemodeOutput(
@@ -1940,7 +1956,7 @@ test('accounts for replaced and deleted values when admitting overflow before sc
     writeOutput: async (name, data, api, context, writes) => {
       if (typeof data !== 'string') throw new Error('Expected text output');
       const saved = await retainPiCodemodeOutput(name, data, api, context, writes);
-      if ('path' in saved) outputKey = saved.path.slice('store:'.length);
+      if (saved.kind === 'saved') outputKey = saved.path.slice('store:'.length);
       return saved;
     },
   });
