@@ -445,6 +445,42 @@ export function createRemoteConversationSession(
     }
   }
 
+  async function readEarlierCitations(
+    historyVersion: string,
+    messageId: string,
+    ids: readonly string[],
+    signal: AbortSignal,
+    isStreaming = false,
+  ): Promise<CitationSource[]> {
+    const missing = new Set(ids);
+    const found: CitationSource[] = [];
+    // A streaming message is beyond persisted history. Otherwise skip every later row.
+    let before = isStreaming;
+    let cursor: string | undefined;
+    const visited = new Set<string>();
+    do {
+      const page = await source.history(ref.sessionId, historyVersion, cursor, signal);
+      for (const message of page.items) {
+        if (message.id === messageId) {
+          before = true;
+          continue;
+        }
+        if (!before) continue;
+        for (const tool of projectHistory(message).tools ?? []) {
+          for (const source of await readToolCitations(tool, signal)) {
+            if (missing.delete(source.id)) found.push(source);
+          }
+          if (!missing.size) return found;
+        }
+      }
+      cursor = page.next;
+      if (cursor && visited.has(cursor))
+        throw new ConversationReadError({ code: 'internal', retry: 'none' });
+      if (cursor) visited.add(cursor);
+    } while (cursor && missing.size);
+    return found;
+  }
+
   const handle: RemoteConversationSession = {
     readingAidScope: JSON.stringify([source.draftScope, ref.sessionId]),
     ref,
@@ -485,36 +521,10 @@ export function createRemoteConversationSession(
       readCitations: (messageId, ids, signal) =>
         read(signal, async (signal) => {
           const fixed = await source.readSession(ref.sessionId, signal);
-          const missing = new Set(ids);
-          const found: CitationSource[] = [];
-          // A running message is beyond persisted history. Otherwise skip every later row.
-          let before =
-            latest?.messages.some(
-              (message) => message.id === messageId && message.state === 'streaming',
-            ) ?? false;
-          let cursor: string | undefined;
-          const visited = new Set<string>();
-          do {
-            const page = await source.history(ref.sessionId, fixed.historyVersion, cursor, signal);
-            for (const message of page.items) {
-              if (message.id === messageId) {
-                before = true;
-                continue;
-              }
-              if (!before) continue;
-              for (const tool of projectHistory(message).tools ?? []) {
-                for (const source of await readToolCitations(tool, signal)) {
-                  if (missing.delete(source.id)) found.push(source);
-                }
-                if (!missing.size) return found;
-              }
-            }
-            cursor = page.next;
-            if (cursor && visited.has(cursor))
-              throw new ConversationReadError({ code: 'internal', retry: 'none' });
-            if (cursor) visited.add(cursor);
-          } while (cursor && missing.size);
-          return found;
+          const isStreaming = latest?.messages.some(
+            (message) => message.id === messageId && message.state === 'streaming',
+          );
+          return readEarlierCitations(fixed.historyVersion, messageId, ids, signal, isStreaming);
         }),
       peekLatest: () => {
         assertCurrent();
@@ -610,42 +620,32 @@ export function createRemoteConversationSession(
         )
           throw new ConversationReadError({ code: 'conflict', retry: 'read-again' });
         const messages = [];
-        const priorSources = new Map<string, CitationSource>();
         for (const message of selected.toReversed()) {
           const transcript = remoteTranscriptMessage(message);
           const row = projectHistory(message);
           const ids = citationIds(row.display.data.parts ?? []);
-          const ownSources: CitationSource[] = [];
-          for (const tool of row.tools ?? [])
-            ownSources.push(...(await readToolCitations(tool, signal)));
-          const sources = [...ownSources];
+          const sources: CitationSource[] = [];
           if (ids.length) {
+            for (const tool of row.tools ?? []) {
+              sources.push(...(await readToolCitations(tool, signal)));
+            }
             const known = new Set([
-              ...ownSources.map((source) => source.id),
+              ...sources.map((source) => source.id),
               ...message.parts.flatMap((part) =>
                 part.kind === 'presentation' && part.part.type === 'source-url'
                   ? [part.part.sourceId]
                   : [],
               ),
             ]);
-            const missing: string[] = [];
-            for (const id of ids) {
-              if (known.has(id)) continue;
-              const prior = priorSources.get(id);
-              if (prior) {
-                sources.push(prior);
-                known.add(id);
-              } else {
-                missing.push(id);
-              }
-            }
+            const missing = ids.filter((id) => !known.has(id));
             if (missing.length) {
-              const earlier = await handle.history.readCitations!(message.id, missing, signal);
+              // Selected rows may skip a newer source with the same ID.
+              const earlier = await read(signal, (signal) =>
+                readEarlierCitations(fixed.historyVersion, message.id, missing, signal),
+              );
               sources.push(...earlier);
-              for (const source of earlier) priorSources.set(source.id, source);
             }
           }
-          for (const source of ownSources) priorSources.set(source.id, source);
           transcript.citationSources = sources;
           for (const part of transcript.parts) {
             if (part.type !== 'prepared-file' || !part.mediaType.toLowerCase().startsWith('image/'))

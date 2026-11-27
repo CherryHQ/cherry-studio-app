@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type {
   ConversationHistoryView,
@@ -117,36 +117,22 @@ export function useLocalConversation(input: {
     if (window.hasNewerMessages) return historyMessages;
     return branchMessages.map((message) => projector.message(message, state));
   }, [projector, branchMessages, historyMessages, state, window.hasNewerMessages]);
-  const liveStateRef = useRef({
-    liveMessages: state.liveMessages,
-    transcriptRevision: state.transcriptRevision,
-  });
-  useEffect(() => {
-    liveStateRef.current = {
-      liveMessages: state.liveMessages,
-      transcriptRevision: state.transcriptRevision,
-    };
-  }, [state.liveMessages, state.transcriptRevision]);
   const citationReader = useMemo(
     () => (sessionId ? createLocalCitationReader(apiClient, sessionId) : undefined),
     [apiClient, sessionId],
   );
   const readCitations = useCallback<NonNullable<ConversationHistoryView['readCitations']>>(
-    (messageId, ids, signal) =>
-      citationReader
-        ? citationReader(
-            messageId,
-            ids,
-            signal,
-            liveStateRef.current.liveMessages,
-            liveStateRef.current.transcriptRevision,
-          )
-        : Promise.resolve([]),
-    [citationReader],
+    (messageId, ids, signal) => {
+      if (!sessionId || !citationReader) return Promise.resolve([]);
+      const { liveMessages, transcriptRevision } = client.getState(sessionId);
+      return citationReader(messageId, ids, signal, liveMessages, transcriptRevision);
+    },
+    [citationReader, client, sessionId],
   );
+  const citationRevision = state.transcriptRevision?.toString();
   const messageWindow = useMemo<ConversationHistoryView>(
-    () => ({ ...window, messages: historyMessages, readCitations }),
-    [window, historyMessages, readCitations],
+    () => ({ ...window, revision: citationRevision, messages: historyMessages, readCitations }),
+    [window, citationRevision, historyMessages, readCitations],
   );
   return {
     snapshot,

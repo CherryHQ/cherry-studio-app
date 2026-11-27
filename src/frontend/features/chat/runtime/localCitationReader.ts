@@ -8,7 +8,6 @@ import type {
 
 import { toAgentMessageListItem } from './agentMessageProjection';
 
-const MAX_CITATION_SCAN_PAGES = 25;
 const MAX_CACHED_PAGES = 200;
 
 type CitationMessagesClient = Pick<ReturnType<typeof useApiClient>, 'get'>;
@@ -37,15 +36,17 @@ function summarizePage(page: AgentSessionMessagePage): CachedCitationPage {
   return {
     entries: page.items.map((message) => ({
       id: message.id,
-      sources: collectToolCitationSources(toAgentMessageListItem(message)?.data.parts ?? []),
+      sources: collectToolCitationSources(toAgentMessageListItem(message)?.data.parts ?? []).map(
+        ({ id, title, url }) => ({ id, title, ...(url === undefined ? {} : { url }) }),
+      ),
     })),
     nextCursor: page.nextCursor,
   };
 }
 
 /**
- * Resolves earlier citation sources for one session with bounded page scans,
- * settled-page caching, and in-flight deduplication across concurrent readers.
+ * Resolves earlier citation sources for one session with a bounded page cache
+ * and in-flight deduplication across concurrent readers.
  */
 export function createLocalCitationReader(
   apiClient: CitationMessagesClient,
@@ -100,7 +101,7 @@ export function createLocalCitationReader(
           })
           .then((page) => {
             const summarized = summarizePage(page);
-            if (cacheKey && requestRevision === cachedRevision) {
+            if (cacheKey && !controller.signal.aborted && requestRevision === cachedRevision) {
               rememberPage(cacheKey, summarized);
             }
             return summarized;
@@ -172,7 +173,7 @@ export function createLocalCitationReader(
     let inFlightKey = cacheKey ?? 'head';
     const visited = new Set<string>();
 
-    for (let scanned = 0; missing.size && scanned < MAX_CITATION_SCAN_PAGES; scanned++) {
+    while (missing.size) {
       const page = await fetchPage(query, cacheKey, inFlightKey, requestRevision, signal);
       signal.throwIfAborted();
       for (const entry of page.entries) {

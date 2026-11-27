@@ -132,34 +132,37 @@ it('excludes live rows from an older search window and projects nothing without 
   expect(mockReconcile).toHaveBeenCalledTimes(1);
 });
 
-it('reads earlier citation facts on the selected branch without changing the message window', async () => {
-  const tool = (id: string): AgentMessageView => ({
-    ...message(id),
-    parts: [
-      {
-        id: `${id}-tool`,
-        type: 'dynamic-tool',
-        toolName: 'web_search',
-        title: 'web_search',
-        toolCallId: `${id}-call`,
-        toolRef: { source: 'builtin', capabilityId: 'web_search' },
-        input: { query: 'source' },
-        state: 'output-available',
-        output: {
-          value: [{ id: 'lookup-1', title: id, url: 'https://example.com', content: 'Source' }],
-          artifacts: [],
-        },
+const citationMessage = (id: string): AgentMessageView => ({
+  ...message(id),
+  parts: [
+    {
+      id: `${id}-tool`,
+      type: 'dynamic-tool',
+      toolName: 'web_search',
+      title: 'web_search',
+      toolCallId: `${id}-call`,
+      toolRef: { source: 'builtin', capabilityId: 'web_search' },
+      input: { query: 'source' },
+      state: 'output-available',
+      output: {
+        value: [{ id: 'lookup-1', title: id, url: 'https://example.com', content: 'Source' }],
+        artifacts: [],
       },
-    ],
+    },
+  ],
+});
+
+it('returns citation metadata from earlier rows without retaining tool bodies or changing the window', async () => {
+  mockApi.get.mockResolvedValueOnce({
+    items: [citationMessage('later'), message('target'), citationMessage('earlier')],
   });
-  mockApi.get.mockResolvedValueOnce({ items: [tool('later'), message('target'), tool('earlier')] });
   act(() => {
     renderer = create(<Probe sessionId="session" />);
   });
   const windowMessages = result.messageWindow.messages;
   expect(
     await result.messageWindow.readCitations!('target', ['lookup-1'], new AbortController().signal),
-  ).toEqual([{ id: 'lookup-1', title: 'earlier', url: 'https://example.com', content: 'Source' }]);
+  ).toEqual([{ id: 'lookup-1', title: 'earlier', url: 'https://example.com' }]);
   expect(mockApi.get).toHaveBeenCalledWith(
     '/agent-sessions/session/messages',
     expect.objectContaining({
@@ -189,12 +192,12 @@ it('keeps readCitations identity stable while live streaming updates arrive', ()
   expect(result.messageWindow.readCitations).toBe(firstReadCitations);
 });
 
-it('caps backward citation scans when cited ids are absent', async () => {
+it('finds sources past the former page cap and stops once the requested source is found', async () => {
   mockApi.get.mockImplementation(async (_url: string, options: { query?: { cursor?: string } }) => {
     const pageIndex = options.query?.cursor ? Number(options.query.cursor.split('-')[1]) : 1;
     return {
-      items: [message(`msg-${pageIndex}`)],
-      nextCursor: pageIndex < 40 ? `cursor-${pageIndex + 1}` : undefined,
+      items: [pageIndex === 27 ? citationMessage('older-source') : message(`msg-${pageIndex}`)],
+      nextCursor: pageIndex < 30 ? `cursor-${pageIndex + 1}` : undefined,
     };
   });
   act(() => {
@@ -202,13 +205,9 @@ it('caps backward citation scans when cited ids are absent', async () => {
   });
 
   expect(
-    await result.messageWindow.readCitations!(
-      'msg-1',
-      ['missing-id'],
-      new AbortController().signal,
-    ),
-  ).toEqual([]);
-  expect(mockApi.get.mock.calls.length).toBeLessThanOrEqual(25);
+    await result.messageWindow.readCitations!('msg-1', ['lookup-1'], new AbortController().signal),
+  ).toEqual([{ id: 'lookup-1', title: 'older-source', url: 'https://example.com' }]);
+  expect(mockApi.get).toHaveBeenCalledTimes(27);
 });
 
 it('shares cached pages and in-flight fetches across concurrent reads while isolating aborts', async () => {
@@ -369,6 +368,7 @@ it('invalidates cached citation pages when transcriptRevision increments on dele
     renderer = create(<Probe sessionId="session" />);
   });
   const firstReadCitations = result.messageWindow.readCitations;
+  expect(result.messageWindow.revision).toBe('1');
 
   await expect(
     result.messageWindow.readCitations!('target', ['lookup-1'], new AbortController().signal),
@@ -398,6 +398,7 @@ it('invalidates cached citation pages when transcriptRevision increments on dele
   act(() => {
     renderer.update(<Probe sessionId="session" />);
   });
+  expect(result.messageWindow.revision).toBe('2');
   await expect(
     result.messageWindow.readCitations!('target', ['lookup-1'], new AbortController().signal),
   ).resolves.toEqual([{ id: 'lookup-1', title: 'Updated Source', url: 'https://example.com' }]);

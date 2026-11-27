@@ -4,7 +4,7 @@ import {
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
 import { useFocusEffect, useIsFocused, useIsPreview, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
@@ -34,11 +34,7 @@ import { queryKeys, useApiClient, useBackendModule } from '@/frontend/data';
 import { cacheService } from '@/frontend/data/CacheService';
 import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
 import { useFileWorkspace } from '@/frontend/hooks/file';
-import {
-  citationIds,
-  collectCitationSources,
-  conversationCitationSources,
-} from '@/frontend/utils/messageCitations';
+import { citationIds, collectCitationSources } from '@/frontend/utils/messageCitations';
 import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import { agentPolicy } from '@/shared/data/managedPolicy';
@@ -200,10 +196,6 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     [api, isPreview, openTurn, sessionId],
   );
   const readCitations = messageWindow.readCitations;
-  const readCitationsRef = useRef(readCitations);
-  useEffect(() => {
-    readCitationsRef.current = readCitations;
-  }, [readCitations]);
   const shareTarget = useMemo<ChatShareTarget | undefined>(
     () =>
       sessionId
@@ -235,30 +227,17 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                 query: { ids: [...ids] },
                 signal,
               });
-              const displayParts = snapshot.messages.map(
-                (message) => toAgentMessageDisplayParts(message.parts).parts ?? [],
-              );
-              const selectedRegistry = conversationCitationSources(
-                snapshot.messages.map((message, index) => ({
-                  id: message.id,
-                  parts: displayParts[index],
-                  sources: [],
-                })),
-              );
               const messages = await Promise.all(
-                snapshot.messages.map(async (message, index) => {
-                  const parts = displayParts[index];
-                  const selected = selectedRegistry.get(message.id) ?? [];
-                  const known = collectCitationSources(parts, selected);
+                snapshot.messages.map(async (message) => {
+                  const parts = toAgentMessageDisplayParts(message.parts).parts ?? [];
+                  const known = collectCitationSources(parts);
                   const missing = citationIds(parts).filter((id) => !known.has(id));
-                  const earlier = missing.length
-                    ? await readCitationsRef.current?.(message.id, missing, signal)
-                    : undefined;
-                  const citationSources = [...selected, ...(earlier ?? [])];
                   return {
                     ...message,
                     modelName: resolveMessageModel(message)?.name,
-                    citationSources: citationSources.length ? citationSources : undefined,
+                    citationSources: missing.length
+                      ? await readCitations?.(message.id, missing, signal)
+                      : undefined,
                   };
                 }),
               );
@@ -270,7 +249,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
             },
           }
         : undefined,
-    [api, sessionId],
+    [api, readCitations, sessionId],
   );
   const isSessionAvailable =
     Boolean(sessionId) && !session.error && (session.isLoading || Boolean(session.data));

@@ -429,6 +429,7 @@ describe('AgentSessionChatClient', () => {
     const client = new AgentSessionChatClient(protocol);
     const release = client.subscribe('session-1', () => undefined);
     await client.observe('session-1');
+    const originalRevision = client.getState('session-1').transcriptRevision;
     expect(client.getState('session-1').liveMessages[0]?.parts[0]).toMatchObject({
       text: 'before',
     });
@@ -450,6 +451,7 @@ describe('AgentSessionChatClient', () => {
 
     await client.resumeObservedSessions();
     expect(protocol.observeSession).toHaveBeenCalledTimes(2);
+    expect(client.getState('session-1').transcriptRevision).toBe((originalRevision ?? 0) + 1);
     expect(client.getState('session-1').liveMessages[0]?.parts[0]).toMatchObject({
       text: 'before and after',
     });
