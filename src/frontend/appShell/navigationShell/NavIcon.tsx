@@ -1,20 +1,20 @@
 import type { LucideIconComponent } from '@cherrystudio/app-icons';
-import BoxesIcon from '@cherrystudio/app-icons/icons/boxes';
-import BoxesFilledIcon from '@cherrystudio/app-icons/icons/boxes-filled';
-import FolderIcon from '@cherrystudio/app-icons/icons/folder';
-import FolderFilledIcon from '@cherrystudio/app-icons/icons/folder-filled';
-import LayoutGridIcon from '@cherrystudio/app-icons/icons/layout-grid';
-import LayoutGridFilledIcon from '@cherrystudio/app-icons/icons/layout-grid-filled';
-import MessageCircleIcon from '@cherrystudio/app-icons/icons/message-circle';
-import MessageCircleFilledIcon from '@cherrystudio/app-icons/icons/message-circle-filled';
-import MousePointerClickIcon from '@cherrystudio/app-icons/icons/mouse-pointer-click';
-import MousePointerClickFilledIcon from '@cherrystudio/app-icons/icons/mouse-pointer-click-filled';
-import NetworkIcon from '@cherrystudio/app-icons/icons/network';
-import NetworkFilledIcon from '@cherrystudio/app-icons/icons/network-filled';
-import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
-import PaletteFilledIcon from '@cherrystudio/app-icons/icons/palette-filled';
-import StoreIcon from '@cherrystudio/app-icons/icons/store';
-import StoreFilledIcon from '@cherrystudio/app-icons/icons/store-filled';
+import NavAgentsIcon from '@cherrystudio/app-icons/icons/nav-agents';
+import NavAgentsFilledIcon from '@cherrystudio/app-icons/icons/nav-agents-filled';
+import NavChatIcon from '@cherrystudio/app-icons/icons/nav-chat';
+import NavChatFilledIcon from '@cherrystudio/app-icons/icons/nav-chat-filled';
+import NavDevicesIcon from '@cherrystudio/app-icons/icons/nav-devices';
+import NavDevicesFilledIcon from '@cherrystudio/app-icons/icons/nav-devices-filled';
+import NavDrawingsIcon from '@cherrystudio/app-icons/icons/nav-drawings';
+import NavDrawingsFilledIcon from '@cherrystudio/app-icons/icons/nav-drawings-filled';
+import NavFilesIcon from '@cherrystudio/app-icons/icons/nav-files';
+import NavFilesFilledIcon from '@cherrystudio/app-icons/icons/nav-files-filled';
+import NavMarketplaceIcon from '@cherrystudio/app-icons/icons/nav-marketplace';
+import NavMarketplaceFilledIcon from '@cherrystudio/app-icons/icons/nav-marketplace-filled';
+import NavMoreIcon from '@cherrystudio/app-icons/icons/nav-more';
+import NavMoreFilledIcon from '@cherrystudio/app-icons/icons/nav-more-filled';
+import NavPluginsIcon from '@cherrystudio/app-icons/icons/nav-plugins';
+import NavPluginsFilledIcon from '@cherrystudio/app-icons/icons/nav-plugins-filled';
 import type { ReactElement } from 'react';
 
 import type { NavTabId } from './navRouteManifest';
@@ -25,14 +25,14 @@ type DualStateIconEntry = {
 };
 
 const NAV_ICON_BY_TAB = {
-  chat: { filled: MessageCircleFilledIcon, outline: MessageCircleIcon },
-  agents: { filled: MousePointerClickFilledIcon, outline: MousePointerClickIcon },
-  more: { filled: LayoutGridFilledIcon, outline: LayoutGridIcon },
-  drawings: { filled: PaletteFilledIcon, outline: PaletteIcon },
-  plugins: { filled: BoxesFilledIcon, outline: BoxesIcon },
-  marketplace: { filled: StoreFilledIcon, outline: StoreIcon },
-  files: { filled: FolderFilledIcon, outline: FolderIcon },
-  devices: { filled: NetworkFilledIcon, outline: NetworkIcon },
+  chat: { filled: NavChatFilledIcon, outline: NavChatIcon },
+  agents: { filled: NavAgentsFilledIcon, outline: NavAgentsIcon },
+  more: { filled: NavMoreFilledIcon, outline: NavMoreIcon },
+  drawings: { filled: NavDrawingsFilledIcon, outline: NavDrawingsIcon },
+  plugins: { filled: NavPluginsFilledIcon, outline: NavPluginsIcon },
+  marketplace: { filled: NavMarketplaceFilledIcon, outline: NavMarketplaceIcon },
+  files: { filled: NavFilesFilledIcon, outline: NavFilesIcon },
+  devices: { filled: NavDevicesFilledIcon, outline: NavDevicesIcon },
 } as const satisfies Record<NavTabId, DualStateIconEntry>;
 
 type NavIconProps = {
@@ -44,14 +44,14 @@ type NavIconProps = {
   strokeWidth?: number;
 };
 
-/** Dual-state (outline vs filled) navigation glyph backed by `@cherrystudio/app-icons`. */
+/** Dual-state (outline vs filled) rounded navigation glyph backed by `@cherrystudio/app-icons`. */
 export function NavIcon({
   className,
   color,
   filled = false,
   id,
   size,
-  strokeWidth = 1.85,
+  strokeWidth = 2,
 }: NavIconProps): ReactElement {
   const entry = NAV_ICON_BY_TAB[id];
   const Icon = filled ? entry.filled : entry.outline;
