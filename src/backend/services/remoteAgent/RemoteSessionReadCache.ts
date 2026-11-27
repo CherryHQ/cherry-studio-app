@@ -112,7 +112,7 @@ export class RemoteSessionReadCache {
         : {}),
     };
   }
-  partsKey(message: Pick<AgentMessageListItem, 'messageId' | 'revision'>) {
+  partsKey(message: AgentMessageListItem) {
     return JSON.stringify(['parts', message.messageId, message.revision]);
   }
   setEpoch(entry: ReadCacheEntry, epoch: string) {

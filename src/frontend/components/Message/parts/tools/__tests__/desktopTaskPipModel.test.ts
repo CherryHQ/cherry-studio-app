@@ -24,7 +24,7 @@ const output: DesktopDispatchResult = {
 };
 
 function live(fields: Partial<RemoteSessionLivePreview>): RemoteSessionLivePreview {
-  return { connectionStatus: 'ready', current: true, recentTools: [], ...fields };
+  return { connectionStatus: 'ready', current: true, ...fields };
 }
 
 describe('buildDesktopTaskPipViewModel', () => {
@@ -79,11 +79,7 @@ describe('buildDesktopTaskPipViewModel', () => {
     ).toBe('failed');
   });
 
-  test('shows the latest pending interaction, tools and preview while retaining the persisted destination', () => {
-    const recentTools = [
-      { name: 'read_file', state: 'completed' },
-      { name: 'run_task', state: 'input-ready' },
-    ] as const;
+  test('shows the latest pending interaction and title while retaining the persisted destination', () => {
     const view = buildDesktopTaskPipViewModel({
       input: { connection_id: 'wrong-desktop', title: 'Previous draft' },
       output: { ...output, errorMessage: 'Older error' },
@@ -91,8 +87,6 @@ describe('buildDesktopTaskPipViewModel', () => {
         executionState: 'running',
         pendingInteraction: { id: 'approval-1', title: 'Run project checks', kind: 'decision' },
         sessionTitle: 'Updated desktop title',
-        previewText: 'I checked the report.',
-        recentTools,
       }),
     });
     expect(view).toMatchObject({
@@ -106,25 +100,22 @@ describe('buildDesktopTaskPipViewModel', () => {
       workspaceName: output.workspaceName,
       sessionId: output.sessionId,
       attachmentCount: 1,
-      recentTools,
       pendingApprovalTitle: 'Run project checks',
-      previewText: 'I checked the report.',
       canOpenModal: true,
     });
   });
 
-  test('uses the brief instead of raw diagnostics and opens a pending receipt by draft alone', () => {
+  test('gates modal opening on sessionId or pending confirmation draftId', () => {
     const receipt = { ...output, sessionId: undefined };
     expect(buildDesktopTaskPipViewModel({ output: receipt })).toMatchObject({
-      previewText: output.promptPreview,
       canOpenModal: false,
     });
     expect(
       buildDesktopTaskPipViewModel({
         output: { ...receipt, status: 'rejected', errorMessage: 'Desktop declined the task' },
-        livePreview: live({ previewText: '  ' }),
+        livePreview: live({}),
       }),
-    ).toMatchObject({ state: 'failed', previewText: output.promptPreview, canOpenModal: false });
+    ).toMatchObject({ state: 'failed', canOpenModal: false });
     expect(
       buildDesktopTaskPipViewModel({
         output: { ...receipt, status: 'pending_confirmation', draftId: 'draft-1' },
@@ -145,7 +136,6 @@ describe('buildDesktopTaskPipViewModel', () => {
       }),
     ).toMatchObject({
       workspaceKind: 'system',
-      previewText: 'Full task brief',
       attachmentCount: 1,
       canOpenModal: false,
     });

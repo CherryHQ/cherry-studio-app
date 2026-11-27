@@ -30,9 +30,7 @@ export type DesktopTaskPipViewModel = {
   draftId?: string;
   operationId?: string;
   attachmentCount: number;
-  recentTools: RemoteSessionLivePreview['recentTools'];
   pendingApprovalTitle?: string;
-  previewText?: string;
   canOpenModal: boolean;
 };
 
@@ -99,7 +97,6 @@ export function buildDesktopTaskPipViewModel({
         ? 'rejected'
         : (result?.status ?? (output !== undefined ? 'rejected' : undefined));
   const looseAttachments = loose.attachments ?? loose.file_entry_ids;
-  const brief = approval?.text ?? nonBlankText(loose.text);
 
   return {
     state: resolveState(status, livePreview),
@@ -118,12 +115,7 @@ export function buildDesktopTaskPipViewModel({
     attachmentCount:
       dispatch?.attachments.length ??
       (Array.isArray(looseAttachments) ? looseAttachments.length : 0),
-    recentTools: livePreview?.recentTools ?? [],
     pendingApprovalTitle: nonBlankText(livePreview?.pendingInteraction?.title),
-    previewText:
-      nonBlankText(livePreview?.previewText) ??
-      nonBlankText(result?.promptPreview) ??
-      brief?.slice(0, 240),
     canOpenModal: Boolean(
       connectionId && (sessionId || (result?.draftId && result.status === 'pending_confirmation')),
     ),

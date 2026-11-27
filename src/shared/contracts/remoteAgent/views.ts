@@ -196,10 +196,4 @@ export type RemoteSessionLivePreview = {
   sessionTitle?: string;
   executionState?: RemoteSessionSnapshot['executions'][number]['state'] | 'pending-confirm';
   pendingInteraction?: { id: string; title: string; kind: 'decision' | 'question' };
-  recentTools: readonly {
-    name: string;
-    state: 'streaming' | 'input-ready' | 'completed' | 'failed';
-  }[];
-  previewText?: string;
-  updatedAt?: number;
 };

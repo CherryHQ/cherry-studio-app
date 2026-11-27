@@ -9,7 +9,6 @@ export const DesktopDispatchWorkspaceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('registered'), id: z.string().min(1), name: z.string().optional() }),
   z.object({ kind: z.literal('system') }),
 ]);
-export type DesktopDispatchWorkspace = z.infer<typeof DesktopDispatchWorkspaceSchema>;
 
 export const DesktopDispatchAttachmentSchema = z.object({
   fileEntryId: FileEntryIdSchema,

@@ -68,7 +68,6 @@ import {
 } from './remoteUploads';
 import { SessionSync } from './SessionSync';
 
-type Execution = RemoteSessionSnapshot['executions'][number];
 export type SessionLivePreview = RemoteSessionLivePreview & {
   terminal?: { id: string; epoch?: string; version: string };
 };
@@ -82,25 +81,6 @@ function activeExecution(snapshot: RemoteSessionSnapshot | undefined) {
 function terminalExecution(snapshot: RemoteSessionSnapshot | undefined) {
   return snapshot?.executions.findLast(({ state }) =>
     ['completed', 'cancelled', 'failed', 'interrupted'].includes(state),
-  );
-}
-
-function replyExcerpt(text: string[]) {
-  return (
-    text
-      .map((part) => part.trim())
-      .filter(Boolean)
-      .join('\n')
-      .slice(-240)
-      .trim() || undefined
-  );
-}
-
-function historyReplyExcerpt(parts: readonly AgentPart[]) {
-  return replyExcerpt(
-    parts.flatMap((part) =>
-      part.kind === 'text' && 'text' in part.content ? [part.content.text] : [],
-    ),
   );
 }
 
@@ -118,9 +98,6 @@ type Observation = {
   reply?: BackgroundReplyTurn;
   executionId?: string;
   previousTerminalId?: string;
-  previewRead?: AbortController;
-  previewAttempt?: string;
-  terminalReply?: { executionId: string; messageRevision?: string; epoch?: string; text: string };
   backgroundInteractionKey?: string;
   listeners: Set<(snapshot: RemoteSessionSnapshot) => void>;
   sync?: SessionSync;
@@ -329,9 +306,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
     this.preparing > 0 ||
     Boolean(this.attachmentDrafts?.hasPending()) ||
     this.hasPendingCommands() ||
-    [...this.observations.values()].some(
-      (observation) => observation.tracking || observation.previewRead,
-    );
+    [...this.observations.values()].some((observation) => observation.tracking);
   subscribeExecution = (listener: () => void) => {
     this.executionListeners.add(listener);
     return () => {
@@ -466,12 +441,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
       if (!listeners.delete(listener) || listeners.size) return;
       this.liveListeners.delete(sessionId);
       const observation = this.observations.get(sessionId);
-      if (
-        observation &&
-        !observation.tracking &&
-        !observation.previewRead &&
-        !observation.listeners.size
-      )
+      if (observation && !observation.tracking && !observation.listeners.size)
         this.removeObservation(sessionId);
     };
   }
@@ -504,40 +474,6 @@ export class RemoteAgentScope implements RemoteAgentSource {
         : undefined;
     const confirmed = terminal?.id === observation?.previousTerminalId ? undefined : terminal;
     const interaction = snapshot?.interactions.find((item) => item.state === 'pending');
-    const assistants = snapshot?.messages.filter((message) => message.role === 'assistant') ?? [];
-    const recentTools: RemoteSessionLivePreview['recentTools'] = assistants
-      .flatMap((message) => message.parts)
-      .filter((part) => part.kind === 'tool')
-      .slice(-2)
-      .toReversed()
-      .map(({ name, state }) => ({ name, state }));
-    const messageId = (active ?? confirmed)?.messageId;
-    const message = messageId
-      ? assistants.find((message) => message.id === messageId)
-      : (active || !observation?.tracking) && !confirmed && !pending
-        ? assistants.at(-1)
-        : undefined;
-    const read = observation?.terminalReply;
-    const committedText =
-      confirmed &&
-      (read?.executionId === confirmed.id &&
-      read.messageRevision === confirmed.history?.messageRevision &&
-      read.epoch === snapshot?.historyEpoch
-        ? read.text
-        : this.cachedTerminalReply(sessionId, confirmed));
-    const liveMessage = message && observation?.projection?.messages[message.id];
-    const complete =
-      !confirmed ||
-      ((!confirmed.history || message?.version === confirmed.history.messageRevision) &&
-        liveMessage?.partIds.every((id) => !!observation?.projection?.parts[id]) &&
-        message?.parts.every((part) => part.kind !== 'text' || part.complete));
-    const previewText =
-      committedText ??
-      (complete
-        ? replyExcerpt(
-            message?.parts.flatMap((part) => (part.kind === 'text' ? [part.text] : [])) ?? [],
-          )
-        : undefined);
     const preview: SessionLivePreview = {
       connectionStatus: this.state.status,
       current: Boolean(snapshot?.current),
@@ -551,9 +487,6 @@ export class RemoteAgentScope implements RemoteAgentSource {
         title: interaction.title,
         kind: interaction.kind ?? 'decision',
       },
-      recentTools,
-      previewText,
-      updatedAt: snapshot ? Date.parse(snapshot.session.updatedAt) || undefined : undefined,
       ...(confirmed && snapshot
         ? {
             terminal: {
@@ -591,7 +524,6 @@ export class RemoteAgentScope implements RemoteAgentSource {
   private onConnectionChanged() {
     this.state = { ...this.state, ...this.lease.getSnapshot() };
     for (const [sessionId, observation] of this.observations) {
-      observation.previewRead?.abort();
       this.stopObservation(observation);
       this.withdrawTargets(sessionId, observation);
     }
@@ -901,103 +833,6 @@ export class RemoteAgentScope implements RemoteAgentSource {
       },
     );
   }
-  private cachedTerminalReply(sessionId: string, execution: Execution) {
-    const revision = execution.history?.messageRevision;
-    const entry = this.readCache.find(this.draftScope, sessionId);
-    if (!entry || !revision || !execution.messageId) return;
-    const key = this.readCache.partsKey({ messageId: execution.messageId, revision });
-    const parts = this.readCache.get<AgentPart[]>(entry, key);
-    if (parts) return historyReplyExcerpt(parts);
-  }
-
-  private readTerminalReply(sessionId: string, observation: Observation, execution: Execution) {
-    const snapshot = observation.snapshot!;
-    const { messageId, history } = execution;
-    const preview = this.getLiveSessionPreview(sessionId);
-    if (
-      !messageId ||
-      execution.persistenceFailure ||
-      preview?.terminal?.id !== execution.id ||
-      preview.previewText
-    )
-      return;
-    const epoch = snapshot.historyEpoch;
-    const version =
-      history && BigInt(history.historyRevision) > BigInt(snapshot.session.historyVersion)
-        ? history.historyRevision
-        : snapshot.session.historyVersion;
-    const attempt = JSON.stringify([epoch, execution.id]);
-    if (observation.previewAttempt === attempt) return;
-    const entry = this.cacheEntry(sessionId);
-    if (!this.readCache.beginHistory(entry, version)) return;
-    observation.previewAttempt = attempt;
-    const generation = entry.generation;
-    const release = this.readCache.retain(entry);
-    const controller = new AbortController();
-    const linked = linkAbortSignals([
-      controller.signal,
-      this.lease.signal,
-      AbortSignal.timeout(5000),
-    ]);
-    const signal = linked.signal;
-    observation.previewRead = controller;
-    const read = async () => {
-      // Use the head page shared with the conversation. Only hydrate the confirmed assistant.
-      const { items } = await this.listHistoryPage(sessionId, version, undefined, signal);
-      if (signal.aborted || !this.readCache.valid(entry, generation)) return;
-      const message = items.find(
-        (item) =>
-          item.messageId === messageId &&
-          item.role === 'assistant' &&
-          (!history || item.revision === history.messageRevision),
-      );
-      if (!message) return;
-      const text = historyReplyExcerpt(await this.messageParts(sessionId, message, signal));
-      const current = observation.snapshot;
-      const latest = terminalExecution(current);
-      if (
-        !text ||
-        signal.aborted ||
-        this.stopped ||
-        observation.previewRead !== controller ||
-        this.observations.get(sessionId) !== observation ||
-        !current?.current ||
-        current.historyEpoch !== epoch ||
-        BigInt(current.session.historyVersion) > BigInt(version) ||
-        activeExecution(current) ||
-        observation.pendingSubmission ||
-        observation.awaitingCheckpoint ||
-        latest?.id !== execution.id ||
-        !deepEqual(latest.history, history) ||
-        !this.readCache.valid(entry, generation)
-      )
-        return;
-      observation.terminalReply = {
-        executionId: execution.id,
-        messageRevision: history?.messageRevision,
-        epoch,
-        text,
-      };
-      this.publishTerminalPreview(sessionId);
-      this.notifyLiveListeners(sessionId);
-    };
-    this.track(
-      read().finally(() => {
-        linked.dispose();
-        release();
-        if (observation.previewRead !== controller) return;
-        observation.previewRead = undefined;
-        if (
-          !observation.tracking &&
-          !observation.listeners.size &&
-          !this.liveListeners.has(sessionId) &&
-          this.observations.get(sessionId) === observation
-        )
-          this.removeObservation(sessionId);
-        this.publishExecution();
-      }),
-    ).catch(() => undefined);
-  }
 
   history(sessionId: string, version: string, cursor: string | undefined, signal: AbortSignal) {
     return this.reads.share(
@@ -1089,13 +924,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
     signal.throwIfAborted();
     if (entry.invalidated || entry.generation !== generation)
       throw new RemoteAgentError('REVISION_EXPIRED');
-    if (!cursor) {
-      this.readCache.put(entry, generation, 'window', window);
-      if (this.observations.has(sessionId)) {
-        this.publishTerminalPreview(sessionId);
-        this.notifyLiveListeners(sessionId);
-      }
-    }
+    if (!cursor) this.readCache.put(entry, generation, 'window', window);
     return { items, next: page.nextCursor ?? undefined };
   }
   private issueResource = (sessionId: string, value: RemoteResourceDescriptor): string => {
@@ -1206,7 +1035,6 @@ export class RemoteAgentScope implements RemoteAgentSource {
       if (!retained.listeners.size && !retained.tracking) {
         this.stopObservation(retained);
         if (this.observations.get(sessionId) === retained) {
-          if (retained.previewRead) return;
           if (this.liveListeners.has(sessionId)) this.withdrawTargets(sessionId, retained);
           else this.removeObservation(sessionId);
         }
@@ -1219,7 +1047,6 @@ export class RemoteAgentScope implements RemoteAgentSource {
       observation = { listeners: new Set() };
       this.observations.set(sessionId, observation);
     }
-    observation.previewRead?.abort();
     observation.tracking = true;
     observation.awaitingCheckpoint = true;
     if (!observation.reply && this.background && !this.backgroundBlocked) {
@@ -1302,7 +1129,6 @@ export class RemoteAgentScope implements RemoteAgentSource {
         observation.previousTerminalId !== undefined
       )
         return;
-      if (terminal?.state === 'completed') this.readTerminalReply(sessionId, observation, terminal);
       this.endTracking(
         sessionId,
         observation,
@@ -1427,11 +1253,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
     this.publishExecution();
     if (!observation.listeners.size) {
       this.stopObservation(observation);
-      if (
-        !observation.previewRead &&
-        this.observations.get(sessionId) === observation &&
-        !this.liveListeners.has(sessionId)
-      )
+      if (this.observations.get(sessionId) === observation && !this.liveListeners.has(sessionId))
         this.removeObservation(sessionId);
     }
   }
@@ -1713,7 +1535,6 @@ export class RemoteAgentScope implements RemoteAgentSource {
     this.actions.stop();
     this.attachmentDrafts?.stop();
     for (const observation of this.observations.values()) {
-      observation.previewRead?.abort();
       observation.reply?.finish('cancelled');
       this.stopObservation(observation);
     }

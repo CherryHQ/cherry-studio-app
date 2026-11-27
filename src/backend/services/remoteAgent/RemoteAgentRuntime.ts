@@ -237,10 +237,7 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
       BigInt(saved.terminal.version) > BigInt(live.terminal.version) ||
       (saved.terminal.id === live.terminal.id &&
         saved.terminal.version === live.terminal.version &&
-        (deepEqual(saved, live) ||
-          (saved.executionState === live.executionState &&
-            !!saved.previewText &&
-            !live.previewText)))
+        deepEqual(saved, live))
     );
   }
 

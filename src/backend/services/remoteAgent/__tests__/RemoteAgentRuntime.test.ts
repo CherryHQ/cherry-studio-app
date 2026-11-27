@@ -219,7 +219,7 @@ it('one cancelled acquisition cannot release the scope awaited by another route'
 });
 
 it('attaches passive listeners when a matching scope appears and releases them on close', async () => {
-  const preview = { connectionStatus: 'ready', current: false, recentTools: [] } as const;
+  const preview = { connectionStatus: 'ready', current: false } as const;
   const detach = jest.fn();
   const getLiveSessionPreview = jest.fn(() => preview);
   const subscribeLiveSession = jest.fn((_sessionId: string, _listener: () => void) => detach);
@@ -278,7 +278,6 @@ it.each([
       connectionStatus: 'ready',
       current: true,
       executionState,
-      recentTools: [],
     };
     jest.mocked(RemoteAgentScope).mockImplementationOnce((lease) => {
       const scope = Object.assign(mockScope(lease), {
@@ -319,16 +318,14 @@ it.each([
   },
 );
 
-it('preserves confirmed status and reply through sparse scopes while showing newer execution state', async () => {
+it('preserves confirmed status through sparse scopes while showing newer execution state', async () => {
   const terminal: SessionLivePreview = {
     connectionStatus: 'ready',
     current: true,
     executionState: 'completed',
-    recentTools: [],
-    previewText: 'HANDOFF-1934-OK',
     terminal: { id: 'first', epoch: 'epoch', version: '1' },
   };
-  const sparse: SessionLivePreview = { connectionStatus: 'ready', current: false, recentTools: [] };
+  const sparse: SessionLivePreview = { connectionStatus: 'ready', current: false };
   let live = terminal;
   const mockLiveScope = (lease: DesktopDomainLease) => {
     const scope = Object.assign(mockScope(lease), {
@@ -346,9 +343,6 @@ it('preserves confirmed status and reply through sparse scopes while showing new
   live = sparse;
   const reopened = await runtime.open('pc', signal());
   expect(runtime.peekLiveSession('pc', 'session')).toBe(terminal);
-  expect(runtime.peekLiveSession('pc', 'session')).toBe(terminal);
-  live = { ...terminal, previewText: undefined };
-  expect(runtime.peekLiveSession('pc', 'session')).toBe(terminal);
   live = { ...sparse, connectionStatus: 'suspended' };
   expect(runtime.peekLiveSession('pc', 'session')).toBe(live);
   live = { ...sparse, executionState: 'pending-confirm' };
@@ -360,11 +354,9 @@ it('preserves confirmed status and reply through sparse scopes while showing new
   live = {
     ...terminal,
     terminal: { id: 'second', epoch: 'epoch', version: '2' },
-    previewText: undefined,
   };
-  expect(runtime.peekLiveSession('pc', 'session')).toBe(live);
-  live = { ...live, previewText: 'HANDOFF-1934-FOLLOWUP' };
   const followup = live;
+  expect(runtime.peekLiveSession('pc', 'session')).toBe(followup);
   reopened.dispose();
   invalidate({ connectionId: 'pc', domain: 'agent', grantId: 'other-grant' });
   expect(runtime.peekLiveSession('pc', 'session')).toBe(followup);

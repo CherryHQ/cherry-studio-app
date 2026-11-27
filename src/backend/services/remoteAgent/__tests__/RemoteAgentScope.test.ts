@@ -327,32 +327,22 @@ it('keeps live preview reads and subscriptions passive while projecting known ob
   test.setState({ status: 'ready' });
   expect(test.lease.ready).not.toHaveBeenCalled();
 
-  const tail = 'r'.repeat(240);
   test.projection.messages.m = {
     messageId: 'm',
     revision: '1',
     role: 'assistant',
     status: 'pending',
-    partIds: ['reply', 'tool1', 'tool2', 'tool3'],
+    partIds: ['tool3'],
   };
-  test.projection.parts.reply = {
-    partId: 'reply',
+  test.projection.parts.tool3 = {
+    partId: 'tool3',
     revision: '1',
-    kind: 'text',
-    state: 'streaming',
-    content: { text: ` old ${tail} ` },
+    kind: 'tool-input',
+    state: 'completed',
+    toolName: 'tool3',
+    toolCallId: 'tool3',
+    content: { text: '{}' },
   };
-  for (const id of ['tool1', 'tool2', 'tool3']) {
-    test.projection.parts[id] = {
-      partId: id,
-      revision: '1',
-      kind: 'tool-input',
-      state: 'completed',
-      toolName: id,
-      toolCallId: id,
-      content: { text: '{}' },
-    };
-  }
   test.projection.executions.e = { executionId: 'e', status: 'awaiting-approval', durable: false };
   test.projection.interactions.i = {
     interactionId: 'i',
@@ -374,19 +364,13 @@ it('keeps live preview reads and subscriptions passive while projecting known ob
     sessionTitle: 'Session',
     executionState: 'awaiting-approval',
     pendingInteraction: { id: 'i', title: 'Approve access', kind: 'decision' },
-    recentTools: [
-      { name: 'tool3', state: 'input-ready' },
-      { name: 'tool2', state: 'input-ready' },
-    ],
-    previewText: tail,
-    updatedAt: Date.parse(test.projection.session.updatedAt),
   });
   test.setState({ status: 'suspended' });
   const suspended = test.source.getLiveSessionPreview('s');
   expect(suspended).not.toBe(first);
   expect(test.source.getLiveSessionPreview('s')).toBe(suspended);
   expect(previews).toHaveLastReturnedWith(
-    expect.objectContaining({ connectionStatus: 'suspended', current: false, previewText: tail }),
+    expect.objectContaining({ connectionStatus: 'suspended', current: false }),
   );
   unsubscribe();
   previews.mockClear();
@@ -437,104 +421,6 @@ it('starts tracking a titled handoff with no remote conversation screen', async 
     executionState: 'running',
   });
   unsubscribe();
-  test.source.dispose();
-  await test.source.drain();
-});
-
-it('hydrates only the confirmed assistant when a fast handoff checkpoint has no reply body', async () => {
-  const onTerminalPreview = jest.fn();
-  const test = backgroundFixture(onTerminalPreview);
-  test.connection.agentMessageSummariesVersion = 1;
-  test.projection.executions.e = {
-    executionId: 'e',
-    status: 'completed',
-    durable: true,
-    messageId: 'm',
-    history: { historyRevision: '1', messageRevision: '2' },
-  };
-  const request = test.request.getMockImplementation()!;
-  let resolveParts!: (page: unknown) => void;
-  const parts = new Promise((resolve) => {
-    resolveParts = resolve;
-  });
-  test.request.mockImplementation(async (method, params) => {
-    if (method === 'agent.sessions.get') return { session: test.projection.session };
-    if (method === 'agent.sessions.create' || method === 'agent.messages.send')
-      return {
-        commandId: params.commandId,
-        method,
-        status: 'applied',
-        sessionId: 's',
-        admittedAt: '2026-09-22T00:00:00.000Z',
-      };
-    if (method === 'agent.messages.list')
-      return {
-        items: [
-          {
-            messageId: 'm',
-            revision: '2',
-            role: 'assistant',
-            status: 'success',
-            partsMode: 'paged',
-          },
-          {
-            messageId: 'older',
-            revision: '2',
-            role: 'assistant',
-            status: 'success',
-            partsMode: 'paged',
-          },
-        ],
-        nextCursor: 'older',
-      };
-    if (method === 'agent.parts.list') return parts;
-    return request(method, params);
-  });
-
-  await test.source.start({
-    draftId: 'handoff',
-    agentId: 'a',
-    title: 'Desktop task',
-    workspaceId: 'w',
-    text: 'Work',
-  });
-  await settle();
-  expect(test.source.getLiveSessionPreview('s')).toMatchObject({ executionState: 'completed' });
-  expect(test.source.getLiveSessionPreview('s')?.previewText).toBeUndefined();
-  expect(test.source.hasPendingExecution()).toBe(true);
-  expect(test.request.mock.calls.filter(([method]) => method === 'agent.messages.list')).toEqual([
-    [
-      'agent.messages.list',
-      { sessionId: 's', historyRevision: '1', partsMode: 'paged' },
-      expect.any(AbortSignal),
-    ],
-  ]);
-  expect(test.request.mock.calls.filter(([method]) => method === 'agent.parts.list')).toEqual([
-    [
-      'agent.parts.list',
-      { sessionId: 's', messageId: 'm', messageRevision: '2' },
-      expect.any(AbortSignal),
-    ],
-  ]);
-  const tail = 'x'.repeat(224) + 'HANDOFF-1934-OK';
-  resolveParts({
-    items: [
-      {
-        partId: 'reply',
-        revision: '1',
-        kind: 'text',
-        state: 'completed',
-        content: { text: `Earlier reply text ${tail}` },
-      },
-    ],
-    nextCursor: null,
-  });
-  await settle();
-  expect(onTerminalPreview).toHaveBeenLastCalledWith(
-    's',
-    expect.objectContaining({ executionState: 'completed', previewText: tail }),
-  );
-  expect(test.source.hasPendingExecution()).toBe(false);
   test.source.dispose();
   await test.source.drain();
 });
