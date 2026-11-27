@@ -2237,6 +2237,50 @@ describe('Persistent Agent facade', () => {
       preflight.mockRestore();
     }
   });
+
+  test('reopened fork history discovers inputs without scanning the transcript', async () => {
+    const state = fixture();
+    const fork = runtimeLane('session', 1);
+    let runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    try {
+      await runtime.ensureConversation(seed);
+      await submitAndWait(runtime, input('inherited'));
+      const boundary = (await runtime.message(lane, 'answer-inherited'))!.turn.answerBoundary!;
+      await submitAndWait(runtime, input('excluded'));
+      await runtime.forkConversation({
+        ...seed,
+        lane: fork,
+        from: { lane, boundary },
+        referencedFileEntryIds: [],
+      });
+      const expected = (await runtime.message(fork, 'answer-inherited'))!.turn;
+      const entryId = Number(expected.inputBoundary!.slice(3));
+      const nextCursor = `pi:${entryId - 1}`;
+      await runtime.close();
+      runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+
+      const scanEntries = jest.spyOn(state.storage, 'scanEntries');
+      for (const query of [{ limit: 1, requestIds: ['excluded', 'inherited'] }, { limit: 1 }]) {
+        expect(await runtime.history(fork, query)).toEqual({ turns: [expected], nextCursor });
+        // The selected turn still projects its own entries. Discovery needs no transcript scan.
+        expect(scanEntries).toHaveBeenCalledTimes(1);
+        expect(scanEntries.mock.calls[0]?.[0]).toMatchObject({ minEntryId: entryId });
+        scanEntries.mockClear();
+      }
+      expect(await runtime.history(fork, { limit: 1, cursor: nextCursor })).toEqual({ turns: [] });
+      expect(await runtime.assistantMessageIdForRequest(fork, 'inherited')).toBe(
+        'answer-inherited',
+      );
+      expect(await runtime.assistantMessageIdForRequest(fork, 'excluded')).toBeUndefined();
+      expect(await runtime.assistantMessageIdForRequest(lane, 'excluded')).toBe('answer-excluded');
+      expect(scanEntries).not.toHaveBeenCalled();
+    } finally {
+      await runtime.close();
+    }
+  });
+
   test('manually compacts an idle working copy after a cold open using its saved model and provider session', async () => {
     const state = fixture();
     let runtime = state.create();

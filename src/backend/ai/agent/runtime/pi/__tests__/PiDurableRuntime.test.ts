@@ -76,6 +76,35 @@ test('execution protection follows runnable work, including due sleeps and cance
 });
 
 describe('PiDurableRuntime identity and handoff', () => {
+  test('repeated usage delivery checkpoints every change to the pending list', async () => {
+    const storage = new MemoryStorage();
+    const runtime = await PiDurableRuntime.open(storage, options());
+    const commit = jest.spyOn(storage, 'commit');
+    try {
+      for (let index = 0; index < 5; index++) {
+        const id = `usage-${index}`;
+        const value = { tokens: index + 1 };
+        await runtime.saveUsage(id, value);
+        expect(await runtime.pendingUsage()).toEqual([{ id, value }]);
+        await runtime.acknowledgeUsage(id);
+        expect(await runtime.pendingUsage()).toEqual([]);
+      }
+      const pending = await storage.findDocument(
+        { kind: 'cherry.usage-pending', scope: { kind: 'session' }, key: 'pending' },
+        'current',
+        BACKGROUND_CONTEXT,
+      );
+      const revisionKinds = commit.mock.calls
+        .flatMap(([batches]) => batches.flat())
+        .flatMap((write) =>
+          write.type === 'document.change' && write.id === pending!.id ? [write.content.kind] : [],
+        );
+      expect(revisionKinds).toEqual(Array(9).fill('base'));
+    } finally {
+      await runtime.close();
+    }
+  });
+
   test('withdrawal uses the current predecessor after a different queued input is steered', async () => {
     class ReopenableStorage extends MemoryStorage {
       override async close() {}
@@ -831,10 +860,12 @@ describe('PiDurableRuntime identity and handoff', () => {
           }),
         BACKGROUND_CONTEXT,
       );
+      const scanEntries = jest.spyOn(storage, 'scanEntries');
       expect(await runtime.latestInput(seed.sessionId, compaction.id)).toEqual({
         record,
         metadata,
       });
+      expect(scanEntries).not.toHaveBeenCalled();
       await runtime.history(seed.sessionId, 1);
       expect(
         scan.mock.calls.filter(([query]) => query.conversationId === conversation.id),
@@ -843,6 +874,86 @@ describe('PiDurableRuntime identity and handoff', () => {
       expect(await runtime.withdrawInput(seed.sessionId, 'missing')).toBe('not_found');
       expect(await runtime.sessions()).toEqual([
         { sessionId: seed.sessionId, binding: await runtime.binding(seed.sessionId) },
+      ]);
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('placed inputs respect every fork boundary and use submission lookups without entry scans', async () => {
+    const storage = new MemoryStorage();
+    const runtime = await PiDurableRuntime.open(storage, options());
+    const place = async (sessionId: string, requestId: string) => {
+      const metadata = { requestId };
+      const submission = await runtime.submit(
+        sessionId,
+        { type: 'input', requestId, content: requestId },
+        metadata,
+      );
+      return { record: await submission.wait(BACKGROUND_CONTEXT), metadata };
+    };
+    try {
+      const root = await runtime.ensureConversation(seed);
+      const inherited = await place(seed.sessionId, 'inherited');
+      const hidden = await place(seed.sessionId, 'hidden');
+      const child = await runtime.forkConversation(seed.sessionId, {
+        ...seed,
+        sessionId: 'child',
+        at: inherited.record.entry!,
+        resourceFileEntryIds: [],
+      });
+      const newer = await place('child', 'newer');
+      expect(newer.record.entry!).toBeGreaterThan(hidden.record.entry!);
+      const grandchild = await runtime.forkConversation('child', {
+        ...seed,
+        sessionId: 'grandchild',
+        at: newer.record.entry!,
+        resourceFileEntryIds: [],
+      });
+      await grandchild.commit(async (tx) => {
+        await tx.createSubmission({
+          conversationId: grandchild.id,
+          type: 'input',
+          status: 'queued',
+          requestId: 'queued',
+        });
+      }, BACKGROUND_CONTEXT);
+      const scanEntries = jest.spyOn(storage, 'scanEntries');
+      const readEntry = jest.spyOn(storage, 'entry');
+      const scanSubmissions = jest.spyOn(storage, 'scanSubmissions');
+      const byRequest = jest.spyOn(storage, 'submissionByRequest');
+      const readMetadata = jest.spyOn(runtime, 'submissionMetadata');
+      expect(
+        await runtime.placedInputs('grandchild', {
+          limit: 2,
+          requestIds: ['inherited', 'hidden', 'inherited', 'newer', 'queued'],
+        }),
+      ).toEqual([newer, inherited]);
+      expect(byRequest).toHaveBeenCalledTimes(3 * 4);
+      expect(scanSubmissions).not.toHaveBeenCalled();
+      expect(
+        await runtime.placedInputs('grandchild', {
+          limit: 2,
+          maxEntryId: hidden.record.entry!,
+          requestIds: ['newer', 'inherited'],
+        }),
+      ).toEqual([inherited]);
+      expect(await runtime.placedInputs('grandchild', { limit: 1, requestIds: [] })).toEqual([]);
+      readMetadata.mockClear();
+      expect(await runtime.placedInputs('grandchild', { limit: 1 })).toEqual([newer]);
+      expect(readMetadata).toHaveBeenCalledTimes(1);
+      expect(await runtime.placedInputs('grandchild', { limit: 3 })).toEqual([newer, inherited]);
+      expect(await runtime.latestInput('grandchild', hidden.record.entry!)).toEqual(inherited);
+      expect(scanEntries).not.toHaveBeenCalled();
+      expect(readEntry).not.toHaveBeenCalledWith(
+        grandchild.id,
+        hidden.record.entry,
+        BACKGROUND_CONTEXT,
+      );
+      expect(scanSubmissions.mock.calls.map(([query]) => query.conversationId)).toEqual([
+        grandchild.id,
+        child.id,
+        root.id,
       ]);
     } finally {
       await runtime.close();

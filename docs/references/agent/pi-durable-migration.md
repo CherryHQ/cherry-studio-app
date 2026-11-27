@@ -30,8 +30,9 @@ and [Pi AI changelog](https://github.com/earendil-works/pi/blob/v1.5.0/packages/
   an input as failed; `interrupted` ends it as interrupted. Neither is projected as an indefinitely
   paused reply. Sleeping/blocked work still follows the existing execution-protection policy.
 - `afterFailedRun: 'continue'`, model-specific compaction policy and Cherry client identity remain.
-  `progress.persistWithinMs: 0` explicitly retains immediate streaming persistence for this
-  compatibility upgrade; adopting the new 1000 ms default requires a separate durability decision.
+  `progress.persistWithinMs` uses Pi's 1000 ms default to coalesce streaming progress writes.
+- Cherry's current-only documents use `checkpointWhen: () => true`. SQLite replaces their prior
+  revisions when it writes a base checkpoint, bounding `document_revisions` per document.
 - Tool parameters remain ordinary JSON Schema objects, preserving additional-property semantics.
   Error `afterTool` results retain their diagnostics and failure details; confirmed Code Mode
   artifacts still come from their durable transcript receipts. Unoffered calls must never execute.
@@ -72,8 +73,8 @@ at `1.4.0`. The four remaining patches are rebased against the published npm pac
 upstream sources are the [Durable changelog](https://github.com/earendil-works/pi/blob/v1.4.0/packages/durable/CHANGELOG.md)
 and [Pi AI changelog](https://github.com/earendil-works/pi/blob/v1.4.0/packages/ai/CHANGELOG.md).
 
-- Cherry document definitions explicitly set `checkpointWhen: () => false`, retaining the previous
-  delta-only policy rather than changing stored document behavior during the upgrade.
+- The 1.4.0 upgrade retained delta-only writes for Cherry documents. The current checkpoint policy
+  is described in the 1.5.0 section above.
 - `afterFailedRun: 'continue'` replaces the local generation failure-boundary patch. Missing models,
   final provider errors and failed blocking compactions settle their inputs and advance queued work.
 - Sleeping tasks and tasks blocked by the restart limit remain unfinished work for storage and

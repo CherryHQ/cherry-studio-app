@@ -371,19 +371,22 @@ export class DurableAgentHost implements AgentProtocol {
         const agentId = prepared?.plan.agent.id ?? session?.agentId;
         // Deleted owners are never reconstructed from the disposable execution log.
         if (!agentId) return;
-        const selected = identity.requestId
-          ? (
-              await this.conversations.history(identity, {
-                limit: 1,
-                requestIds: [identity.requestId],
-              })
-            ).turns[0]
-          : undefined;
+        let assistantMessageId: string | undefined;
+        if (identity.requestId) {
+          assistantMessageId = this.conversations.assistantMessageIdForRequest
+            ? await this.conversations.assistantMessageIdForRequest(identity, identity.requestId)
+            : (
+                await this.conversations.history(identity, {
+                  limit: 1,
+                  requestIds: [identity.requestId],
+                })
+              ).turns[0]?.assistantMessageId;
+        }
         if (!initialized) this.controller.signal.throwIfAborted();
         await this.ports.recordDurableUsage!(identity, report, {
           agentId,
           agentName: prepared?.plan.agent.name ?? null,
-          assistantMessageId: selected?.assistantMessageId ?? null,
+          assistantMessageId: assistantMessageId ?? null,
         });
       },
     };

@@ -91,7 +91,7 @@ export class AgentSqlDatabase implements AgentSqlExecutor {
   }
 
   all<T extends object>(sql: string, ...params: AgentSqlValue[]): Promise<T[]> {
-    return this.enqueue(() => this.sqlite.getAllAsync<T>(sql, bindings(params)));
+    return this.enqueue(() => this.readAll<T>(sql, params));
   }
 
   transaction<T>(callback: (transaction: AgentSqlExecutor) => Promise<T>): Promise<T> {
@@ -120,7 +120,7 @@ export class AgentSqlDatabase implements AgentSqlExecutor {
         },
         all: async <Row extends object>(sql: string, ...params: AgentSqlValue[]) => {
           assertActive();
-          return this.sqlite.getAllAsync<Row>(sql, bindings(params));
+          return this.readAll<Row>(sql, params);
         },
       };
       try {
@@ -150,6 +150,13 @@ export class AgentSqlDatabase implements AgentSqlExecutor {
       this.closing = this.tail.then(() => this.sqlite.closeAsync());
     }
     return this.closing;
+  }
+
+  private async readAll<T extends object>(sql: string, params: AgentSqlValue[]): Promise<T[]> {
+    const boundParams = bindings(params);
+    const rows: T[] = [];
+    for await (const row of this.sqlite.getEachAsync<T>(sql, boundParams)) rows.push(row);
+    return rows;
   }
 
   private enqueue<T>(operation: () => Promise<T>): Promise<T> {

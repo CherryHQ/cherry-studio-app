@@ -346,6 +346,7 @@ export interface DurableAgentRuntime {
     turns: readonly RuntimeDurableTurn[];
     nextCursor?: string;
   }>;
+  assistantMessageIdForRequest?(lane: RuntimeLane, requestId: string): Promise<string | undefined>;
   message(
     lane: RuntimeLane,
     messageId: string,
