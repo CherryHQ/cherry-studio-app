@@ -5110,6 +5110,118 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     },
   );
 
+  test('does not emit runtime.recovered when storage fails again during storage recovery reopen', async () => {
+    const state = fixture({ shouldRecoverStorage: () => true });
+    await state.reserve('completed');
+    await state.host.initialize();
+    const runtimeEvents: AgentEvent[] = [];
+    const observation = await state.host.observeSession(state.sessionId, (event) => {
+      if (event.type === 'runtime.recovered' || event.type === 'runtime.failed') {
+        runtimeEvents.push(event);
+      }
+    });
+    const failure = {
+      code: 'runtime_storage_failed',
+      message: 'Storage unavailable',
+      retryable: true,
+    };
+    jest.spyOn(state.conversations, 'resume').mockImplementationOnce(() => {
+      state.steps.push('resume');
+      state.execution()!.onFailure!(failure);
+    });
+    try {
+      await askTwoModels(state);
+      await settle();
+
+      state.execution()!.onFailure!(failure);
+      await settle();
+
+      expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+      expect(state.host.isReady).toBe(false);
+      expect(runtimeEvents).toEqual([{ type: 'runtime.failed', retryable: false }]);
+    } finally {
+      observation.unsubscribe();
+      await state.host.close();
+    }
+  });
+
+  test.each(['lease', 'storage'] as const)(
+    're-evaluates foreground lease expiry arriving during %s reopen',
+    async (mode) => {
+      const protection = executionProtection();
+      const state = fixture({
+        executionLease: protection.acquire,
+        isForeground: () => true,
+        shouldRecoverStorage: () => true,
+      });
+      await state.reserve('completed');
+      await state.host.initialize();
+      const runtimeEvents: AgentEvent[] = [];
+      const observation = await state.host.observeSession(state.sessionId, (event) => {
+        if (event.type === 'runtime.recovered' || event.type === 'runtime.failed') {
+          runtimeEvents.push(event);
+        }
+      });
+      const failure = {
+        code: 'runtime_storage_failed',
+        message: 'Storage unavailable',
+        retryable: true,
+      };
+      const baseInitialize = jest.mocked(state.conversations.initialize).getMockImplementation()!;
+      let reopenStarted!: () => void;
+      const reopenInFlight = new Promise<void>((resolve) => {
+        reopenStarted = resolve;
+      });
+      let releaseReopenInit!: () => void;
+      jest
+        .spyOn(state.conversations, 'initialize')
+        .mockImplementationOnce(async (database, ports, signal) => {
+          await baseInitialize(database, ports, signal);
+          reopenStarted();
+          await new Promise<void>((resolve) => {
+            releaseReopenInit = resolve;
+          });
+        });
+      try {
+        await askTwoModels(state);
+        await settle();
+
+        let firstOp: Promise<void> | undefined;
+        if (mode === 'lease') {
+          firstOp = protection.acquire.mock.calls.at(-1)![0](
+            new KeepAliveInterruptionError('continued-processing-expired'),
+          ) as Promise<void>;
+        } else {
+          state.execution()!.onFailure!(failure);
+        }
+
+        await reopenInFlight;
+        const secondLease = protection.acquire.mock.calls.at(-1)![0](
+          new KeepAliveInterruptionError('continued-processing-expired'),
+        ) as Promise<void>;
+        await settle();
+        releaseReopenInit();
+        await Promise.all([firstOp, secondLease]);
+        await settle();
+
+        expect(state.host.isReady).toBe(true);
+        expect(state.conversations.initialize).toHaveBeenCalledTimes(3);
+        expect(runtimeEvents.length).toBeGreaterThanOrEqual(1);
+        expect(runtimeEvents.every((event) => event.type === 'runtime.recovered')).toBe(true);
+
+        if (mode === 'storage') {
+          state.execution()!.onFailure!(failure);
+          await settle();
+          expect(runtimeEvents.at(-1)).toEqual({ type: 'runtime.failed', retryable: false });
+          expect(state.conversations.initialize).toHaveBeenCalledTimes(3);
+        }
+      } finally {
+        observation.unsubscribe();
+        await state.host.close();
+      }
+    },
+  );
+
   test('the background reply passes to a running answer and ends with the last one', async () => {
     const state = fixture();
     await state.reserve('completed');

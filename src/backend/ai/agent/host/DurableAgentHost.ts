@@ -562,7 +562,8 @@ export class DurableAgentHost implements AgentProtocol {
         attemptedRecovery = true;
         await this.reopenSuspended(false);
         if (operation && this.autoReopen === operation) this.autoReopen = undefined;
-        if (this.accepting) {
+        if (operation?.kind === 'storage-failed') return;
+        if (!operation?.cancelled && this.accepting) {
           this.publishRuntimeEvent({ type: 'runtime.recovered' });
           return;
         }
@@ -571,6 +572,7 @@ export class DurableAgentHost implements AgentProtocol {
       logger.error('Agent operation failed', { error: cause, operation: 'ai.storage_recovery' });
     }
     if (operation && this.autoReopen === operation) this.autoReopen = undefined;
+    if (operation?.kind === 'storage-failed') return;
     if (this.storageRecovery === 'scheduled') this.storageRecovery = 'idle';
     const isForegroundStorageFailure =
       Boolean(this.ports.shouldRecoverStorage?.()) && !storageMutationGate.isFrozen;
@@ -578,11 +580,21 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   private async handleExecutionLeaseInterrupted(reason: Error): Promise<void> {
-    if (this.autoReopen) {
+    while (this.autoReopen) {
       const active = this.autoReopen;
-      await this.suspendInternal(reason);
+      if (!this.resuming) {
+        await this.suspendInternal(reason);
+        await active.promise;
+        return;
+      }
       await active.promise;
-      return;
+      if (
+        this.controller.signal.aborted ||
+        this.suspended ||
+        active.cancelled ||
+        active.kind === 'storage-failed'
+      )
+        return;
     }
     const blockedByTerminalStorage =
       this.suspended && !this.accepting && this.storageRecovery === 'attempted';
@@ -595,7 +607,7 @@ export class DurableAgentHost implements AgentProtocol {
       await this.suspendInternal(reason);
       return;
     }
-    const operation: NonNullable<typeof this.autoReopen> = {
+    const operation: NonNullable<DurableAgentHost['autoReopen']> = {
       kind: 'lease',
       cancelled: false,
       promise: Promise.resolve(),
@@ -619,7 +631,7 @@ export class DurableAgentHost implements AgentProtocol {
       }
       if (!this.ports.isForeground?.()) return;
       try {
-        await this.resumeSuspended();
+        await this.reopenSuspended(false);
         if (this.autoReopen === operation) this.autoReopen = undefined;
         if (!operation.cancelled && this.accepting)
           this.publishRuntimeEvent({ type: 'runtime.recovered' });
@@ -722,6 +734,7 @@ export class DurableAgentHost implements AgentProtocol {
       Boolean(this.ports.shouldRecoverStorage?.()) &&
       !storageMutationGate.isFrozen;
     const failure = new Error(error.message);
+    let failedDuringRecovery = false;
     if (this.autoReopen) {
       if (this.autoReopen.kind === 'lease' && !this.autoReopen.cancelled) {
         logger.error('Durable Agent storage failed', failure);
@@ -740,9 +753,17 @@ export class DurableAgentHost implements AgentProtocol {
         await suspension;
         return;
       }
-      if (this.autoReopen.kind === 'storage' || this.autoReopen.kind === 'storage-failed') {
+      if (this.autoReopen.kind === 'storage-failed') {
         await this.autoReopen.promise;
         return;
+      }
+      if (this.autoReopen.kind === 'storage') {
+        const active = this.autoReopen;
+        active.kind = 'storage-failed';
+        active.cancelled = true;
+        failedDuringRecovery = true;
+        await active.promise;
+        if (this.controller.signal.aborted) return;
       }
     }
     const canRecover =
@@ -792,7 +813,7 @@ export class DurableAgentHost implements AgentProtocol {
         }),
     };
     this.autoReopen = operation;
-    this.publishStorageFailureEvent(isForegroundStorageFailure, false);
+    this.publishStorageFailureEvent(isForegroundStorageFailure, failedDuringRecovery);
     await operation.promise;
   }
 
