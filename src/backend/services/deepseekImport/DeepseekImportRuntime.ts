@@ -4,8 +4,11 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { DbService } from '@/backend/data/db/DbService';
-import { agentSessionMessageTable, agentSessionTable } from '@/backend/data/db/schemas';
-import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
+import {
+  agentSessionMessageTable,
+  agentSessionTable,
+  createOrderedUuid,
+} from '@/backend/data/db/schemas';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { AgentService } from '@/backend/data/services/AgentService';
 import { FileEntryService } from '@/backend/data/services/FileEntryService';
