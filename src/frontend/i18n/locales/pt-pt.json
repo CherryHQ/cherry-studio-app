@@ -1056,8 +1056,6 @@
   "fileExport.watermark.download": "Lê o código para transferir a app móvel",
   "fileExport.watermark.downloadLink": "Transferir a app móvel",
   "fileExport.watermark.scanToDownload": "Digitalize para transferir",
-  "filePane.expand": "Expandir para ler",
-  "filePane.returnToChat": "Voltar à conversa",
   "filePreview.document": "Documento",
   "filePreview.openFailed": "Nenhuma aplicação conseguiu abrir este ficheiro.",
   "filePreview.openWith": "Abrir ficheiro com",

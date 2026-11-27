@@ -1032,8 +1032,6 @@
   "fileExport.watermark.download": "扫码下载移动端",
   "fileExport.watermark.downloadLink": "下载移动端",
   "fileExport.watermark.scanToDownload": "扫码下载",
-  "filePane.expand": "展开阅读",
-  "filePane.returnToChat": "返回对话",
   "filePreview.document": "文档",
   "filePreview.openFailed": "没有可用于打开此文件的应用。",
   "filePreview.openWith": "打开文件",
