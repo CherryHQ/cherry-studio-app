@@ -75,11 +75,11 @@ describe('Composer.Editor', () => {
 
   it('bounds the native text field to a single row only while compact', () => {
     const nativeStyle = () => StyleSheet.flatten(renderer.root.findByType(TextInput).props.style);
-    expect(nativeStyle()).toMatchObject({ maxHeight: 24, paddingVertical: 0 });
+    expect(nativeStyle()).toMatchObject({ maxHeight: 32, paddingVertical: 0 });
     act(() => renderer.update(renderEditor(true)));
     expect(nativeStyle()).toMatchObject({ maxHeight: 132, paddingVertical: 4 });
     act(() => renderer.update(renderEditor(false)));
-    expect(nativeStyle()).toMatchObject({ maxHeight: 24, paddingVertical: 0 });
+    expect(nativeStyle()).toMatchObject({ maxHeight: 32, paddingVertical: 0 });
   });
 
   it('keeps the resting field clear of both trailing actions without adding a leading slot', () => {

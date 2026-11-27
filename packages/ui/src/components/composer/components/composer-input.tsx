@@ -154,7 +154,7 @@ export function ComposerInput({
         cursorColor={typeof selectionTint === 'string' ? selectionTint : undefined}
         selectionColor={typeof selectionColor === 'string' ? selectionColor : undefined}
         // Set once. Every later change goes through the sync effect above.
-        defaultValue={value}
+        defaultValue={value || undefined}
         // Turning `google.com` into a link as the user types would mint the one
         // entity this field is supposed to reserve for mentions.
         linkRegex={null}
