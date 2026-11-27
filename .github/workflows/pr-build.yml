@@ -1,6 +1,9 @@
 name: PR Build
 
 on:
+  push:
+    branches:
+      - ci/pr-native-build-pipeline
   workflow_dispatch:
     inputs:
       pr:
@@ -45,7 +48,7 @@ permissions:
 jobs:
   resolve:
     name: Resolve PR build targets
-    if: github.repository == 'CherryHQ/cherry-studio-app'
+    if: github.repository == 'CherryHQ/cherry-studio-app' && (github.event_name == 'workflow_dispatch' || github.actor == 'zhangjiadi225')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -69,12 +72,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          INPUT_PR: ${{ inputs.pr }}
-          INPUT_REF: ${{ inputs.ref }}
-          INPUT_ANDROID_DEV: ${{ inputs.android_dev }}
-          INPUT_IOS_DEV: ${{ inputs.ios_dev }}
-          INPUT_ANDROID_PRODUCTION: ${{ inputs.android_production }}
-          INPUT_ALLOW_FORK_PR: ${{ inputs.allow_fork_pr }}
+          INPUT_PR: ${{ inputs.pr || '' }}
+          INPUT_REF: ${{ inputs.ref || (github.event_name == 'push' && github.sha || '') }}
+          INPUT_ANDROID_DEV: ${{ github.event_name == 'push' || inputs.android_dev }}
+          INPUT_IOS_DEV: ${{ github.event_name == 'push' || inputs.ios_dev }}
+          INPUT_ANDROID_PRODUCTION: ${{ github.event_name == 'push' || inputs.android_production }}
+          INPUT_ALLOW_FORK_PR: ${{ inputs.allow_fork_pr || false }}
         run: |
           targets=()
           needs_android=false
