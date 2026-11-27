@@ -828,6 +828,18 @@ test('does not reconnect repeatedly after a second pre-command failure', async (
   expect(native.run).toHaveBeenCalledTimes(2);
 });
 
+test('forgetSession revokes the live target even when removing the remembered binding fails', async () => {
+  const profile = await trusted();
+  const sessionId = mockRandomUUID();
+  await runtime.selectTarget(sessionId, profile);
+  profileStorage.set.mockImplementationOnce(() => {
+    throw new Error('Storage unavailable');
+  });
+
+  await expect(runtime.forgetSession(sessionId)).rejects.toThrow('Storage unavailable');
+  expect(runtime.getTarget(sessionId)).toBeNull();
+});
+
 test('forgetSession clears in-memory target, grant timer, MMKV binding, and 64-slot capacity', async () => {
   jest.useFakeTimers();
   try {

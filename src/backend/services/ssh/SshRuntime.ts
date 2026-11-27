@@ -432,8 +432,11 @@ export class SshRuntime extends BaseService implements SshModule {
   forgetSession = async (sessionId: string): Promise<void> => {
     if (!sessionId || sessionId.length > 200) return;
     await this.serialize(async () => {
-      if (!sessionId.startsWith('draft:')) this.profiles.rememberTarget(sessionId, null);
-      if (this.clearActiveTargetState(sessionId)) this.notifyTargets();
+      try {
+        if (!sessionId.startsWith('draft:')) this.profiles.rememberTarget(sessionId, null);
+      } finally {
+        if (this.clearActiveTargetState(sessionId)) this.notifyTargets();
+      }
     });
   };
 

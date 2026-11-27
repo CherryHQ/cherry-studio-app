@@ -609,7 +609,7 @@ describe('Persistent Agent facade', () => {
     },
   );
 
-  test.each(['unfinished', 'idle'] as const)(
+  test.each(['unfinished', 'idle', 'unfinished tool-schema'] as const)(
     'isolates corrupt %s configuration while restoring and running a healthy owner',
     async (status) => {
       const state = fixture();
@@ -647,7 +647,23 @@ describe('Persistent Agent facade', () => {
           const submission = input(target.sessionId);
           await conversation.commit(async (tx) => {
             if (target === lane) {
-              (await tx.doc(configuration, target.sessionId, {})).value = {};
+              (await tx.doc(configuration, target.sessionId, {})).value =
+                status === 'unfinished tool-schema'
+                  ? {
+                      ...seed.configuration,
+                      version: 2,
+                      tools: [
+                        {
+                          ref: { source: 'builtin', capabilityId: 'read_file' },
+                          providerName: 'read_file',
+                          displayName: 'Read file',
+                          description: 'Read a file.',
+                          inputSchema: null,
+                          approval: 'auto',
+                        },
+                      ],
+                    }
+                  : {};
               if (status === 'idle') return;
             }
             await tx.doc(
@@ -685,11 +701,11 @@ describe('Persistent Agent facade', () => {
       runtime = state.create();
       try {
         await runtime.initialize(state.database, state.ports);
-        if (status === 'unfinished') {
+        if (status !== 'idle') {
           expect(failure).toHaveBeenCalledWith(lane, expect.any(RuntimeCorruptLaneError));
           expect((failure.mock.calls[0]?.[1] as Error | undefined)?.cause).toBeInstanceOf(ZodError);
         }
-        expect(failure).toHaveBeenCalledTimes(status === 'unfinished' ? 1 : 0);
+        expect(failure).toHaveBeenCalledTimes(status === 'idle' ? 0 : 1);
         expect((await runtime.configuration(healthy)).model).toEqual(reference);
         const completed = deferred<void>();
         const observed = await runtime.observe(healthy, (event) => {
@@ -701,10 +717,12 @@ describe('Persistent Agent facade', () => {
         await observed.unsubscribe();
         expect(state.requests).toHaveLength(1);
         expect((await runtime.history(healthy, { limit: 1 })).turns[0]?.status).toBe('completed');
-        await expect(runtime.configuration(lane)).rejects.toBeInstanceOf(RuntimeCorruptLaneError);
-        await expect(runtime.observe(lane, () => {})).rejects.toBeInstanceOf(
-          RuntimeCorruptLaneError,
-        );
+        if (status !== 'unfinished tool-schema') {
+          await expect(runtime.configuration(lane)).rejects.toBeInstanceOf(RuntimeCorruptLaneError);
+          await expect(runtime.observe(lane, () => {})).rejects.toBeInstanceOf(
+            RuntimeCorruptLaneError,
+          );
+        }
       } finally {
         await runtime.close();
       }

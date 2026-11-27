@@ -828,8 +828,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     } catch (error) {
       throw this.wrapCorruptLaneError(error, lane);
     }
-    const agent = await this.installConfiguration(lane, configuration, true, signal);
     try {
+      const agent = await this.installConfiguration(lane, configuration, true, signal);
       signal?.throwIfAborted();
       if (stored?.version === 1)
         await runtime.restoreConfiguration(key, serializePiConfiguration(configuration), agent);

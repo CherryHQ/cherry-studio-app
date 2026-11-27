@@ -580,6 +580,7 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   private async handleExecutionLeaseInterrupted(reason: Error): Promise<void> {
+    let overlapsStorageRecovery = false;
     while (this.autoReopen) {
       const active = this.autoReopen;
       if (!this.resuming) {
@@ -587,6 +588,7 @@ export class DurableAgentHost implements AgentProtocol {
         await active.promise;
         return;
       }
+      if (active.kind === 'storage') overlapsStorageRecovery = true;
       await active.promise;
       if (
         this.controller.signal.aborted ||
@@ -633,8 +635,11 @@ export class DurableAgentHost implements AgentProtocol {
       try {
         await this.reopenSuspended(false);
         if (this.autoReopen === operation) this.autoReopen = undefined;
-        if (!operation.cancelled && this.accepting)
+        if (!operation.cancelled && this.accepting) {
+          // A follow-up reopen for the same incident still shares its storage retry budget.
+          if (!overlapsStorageRecovery) this.storageRecovery = 'idle';
           this.publishRuntimeEvent({ type: 'runtime.recovered' });
+        }
       } catch (error) {
         if (this.autoReopen === operation) this.autoReopen = undefined;
         logger.error(

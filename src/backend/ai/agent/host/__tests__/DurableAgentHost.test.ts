@@ -2606,13 +2606,13 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
-  test.each(['runtime-metadata', 'stored-parts'] as const)(
+  test.each(['runtime-metadata', 'stored-parts', 'stored-stats'] as const)(
     'isolates invalid %s at startup without rewriting it or relaxing backup reads',
     async (source) => {
       const state = fixture();
       const unreadable = await state.reserve();
       if (source === 'runtime-metadata') unreadable.metadata = {};
-      else {
+      else if (source === 'stored-parts') {
         state.copies.clear();
         state.raw
           .prepare('UPDATE agent_session_message SET data = ? WHERE id = ?')
@@ -2620,10 +2620,14 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
             JSON.stringify({ parts: [{ id: 'future', type: 'unsupported-part' }] }),
             unreadable.assistantMessageId,
           );
+      } else {
+        state.raw
+          .prepare('UPDATE agent_session_message SET stats = ? WHERE id = ?')
+          .run(JSON.stringify({ requestCount: 'invalid' }), unreadable.assistantMessageId);
       }
       const readUnreadable = () =>
         state.raw
-          .prepare('SELECT status, data FROM agent_session_message WHERE id = ?')
+          .prepare('SELECT status, data, stats FROM agent_session_message WHERE id = ?')
           .get(unreadable.assistantMessageId);
       const original = readUnreadable();
       const healthy = await state.store.reserveInitialSubmission({
@@ -4945,6 +4949,51 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       );
       await settle();
       expect(events).toContainEqual({ type: 'runtime.failed' });
+    } finally {
+      observation.unsubscribe();
+      await state.host.close();
+    }
+  });
+
+  test('successful independent lease recovery resets a previously used storage retry', async () => {
+    const protection = executionProtection();
+    const state = fixture({
+      executionLease: protection.acquire,
+      isForeground: () => true,
+      shouldRecoverStorage: () => true,
+    });
+    jest
+      .spyOn(state.conversations, 'watchWork')
+      .mockResolvedValue({ active: true, unsubscribe: async () => {} });
+    await state.reserve('running');
+    await state.host.initialize();
+    const runtimeEvents: string[] = [];
+    const observation = await state.host.observeSession(state.sessionId, (event) => {
+      if (event.type === 'runtime.recovered' || event.type === 'runtime.failed') {
+        runtimeEvents.push(event.type);
+      }
+    });
+    const failure = {
+      code: 'runtime_storage_failed',
+      message: 'Storage unavailable',
+      retryable: true,
+    };
+    try {
+      state.execution()!.onFailure!(failure);
+      await settle();
+      await protection.acquire.mock.calls[1]![0](
+        new KeepAliveInterruptionError('continued-processing-expired'),
+      );
+      state.execution()!.onFailure!(failure);
+      await settle();
+
+      expect(state.conversations.initialize).toHaveBeenCalledTimes(4);
+      expect(runtimeEvents).toEqual([
+        'runtime.recovered',
+        'runtime.recovered',
+        'runtime.recovered',
+      ]);
+      expect(state.host.isReady).toBe(true);
     } finally {
       observation.unsubscribe();
       await state.host.close();

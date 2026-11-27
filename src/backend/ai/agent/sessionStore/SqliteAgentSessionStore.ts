@@ -35,6 +35,7 @@ import {
   toAgentMessageView,
   toReadableAgentMessageViews,
   toAgentSessionView,
+  type AgentMessageViewRow,
 } from '@/backend/data/services/utils/agentSessionRows';
 import { requireActiveFolder } from '@/backend/data/services/utils/fileLibraryRows';
 import { toSearchableText } from '@/backend/data/services/utils/searchSnippet';
@@ -1008,16 +1009,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     if (options?.tolerateInvalidParts) {
       return toReadableAgentMessageViews([row])[0] ?? null;
     }
-    try {
-      return toAgentMessageView(row);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        throw new RuntimeCorruptLaneError('Stored agent message failed schema validation.', {
-          cause: error,
-        });
-      }
-      throw error;
-    }
+    return toRuntimeMessageView(row);
   }
 
   async listTurnMessages(sessionId: string, turnId: string): Promise<AgentMessageView[]> {
@@ -1307,10 +1299,21 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
         })
         .where(eq(agentSessionTable.id, existing.sessionId));
-      return toAgentMessageView(row);
+      return toRuntimeMessageView(row);
     });
     publishDataApiChanges(['/agent-sessions', `/agent-sessions/${message.sessionId}`]);
     return message;
+  }
+}
+
+function toRuntimeMessageView(row: AgentMessageViewRow): AgentMessageView {
+  try {
+    return toAgentMessageView(row);
+  } catch (error) {
+    if (!(error instanceof ZodError)) throw error;
+    throw new RuntimeCorruptLaneError('Stored agent message failed schema validation.', {
+      cause: error,
+    });
   }
 }
 
