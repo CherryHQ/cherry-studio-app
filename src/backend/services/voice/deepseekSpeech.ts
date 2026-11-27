@@ -11,69 +11,207 @@ import { VoiceError } from '@/shared/contracts/voice';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { voiceAudioSession } from './audioSession';
-import type { SpeechEngine } from './engines';
+import type { SpeechEngine, SpeechPlaybackControls } from './engines';
+import { createSpeechPauseGate } from './speechPauseGate';
 import { splitSpeechText } from './speechText';
 
 const logger = loggerService.withContext('DeepseekSpeech');
 
-async function play(uri: string, signal: AbortSignal): Promise<void> {
+async function play(
+  uri: string,
+  signal: AbortSignal,
+  registerPlayerControls: (controls: SpeechPlaybackControls | null) => void,
+  startPaused: boolean,
+  onInterrupted?: () => void,
+): Promise<void> {
   signal.throwIfAborted();
-  const player = createAudioPlayer(uri);
+  let activePlayer: ReturnType<typeof createAudioPlayer> | null = null;
   let stop: (() => void) | undefined;
   let subscription: { remove(): void } | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let isReleased = false;
+  let state: 'starting' | 'playing' | 'paused' = startPaused ? 'paused' : 'starting';
+  let resumePosition = 0;
+  let seekToken = 0;
 
-  function releasePlayer() {
-    if (isReleased) return;
-    isReleased = true;
-    clearTimeout(timer);
-    if (stop) signal.removeEventListener('abort', stop);
+  function detachPlayer(capturePosition: boolean) {
+    const player = activePlayer;
+    if (!player) return;
+    if (capturePosition) {
+      const currentTime = (player as { currentTime?: unknown }).currentTime;
+      if (typeof currentTime === 'number' && Number.isFinite(currentTime) && currentTime > 0) {
+        resumePosition = currentTime;
+      }
+    }
+    if (Platform.OS === 'ios') {
+      // Muting and stripping the AVPlayerItem before release prevents a concurrent expo-audio
+      // sessionQueue interruption-resume snapshot from playing audio on the released player.
+      try {
+        player.muted = true;
+        player.volume = 0;
+        (player as { replace?: (source: null) => void }).replace?.(null);
+      } catch {
+        // Ignore best-effort teardown hardening if the native player is already released.
+      }
+    }
+    activePlayer = null;
+    const sub = subscription;
+    subscription = undefined;
     try {
-      subscription?.remove();
+      sub?.remove();
     } finally {
       player.release();
     }
   }
 
+  function releasePlayer() {
+    if (isReleased) return;
+    isReleased = true;
+    seekToken += 1;
+    registerPlayerControls(null);
+    clearTimeout(timer);
+    timer = undefined;
+    if (stop) signal.removeEventListener('abort', stop);
+    detachPlayer(false);
+  }
+
   try {
     await new Promise<void>((resolve, reject) => {
       let settled = false;
-      let playing = false;
       const settle = (error?: unknown) => {
         if (settled) return;
         settled = true;
         if (error) reject(error);
         else resolve();
       };
+      const armTimer = () => {
+        clearTimeout(timer);
+        timer = setTimeout(
+          () => settle(new VoiceError('failed', 'Speech playback did not finish.')),
+          10 * 60_000,
+        );
+      };
+      const attachAndPlay = (seekToPosition: number) => {
+        if (settled || isReleased) return;
+        const token = ++seekToken;
+        const player = createAudioPlayer(uri);
+        activePlayer = player;
+        subscription = player.addListener('playbackStatusUpdate', (status) => {
+          if (activePlayer !== player) return;
+          const statusCurrentTime = (status as { currentTime?: unknown }).currentTime;
+          if (
+            typeof statusCurrentTime === 'number' &&
+            Number.isFinite(statusCurrentTime) &&
+            statusCurrentTime > 0
+          ) {
+            resumePosition = statusCurrentTime;
+          }
+          if (status.didJustFinish) {
+            settle();
+            return;
+          }
+          if (status.error) {
+            settle(new VoiceError('failed', 'Speech playback was interrupted.'));
+            return;
+          }
+          if (status.playing) {
+            if (state === 'starting') {
+              state = 'playing';
+            } else if (state === 'paused') {
+              // Queued playback updates emitted before pause must not override paused intent.
+              try {
+                player.pause();
+              } catch {
+                // Ignore best-effort re-pause if player is already stopping or released.
+              }
+            }
+            return;
+          }
+          if (state === 'playing' && status.isLoaded && !status.isBuffering) {
+            if (onInterrupted) {
+              onInterrupted();
+            } else {
+              settle(new VoiceError('failed', 'Speech playback was interrupted.'));
+            }
+          }
+        });
+
+        const startPlayback = () => {
+          if (
+            settled ||
+            isReleased ||
+            activePlayer !== player ||
+            seekToken !== token ||
+            state !== 'starting'
+          ) {
+            return;
+          }
+          try {
+            player.play();
+          } catch (error) {
+            settle(error);
+          }
+        };
+
+        const seek = (player as { seekTo?: (seconds: number) => Promise<void> }).seekTo;
+        if (seekToPosition > 0 && typeof seek === 'function') {
+          void Promise.resolve(seek.call(player, seekToPosition))
+            .catch(() => {})
+            .then(startPlayback);
+          return;
+        }
+        startPlayback();
+      };
+
       stop = () => {
         settle(signal.reason ?? new Error('Speech was cancelled.'));
         try {
           // iOS pause schedules shared session deactivation. Release stops this player directly.
           if (Platform.OS === 'ios') releasePlayer();
-          else player.pause();
+          else activePlayer?.pause();
         } catch (error) {
           logger.warn('Cancelled speech playback could not be stopped', { error });
         }
       };
-      timer = setTimeout(
-        () => settle(new VoiceError('failed', 'Speech playback did not finish.')),
-        10 * 60_000,
-      );
-      subscription = player.addListener('playbackStatusUpdate', (status) => {
-        if (status.didJustFinish) settle();
-        else if (
-          status.error ||
-          (playing && status.isLoaded && !status.playing && !status.isBuffering)
-        )
-          settle(new VoiceError('failed', 'Speech playback was interrupted.'));
-        playing ||= status.playing;
+      registerPlayerControls({
+        pause() {
+          if (settled || isReleased || state === 'paused') return;
+          state = 'paused';
+          seekToken += 1;
+          clearTimeout(timer);
+          timer = undefined;
+          try {
+            // Releasing the iOS player evicts it from expo-audio's interruption registry so
+            // AVAudioSession .shouldResume cannot restart audio after a user pause.
+            if (Platform.OS === 'ios') detachPlayer(true);
+            else activePlayer?.pause();
+          } catch (error) {
+            settle(error);
+          }
+        },
+        resume() {
+          if (settled || isReleased || state !== 'paused') return;
+          // Require fresh playing confirmation so late pause events cannot fake an interruption.
+          state = 'starting';
+          armTimer();
+          try {
+            if (Platform.OS === 'ios' || !activePlayer) {
+              attachAndPlay(resumePosition);
+            } else {
+              activePlayer.play();
+            }
+          } catch (error) {
+            settle(error);
+          }
+          return 'playing';
+        },
       });
       signal.addEventListener('abort', stop, { once: true });
       if (signal.aborted) stop();
-      else if (!settled) {
+      else if (!settled && state !== 'paused') {
+        armTimer();
         try {
-          player.play();
+          attachAndPlay(0);
         } catch (error) {
           settle(error);
         }
@@ -97,27 +235,64 @@ export function createDeepseekSpeech(voice: () => Promise<string>): SpeechEngine
         { id: 'tide', name: 'Tide' },
       ];
     },
-    async speak({ text, signal, backgroundPlayback }) {
+    async speak({ text, signal, backgroundPlayback, playback }) {
       const voiceId = await voice();
       if (voiceId !== 'stella' && voiceId !== 'tide')
         throw new VoiceError('invalid-voice', 'The selected DeepSeek voice is unavailable.');
       const connection = await resolveDeepseekConnection(signal);
       const api = createHttpClient({ baseUrl: connection.baseUrl, timeoutMs: 180_000 });
+      const chunks = splitSpeechText(text, 400);
+      if (chunks.length === 0) return;
+
       const release = await voiceAudioSession.acquire('speech');
+      const gate = createSpeechPauseGate(signal);
+      let synthesizing = false;
+      let playerControls: SpeechPlaybackControls | null = null;
+
+      const pause = () => {
+        if (!gate.pause()) return;
+        playback?.onPhase('paused');
+        playerControls?.pause();
+      };
+      const resume = () => {
+        if (!gate.resume()) return;
+        const phase = synthesizing ? 'preparing' : 'playing';
+        playback?.onPhase(phase);
+        playerControls?.resume();
+        return phase;
+      };
+
       try {
+        signal.throwIfAborted();
         await voiceAudioSession.playback(backgroundPlayback);
-        for (const chunk of splitSpeechText(text, 400)) {
+        signal.throwIfAborted();
+        playback?.onControls({ pause, resume });
+        for (let index = 0; index < chunks.length; index += 1) {
+          await gate.waitIfPaused();
           signal.throwIfAborted();
-          const response = await api.request<ArrayBuffer>({
-            method: 'POST',
-            path: '/v1/tools/tts',
-            body: { text: chunk, voice_id: voiceId, format: 'wav', filter_markdown: false },
-            headers: connection.headers,
-            responseType: 'arraybuffer',
-            maxResponseBytes: 16 * 1024 * 1024,
-            redirect: 'error',
-            signal,
-          });
+          playback?.onProgress({ completedChunks: index, totalChunks: chunks.length });
+          playback?.onPhase('preparing');
+          synthesizing = true;
+          let response: Awaited<ReturnType<typeof api.request<ArrayBuffer>>>;
+          try {
+            response = await api.request<ArrayBuffer>({
+              method: 'POST',
+              path: '/v1/tools/tts',
+              body: {
+                text: chunks[index]!,
+                voice_id: voiceId,
+                format: 'wav',
+                filter_markdown: false,
+              },
+              headers: connection.headers,
+              responseType: 'arraybuffer',
+              maxResponseBytes: 16 * 1024 * 1024,
+              redirect: 'error',
+              signal,
+            });
+          } finally {
+            synthesizing = false;
+          }
           signal.throwIfAborted();
           const bytes = new Uint8Array(response.data);
           if (
@@ -133,7 +308,19 @@ export function createDeepseekSpeech(voice: () => Promise<string>): SpeechEngine
           );
           try {
             file.writeSync(bytes);
-            await play(file.uri, signal);
+            await gate.waitIfPaused();
+            signal.throwIfAborted();
+            playback?.onPhase('playing');
+            await play(
+              file.uri,
+              signal,
+              (controls) => {
+                playerControls = controls;
+              },
+              gate.isPaused(),
+              playback?.onInterrupted,
+            );
+            playback?.onProgress({ completedChunks: index + 1, totalChunks: chunks.length });
           } finally {
             try {
               if (file.exists) file.delete();
@@ -143,6 +330,8 @@ export function createDeepseekSpeech(voice: () => Promise<string>): SpeechEngine
           }
         }
       } finally {
+        playerControls = null;
+        playback?.onControls(null);
         await release();
       }
     },

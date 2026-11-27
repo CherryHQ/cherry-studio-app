@@ -3,6 +3,8 @@ import type {
   AudioTranscriptionOptions,
   AudioTranscriptionResult,
   DictationSession,
+  SpeechPhase,
+  SpeechProgress,
   SpeechVoice,
   VoiceEngineId,
   VoiceEngineStatus,
@@ -25,14 +27,28 @@ export interface DictationEngine {
   start(input: DictationStart): Promise<DictationSession>;
 }
 
+export type SpeechPlaybackControls = {
+  pause(): void;
+  resume(): SpeechPhase | void;
+};
+
+export type SpeechPlaybackCallbacks = {
+  onPhase(phase: SpeechPhase): void;
+  onProgress(progress: SpeechProgress): void;
+  onControls(controls: SpeechPlaybackControls | null): void;
+  onInterrupted?(): void;
+};
+
 export type SpeechRequest = {
-  /** Android has admitted this reading to its media service. */
-  backgroundPlayback?: boolean;
+  /** Android/iOS background admission state or live getter evaluated when configuring audio mode. */
+  backgroundPlayback?: boolean | (() => boolean);
   /** Plain prose; the runtime has already removed Markdown. */
   text: string;
   language: AppLanguage;
   /** Aborting stops output and rejects. */
   signal: AbortSignal;
+  /** Optional lifecycle and progress hooks for playback UI. */
+  playback?: SpeechPlaybackCallbacks;
 };
 
 /** One way of reading text aloud. */

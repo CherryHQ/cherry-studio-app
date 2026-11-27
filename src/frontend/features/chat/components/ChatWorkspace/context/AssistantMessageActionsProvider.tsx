@@ -35,6 +35,7 @@ import { useChatEditing } from '../../../context/ChatEditingProvider';
 import { editReplyHref } from '../../../editReply/editReplyRoute';
 import { useIsChatShareSelecting } from '../../../share/chatShareSelection';
 import type { ChatShareTranslations } from '../../../share/chatShareTarget';
+import type { SpeechContext } from '../../../voice/useMessageSpeech';
 import { getSendErrorCodeLabelKey } from '../../ChatInput/utils/sendErrorLabel';
 import { AssistantToolbarManageSheet } from '../components/AssistantToolbarManageSheet';
 import { useMessageTranslationStore } from '../translation/MessageTranslationProvider';
@@ -65,6 +66,8 @@ type AssistantMessageActionsState = {
   toolbarConfig: AssistantMessageToolbarConfig;
   copiedMessageId?: string;
   isAssistantToolbarEnabled: boolean;
+  /** Conversation and agent metadata attached to read-aloud requests. */
+  speechContext?: SpeechContext;
   /** A running turn owns the transcript; its rows must not disappear underneath it. */
   isDeleteDisabled: boolean;
   /** Editing is refused while the Session has unfinished work or is re-synchronizing. */
@@ -110,6 +113,8 @@ const AssistantMessageActionsStateContext = createContext<AssistantMessageAction
 const AssistantMessageActionsContext = createContext<AssistantMessageActions | null>(null);
 
 type AssistantMessageActionsProviderProps = PropsWithChildren<{
+  assistantName?: string;
+  connectionId?: string;
   isAssistantToolbarEnabled: boolean;
   /** Opens the source-owned share selector; absent while no Session exists. */
   onShare?: (messageId: string, translations?: ChatShareTranslations) => void;
@@ -120,7 +125,9 @@ type AssistantMessageActionsProviderProps = PropsWithChildren<{
 }>;
 
 export function AssistantMessageActionsProvider({
+  assistantName,
   children,
+  connectionId,
   isAssistantToolbarEnabled,
   onShare,
   sessionId,
@@ -385,9 +392,25 @@ export function AssistantMessageActionsProvider({
     },
     [beginEdit],
   );
+  const snapshotTitle = snapshot.title.trim();
+  const speechContext = useMemo<SpeechContext | undefined>(() => {
+    const source = sessionId
+      ? connectionId
+        ? ({ kind: 'desktop', connectionId, sessionId } as const)
+        : ({ kind: 'local', sessionId } as const)
+      : undefined;
+    return source || snapshotTitle || assistantName
+      ? {
+          ...(snapshotTitle ? { title: snapshotTitle } : {}),
+          ...(assistantName ? { subtitle: assistantName } : {}),
+          ...(source ? { source } : {}),
+        }
+      : undefined;
+  }, [assistantName, connectionId, sessionId, snapshotTitle]);
   return (
     <ChatMessageActionsProvider
       isAssistantToolbarEnabled={isAssistantToolbarEnabled && !isSelecting}
+      speechContext={speechContext}
       onShare={share}
       onEditAnswer={editableAnswerIds.size ? edit : undefined}
       editableAnswerIds={editableAnswerIds}
@@ -448,6 +471,7 @@ export function AssistantMessageActionsProvider({
 export function ChatMessageActionsProvider({
   children,
   isAssistantToolbarEnabled,
+  speechContext,
   onShare: shareAssistantMessage,
   onEditAnswer: editAnswer,
   onFork: forkFromAssistantMessage,
@@ -466,6 +490,7 @@ export function ChatMessageActionsProvider({
   isEditQuestionDisabled = true,
 }: PropsWithChildren<{
   isAssistantToolbarEnabled: boolean;
+  speechContext?: SpeechContext;
   onShare: AssistantMessageActions['shareAssistantMessage'];
   onEditAnswer?: AssistantMessageActions['editAnswer'];
   onFork?: AssistantMessageActions['forkFromAssistantMessage'];
@@ -556,6 +581,7 @@ export function ChatMessageActionsProvider({
       isEditQuestionDisabled,
       isRetryDisabled,
       retryableMessageIds,
+      speechContext,
       toolbarConfig,
     }),
     [
@@ -569,6 +595,7 @@ export function ChatMessageActionsProvider({
       isEditQuestionDisabled,
       isRetryDisabled,
       retryableMessageIds,
+      speechContext,
       toolbarConfig,
     ],
   );

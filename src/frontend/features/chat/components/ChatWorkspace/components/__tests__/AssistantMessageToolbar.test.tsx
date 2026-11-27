@@ -34,12 +34,24 @@ let mockMessageTranslation:
   | undefined;
 
 const mockToggleSpeech = jest.fn();
-const mockSpeech = jest.fn((_messageId: string, _text: string | undefined) => ({
-  isSpeaking: false,
-  toggle: mockToggleSpeech,
-}));
+const mockSpeech = jest.fn(
+  (
+    _messageId: string,
+    _text: string | undefined,
+    _context?: unknown,
+  ): {
+    isSpeaking: boolean;
+    phase?: 'preparing' | 'playing' | 'paused' | null;
+    toggle: () => void;
+  } => ({
+    isSpeaking: false,
+    phase: null,
+    toggle: mockToggleSpeech,
+  }),
+);
 jest.mock('../../../../voice/useMessageSpeech', () => ({
-  useMessageSpeech: (messageId: string, text: string | undefined) => mockSpeech(messageId, text),
+  useMessageSpeech: (messageId: string, text: string | undefined, context?: unknown) =>
+    mockSpeech(messageId, text, context),
 }));
 
 const mockSetStringAsync = jest.fn(async (_text: string) => undefined);
@@ -77,6 +89,7 @@ jest.mock('@cherrystudio/ui/components', () => {
       createElement('ActionMenu', { items }, children),
     Button: (props: object) => createElement('Button', props),
     OptionPickerBottomSheet: (props: object) => createElement('OptionPickerBottomSheet', props),
+    Spinner: (props: object) => createElement('Spinner', props),
     useAlert: () => ({ alert: { confirm: mockAlertConfirm } }),
     useToast: () => ({ toast: { show: mockToastShow } }),
   };
@@ -270,12 +283,41 @@ describe('AssistantMessageToolbar', () => {
   test('reads the answer text aloud from the toolbar', () => {
     renderToolbar(createMessage('success', 'Answer'));
 
-    expect(mockSpeech).toHaveBeenLastCalledWith('assistant-1', 'Answer');
+    expect(mockSpeech).toHaveBeenLastCalledWith('assistant-1', 'Answer', {
+      source: { kind: 'local', sessionId: 'session-1' },
+      title: 'Arithmetic drills',
+    });
     const button = renderer?.root.findByProps({ testID: 'assistant-message-read-aloud' });
     expect(button?.props.accessibilityLabel).toBe('voice.speech.start');
     act(() => button?.props.onPress());
     expect(mockToggleSpeech).toHaveBeenCalledTimes(1);
     expect(menuItem('read-aloud')).toBeUndefined();
+  });
+
+  test('reflects preparing, playing, and paused speech states on the toolbar icon', () => {
+    mockSpeech.mockReturnValueOnce({
+      isSpeaking: true,
+      phase: 'preparing',
+      toggle: mockToggleSpeech,
+    });
+    renderToolbar(createMessage('success', 'Answer'));
+    let button = renderer?.root.findByProps({ testID: 'assistant-message-read-aloud' });
+    expect(button?.props.accessibilityLabel).toBe('voice.speech.stop');
+    expect(button?.props.icon?.props?.size).toBe('sm');
+
+    mockSpeech.mockReturnValueOnce({
+      isSpeaking: true,
+      phase: 'playing',
+      toggle: mockToggleSpeech,
+    });
+    renderToolbar(createMessage('success', 'Answer'));
+    button = renderer?.root.findByProps({ testID: 'assistant-message-read-aloud' });
+    expect(button?.props.icon?.props?.className).toBe('text-primary');
+
+    mockSpeech.mockReturnValueOnce({ isSpeaking: true, phase: 'paused', toggle: mockToggleSpeech });
+    renderToolbar(createMessage('success', 'Answer'));
+    button = renderer?.root.findByProps({ testID: 'assistant-message-read-aloud' });
+    expect(button?.props.icon?.props?.className).toBe('text-foreground');
   });
 
   test('adds an answer from the model chosen with @', async () => {

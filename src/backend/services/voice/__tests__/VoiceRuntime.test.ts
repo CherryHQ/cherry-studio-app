@@ -59,6 +59,7 @@ function setup({
   systemTranscription,
   cloudTranscription,
   canSpeakInBackground,
+  isBackgrounded,
   beginBackgroundPlayback,
 }: {
   transcription?: TranscriptionEngine;
@@ -68,6 +69,7 @@ function setup({
   speech?: Partial<Record<VoiceEngineId, SpeechEngine>>;
   selected?: Partial<Record<'dictation' | 'speech' | 'transcription', VoiceEngineId>>;
   canSpeakInBackground?: () => boolean;
+  isBackgrounded?: () => boolean;
   beginBackgroundPlayback?: VoiceRuntimeDependencies['beginBackgroundPlayback'];
 }) {
   let background: (() => void) | undefined;
@@ -92,6 +94,7 @@ function setup({
     language: () => 'zh-CN',
     dictationLanguage: () => 'en-US',
     canSpeakInBackground,
+    isBackgrounded,
     beginBackgroundPlayback,
     onBackground: (listener) => {
       background = listener;
@@ -231,12 +234,20 @@ describe('one voice activity at a time', () => {
     });
     await flush();
     expect(spoken).toEqual(['Title\nRead']);
-    expect(module.getActivity()).toEqual({ kind: 'speaking', key: 'a' });
+    expect(module.getActivity()).toEqual({
+      kind: 'speaking',
+      key: 'a',
+      phase: 'preparing',
+    });
 
     const second = module.speak('Next', { key: 'b' });
     await expect(first).resolves.toBeUndefined();
     await flush();
-    expect(module.getActivity()).toEqual({ kind: 'speaking', key: 'b' });
+    expect(module.getActivity()).toEqual({
+      kind: 'speaking',
+      key: 'b',
+      phase: 'preparing',
+    });
     module.stopSpeaking();
     await expect(second).resolves.toBeUndefined();
     expect(module.getActivity()).toEqual({ kind: 'idle' });
@@ -295,36 +306,258 @@ describe('one voice activity at a time', () => {
     await runtime.dispose();
   });
 
-  test('a pending media service must be admitted before speech, then its stop control ends only that reading', async () => {
+  test('a pending media service can be cancelled mid-admission and its handlers control only that reading', async () => {
     const speech = speechEngine();
-    const admitted = deferred<() => Promise<void>>();
-    const end = jest.fn(async () => {});
-    let stop: (() => void) | undefined;
+    const admitted = deferred<boolean>();
+    const updateState = jest.fn(async () => {});
+    const end = jest.fn(async () => {
+      admitted.resolve(false);
+    });
+    let handlers:
+      | {
+          onPause(): void;
+          onResume(): void;
+          onInterrupt(): void;
+          onInterruptionEnded(): void;
+          onStop(): void;
+        }
+      | undefined;
     const runtime = setup({
       speech: { system: speech.engine },
-      beginBackgroundPlayback: (_labels, onStop) => {
-        stop = onStop;
-        return admitted.promise;
+      beginBackgroundPlayback: (_labels, nextHandlers) => {
+        handlers = nextHandlers;
+        return { admitted: admitted.promise, updateState, end };
       },
     });
-    const reading = runtime.module.speak('first', {
-      playbackLabels: { title: 'Read aloud', stop: 'Stop' },
-    });
+    const labels = {
+      title: 'Read aloud',
+      subtitle: 'Cherry Studio',
+      channelName: 'Read aloud',
+      play: 'Resume',
+      pause: 'Pause',
+      stop: 'Stop',
+    };
+    const cancelledBeforeAdmit = runtime.module.speak('cancelled', { systemLabels: labels });
     await flush();
-    runtime.background();
+    runtime.module.stopSpeaking();
+    await expect(cancelledBeforeAdmit).resolves.toBeUndefined();
+    expect(end).toHaveBeenCalledTimes(1);
     expect(speech.spoken).toEqual([]);
-    admitted.resolve(end);
+    expect(runtime.module.getActivity()).toEqual({ kind: 'idle' });
+
+    const secondAdmitted = deferred<boolean>();
+    const secondEnd = jest.fn(async () => {});
+    const runtime2 = setup({
+      speech: { system: speech.engine },
+      beginBackgroundPlayback: (_labels, nextHandlers) => {
+        handlers = nextHandlers;
+        return { admitted: secondAdmitted.promise, updateState, end: secondEnd };
+      },
+    });
+    const reading = runtime2.module.speak('first', { systemLabels: labels });
+    await flush();
+    // Backgrounding while native admission is still pending waits for the admission outcome.
+    runtime2.background();
+    expect(speech.spoken).toEqual([]);
+    secondAdmitted.resolve(true);
     await flush();
     expect(speech.spoken).toEqual(['first']);
-    stop!();
+    handlers!.onStop();
     await reading;
-    expect(end).toHaveBeenCalledTimes(1);
-    const next = runtime.module.speak('second');
+    expect(secondEnd).toHaveBeenCalledTimes(1);
+
+    const next = runtime2.module.speak('second');
     await flush();
-    stop!();
+    handlers!.onStop();
+    expect(runtime2.module.getActivity().kind).toBe('speaking');
+    runtime2.background();
+    await next;
+    await runtime.dispose();
+    await runtime2.dispose();
+  });
+
+  test('continues in foreground if background admission is declined, and stops only on background', async () => {
+    const speech = speechEngine();
+    const end = jest.fn(async () => {});
+    const runtime = setup({
+      speech: { system: speech.engine },
+      beginBackgroundPlayback: () => ({
+        admitted: Promise.resolve(false),
+        updateState: jest.fn(async () => {}),
+        end,
+      }),
+    });
+    const reading = runtime.module.speak('hello', {
+      systemLabels: {
+        title: 'Read aloud',
+        subtitle: 'Cherry Studio',
+        channelName: 'Read aloud',
+        play: 'Resume',
+        pause: 'Pause',
+        stop: 'Stop',
+      },
+    });
+    await flush();
+    expect(speech.spoken).toEqual(['hello']);
     expect(runtime.module.getActivity().kind).toBe('speaking');
     runtime.background();
-    await next;
+    await reading;
+    expect(end).toHaveBeenCalledTimes(1);
+    expect(runtime.module.getActivity()).toEqual({ kind: 'idle' });
+    await runtime.dispose();
+  });
+
+  test('publishes metadata, progress, pause/resume phases, and scopes stopSpeaking by key and source', async () => {
+    const enginePause = jest.fn();
+    const engineResume = jest.fn(() => 'playing' as const);
+    const updateState = jest.fn(async () => {});
+    const end = jest.fn(async () => {});
+    let capturedCallbacks: Parameters<SpeechEngine['speak']>[0]['playback'] | undefined;
+    let handlers:
+      | {
+          onPause(): void;
+          onResume(): void;
+          onInterrupt(): void;
+          onInterruptionEnded(): void;
+          onStop(): void;
+        }
+      | undefined;
+    let finished = deferred<void>();
+    const engine: SpeechEngine = {
+      status: async () => 'ready',
+      listVoices: async () => [],
+      speak: jest.fn(({ playback, signal }) => {
+        capturedCallbacks = playback;
+        return new Promise<void>((resolve, reject) => {
+          void finished.promise.then(resolve, reject);
+          signal.addEventListener('abort', () => reject(signal.reason));
+        });
+      }),
+    };
+    const runtime = setup({
+      speech: { system: engine },
+      beginBackgroundPlayback: (_labels, nextHandlers) => {
+        handlers = nextHandlers;
+        return { admitted: Promise.resolve(true), updateState, end };
+      },
+    });
+
+    const reading = runtime.module.speak('Hello world.', {
+      key: 'msg-1',
+      metadata: {
+        title: 'Chat',
+        subtitle: 'Cherry',
+        source: { kind: 'local', sessionId: 'sess-1' },
+      },
+      systemLabels: {
+        title: 'Read aloud',
+        subtitle: 'Cherry Studio',
+        channelName: 'Read aloud',
+        play: 'Resume',
+        pause: 'Pause',
+        stop: 'Stop',
+      },
+    });
+    expect(runtime.module.getActivity()).toEqual({
+      kind: 'speaking',
+      key: 'msg-1',
+      phase: 'preparing',
+      metadata: {
+        title: 'Chat',
+        subtitle: 'Cherry',
+        source: { kind: 'local', sessionId: 'sess-1' },
+      },
+    });
+
+    await flush();
+    capturedCallbacks!.onControls({ pause: enginePause, resume: engineResume });
+    capturedCallbacks!.onProgress({ completedChunks: 1, totalChunks: 3 });
+    capturedCallbacks!.onPhase('playing');
+    expect(runtime.module.getActivity()).toEqual({
+      kind: 'speaking',
+      key: 'msg-1',
+      phase: 'playing',
+      metadata: {
+        title: 'Chat',
+        subtitle: 'Cherry',
+        source: { kind: 'local', sessionId: 'sess-1' },
+      },
+      progress: { completedChunks: 1, totalChunks: 3 },
+    });
+    expect(updateState).toHaveBeenCalledWith('playing');
+
+    // Non-matching key or source must not stop the active reading.
+    runtime.module.stopSpeaking({ key: 'msg-other' });
+    runtime.module.stopSpeaking({ source: { kind: 'local', sessionId: 'sess-other' } });
+    expect(runtime.module.getActivity().kind).toBe('speaking');
+
+    runtime.module.togglePauseSpeaking();
+    expect(enginePause).toHaveBeenCalledTimes(1);
+    expect(runtime.module.getActivity()).toMatchObject({ phase: 'paused' });
+    expect(updateState).toHaveBeenCalledWith('paused');
+
+    handlers!.onResume();
+    expect(engineResume).toHaveBeenCalledTimes(1);
+    expect(runtime.module.getActivity()).toMatchObject({ phase: 'playing' });
+    expect(updateState).toHaveBeenLastCalledWith('playing');
+
+    finished.resolve();
+    await reading;
+    expect(end).toHaveBeenCalledTimes(1);
+    expect(runtime.module.getActivity()).toEqual({ kind: 'idle' });
+
+    finished = deferred<void>();
+    const desktopSource = { kind: 'desktop', connectionId: 'conn-1', sessionId: 'sess-1' } as const;
+    const remote = runtime.module.speak('Remote', {
+      key: 'msg-r',
+      metadata: { source: desktopSource },
+    });
+    await flush();
+    runtime.module.stopSpeaking({ source: { kind: 'local', sessionId: 'sess-1' } });
+    expect(runtime.module.getActivity().kind).toBe('speaking');
+    runtime.module.stopSpeaking({ source: desktopSource });
+    await remote;
+    expect(runtime.module.getActivity()).toEqual({ kind: 'idle' });
+    await runtime.dispose();
+  });
+
+  test('applies a pause requested during preparing as soon as engine controls register and allows replacement while paused', async () => {
+    const enginePause = jest.fn();
+    const first = deferred<void>();
+    const second = speechEngine();
+    let callbacks: Parameters<SpeechEngine['speak']>[0]['playback'];
+    const customEngine: SpeechEngine = {
+      status: async () => 'ready',
+      listVoices: async () => [],
+      speak: jest.fn(({ text, playback, signal }) => {
+        if (text === 'first') {
+          callbacks = playback;
+          return new Promise<void>((resolve, reject) => {
+            void first.promise.then(resolve, reject);
+            signal.addEventListener('abort', () => reject(signal.reason));
+          });
+        }
+        return second.engine.speak({ text, language: 'zh-CN', signal, playback });
+      }),
+    };
+    const runtime = setup({ speech: { system: customEngine } });
+    const reading1 = runtime.module.speak('first', { key: 'a' });
+    runtime.module.pauseSpeaking();
+    expect(runtime.module.getActivity()).toMatchObject({ kind: 'speaking', phase: 'paused' });
+    await flush();
+    callbacks!.onControls({ pause: enginePause, resume: jest.fn() });
+    expect(enginePause).toHaveBeenCalledTimes(1);
+
+    const reading2 = runtime.module.speak('second', { key: 'b' });
+    await reading1;
+    await flush();
+    expect(runtime.module.getActivity()).toMatchObject({
+      kind: 'speaking',
+      key: 'b',
+      phase: 'preparing',
+    });
+    runtime.module.stopSpeaking();
+    await reading2;
     await runtime.dispose();
   });
 
@@ -357,6 +590,233 @@ describe('one voice activity at a time', () => {
     await reading;
     dictation.result.resolve('done');
     await session.result;
+    await runtime.dispose();
+  });
+
+  test('replacement awaits a single native cleanup promise before admitting the next session', async () => {
+    const speech = speechEngine();
+    const firstAdmit = deferred<boolean>();
+    const firstEndGate = deferred<void>();
+    const secondAdmit = deferred<boolean>();
+    const calls: string[] = [];
+    const firstEnd = jest.fn(async () => {
+      calls.push('end-1-start');
+      firstAdmit.resolve(false);
+      await firstEndGate.promise;
+      calls.push('end-1-done');
+    });
+    const secondEnd = jest.fn(async () => {
+      calls.push('end-2');
+    });
+    let seq = 0;
+    const runtime = setup({
+      speech: { system: speech.engine },
+      beginBackgroundPlayback: () => {
+        seq += 1;
+        if (seq === 1) {
+          calls.push('begin-1');
+          return {
+            admitted: firstAdmit.promise,
+            updateState: jest.fn(async () => {}),
+            end: firstEnd,
+          };
+        }
+        calls.push('begin-2');
+        return {
+          admitted: secondAdmit.promise,
+          updateState: jest.fn(async () => {}),
+          end: secondEnd,
+        };
+      },
+    });
+    const labels = {
+      title: 'Read aloud',
+      subtitle: 'Cherry Studio',
+      channelName: 'Read aloud',
+      play: 'Resume',
+      pause: 'Pause',
+      stop: 'Stop',
+    };
+
+    const reading1 = runtime.module.speak('first', { systemLabels: labels });
+    await flush();
+    expect(calls).toEqual(['begin-1']);
+
+    const reading2 = runtime.module.speak('second', { systemLabels: labels });
+    await flush();
+    expect(firstEnd).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual(['begin-1', 'end-1-start']);
+
+    firstEndGate.resolve();
+    await reading1;
+    await flush();
+    expect(calls).toEqual(['begin-1', 'end-1-start', 'end-1-done', 'begin-2']);
+    secondAdmit.resolve(true);
+    await flush();
+    expect(speech.spoken).toEqual(['second']);
+    runtime.module.stopSpeaking();
+    await reading2;
+    expect(secondEnd).toHaveBeenCalledTimes(1);
+    await runtime.dispose();
+  });
+
+  test('centralizes pause reason, gates resume on requestResume, and prevents late interruption resume after user pause', async () => {
+    const enginePause = jest.fn();
+    const engineResume = jest.fn(() => 'playing' as const);
+    let focusGate = deferred<boolean>();
+    let callbacks: Parameters<SpeechEngine['speak']>[0]['playback'] | undefined;
+    let handlers:
+      | {
+          onPause(): void;
+          onResume(): void;
+          onInterrupt(): void;
+          onInterruptionEnded(): void;
+          onStop(): void;
+        }
+      | undefined;
+    let finished = deferred<void>();
+    const engine: SpeechEngine = {
+      status: async () => 'ready',
+      listVoices: async () => [],
+      speak: jest.fn(({ playback, signal }) => {
+        callbacks = playback;
+        return new Promise<void>((resolve, reject) => {
+          void finished.promise.then(resolve, reject);
+          signal.addEventListener('abort', () => reject(signal.reason));
+        });
+      }),
+    };
+    const runtime = setup({
+      speech: { system: engine },
+      beginBackgroundPlayback: (_labels, nextHandlers) => {
+        handlers = nextHandlers;
+        return {
+          admitted: Promise.resolve(true),
+          requestResume: jest.fn(() => focusGate.promise),
+          updateState: jest.fn(async () => {}),
+          end: jest.fn(async () => {}),
+        };
+      },
+    });
+
+    const labels = {
+      title: 'Read aloud',
+      subtitle: 'Cherry Studio',
+      channelName: 'Read aloud',
+      play: 'Resume',
+      pause: 'Pause',
+      stop: 'Stop',
+    };
+    const reading = runtime.module.speak('hello', { systemLabels: labels });
+    await flush();
+    callbacks!.onControls({ pause: enginePause, resume: engineResume });
+    callbacks!.onPhase('playing');
+
+    // System interruption pauses playback; user pause during interruption blocks automatic resume.
+    handlers!.onInterrupt();
+    expect(runtime.module.getActivity()).toMatchObject({ phase: 'paused' });
+    runtime.module.pauseSpeaking();
+    handlers!.onInterruptionEnded();
+    await flush();
+    expect(engineResume).not.toHaveBeenCalled();
+
+    // Denied focus on user resume keeps reading paused.
+    runtime.module.resumeSpeaking();
+    focusGate.resolve(false);
+    await flush();
+    expect(engineResume).not.toHaveBeenCalled();
+    expect(runtime.module.getActivity()).toMatchObject({ phase: 'paused' });
+
+    finished.resolve();
+    await reading;
+
+    // Interruption-only pause resumes automatically once focus is granted, unless invalidated in flight.
+    finished = deferred<void>();
+    focusGate = deferred<boolean>();
+    const reading2 = runtime.module.speak('world', { systemLabels: labels });
+    await flush();
+    callbacks!.onControls({ pause: enginePause, resume: engineResume });
+    callbacks!.onPhase('playing');
+    callbacks!.onInterrupted?.();
+    expect(runtime.module.getActivity()).toMatchObject({ phase: 'paused' });
+    handlers!.onInterruptionEnded();
+    focusGate.resolve(true);
+    await flush();
+    expect(engineResume).toHaveBeenCalledTimes(1);
+    expect(runtime.module.getActivity()).toMatchObject({ phase: 'playing' });
+
+    // A user pause arriving while requestResume is in flight invalidates the pending token.
+    focusGate = deferred<boolean>();
+    handlers!.onInterrupt();
+    handlers!.onInterruptionEnded();
+    runtime.module.pauseSpeaking();
+    focusGate.resolve(true);
+    await flush();
+    expect(engineResume).toHaveBeenCalledTimes(1);
+    expect(runtime.module.getActivity()).toMatchObject({ phase: 'paused' });
+
+    finished.resolve();
+    await reading2;
+    await runtime.dispose();
+  });
+
+  test('revokeBackgroundPlayback strips media session without interrupting foreground speech and aborts only when backgrounded', async () => {
+    let spokenRequest: Parameters<SpeechEngine['speak']>[0] | undefined;
+    const speech = speechEngine();
+    const baseSpeak = speech.engine.speak;
+    speech.engine.speak = jest.fn((input) => {
+      spokenRequest = input;
+      return baseSpeak(input);
+    });
+    const end = jest.fn(async () => {});
+    let backgrounded = false;
+    const runtime = setup({
+      speech: { system: speech.engine },
+      isBackgrounded: () => backgrounded,
+      beginBackgroundPlayback: () => ({
+        admitted: Promise.resolve(true),
+        updateState: jest.fn(async () => {}),
+        end,
+      }),
+    });
+
+    const reading = runtime.module.speak('hello', {
+      systemLabels: {
+        title: 'Read aloud',
+        subtitle: 'Cherry Studio',
+        channelName: 'Read aloud',
+        play: 'Resume',
+        pause: 'Pause',
+        stop: 'Stop',
+      },
+    });
+    await flush();
+    expect(typeof spokenRequest?.backgroundPlayback).toBe('function');
+    expect((spokenRequest?.backgroundPlayback as () => boolean)()).toBe(true);
+    runtime.revokeBackgroundPlayback();
+    expect(end).toHaveBeenCalledTimes(1);
+    expect((spokenRequest?.backgroundPlayback as () => boolean)()).toBe(false);
+    expect(runtime.module.getActivity().kind).toBe('speaking');
+
+    runtime.background();
+    await reading;
+    expect(runtime.module.getActivity()).toEqual({ kind: 'idle' });
+
+    backgrounded = true;
+    const reading2 = runtime.module.speak('world', {
+      systemLabels: {
+        title: 'Read aloud',
+        subtitle: 'Cherry Studio',
+        channelName: 'Read aloud',
+        play: 'Resume',
+        pause: 'Pause',
+        stop: 'Stop',
+      },
+    });
+    await flush();
+    runtime.revokeBackgroundPlayback();
+    await reading2;
+    expect(runtime.module.getActivity()).toEqual({ kind: 'idle' });
     await runtime.dispose();
   });
 

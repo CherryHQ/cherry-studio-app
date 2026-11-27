@@ -1,8 +1,9 @@
 import { cn } from '@cherrystudio/ui/utils';
-import type { PropsWithChildren, ReactNode } from 'react';
+import { type PropsWithChildren, type ReactNode, useMemo } from 'react';
 import { ScrollView, type ScrollViewProps } from 'react-native';
 
 import { RouteHeader, type RouteHeaderProps } from '@/frontend/appShell/header';
+import { useSpeechPlaybackInset } from '@/frontend/appShell/speechPlayback';
 
 type SettingsScrollPageProps = PropsWithChildren<
   Pick<
@@ -31,6 +32,9 @@ export function SettingsScrollPage({
   keyboardShouldPersistTaps,
   search,
 }: SettingsScrollPageProps) {
+  const speechInset = useSpeechPlaybackInset();
+  const contentContainerStyle = useMemo(() => ({ paddingTop: 20 + speechInset }), [speechInset]);
+
   return (
     <>
       <RouteHeader {...headerProps} />
@@ -39,6 +43,7 @@ export function SettingsScrollPage({
         alwaysBounceVertical={false}
         className="flex-1"
         contentContainerClassName={cn('px-4 py-5', contentClassName)}
+        contentContainerStyle={contentContainerStyle}
         contentInsetAdjustmentBehavior={contentInsetAdjustmentBehavior}
         keyboardDismissMode={keyboardDismissMode}
         keyboardShouldPersistTaps={keyboardShouldPersistTaps}

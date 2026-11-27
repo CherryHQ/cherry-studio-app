@@ -23,6 +23,10 @@ import {
   SidebarColumnProvider,
   SidebarToggleProvider,
 } from '@/frontend/appShell/sidebar';
+import {
+  SpeechPlaybackInsetProvider,
+  SpeechPlaybackOverlay,
+} from '@/frontend/appShell/speechPlayback';
 import { AppSearchPanel } from '@/frontend/features/search';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
@@ -73,21 +77,24 @@ function DrawerShell() {
                 <SidebarToggleProvider>
                   <View className="flex-1 flex-row">
                     {canDock ? <DockedSidebar searchPanel={AppSearchPanel} /> : null}
-                    <View className="min-w-0 flex-1">
-                      <Stack
-                        screenOptions={{ headerShown: false, contentStyle: { backgroundColor } }}
-                      >
-                        <Stack.Screen name="(content)" />
-                        <Stack.Screen
-                          name={NAV_ROUTE_MANIFEST.settings.stackRoute}
-                          options={
-                            isWide
-                              ? { animation: 'none', gestureEnabled: false, headerShown: false }
-                              : { gestureEnabled: true, headerShown: false }
-                          }
-                        />
-                      </Stack>
-                    </View>
+                    <SpeechPlaybackInsetProvider>
+                      <View className="min-w-0 flex-1">
+                        <Stack
+                          screenOptions={{ headerShown: false, contentStyle: { backgroundColor } }}
+                        >
+                          <Stack.Screen name="(content)" />
+                          <Stack.Screen
+                            name={NAV_ROUTE_MANIFEST.settings.stackRoute}
+                            options={
+                              isWide
+                                ? { animation: 'none', gestureEnabled: false, headerShown: false }
+                                : { gestureEnabled: true, headerShown: false }
+                            }
+                          />
+                        </Stack>
+                        <SpeechPlaybackOverlay />
+                      </View>
+                    </SpeechPlaybackInsetProvider>
                   </View>
                 </SidebarToggleProvider>
               </ChatDockLayoutProvider>

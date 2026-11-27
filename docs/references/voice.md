@@ -37,9 +37,14 @@ finishes dictation with a check mark and shows progress while waiting for the fi
 While dictating, cancel replaces the leading attachment action and discards the dictation,
 including while the final result is pending. Until text arrives, the placeholder shows listening
 with elapsed time, then transcription progress. Adding to a typed draft by voice goes through the
-keyboard's own voice input. Reading aloud sits beside copy on a settled assistant reply's toolbar
-and turns into stop while that reply is read. Switching, closing or navigating away from the
-conversation ends reading, including when another route covers a still-mounted chat screen.
+keyboard's own voice input. Reading aloud sits beside copy on a settled assistant reply's toolbar, showing preparing, active,
+and paused states, and turns into stop while that reply is active. An app-wide floating reading
+capsule (`src/frontend/appShell/speechPlayback`) appears below the top header bar whenever speech is
+active, displaying status, agent/conversation title, chunk progress, pause/resume, stop, and a
+tap-to-return link when browsing away from the source conversation. Without background-reading
+opt-in, switching, closing, or navigating away from the conversation ends reading; once opted in
+under **Settings → Voice → Read aloud**, reading continues across in-app navigation and when
+backgrounded or locked.
 
 ## Module Boundaries
 
@@ -61,23 +66,24 @@ or model catalogs.
   dictation stops reading, reading replaces
   reading, and reading cannot start during dictation or file transcription. Replacement waits for
   the previous native operation to settle before configuring another audio use. Backgrounding aborts
-  capture. iOS reading can continue after background-audio consent; Android users can opt in under Settings → Voice → Read aloud.
+  capture. Both iOS and Android users can opt into background reading via the dedicated `feature.voice.background_reading` preference under **Settings → Voice → Read aloud** (migrated once on upgrade from legacy `app.background_audio.consent` via `PreferenceSeeder` without runtime coupling to iOS silent audio keep-alive). The runtime is the single authority for playback phase, user intent, and interruption vs. user pause reason across the native media card and speech engines, awaiting full native slot release before admitting a replacement reading.
   File transcription follows its caller’s cancellation signal so Agent work can
   use the existing turn execution lease. Host disposal aborts every activity. A permission dialog opened through the system prompt queue does not count as leaving
   the app, even when Android reports `background` behind it. Disposal waits for pending work.
 - `speechText.ts` turns Markdown into prose and splits speech into utterances within the system's
   input limit, preserving sentence boundaries where possible.
 - `systemDictation.ts` owns `expo-speech-recognition`, permissions, native listeners and cleanup.
-  `systemSpeech.ts` owns `expo-speech`, installed voice selection and speech cancellation.
+  `systemSpeech.ts` owns `expo-speech`, installed voice selection, sentence-level pause/resume, and speech cancellation.
   `audioSession.ts` configures the shared audio session through `expo-audio` so reading aloud plays
   with the iOS ring switch silenced. Token-owned capture suspends the silent background loop until
   cleanup; speech owns its audio profile while the loop covers utterance gaps. Only the backend iOS execution source can
   start that loop after consent, only as fallback when official continued processing is unavailable.
   Actual background reading does not require a silent loop while official processing protects tasks.
-  On Android, a user-started reading requests a dedicated media-playback foreground service before audio
-  starts. The service holds audio focus and a wake lock between utterances, publishes a media session
-  with a stop action, and releases its resources when speech ends, is interrupted or is replaced.
-  The notification uses localized controls and does not include the message text.
+  On Android, an opted-in user-started reading requests a dedicated media-playback foreground service before audio
+  starts, renders the brand notification icon (`notification_icon` with `#C74444` accent), silent notification channel, and vector play/pause/stop actions,
+  publishes a `MediaSession` with play/pause and Android 13+ custom stop controls, keeps foreground service promotion across pause/resume while releasing wake locks when paused,
+  coordinates transient and permanent audio-focus transitions, and deep-links back to the active conversation using privacy-safe generic labels (never exposing conversation titles or message text).
+  On iOS, opted-in reading publishes privacy-safe `MPNowPlayingInfoCenter` metadata on the main queue with single-owner clearing, and wires `MPRemoteCommandCenter` play, pause, toggle, and stop controls along with `AVAudioSession` interruption begin/end handling.
 - `recordedDictation.ts` owns WAV recording and cleanup for SenseVoice and DeepSeek.
   `senseVoiceRecognition.ts` shares lazy
   native inference and model-use leases with `senseVoiceTranscription.ts`, which decodes and

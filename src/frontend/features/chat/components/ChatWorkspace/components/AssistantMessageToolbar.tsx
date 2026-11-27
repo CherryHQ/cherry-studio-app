@@ -13,6 +13,7 @@ import {
   ActionMenu,
   Button,
   OptionPickerBottomSheet,
+  Spinner,
   type MenuItem,
 } from '@cherrystudio/ui/components';
 import { memo, useMemo, useState, type ReactElement } from 'react';
@@ -53,6 +54,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
     retryableMessageIds,
     editableAnswerIds,
     isEditAnswerDisabled,
+    speechContext,
     toolbarConfig,
   } = useAssistantMessageActionsState();
   const {
@@ -78,7 +80,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
     () => (isSettled ? messageTranslationText(message.data.parts ?? []) : undefined),
     [isSettled, message],
   );
-  const speech = useMessageSpeech(message.id, speechText);
+  const speech = useMessageSpeech(message.id, speechText, speechContext);
   const isCopied = copiedMessageId === message.id;
   // Turn-scoped, so a row with no turn — synthetic, or not yet reserved — has
   // nothing to delete.
@@ -114,11 +116,16 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           readAloud: {
             id: 'readAloud',
             label: t(speech.isSpeaking ? 'voice.speech.stop' : 'voice.speech.start'),
-            icon: speech.isSpeaking ? (
-              <SquareIcon className="text-foreground" size={15} />
-            ) : (
-              <Volume2Icon className="text-muted-foreground" size={15} />
-            ),
+            icon:
+              speech.phase === 'preparing' ? (
+                <Spinner size="sm" />
+              ) : speech.phase === 'playing' ? (
+                <SquareIcon className="text-primary" size={15} />
+              ) : speech.phase === 'paused' || speech.isSpeaking ? (
+                <SquareIcon className="text-foreground" size={15} />
+              ) : (
+                <Volume2Icon className="text-muted-foreground" size={15} />
+              ),
             onPress: speech.toggle,
             testID: 'assistant-message-read-aloud',
           },
