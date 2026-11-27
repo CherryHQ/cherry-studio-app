@@ -17,10 +17,6 @@ export default function HomeStackLayout() {
         headerTintColor: foregroundColor,
       }}
     >
-      {/* Screens declared here are ordered ahead of the auto-generated ones, and the stack's
-          initial route is whichever comes first. Declaring `index` keeps Home rooted at the
-          overview instead of booting straight into the usage detail. */}
-      <Stack.Screen name="index" />
       <Stack.Screen
         name="ai-usage"
         options={{

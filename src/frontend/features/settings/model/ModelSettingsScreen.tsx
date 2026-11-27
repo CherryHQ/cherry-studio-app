@@ -21,10 +21,7 @@ import type { UniqueModelId } from '@/shared/data/types/model';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 
-// 快速模型暂无功能接入，暂时隐藏设置入口，待功能接通后恢复。
-const VISIBLE_MODEL_SETTING_KINDS = MODEL_SETTING_KINDS.filter(
-  (kind) => kind !== 'fast' && kind !== 'naming',
-);
+const VISIBLE_MODEL_SETTING_KINDS = MODEL_SETTING_KINDS.filter((kind) => kind !== 'naming');
 
 function isNamingModelVisible(item: ModelPickerModelItem): boolean {
   return !item.provider.authMethods?.includes('external-cli');
