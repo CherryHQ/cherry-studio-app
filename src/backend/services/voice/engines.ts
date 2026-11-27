@@ -33,6 +33,8 @@ export type SpeechRequest = {
   language: AppLanguage;
   /** Aborting stops output and rejects. */
   signal: AbortSignal;
+  /** Reports the first native playback start. */
+  onPlaybackStart?(): void;
 };
 
 /** One way of reading text aloud. */

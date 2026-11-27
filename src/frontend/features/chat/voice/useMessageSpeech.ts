@@ -7,31 +7,34 @@ import { useBackendModule } from '@/frontend/data';
 import { voiceErrorLabelKey } from '@/frontend/utils/voiceErrorLabel';
 
 /** Read-aloud state of one message; starting another message replaces it. */
-export function useMessageSpeech(messageId: string, text: string | undefined) {
+export function useMessageSpeech(messageId: string, text: string | (() => string)) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const voice = useBackendModule('voice');
-  // A boolean snapshot re-renders only the toolbars whose own state changed.
-  const isSpeaking = useSyncExternalStore(voice.subscribeActivity, () => {
+  // A primitive snapshot re-renders only the toolbars whose own phase changed.
+  const phase = useSyncExternalStore(voice.subscribeActivity, () => {
     const activity = voice.getActivity();
-    return activity.kind === 'speaking' && activity.key === messageId;
+    return activity.kind === 'speaking' && activity.key === messageId ? activity.phase : 'idle';
   });
+  const isSpeaking = phase !== 'idle';
   const toggle = useCallback(() => {
     if (isSpeaking) {
-      voice.stopSpeaking();
+      voice.stopSpeaking(messageId);
       return;
     }
-    if (!text) return;
+    const content = typeof text === 'function' ? text() : text;
+    if (!content) return;
     voice
-      .speak(text, {
+      .speak(content, {
         key: messageId,
+        inputFormat: 'plainText',
         playbackLabels: { title: t('settings.voice.speech.title'), stop: t('voice.speech.stop') },
       })
       .catch((error: unknown) => {
         toast.show({ label: t(voiceErrorLabelKey(error)), variant: 'danger' });
       });
   }, [isSpeaking, messageId, t, text, toast, voice]);
-  return { isSpeaking, toggle };
+  return { phase, isSpeaking, toggle };
 }
 
 /** Reading aloud belongs to the conversation on screen: switching or closing it ends the reading. */

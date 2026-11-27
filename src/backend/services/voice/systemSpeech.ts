@@ -17,7 +17,13 @@ export function createSystemSpeechEngine({
   /** Empty selects an installed voice for the app language, preferring an exact locale match. */
   voice(): Promise<string>;
 }): SpeechEngine {
-  function utter(text: string, language: string, voiceId: string, signal: AbortSignal) {
+  function utter(
+    text: string,
+    language: string,
+    voiceId: string,
+    signal: AbortSignal,
+    onStart: () => void,
+  ) {
     signal.throwIfAborted();
     return new Promise<void>((resolve, reject) => {
       let settled = false;
@@ -44,7 +50,15 @@ export function createSystemSpeechEngine({
           language,
           voice: voiceId,
           useApplicationAudioSession: true,
-          onDone: () => settle(),
+          onStart: () => {
+            if (settled || signal.aborted) return;
+            onStart();
+          },
+          onDone: () => {
+            if (settled || signal.aborted) return;
+            onStart();
+            settle();
+          },
           // A stop that reading did not request, such as an audio interruption, fails it.
           onStopped: () => settle(new Error('System speech was stopped.')),
           onError: (error) => settle(error),
@@ -76,7 +90,7 @@ export function createSystemSpeechEngine({
     // Every supported iOS and Android device ships a speech engine.
     status: async () => 'ready',
     listVoices,
-    async speak({ text, language, signal, backgroundPlayback }) {
+    async speak({ text, language, signal, backgroundPlayback, onPlaybackStart }) {
       const [voiceId, voices] = await Promise.all([voice(), listVoices(language, signal)]);
       signal.throwIfAborted();
       // Resolve an installed ID even for the default. expo-speech 58's Android adapter parses
@@ -92,12 +106,19 @@ export function createSystemSpeechEngine({
         );
       }
       const release = await voiceAudioSession.acquire('speech');
+      let hasStarted = false;
+      const notifyPlaybackStart = () => {
+        if (hasStarted) return;
+        hasStarted = true;
+        onPlaybackStart?.();
+      };
       try {
         signal.throwIfAborted();
         await voiceAudioSession.playback(backgroundPlayback);
-        for (const chunk of splitSpeechText(text, Speech.maxSpeechInputLength)) {
+        const chunks = splitSpeechText(text, Speech.maxSpeechInputLength);
+        for (const chunk of chunks) {
           signal.throwIfAborted();
-          await utter(chunk, language, selected.id, signal);
+          await utter(chunk, language, selected.id, signal, notifyPlaybackStart);
         }
       } finally {
         await release();

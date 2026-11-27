@@ -3077,6 +3077,7 @@
   "voice.error.offlineRecognitionUnavailable": "El reconocimiento del sistema sin conexión no está disponible para este idioma. Configúralo en los ajustes del dispositivo, elige otro idioma o usa SenseVoice.",
   "voice.error.permissionDenied": "Permite en los ajustes del sistema el acceso al micrófono o al reconocimiento de voz que requiere esta función.",
   "voice.error.unsupported": "Esta función de voz no está disponible en esta versión de la aplicación o en este dispositivo.",
+  "voice.speech.preparingStop": "Preparando… Detener lectura",
   "voice.speech.start": "Leer en voz alta",
   "voice.speech.stop": "Detener lectura",
   "workspace.collapse": "Contraer {{name}}",

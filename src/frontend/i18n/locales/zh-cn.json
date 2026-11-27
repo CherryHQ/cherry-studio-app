@@ -3033,6 +3033,7 @@
   "voice.error.offlineRecognitionUnavailable": "系统暂不支持此语言的离线识别。请前往设备设置配置、更换语言，或使用 SenseVoice。",
   "voice.error.permissionDenied": "请在系统设置中开启此功能所需的麦克风或语音识别权限。",
   "voice.error.unsupported": "当前应用版本或设备不支持此语音功能。",
+  "voice.speech.preparingStop": "正在准备 · 停止朗读",
   "voice.speech.start": "朗读",
   "voice.speech.stop": "停止朗读",
   "workspace.collapse": "收起 {{name}}",

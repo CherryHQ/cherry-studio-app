@@ -11,9 +11,9 @@ import {
   type VoiceRequestOptions,
 } from '@/shared/contracts/voice';
 import type { AppLanguage } from '@/shared/utils/languages';
+import { speakableText } from '@/shared/utils/speechText';
 
 import type { DictationEngine, SpeechEngine, TranscriptionEngine, VoiceEngines } from './engines';
-import { speakableText } from './speechText';
 
 export type VoiceRuntimeDependencies = {
   engines: VoiceEngines;
@@ -271,11 +271,12 @@ export function createVoiceRuntime({
     },
 
     async speak(text, options) {
+      const prose = options?.inputFormat === 'plainText' ? text.trim() : speakableText(text);
+      if (!prose) return;
       if (current && current.activity.kind !== 'speaking')
         throw new VoiceError('busy', 'Reading aloud cannot start during recognition.');
-      const prose = speakableText(text);
-      if (!prose) return;
-      const activity = claim({ kind: 'speaking', key: options?.key ?? null }, options?.signal);
+      const key = options?.key ?? null;
+      const activity = claim({ kind: 'speaking', key, phase: 'preparing' }, options?.signal);
       let endPlayback: (() => Promise<void>) | undefined;
       try {
         await activity.ready;
@@ -293,12 +294,18 @@ export function createVoiceRuntime({
           activity.signal.throwIfAborted();
         }
         const engine = await track(resolve<SpeechEngine>('speech', activity.signal));
+        let hasStarted = false;
         await track(
           engine.speak({
             text: prose,
             language: language(),
             signal: activity.signal,
             backgroundPlayback: Boolean(endPlayback),
+            onPlaybackStart() {
+              if (hasStarted) return;
+              hasStarted = true;
+              activity.update({ kind: 'speaking', key, phase: 'playing' });
+            },
           }),
         );
       } catch (error) {
@@ -313,8 +320,13 @@ export function createVoiceRuntime({
       }
     },
 
-    stopSpeaking() {
-      if (current?.activity.kind === 'speaking') current.controller.abort();
+    stopSpeaking(key) {
+      if (
+        current?.activity.kind === 'speaking' &&
+        (key === undefined || current.activity.key === key)
+      ) {
+        current.controller.abort();
+      }
     },
     getActivity: () => current?.activity ?? IDLE,
     subscribeActivity(listener) {

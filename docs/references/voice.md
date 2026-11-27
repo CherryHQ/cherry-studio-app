@@ -37,9 +37,13 @@ finishes dictation with a check mark and shows progress while waiting for the fi
 While dictating, cancel replaces the leading attachment action and discards the dictation,
 including while the final result is pending. Until text arrives, the placeholder shows listening
 with elapsed time, then transcription progress. Adding to a typed draft by voice goes through the
-keyboard's own voice input. Reading aloud sits beside copy on a settled assistant reply's toolbar
-and turns into stop while that reply is read. Switching, closing or navigating away from the
-conversation ends reading, including when another route covers a still-mounted chat screen.
+keyboard's own voice input. Read Aloud is available in the toolbar of a settled assistant reply
+with speakable text. Chat uses the same final answer body as the message renderer, after removing
+duplicate generated-image references. It uses sources recorded across the message and its attached
+citation metadata to remove confirmed citation marks. The toolbar shows a cancellable progress
+indicator until native playback starts, then a stop button. Either action stops only that
+message's reading. Switching, closing or navigating away from the conversation ends reading,
+including when another route covers a still-mounted chat screen.
 
 ## Module Boundaries
 
@@ -65,8 +69,15 @@ or model catalogs.
   File transcription follows its caller’s cancellation signal so Agent work can
   use the existing turn execution lease. Host disposal aborts every activity. A permission dialog opened through the system prompt queue does not count as leaving
   the app, even when Android reports `background` behind it. Disposal waits for pending work.
-- `speechText.ts` turns Markdown into prose and splits speech into utterances within the system's
-  input limit, preserving sentence boundaries where possible.
+- `src/shared/utils/speechText.ts` converts Markdown to speech-ready prose for chat and
+  `VoiceRuntime`. It skips code blocks, images, HTTP(S) auto-links and bare addresses,
+  and paired display or explicit TeX formulas. Inline code, link labels, escaped citation
+  examples and single-dollar amounts stay readable. Chat sends the result with
+  `inputFormat: 'plainText'`; other callers can pass Markdown by default.
+- The backend's `speechText.ts` splits prose into utterances within each engine's UTF-16 input
+  limits, preferring sentence boundaries and keeping surrogate pairs together. The runtime
+  publishes the caller key and `preparing` phase on claim, then publishes `playing` once
+  the engine reports the first native playback start.
 - `systemDictation.ts` owns `expo-speech-recognition`, permissions, native listeners and cleanup.
   `systemSpeech.ts` owns `expo-speech`, installed voice selection and speech cancellation.
   `audioSession.ts` configures the shared audio session through `expo-audio` so reading aloud plays
@@ -85,10 +96,14 @@ or model catalogs.
 the generated text through the existing file commit boundary.
   `voiceModel.ts` owns the optional model's download, integrity and deletion through `localModel`.
 - `deepseekRecognition.ts` consumes recorded/decoded WAV windows through ASR.
-  `deepseekSpeech.ts` synthesizes bounded utterances, plays temporary WAV files through the shared
-  audio session, and releases player/files on completion, error or cancellation. Missing cloud
-  configuration reports `needs-service` and links to the DeepSeek model Provider's settings. Voice
-  engine and voice selection stay in Settings → Voice. See
+  `deepseekSpeech.ts` synthesizes up to 140 UTF-16 units for the first utterance and 400 for
+  subsequent utterances. It keeps at most one next validated WAV in memory during playback. On
+  interruption or failure it calls `player.release()` for the current player before deleting the
+  temporary WAV. On Android, Expo Audio dispatches native player release asynchronously to the main
+  thread. After deleting the WAV, `deepseekSpeech.ts` cancels and awaits the pending synthesis, then
+  releases the audio session. The runtime then ends the Android playback service if it was admitted.
+  Missing cloud configuration reports `needs-service` and links to the DeepSeek model Provider's
+  settings. Voice engine and voice selection stay in Settings → Voice. See
   [DeepSeek Services](./deepseek-services.md) for batch recognition and settled-answer boundaries.
 - `createVoice.ts` assembles the engines, model owner and background listener for the host. Adding a
   future engine requires an adapter, a `VOICE_ENGINES` entry and registration here.

@@ -3033,6 +3033,7 @@
   "voice.error.offlineRecognitionUnavailable": "Nhận dạng ngoại tuyến của hệ thống không khả dụng cho ngôn ngữ này. Hãy cấu hình trong cài đặt thiết bị, chọn ngôn ngữ khác hoặc dùng SenseVoice.",
   "voice.error.permissionDenied": "Cho phép quyền truy cập micrô hoặc nhận dạng giọng nói mà tính năng này yêu cầu trong cài đặt hệ thống.",
   "voice.error.unsupported": "Tính năng giọng nói này không khả dụng trong phiên bản ứng dụng hoặc trên thiết bị này.",
+  "voice.speech.preparingStop": "Đang chuẩn bị… Dừng đọc",
   "voice.speech.start": "Đọc to",
   "voice.speech.stop": "Dừng đọc",
   "workspace.collapse": "Thu gọn {{name}}",

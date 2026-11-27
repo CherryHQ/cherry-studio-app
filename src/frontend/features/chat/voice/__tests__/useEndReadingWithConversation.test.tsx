@@ -1,9 +1,22 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { useEndReadingWithConversation } from '../useMessageSpeech';
+import type { VoiceActivity } from '@/shared/contracts/voice';
+
+import { useEndReadingWithConversation, useMessageSpeech } from '../useMessageSpeech';
 
 const mockStopSpeaking = jest.fn();
-const mockVoice = { stopSpeaking: mockStopSpeaking };
+const mockSpeak = jest.fn(async () => {});
+const mockActivityListeners = new Set<() => void>();
+let mockActivity: VoiceActivity = { kind: 'idle' };
+const mockVoice = {
+  getActivity: () => mockActivity,
+  speak: mockSpeak,
+  stopSpeaking: mockStopSpeaking,
+  subscribeActivity: (listener: () => void) => {
+    mockActivityListeners.add(listener);
+    return () => mockActivityListeners.delete(listener);
+  },
+};
 let mockFocused = true;
 
 jest.mock('expo-router', () => ({
@@ -31,6 +44,7 @@ function Conversation({ id }: { id: string }) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockFocused = true;
+  mockActivity = { kind: 'idle' };
 });
 
 test('switching or closing the conversation ends its reading', () => {
@@ -62,4 +76,62 @@ test('covering a mounted conversation stops reading once; hidden unmount cannot 
   // The next route can own a new reading while this screen remains in the stack.
   act(() => renderer.unmount());
   expect(mockStopSpeaking).toHaveBeenCalledTimes(1);
+});
+
+test('one message observes its own phase and cancels only its own reading', () => {
+  function Control(_props: ReturnType<typeof useMessageSpeech>) {
+    return null;
+  }
+  function Message() {
+    return <Control {...useMessageSpeech('a', '[label](target)')} />;
+  }
+  let renderer!: ReactTestRenderer;
+  const readControl = () => renderer.root.findByType(Control).props;
+  function publish(activity: VoiceActivity) {
+    act(() => {
+      mockActivity = activity;
+      mockActivityListeners.forEach((listener) => listener());
+    });
+  }
+  act(() => {
+    renderer = create(<Message />);
+  });
+  expect(readControl()).toMatchObject({ phase: 'idle', isSpeaking: false });
+  act(() => readControl().toggle());
+  expect(mockSpeak).toHaveBeenCalledWith(
+    '[label](target)',
+    expect.objectContaining({ key: 'a', inputFormat: 'plainText' }),
+  );
+  publish({ kind: 'speaking', key: 'a', phase: 'preparing' });
+  expect(readControl()).toMatchObject({ phase: 'preparing', isSpeaking: true });
+  act(() => readControl().toggle());
+  expect(mockStopSpeaking).toHaveBeenCalledWith('a');
+  publish({ kind: 'speaking', key: 'a', phase: 'playing' });
+  expect(readControl()).toMatchObject({ phase: 'playing', isSpeaking: true });
+  publish({ kind: 'speaking', key: 'b', phase: 'preparing' });
+  expect(readControl()).toMatchObject({ phase: 'idle', isSpeaking: false });
+  act(() => renderer.unmount());
+});
+
+test('resolves a lazy speech text getter only when reading starts', () => {
+  const getText = jest.fn(() => 'Lazy speech body');
+  function Control(_props: ReturnType<typeof useMessageSpeech>) {
+    return null;
+  }
+  function Message() {
+    return <Control {...useMessageSpeech('lazy', getText)} />;
+  }
+  let renderer!: ReactTestRenderer;
+  act(() => {
+    renderer = create(<Message />);
+  });
+  expect(getText).not.toHaveBeenCalled();
+
+  act(() => renderer.root.findByType(Control).props.toggle());
+  expect(getText).toHaveBeenCalledTimes(1);
+  expect(mockSpeak).toHaveBeenCalledWith(
+    'Lazy speech body',
+    expect.objectContaining({ key: 'lazy', inputFormat: 'plainText' }),
+  );
+  act(() => renderer.unmount());
 });

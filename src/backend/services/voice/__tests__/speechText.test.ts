@@ -1,28 +1,4 @@
-import { speakableText, splitSpeechText } from '../speechText';
-
-test('reads prose and skips code, images and link targets', () => {
-  const markdown = [
-    '## 结论',
-    '',
-    '先看 **重点**：[文档](https://example.com/doc) 与 `npm test`。',
-    '',
-    '```bash',
-    'rm -rf build',
-    '```',
-    '',
-    '![diagram](https://example.com/d.png)',
-    '',
-    '| 名称 | 值 |',
-    '| --- | --- |',
-    '| a | 1 |',
-    '',
-    '- one',
-    '- two',
-  ].join('\n');
-  expect(speakableText(markdown)).toBe(
-    ['结论', '先看 重点：文档 与 npm test。', '名称 值', 'a 1', 'one', 'two'].join('\n'),
-  );
-});
+import { splitSpeechText } from '../speechText';
 
 test('packs sentences into utterances without exceeding the limit', () => {
   const text = 'First sentence. Second one! 第三句。第四句？\nNew line here.';
@@ -35,4 +11,24 @@ test('packs sentences into utterances without exceeding the limit', () => {
     'x'.repeat(10),
     'x'.repeat(5),
   ]);
+});
+
+test('uses the first limit only for the first utterance and prefers sentence boundaries', () => {
+  expect(splitSpeechText('Start. Second. Third. Last.', 20, 12)).toEqual([
+    'Start.',
+    'Second. Third. Last.',
+  ]);
+  expect(splitSpeechText('x'.repeat(28), 12, 4).map((chunk) => chunk.length)).toEqual([4, 12, 12]);
+});
+
+test('keeps supplementary characters intact at both hard-cut boundaries', () => {
+  const chunks = splitSpeechText('ab🙂c🙂def🙂', 4, 3);
+  expect(chunks).toEqual(['ab', '🙂c', '🙂de', 'f🙂']);
+  expect(chunks.join('')).toBe('ab🙂c🙂def🙂');
+});
+
+test('handles impossible and invalid unit limits without emitting lone surrogates', () => {
+  expect(splitSpeechText('🙂a\ud800', 1)).toEqual(['�', 'a', '�']);
+  expect(splitSpeechText('hi', 0)).toEqual([]);
+  expect(splitSpeechText('hi', 10, 0)).toEqual([]);
 });
