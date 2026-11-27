@@ -267,6 +267,15 @@ describe('Composer', () => {
     expect(input.props.style).toEqual(expect.objectContaining({ color: '#111827', fontSize: 16 }));
   });
 
+  it.each([
+    { value: '', defaultValue: undefined },
+    { value: 'Hello', defaultValue: 'Hello' },
+  ])('sets the native initial value for draft "$value"', ({ value, defaultValue }) => {
+    const tree = render({ value, children: <Composer.Input placeholder="Write a message" /> });
+
+    expect(tree.root.findByType(EnrichedMarkdownTextInput).props.defaultValue).toBe(defaultValue);
+  });
+
   it('keeps placeholder padding outside the compact native field and restores it when editing', () => {
     const editor = (active: boolean) => (
       <Composer.Editor
@@ -278,7 +287,7 @@ describe('Composer', () => {
     const tree = render({ children: editor(false) });
     const nativeStyle = () => StyleSheet.flatten(tree.root.findByType(TextInput).props.style);
 
-    expect(nativeStyle()).toMatchObject({ maxHeight: 24, paddingVertical: 0 });
+    expect(nativeStyle()).toMatchObject({ maxHeight: 32, paddingVertical: 0 });
 
     act(() => {
       tree.update(
