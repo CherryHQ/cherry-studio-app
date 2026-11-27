@@ -58,10 +58,6 @@ jest.mock('@cherrystudio/ui/haptics', () => ({
 jest.mock('@cherrystudio/ui/motion', () => ({
   duration: { fast: 200 },
   easing: { settle: 'settle' },
-  spring: {
-    morph: { damping: 24, mass: 0.85, stiffness: 320 },
-    tactile: { damping: 32, mass: 0.6, stiffness: 520 },
-  },
 }));
 
 jest.mock('react-native-reanimated', () => {
@@ -85,9 +81,7 @@ jest.mock('react-native-reanimated', () => {
     ReduceMotion: { System: 'system' },
     ZoomIn: transition,
     useAnimatedStyle: (factory: () => object) => factory(),
-    useReducedMotion: () => false,
     useSharedValue: <T,>(initialValue: T) => createMockSharedValue(initialValue),
-    withSpring: (value: number) => value,
     withTiming: (value: number) => value,
   };
 });

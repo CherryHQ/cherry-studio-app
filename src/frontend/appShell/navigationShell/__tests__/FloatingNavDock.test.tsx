@@ -46,7 +46,6 @@ let mockShellState = {
 
 const mockHapticsSelection = jest.fn();
 const mockAnimatedStyles = new WeakMap<object, () => Record<string, unknown>>();
-let mockReducedMotion = false;
 let mockPlatformOS: 'ios' | 'android' = 'ios';
 
 jest.mock('react-native', () => {
@@ -101,10 +100,6 @@ jest.mock('expo-linear-gradient', () => {
 jest.mock('@cherrystudio/ui/motion', () => ({
   duration: { fast: 200 },
   easing: { settle: 'settle' },
-  spring: {
-    morph: { damping: 24, mass: 0.85, stiffness: 320 },
-    tactile: { damping: 32, mass: 0.6, stiffness: 520 },
-  },
 }));
 
 jest.mock('react-native-reanimated', () => {
@@ -132,7 +127,6 @@ jest.mock('react-native-reanimated', () => {
       mockAnimatedStyles.set(style, factory);
       return style;
     },
-    useReducedMotion: () => mockReducedMotion,
     useSharedValue: <T,>(initialValue: T) => {
       const { useRef } = jest.requireActual('react');
       const ref = useRef(null as unknown);
@@ -141,7 +135,6 @@ jest.mock('react-native-reanimated', () => {
       }
       return ref.current;
     },
-    withSpring: (value: number) => value,
     withTiming: (value: number) => value,
   };
 });
@@ -199,7 +192,6 @@ describe('FloatingNavDock drag preview', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockReducedMotion = false;
     mockPlatformOS = 'ios';
     mockShellState = {
       activeDestination: 'more',
@@ -237,7 +229,7 @@ describe('FloatingNavDock drag preview', () => {
     );
   });
 
-  test('renders ChatGPT-aligned full-pill active background, spacing, and dual-state 24dp icons', () => {
+  test('renders ChatGPT-aligned full-pill active background, spacing, and 24dp icons', () => {
     mockShellState.dragState = {
       draggingOut: false,
       id: 'drawings',
@@ -284,21 +276,34 @@ describe('FloatingNavDock drag preview', () => {
       expect.arrayContaining(['bg-secondary', 'dark:bg-secondary-active', 'rounded-full']),
     );
     expect(activePill.props.className).not.toMatch(/border/);
-    expect(readAnimatedStyle(activePill.props.style)).toEqual({ opacity: 1 });
+    expect(activePill.props.style).toEqual({ opacity: 1 });
 
     const activeIcons = activeTab.findAllByType(NavIcon);
-    expect(activeIcons).toHaveLength(2);
-    expect(
-      activeIcons.every((icon) => icon.props.size === 24 && icon.props.strokeWidth === 2),
-    ).toBe(true);
+    expect(activeIcons).toHaveLength(1);
+    expect(activeIcons[0].props).toMatchObject({
+      color: 'foreground',
+      filled: true,
+      size: 24,
+      strokeWidth: 2,
+    });
     expect(activeTab.findAll((node) => node.props?.className === 'opacity-75')).toHaveLength(0);
+
+    const inactiveTab = renderer!.root.findByProps({ testID: 'floating-nav-tab-chat' });
+    const inactiveIcons = inactiveTab.findAllByType(NavIcon);
+    expect(inactiveIcons).toHaveLength(1);
+    expect(inactiveIcons[0].props).toMatchObject({
+      color: 'muted-foreground',
+      filled: false,
+      size: 24,
+      strokeWidth: 2,
+    });
 
     const inactivePill = renderer!.root.findByProps({ testID: 'floating-nav-active-pill-chat' });
     expect(inactivePill.props.collapsable).toBe(false);
     expect(inactivePill.props.className.split(' ')).toEqual(
       expect.arrayContaining(['bg-secondary', 'dark:bg-secondary-active', 'rounded-full']),
     );
-    expect(readAnimatedStyle(inactivePill.props.style)).toEqual({ opacity: 0 });
+    expect(inactivePill.props.style).toEqual({ opacity: 0 });
 
     const preview = renderer!.root.findByProps({ testID: 'floating-nav-preview-drawings' });
     const previewCapsule = preview
@@ -316,7 +321,7 @@ describe('FloatingNavDock drag preview', () => {
     );
   });
 
-  test('keeps active background pill classNames stable and uncollapsed while cross-fading on tab switches', () => {
+  test('keeps active background pill classNames stable and uncollapsed while swapping state instantaneously on tab switches', () => {
     mockShellState.activeDestination = 'chat';
     mockShellState.activeDockTab = 'chat';
 
@@ -332,9 +337,15 @@ describe('FloatingNavDock drag preview', () => {
     });
     const initialClassName = initialMorePill.props.className;
     expect(initialChatPill.props.collapsable).toBe(false);
-    expect(readAnimatedStyle(initialChatPill.props.style)).toEqual({ opacity: 1 });
+    expect(initialChatPill.props.style).toEqual({ opacity: 1 });
     expect(initialMorePill.props.collapsable).toBe(false);
-    expect(readAnimatedStyle(initialMorePill.props.style)).toEqual({ opacity: 0 });
+    expect(initialMorePill.props.style).toEqual({ opacity: 0 });
+    expect(
+      renderer!.root.findByProps({ testID: 'floating-nav-tab-chat' }).findByType(NavIcon).props,
+    ).toMatchObject({ color: 'foreground', filled: true });
+    expect(
+      renderer!.root.findByProps({ testID: 'floating-nav-tab-more' }).findByType(NavIcon).props,
+    ).toMatchObject({ color: 'muted-foreground', filled: false });
 
     mockShellState.activeDestination = 'more';
     mockShellState.activeDockTab = 'more';
@@ -350,9 +361,15 @@ describe('FloatingNavDock drag preview', () => {
     });
     expect(selectedMorePill.props.collapsable).toBe(false);
     expect(selectedMorePill.props.className).toBe(initialClassName);
-    expect(readAnimatedStyle(selectedMorePill.props.style)).toEqual({ opacity: 1 });
+    expect(selectedMorePill.props.style).toEqual({ opacity: 1 });
     expect(unselectedChatPill.props.collapsable).toBe(false);
-    expect(readAnimatedStyle(unselectedChatPill.props.style)).toEqual({ opacity: 0 });
+    expect(unselectedChatPill.props.style).toEqual({ opacity: 0 });
+    expect(
+      renderer!.root.findByProps({ testID: 'floating-nav-tab-more' }).findByType(NavIcon).props,
+    ).toMatchObject({ color: 'foreground', filled: true });
+    expect(
+      renderer!.root.findByProps({ testID: 'floating-nav-tab-chat' }).findByType(NavIcon).props,
+    ).toMatchObject({ color: 'muted-foreground', filled: false });
 
     mockShellState.activeDestination = 'chat';
     mockShellState.activeDockTab = 'chat';
@@ -365,10 +382,10 @@ describe('FloatingNavDock drag preview', () => {
     });
     expect(reselectedChatPill.props.collapsable).toBe(false);
     expect(reselectedChatPill.props.className).toBe(initialClassName);
-    expect(readAnimatedStyle(reselectedChatPill.props.style)).toEqual({ opacity: 1 });
+    expect(reselectedChatPill.props.style).toEqual({ opacity: 1 });
   });
 
-  test('drives tactile press-in/out scale, selection haptics, reduced motion, and Android ripple', () => {
+  test('uses non-scaling press wash on iOS, selection haptics on inactive switches, and bounded ripple on Android', () => {
     mockShellState.activeDestination = 'chat';
     mockShellState.activeDockTab = 'chat';
 
@@ -377,19 +394,15 @@ describe('FloatingNavDock drag preview', () => {
     });
 
     const moreTab = renderer!.root.findByProps({ testID: 'floating-nav-tab-more' });
-    const getIconScaleStyle = () =>
-      readAnimatedStyle(
-        renderer!.root
-          .findByProps({ testID: 'floating-nav-tab-more' })
-          .findAllByType(View)
-          .find((view) => view.props.className?.split(' ').includes('h-6'))?.props.style,
-      );
-    expect(getIconScaleStyle()).toEqual({ transform: [{ scale: 1 }] });
+    expect(
+      moreTab
+        .findAllByType(View)
+        .filter((view) => view.props.className?.split(' ').includes('h-6')),
+    ).toHaveLength(0);
 
     act(() => {
       moreTab.props.onPressIn();
     });
-    expect(getIconScaleStyle()).toEqual({ transform: [{ scale: 0.9 }] });
     expect(
       readAnimatedStyle(
         renderer!.root.findByProps({ testID: 'floating-nav-press-wash-more' }).props.style,
@@ -399,7 +412,6 @@ describe('FloatingNavDock drag preview', () => {
     act(() => {
       moreTab.props.onPressOut();
     });
-    expect(getIconScaleStyle()).toEqual({ transform: [{ scale: 1 }] });
     expect(
       readAnimatedStyle(
         renderer!.root.findByProps({ testID: 'floating-nav-press-wash-more' }).props.style,
@@ -418,16 +430,6 @@ describe('FloatingNavDock drag preview', () => {
     });
     expect(mockHapticsSelection).toHaveBeenCalledTimes(1);
     expect(mockShellState.navigateToDestination).toHaveBeenCalledWith('chat');
-
-    // Reduced motion keeps press scale static at 1.
-    mockReducedMotion = true;
-    act(() => {
-      renderer!.update(<FloatingNavDock />);
-    });
-    act(() => {
-      renderer!.root.findByProps({ testID: 'floating-nav-tab-more' }).props.onPressIn();
-    });
-    expect(getIconScaleStyle()).toEqual({ transform: [{ scale: 1 }] });
 
     // Android uses native bounded foreground ripple with the secondary token and omits JS press wash.
     mockPlatformOS = 'android';

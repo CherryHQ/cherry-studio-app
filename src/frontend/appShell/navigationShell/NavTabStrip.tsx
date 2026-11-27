@@ -1,7 +1,7 @@
 import { Surface } from '@cherrystudio/ui/components';
 import { haptics } from '@cherrystudio/ui/haptics';
-import { duration, easing, spring } from '@cherrystudio/ui/motion';
-import { type RefObject, useCallback, useEffect, useMemo, useRef } from 'react';
+import { duration, easing } from '@cherrystudio/ui/motion';
+import { type RefObject, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Platform,
@@ -19,9 +19,7 @@ import Animated, {
   LinearTransition,
   ReduceMotion,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
-  withSpring,
   withTiming,
   ZoomIn,
 } from 'react-native-reanimated';
@@ -58,24 +56,13 @@ const navPillExit = FadeOut.duration(duration.fast)
   .reduceMotion(ReduceMotion.System);
 
 /**
- * Horizontal bottom-dock pill & icon motion:
- * - Active pill fill and outline/filled icon cross-fade run on the UI thread via opacity
- *   (`150ms` enter / `120ms` exit, `easing.settle`), keeping Android rounded corners uncollapsed
- *   (`#1899`) and allowing immediate mid-flight interruption on rapid tab switches.
- * - Tactile press-in (`1 -> 0.9`, `100ms`) responds on pointer down and recovers with
- *   `spring.tactile`; inactive-to-active switches add a subtle `0.92 -> 1` `spring.morph` settle.
- *   Both scale animations degrade to static swaps when Reduce Motion is enabled.
+ * Horizontal bottom-dock pill & touch feedback:
+ * - Active pill fill (`opacity: 1 | 0` on a persistent `collapsable={false}` layer) and the
+ *   outline/filled icon swap happen instantaneously on commit with zero icon scaling, matching
+ *   ChatGPT Android and keeping rounded corners uncollapsed across transitions (`#1899`).
+ * - Touch press feedback uses bounded foreground `android_ripple` on Android and a UI-thread
+ *   `pressWash` (`100ms` in / `180ms` out, `ReduceMotion.System`) on non-Android platforms.
  */
-const HORIZONTAL_PILL_ENTER_TIMING = {
-  duration: 150,
-  easing: easing.settle,
-  reduceMotion: ReduceMotion.System,
-} as const;
-const HORIZONTAL_PILL_EXIT_TIMING = {
-  duration: 120,
-  easing: easing.settle,
-  reduceMotion: ReduceMotion.System,
-} as const;
 const HORIZONTAL_PRESS_IN_TIMING = {
   duration: 100,
   easing: easing.settle,
@@ -86,16 +73,8 @@ const HORIZONTAL_PRESS_OUT_TIMING = {
   easing: easing.settle,
   reduceMotion: ReduceMotion.System,
 } as const;
-const HORIZONTAL_ICON_PRESS_SCALE = 0.9;
-const HORIZONTAL_ICON_ACTIVATION_START_SCALE = 0.92;
-const HORIZONTAL_ICON_PRESS_OUT_SPRING = {
-  ...spring.tactile,
-  reduceMotion: ReduceMotion.System,
-} as const;
-const HORIZONTAL_ICON_ACTIVATION_SPRING = {
-  ...spring.morph,
-  reduceMotion: ReduceMotion.System,
-} as const;
+const ACTIVE_PILL_VISIBLE_STYLE: ViewStyle = { opacity: 1 };
+const ACTIVE_PILL_HIDDEN_STYLE: ViewStyle = { opacity: 0 };
 
 const COLLAPSED_DETACHED_STYLE: ViewStyle = {
   height: 1,
@@ -263,56 +242,20 @@ function NavHorizontalTabButton({
   testIDPrefix,
 }: NavHorizontalTabButtonProps) {
   const isAndroid = Platform?.OS === 'android';
-  const reducedMotion = useReducedMotion();
   const isVisualActive = isActive || isDragPreview;
-  const activeProgress = useSharedValue(isVisualActive ? 1 : 0);
-  const pressScale = useSharedValue(1);
-  const activationScale = useSharedValue(1);
   const pressWashOpacity = useSharedValue(0);
-  const prevActiveRef = useRef(isActive);
-
-  useEffect(() => {
-    activeProgress.set(
-      withTiming(
-        isVisualActive ? 1 : 0,
-        isVisualActive ? HORIZONTAL_PILL_ENTER_TIMING : HORIZONTAL_PILL_EXIT_TIMING,
-      ),
-    );
-  }, [activeProgress, isVisualActive]);
-
-  useEffect(() => {
-    if (reducedMotion) {
-      pressScale.set(1);
-      activationScale.set(1);
-      prevActiveRef.current = isActive;
-      return;
-    }
-    if (isActive && !prevActiveRef.current) {
-      activationScale.set(HORIZONTAL_ICON_ACTIVATION_START_SCALE);
-      activationScale.set(withSpring(1, HORIZONTAL_ICON_ACTIVATION_SPRING));
-    }
-    prevActiveRef.current = isActive;
-  }, [activationScale, isActive, pressScale, reducedMotion]);
 
   const handlePressIn = useCallback(() => {
-    if (!reducedMotion) {
-      pressScale.set(withTiming(HORIZONTAL_ICON_PRESS_SCALE, HORIZONTAL_PRESS_IN_TIMING));
-    }
     if (!isAndroid) {
       pressWashOpacity.set(withTiming(1, HORIZONTAL_PRESS_IN_TIMING));
     }
-  }, [isAndroid, pressScale, pressWashOpacity, reducedMotion]);
+  }, [isAndroid, pressWashOpacity]);
 
   const handlePressOut = useCallback(() => {
-    if (!reducedMotion) {
-      pressScale.set(withSpring(1, HORIZONTAL_ICON_PRESS_OUT_SPRING));
-    } else {
-      pressScale.set(1);
-    }
     if (!isAndroid) {
       pressWashOpacity.set(withTiming(0, HORIZONTAL_PRESS_OUT_TIMING));
     }
-  }, [isAndroid, pressScale, pressWashOpacity, reducedMotion]);
+  }, [isAndroid, pressWashOpacity]);
 
   const handlePress = useCallback(() => {
     if (!isActive && !isDraggingOut) {
@@ -321,24 +264,8 @@ function NavHorizontalTabButton({
     onPress();
   }, [isActive, isDraggingOut, onPress]);
 
-  const activePillStyle = useAnimatedStyle(() => ({
-    opacity: activeProgress.get(),
-  }));
-
   const pressWashStyle = useAnimatedStyle(() => ({
     opacity: pressWashOpacity.get() * 0.75,
-  }));
-
-  const iconScaleStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pressScale.get() * activationScale.get() }],
-  }));
-
-  const outlineIconStyle = useAnimatedStyle(() => ({
-    opacity: 1 - activeProgress.get(),
-  }));
-
-  const filledIconStyle = useAnimatedStyle(() => ({
-    opacity: activeProgress.get(),
   }));
 
   const pill = (
@@ -360,11 +287,11 @@ function NavHorizontalTabButton({
         onPressOut={handlePressOut}
         testID={`${testIDPrefix}-tab-${tabId}`}
       >
-        <Animated.View
+        <View
           className="bg-secondary dark:bg-secondary-active absolute inset-0 rounded-full"
           collapsable={false}
           pointerEvents="none"
-          style={activePillStyle}
+          style={isVisualActive ? ACTIVE_PILL_VISIBLE_STYLE : ACTIVE_PILL_HIDDEN_STYLE}
           testID={`${testIDPrefix}-active-pill-${tabId}`}
         />
         {!isAndroid ? (
@@ -382,30 +309,13 @@ function NavHorizontalTabButton({
             testID={`${testIDPrefix}-dashed-border-${tabId}`}
           />
         ) : null}
-        <Animated.View
-          className="h-6 w-6 items-center justify-center"
-          pointerEvents="none"
-          style={iconScaleStyle}
-        >
-          <Animated.View
-            className="absolute inset-0 items-center justify-center"
-            style={outlineIconStyle}
-          >
-            <NavIcon
-              color={mutedForegroundColor}
-              filled={false}
-              id={tabId}
-              size={24}
-              strokeWidth={2}
-            />
-          </Animated.View>
-          <Animated.View
-            className="absolute inset-0 items-center justify-center"
-            style={filledIconStyle}
-          >
-            <NavIcon color={foregroundColor} filled id={tabId} size={24} strokeWidth={2} />
-          </Animated.View>
-        </Animated.View>
+        <NavIcon
+          color={isVisualActive ? foregroundColor : mutedForegroundColor}
+          filled={isVisualActive}
+          id={tabId}
+          size={24}
+          strokeWidth={2}
+        />
       </Pressable>
     </View>
   );
