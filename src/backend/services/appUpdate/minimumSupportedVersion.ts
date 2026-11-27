@@ -2,7 +2,6 @@ import { createMMKV } from 'react-native-mmkv';
 import { z } from 'zod';
 
 import { createHttpClient } from '@/backend/services/http';
-import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
 
 import { compareReleaseVersions, parseReleaseVersion } from './releaseVersion';
 
@@ -19,18 +18,9 @@ export function createMinimumVersionPolicy(installed: string | null, lifetime: A
   // The native installation and its minimum version are shared across account profiles.
   const store = createMMKV({ id: 'cherry-installation-config' });
 
-  function getRequiredVersion(): string | null {
-    const minimum = store.getString(KEY);
-    if (!installed || !minimum) return null;
-    try {
-      return compareReleaseVersions(installed, minimum) < 0 ? minimum : null;
-    } catch {
-      return null;
-    }
-  }
-
-  async function refreshRequiredVersion(signal: AbortSignal): Promise<string | null> {
-    const linked = linkAbortSignals([signal, lifetime]);
+  async function checkRequiredVersion(): Promise<string | null> {
+    if (!installed) return null;
+    let minimum: string | undefined;
     try {
       const { data } = await http.request<unknown>({
         method: 'GET',
@@ -39,21 +29,21 @@ export function createMinimumVersionPolicy(installed: string | null, lifetime: A
         credentials: 'omit',
         redirect: 'error',
         maxResponseBytes: 1024 * 1024,
-        signal: linked.signal,
+        signal: lifetime,
       });
-      linked.signal.throwIfAborted();
-      const minimum = configResponse.parse(data).configs[KEY];
+      lifetime.throwIfAborted();
+      minimum = configResponse.parse(data).configs[KEY];
       if (minimum === undefined) {
         store.remove(KEY);
       } else {
         parseReleaseVersion(minimum);
         store.set(KEY, minimum);
       }
-      return getRequiredVersion();
-    } finally {
-      linked.dispose();
+    } catch {
+      lifetime.throwIfAborted();
+      minimum = store.getString(KEY);
     }
+    return minimum && compareReleaseVersions(installed, minimum) < 0 ? minimum : null;
   }
-
-  return { getRequiredVersion, refreshRequiredVersion };
+  return { checkRequiredVersion };
 }

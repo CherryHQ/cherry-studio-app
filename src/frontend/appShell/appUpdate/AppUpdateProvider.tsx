@@ -1,21 +1,14 @@
 import { useAlert, useToast } from '@cherrystudio/ui/components';
-import { useQueryClient } from '@tanstack/react-query';
-import {
-  createContext,
-  type PropsWithChildren,
-  use,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { isCancelledError, useQuery, useQueryClient } from '@tanstack/react-query';
+import { createContext, type PropsWithChildren, use, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useBackendModule } from '@/frontend/data/BackendProvider';
-import { cacheService } from '@/frontend/data/CacheService';
+import { usePrivacyConsentPending } from '@/frontend/appShell/privacy';
+import { useStartupCoverVisible } from '@/frontend/appShell/startup';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { AppUpdateRelease } from '@/shared/contracts/appUpdate';
 
-import { AppUpdateObserver } from './AppUpdateObserver';
+import { AppUpdateDialog } from './AppUpdateDialog';
 import { appUpdateQueryOptions } from './appUpdateQueries';
 
 const UNAVAILABLE_KEYS = {
@@ -29,8 +22,6 @@ const UNAVAILABLE_KEYS = {
 type AppUpdateActions = {
   /** A manual check: opens the dialog for a known or newly found update, otherwise reports why not. */
   check(): Promise<void>;
-  /** Presents one release in the update dialog and records it as this release's reminder. */
-  open(release: AppUpdateRelease): void;
 };
 const AppUpdateActionsContext = createContext<AppUpdateActions | null>(null);
 
@@ -47,13 +38,16 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
   const [release, setRelease] = useState<AppUpdateRelease | null>(null);
   const pendingCheck = useRef<Promise<void> | null>(null);
 
-  useEffect(() => {
-    if (!release) return;
-    cacheService.setPersist('app_update.last_reminder', {
-      releaseId: release.id,
-      remindedAt: Date.now(),
-    });
-  }, [release]);
+  const privacyPending = usePrivacyConsentPending();
+  const coverVisible = useStartupCoverVisible();
+  const { data: requiredVersion = null } = useQuery({
+    queryKey: queryKeys.appUpdate.requiredVersion,
+    queryFn: appUpdate.checkRequiredVersion,
+    enabled: appUpdate.isEnabled && !privacyPending && !coverVisible,
+    staleTime: 'static',
+    gcTime: Infinity,
+    retry: false,
+  });
 
   const dialog = useMemo(() => {
     const close = () => setRelease(null);
@@ -63,7 +57,7 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
         const result = await appUpdate.install();
         // A rejected package returns the transfer to failed, which the dialog already shows.
         if (result === 'invalidPackage') return;
-        close();
+        if (!requiredVersion) close();
         if (result === 'opened') return;
         alert.confirm({
           title: t('appUpdate.installPermissionTitle'),
@@ -95,14 +89,14 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
         });
         return;
       }
-      close();
+      if (!requiredVersion) close();
       void appUpdate.openStore(target).catch(() => {
         toast.show({ label: t('appUpdate.openFailed'), variant: 'danger' });
       });
     };
 
-    /** A failed package may have been replaced or withdrawn, so a retry asks for the latest. */
-    const retry = async () => {
+    /** Resolve the current release when the user starts an update or retries a failed transfer. */
+    const checkAndStart = async () => {
       try {
         const result = await queryClient.fetchQuery(
           appUpdateQueryOptions(appUpdate, { force: true }),
@@ -116,16 +110,25 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
         toast.show({
           label:
             result.status === 'upToDate'
-              ? t('appUpdate.upToDate', { version: result.currentVersion })
+              ? requiredVersion
+                ? t('appUpdate.noRelease')
+                : t('appUpdate.upToDate', { version: result.currentVersion })
               : t(UNAVAILABLE_KEYS[result.reason]),
         });
-      } catch {
-        toast.show({ label: t('appUpdate.failed'), variant: 'danger' });
+      } catch (error) {
+        if (!isCancelledError(error))
+          toast.show({ label: t('appUpdate.failed'), variant: 'danger' });
       }
     };
 
-    return { cancel: appUpdate.cancelDownload, close, install, retry, start };
-  }, [appUpdate, queryClient, alert, toast, t]);
+    const cancel = async () => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: queryKeys.appUpdate.latest(appUpdate.channel) }),
+        appUpdate.cancelDownload(),
+      ]);
+    };
+    return { cancel, close, install, checkAndStart, start };
+  }, [appUpdate, queryClient, alert, toast, t, requiredVersion]);
 
   const actions = useMemo<AppUpdateActions>(() => {
     const open = (next: AppUpdateRelease) => {
@@ -167,14 +170,13 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
         });
         return pendingCheck.current;
       },
-      open,
     };
   }, [appUpdate, queryClient, toast, t]);
 
   return (
     <AppUpdateActionsContext value={actions}>
       {children}
-      <AppUpdateObserver actions={dialog} onOffer={actions.open} release={release} />
+      <AppUpdateDialog actions={dialog} release={release} requiredVersion={requiredVersion} />
     </AppUpdateActionsContext>
   );
 }

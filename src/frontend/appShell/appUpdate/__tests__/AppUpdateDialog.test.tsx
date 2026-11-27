@@ -15,6 +15,7 @@ import { AppUpdateDialog } from '../AppUpdateDialog';
 const mockIdle = { status: 'idle' } as const;
 let mockDownload: AppUpdateDownload = mockIdle;
 const mockUpdate = {
+  channel: 'apk',
   getDownload: () => mockDownload,
   subscribeDownload: () => () => {},
   releaseNotes: jest.fn(async () => 'Release notes'),
@@ -55,17 +56,14 @@ const actions = {
   cancel: jest.fn(),
   close: jest.fn(),
   install: jest.fn(),
-  retry: jest.fn(),
+  checkAndStart: jest.fn(),
   start: jest.fn(),
 };
 let client: QueryClient;
 let renderer: ReactTestRenderer;
-const tree = (
-  current: AppUpdateRelease | null,
-  required?: Parameters<typeof AppUpdateDialog>[0]['required'],
-) => (
+const tree = (current: AppUpdateRelease | null, requiredVersion?: string) => (
   <QueryClientProvider client={client}>
-    <AppUpdateDialog actions={actions} release={current} required={required} />
+    <AppUpdateDialog actions={actions} release={current} requiredVersion={requiredVersion} />
   </QueryClientProvider>
 );
 const rendered = () => JSON.stringify(renderer.toJSON());
@@ -87,11 +85,11 @@ test.each(['android', 'ios'] as const)(
   async (os) => {
     jest.replaceProperty(Platform, 'OS', os);
     const exit = jest.spyOn(BackHandler, 'exitApp').mockImplementation(() => {});
-    const required = { version: '2.0.0', checking: false, recheck: jest.fn() };
+    const required = '2.0.0';
     await act(async () => {
       renderer = create(tree(null, required));
     });
-    expect(rendered()).toContain('common.retry');
+    expect(rendered()).toContain('appUpdate.download');
     expect(rendered()).not.toContain('appUpdate.later');
     expect(rendered().includes('appUpdate.exit')).toBe(os === 'android');
     await act(async () => renderer.root.findByType(Dialog).props.onOpenChange(false));
@@ -103,6 +101,15 @@ test.each(['android', 'ios'] as const)(
     expect(rendered()).not.toContain('appUpdate.downloadInBackground');
   },
 );
+
+test('a previous APK transfer is not offered by the startup prompt', async () => {
+  mockDownload = { status: 'ready', release: apkRelease };
+  await act(async () => {
+    renderer = create(tree(null, '3.0.0'));
+  });
+  expect(rendered()).toContain('appUpdate.download');
+  expect(rendered()).not.toContain('appUpdate.install');
+});
 
 test('an open update dialog requests and displays release notes', async () => {
   await act(async () => {

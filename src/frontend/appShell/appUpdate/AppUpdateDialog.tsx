@@ -1,12 +1,13 @@
 import { Button, Dialog, MarkdownText, Spinner } from '@cherrystudio/ui/components';
 import { normalizeFontSizeStep, type TypographySizeStep } from '@cherrystudio/ui/utils';
-import { useQueries } from '@tanstack/react-query';
+import { useIsFetching, useQueries } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BackHandler, Platform, ScrollView, Text, View } from 'react-native';
 
 import { useBackendModule } from '@/frontend/data/BackendProvider';
 import { usePreference } from '@/frontend/data/hooks';
+import { queryKeys } from '@/frontend/data/queryKeys';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import type { AppUpdateDownload, AppUpdateRelease } from '@/shared/contracts/appUpdate';
 
@@ -16,14 +17,8 @@ export type AppUpdateDialogActions = {
   cancel(): Promise<void>;
   close(): void;
   install(): Promise<void>;
-  retry(): Promise<void>;
+  checkAndStart(): Promise<void>;
   start(release: AppUpdateRelease): void;
-};
-
-type RequiredUpdate = {
-  version: string;
-  checking: boolean;
-  recheck(): void;
 };
 
 const STORE_KEYS = {
@@ -34,39 +29,36 @@ const STORE_KEYS = {
 
 /**
  * The single place an update is read and acted on: what changed, then the one next step for the
- * channel and the transfer. Closing never stops a transfer.
+ * channel and the transfer.
  */
 export function AppUpdateDialog({
   actions,
   release,
-  required = null,
+  requiredVersion = null,
 }: {
   actions: AppUpdateDialogActions;
   release: AppUpdateRelease | null;
-  required?: RequiredUpdate | null;
+  requiredVersion?: string | null;
 }) {
   const appUpdate = useBackendModule('appUpdate');
   const download = useAppUpdateDownload(appUpdate);
-  // A raised floor can discover a new APK while the previous package is still ready to install.
+  // In the mandatory flow, show progress only for the user's selected release.
   const transfer =
-    required &&
-    release &&
-    (download.status === 'ready' || download.status === 'failed') &&
-    download.release.id !== release.id
+    requiredVersion && download.status !== 'idle' && download.release.id !== release?.id
       ? ({ status: 'idle' } as const)
       : download;
   // Keep the last release on screen while the dialog animates closed.
   const [shown, setShown] = useState(release);
   if (release && release !== shown) setShown(release);
-  const current = transfer.status !== 'idle' ? transfer.release : required ? release : shown;
-  if (!current && !required) return null;
+  const current = requiredVersion ? release : transfer.status === 'idle' ? shown : transfer.release;
+  if (!current && !requiredVersion) return null;
 
   return (
     <AppUpdateDialogContent
       actions={actions}
       current={current}
-      open={required !== null || release !== null}
-      required={required}
+      open={requiredVersion !== null || release !== null}
+      requiredVersion={requiredVersion}
       transfer={transfer}
     />
   );
@@ -80,18 +72,19 @@ function AppUpdateDialogContent({
   actions,
   current,
   open,
-  required,
+  requiredVersion,
   transfer,
 }: {
   actions: AppUpdateDialogActions;
   current: AppUpdateRelease | null;
   open: boolean;
-  required: RequiredUpdate | null;
+  requiredVersion: string | null;
   transfer: AppUpdateDownload;
 }) {
   const appUpdate = useBackendModule('appUpdate');
   const [fontSizeStep] = usePreference('ui.font_size_step');
   const { t, i18n } = useTranslation();
+  const checking = useIsFetching({ queryKey: queryKeys.appUpdate.latest(appUpdate.channel) }) > 0;
   const [notes] = useQueries({
     queries: current
       ? [
@@ -104,10 +97,11 @@ function AppUpdateDialogContent({
   });
 
   const dismiss = () => {
-    if (!required) {
+    if (!requiredVersion) {
       actions.close();
     } else if (Platform.OS === 'android') {
-      void actions.cancel().finally(() => BackHandler.exitApp());
+      void actions.cancel();
+      BackHandler.exitApp();
     }
   };
   return (
@@ -118,8 +112,8 @@ function AppUpdateDialogContent({
       open={open}
       testID="app-update-dialog"
       title={
-        required
-          ? t('appUpdate.required', { version: required.version })
+        requiredVersion
+          ? t('appUpdate.required', { version: requiredVersion })
           : current?.latestVersion
             ? t('appUpdate.foundVersion', { version: current.latestVersion })
             : t('appUpdate.confirmTitle')
@@ -143,22 +137,23 @@ function AppUpdateDialogContent({
             actions={actions}
             release={current}
             transfer={transfer}
-            required={!!required}
+            required={!!requiredVersion}
           />
         </>
       ) : (
-        required && (
-          <>
-            <Text className="text-sm text-muted-foreground">
-              {t(required.checking ? 'appUpdate.checking' : 'appUpdate.failed')}
-            </Text>
-            <Button disabled={required.checking} onPress={required.recheck}>
-              {t('common.retry')}
-            </Button>
-          </>
-        )
+        <Button
+          loading={checking}
+          onPress={() => void actions.checkAndStart()}
+          testID="app-update-start"
+        >
+          {t(
+            appUpdate.channel && appUpdate.channel !== 'apk'
+              ? STORE_KEYS[appUpdate.channel]
+              : 'appUpdate.download',
+          )}
+        </Button>
       )}
-      {required && Platform.OS === 'android' && (
+      {requiredVersion && Platform.OS === 'android' && (
         <Button onPress={dismiss} variant="ghost">
           {t('appUpdate.exit')}
         </Button>
@@ -291,7 +286,7 @@ function AppUpdateDialogActionsView({
                 : 'appUpdate.downloadFailed',
             )}
           </Text>
-          <Button onPress={() => void actions.retry()} testID="app-update-retry">
+          <Button onPress={() => void actions.checkAndStart()} testID="app-update-retry">
             {t('appUpdate.retryDownload')}
           </Button>
           {later}

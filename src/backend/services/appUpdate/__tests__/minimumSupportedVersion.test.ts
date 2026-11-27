@@ -8,34 +8,30 @@ jest.mock('@/backend/services/http', () => ({
 const key = 'mobile.minSupportedVersion';
 const respond = (data: unknown) => mockRequest.mockResolvedValueOnce({ data });
 
-test('compares installed product versions numerically and immediately applies a lowered or withdrawn floor', async () => {
+test('compares installed product versions numerically and applies a lowered or withdrawn floor', async () => {
   const signal = new AbortController().signal;
   const policy = createMinimumVersionPolicy('1.9.0', signal);
-  expect(policy.getRequiredVersion()).toBeNull();
   for (const [minimum, required] of [
     ['1.10.0', '1.10.0'],
     ['1.9', null],
     ['1.8.5', null],
   ]) {
     respond({ configs: { [key]: minimum } });
-    await expect(policy.refreshRequiredVersion(signal)).resolves.toBe(required);
-    expect(policy.getRequiredVersion()).toBe(required);
+    await expect(policy.checkRequiredVersion()).resolves.toBe(required);
   }
   respond({ configs: { [key]: '2.0' } });
-  await policy.refreshRequiredVersion(signal);
+  await policy.checkRequiredVersion();
   respond({ configs: { unrelated: true } });
-  await expect(policy.refreshRequiredVersion(signal)).resolves.toBeNull();
-  expect(policy.getRequiredVersion()).toBeNull();
+  await expect(policy.checkRequiredVersion()).resolves.toBeNull();
 });
 
 test('a failed fetch, malformed response or cancelled refresh preserves the last valid minimum', async () => {
   const lifetime = new AbortController();
-  const signal = new AbortController().signal;
   const policy = createMinimumVersionPolicy('1.0', lifetime.signal);
   respond({ configs: { [key]: '2.0' } });
-  await policy.refreshRequiredVersion(signal);
+  await policy.checkRequiredVersion();
   mockRequest.mockRejectedValueOnce(new Error('Offline'));
-  await expect(policy.refreshRequiredVersion(signal)).rejects.toThrow();
+  await expect(policy.checkRequiredVersion()).resolves.toBe('2.0');
   for (const invalid of [
     {},
     { configs: [] },
@@ -43,13 +39,11 @@ test('a failed fetch, malformed response or cancelled refresh preserves the last
     { configs: { [key]: 'v3' } },
   ]) {
     respond(invalid);
-    await expect(policy.refreshRequiredVersion(signal)).rejects.toThrow();
-    expect(policy.getRequiredVersion()).toBe('2.0');
+    await expect(policy.checkRequiredVersion()).resolves.toBe('2.0');
   }
   mockRequest.mockImplementationOnce(async () => {
     lifetime.abort();
     return { data: { configs: {} } };
   });
-  await expect(policy.refreshRequiredVersion(signal)).rejects.toThrow();
-  expect(policy.getRequiredVersion()).toBe('2.0');
+  await expect(policy.checkRequiredVersion()).rejects.toThrow();
 });

@@ -4,9 +4,7 @@ import { useSyncExternalStore } from 'react';
 import { queryKeys } from '@/frontend/data';
 import type { AppUpdateModule, AppUpdateRelease } from '@/shared/contracts/appUpdate';
 
-/**
- * The app-shell observer owns automatic checks; other surfaces observe or explicitly refetch.
- */
+/** About and user-initiated updates share release discovery for the installed channel. */
 export function appUpdateQueryOptions(
   appUpdate: AppUpdateModule,
   { force = false }: { force?: boolean } = {},
