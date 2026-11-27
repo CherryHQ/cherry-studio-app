@@ -11,9 +11,11 @@ caller-preserving sign-in/setup return flows.
   docked beside chat on wide window classes).
 - Sidebar root: `testID:sidebar`.
 - Header controls: search trigger `testID:sidebar-search` (opens `testID:app-search-input` /
-  `testID:app-search-close`), device switcher `testID:sidebar-device-switcher`, Cloud plan badge
-  `testID:sidebar-plan-badge`.
+  `testID:app-search-close`) and device switcher `testID:sidebar-device-switcher`.
 - Sidebar destination entries: `testID:sidebar-scheduled-tasks`, `testID:sidebar-settings`.
+- Tap the profile row or its gear to open Settings. For an active paid subscription, the avatar ring
+  and its caption (`testID:sidebar-plan-badge`) cycle through the plan and each quota window.
+  [Light and dark drawer footers](../../.github/images/sidebar/profile-footer.png)
 - Compact floating dock (`testID:floating-nav-dock`) and foldable trailing rail
   (`testID:vertical-nav-rail`): top-level tabs (`floating-nav-tab-<id>` / `vertical-rail-tab-<id>`
   for chat, pinned tabs, and More); More hub module cards (`testID:more-module-card-drawings`,
@@ -29,14 +31,15 @@ caller-preserving sign-in/setup return flows.
 ## Verification Driver
 
 - Focused Jest suites:
+  - `pnpm test:app -- src/frontend/appShell/sidebar/components/__tests__/SidebarProfileButton.test.tsx --runInBand`
   - `pnpm test:app -- src/frontend/features/search/__tests__/useAppSearchResults.test.ts --runInBand`
 - Device acceptance: `agent-device` round-trip opening `testID:sidebar`, switching destinations,
-  verifying `testID:sidebar-plan-badge` quota refresh, and returning via back gesture / Android
+  verifying the avatar arc matches the remaining percentage on `testID:sidebar-plan-badge`, and returning via back gesture / Android
   hardware back.
 
 ## Observable Acceptance
 
-- Opening the sidebar displays `testID:sidebar`, refreshes Cloud subscription quota when signed in,
+- Opening the sidebar displays `testID:sidebar`, shows the cached subscription when available,
   and navigates cleanly to each destination without leaving orphaned overlays.
 - Completing sign-in or provider setup triggered from a nested route returns to the caller route
   instead of dumping the user back to an unexpected root screen.
