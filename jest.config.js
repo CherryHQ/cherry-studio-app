@@ -34,7 +34,7 @@ module.exports = {
     // architecture rules and the native patch guards that protect every PR.
     ...(process.env.PRCI
       ? [
-          '/scripts/__tests__/(?!(sherpaPrebuiltCache|releaseLocalBuild|prLocalBuild|publishGitcodeRelease|publishRelease|uploadIosSymbols|verifyIosSymbolPackage|architectureBoundaries|reactNativeTextCache|androidWindowCompatibility|nitroIosCompatibility|expoFilePermissions|expoModulesCoreSwiftCompatibility|enrichedMarkdownMathWidth|enrichedMarkdownInlineMath|enrichedMarkdownInputMeasurement|enrichedMarkdownSubmit|skiaCompilerMemory)\\.test\\.ts$)',
+          '/scripts/__tests__/(?!(sherpaPrebuiltCache|releaseLocalBuild|publishGitcodeRelease|publishRelease|uploadIosSymbols|verifyIosSymbolPackage|architectureBoundaries|reactNativeTextCache|androidWindowCompatibility|nitroIosCompatibility|expoFilePermissions|expoModulesCoreSwiftCompatibility|enrichedMarkdownMathWidth|enrichedMarkdownInlineMath|enrichedMarkdownInputMeasurement|enrichedMarkdownSubmit|skiaCompilerMemory)\\.test\\.ts$)',
         ]
       : []),
   ],

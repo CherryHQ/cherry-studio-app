@@ -257,7 +257,6 @@ describe('runLocalReleaseBuild', () => {
     let capturedEasArgs: string[] = [];
     let includeInstallPermission = true;
     const apkBytes = Buffer.from('synthetic-public-apk-payload');
-    const certificateSha256 = 'abcdef0123456789'.repeat(4);
 
     const run: RunLocalCommand = jest.fn(async (_cmd, args, opts) => {
       if (args[0] === easCliPath) {
@@ -272,7 +271,7 @@ describe('runLocalReleaseBuild', () => {
         return { stdout: 'AndroidManifest.xml\nclasses.dex\n', exitCode: 0, stderr: '' };
       if (args[0] === 'verify') {
         return {
-          stdout: `V2 Signer: certificate SHA-256 digest: ${certificateSha256.toUpperCase()}\n`,
+          stdout: 'Signer #1 certificate SHA-256 digest: abcdef0123456789\n',
           stderr: '',
           exitCode: 0,
         };
@@ -343,7 +342,7 @@ describe('runLocalReleaseBuild', () => {
     const manifestText = readFileSync(join(result.archiveDir, 'build-manifest.json'), 'utf8');
     const manifest = JSON.parse(manifestText);
     expect(manifest.commitSha).toBe(commitSha);
-    expect(manifest.signing.certificateSha256).toBe(certificateSha256);
+    expect(manifest.signing.certificateSha256).toBe('abcdef0123456789');
     for (const secretValue of REQUIRED_RELEASE_ENV_VARS.map((key) => baseEnv[key]!)) {
       expect(manifestText).not.toContain(secretValue);
     }
@@ -429,7 +428,7 @@ describe('runLocalReleaseBuild', () => {
       }
       if (args[0] === 'verify') {
         return {
-          stdout: `Signer #1 certificate SHA-256 digest: ${'00112233'.repeat(8)}\n`,
+          stdout: 'Signer #1 certificate SHA-256 digest: 00112233\n',
           stderr: '',
           exitCode: 0,
         };
@@ -522,7 +521,7 @@ describe('runLocalReleaseBuild', () => {
       appVersion: '0.6.2',
       versionCode: '130',
       channel: 'production-domestic-stores',
-      signingCertificateSha256: '00112233'.repeat(8),
+      signingCertificateSha256: '00112233',
     });
   });
 
@@ -743,7 +742,7 @@ describe('runLocalReleaseBatch', () => {
       }
       if (args[0] === 'verify') {
         return {
-          stdout: `Signer #1 certificate SHA-256 digest: ${'0123456789abcdef'.repeat(4)}\n`,
+          stdout: 'Signer #1 certificate SHA-256 digest: 0123456789abcdef\n',
           stderr: '',
           exitCode: 0,
         };
@@ -1332,7 +1331,7 @@ describe('release hardening & integrity guards', () => {
       }
       if (args[0] === 'verify') {
         return {
-          stdout: `Signer #1 certificate SHA-256 digest: ${'a'.repeat(64)}\n`,
+          stdout: 'Signer #1 certificate SHA-256 digest: abcdef\n',
           stderr: '',
           exitCode: 0,
         };

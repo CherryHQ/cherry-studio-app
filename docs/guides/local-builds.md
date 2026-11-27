@@ -342,31 +342,18 @@ removing a plugin from app config does not clean its hooks out of an existing na
 Successful compilation alone does not verify production Sentry event delivery or source-map
 matching; those require a separate runtime check.
 
-## PR Native Builds
+## Branch Builds on Mac Studio
 
-Use the manual [PR Build](../../.github/workflows/pr-build.yml) workflow on GitHub Actions to build
-installable packages from a pull request's source commit on the shared Mac Studio runner
-(`[self-hosted, macOS, ARM64, release]`) without creating a release tag.
+Open **Actions → Branch Build → Run workflow** and use the workflow from `main`. Enter the
+repository branch to build, such as `feature/chat`, and select one package. The task runs the
+selected branch's `pnpm build:local`. [Workflow source](../../.github/workflows/branch-build.yml)
 
-Trigger **Actions → PR Build → Run workflow** (or run `gh workflow run pr-build.yml`) with:
+- `android-dev` (default) builds the Android development APK.
+- `ios-dev` builds the iOS development IPA for physical devices.
+- `android-production` builds an APK with the production profile and increments the remote Android
+  `versionCode`. The workflow disables Sentry build uploads.
 
-- `pr` (required): Enter a pull request number (for example `1913`). The PR must come from a branch
-  in this repository because the runner is shared with formal releases.
-- `android_dev` (default `true`): Builds the Android `development` APK
-  (`com.cherryai.cherrystudio_app.dev`).
-- `ios_dev` (default `false`): Builds the iOS `development` physical-device IPA
-  (`com.cherryai.cherrystudio-app.dev`).
-- `android_production` (default `false`): Builds the Android `production` APK
-  (`com.cherryai.cherrystudio_app`) with `SENTRY_DISABLE_AUTO_UPLOAD=true`,
-  `SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD=true`, and `SENTRY_ALLOW_FAILURE=true`. Because it reuses the
-  `production` EAS profile, it increments the remote EAS Android `versionCode` and receives
-  that profile's EAS environment variables. The GitHub `local-release` environment is reserved for
-  tag-triggered releases. See [Native Releases](./cloud-releases.md) for the formal release process.
-- `post_pr_comment` (default `true`): Posts a build summary table and artifact link on the target PR.
-
-Each successful target is verified locally on Mac Studio (`apksigner` / `aapt2` / `plutil`) and
-uploaded to the workflow run's **Artifacts** section (`pr-build-<source>-<sha>-<target>`, retained
-for 7 days) alongside `SHA256SUMS` and `build-manifest.json`.
+Download the package from **Artifacts** on the workflow run page within 7 days.
 
 ## Tablet Device Configuration
 
