@@ -200,6 +200,13 @@ function RootStack() {
       <Stack.Screen name="share-destination" options={{ headerTransparent: false }} />
       <Stack.Screen name="mermaid-diagram" options={{ headerTransparent: false }} />
       <Stack.Screen name="edit-reply" options={{ headerTransparent: false }} />
+      <Stack.Screen
+        name="remote-session-modal"
+        options={{
+          headerShown: false,
+          presentation: Platform.OS === 'ios' ? 'pageSheet' : 'modal',
+        }}
+      />
       <Stack.Screen name="uu-remote/callback" options={{ headerShown: false, animation: 'none' }} />
       <Stack.Screen
         name="share"

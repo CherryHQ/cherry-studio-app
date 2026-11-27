@@ -18,6 +18,7 @@ export {
 export { ChatSourceProvider, useChatSource } from './ChatSourceProvider';
 export {
   remoteChatHref,
+  remoteSessionModalHref,
   parseRemoteChatRoute,
   type RemoteChatTarget,
   type RemoteChatRouteParams,

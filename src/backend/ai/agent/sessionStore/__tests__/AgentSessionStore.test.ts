@@ -909,6 +909,86 @@ describe('SqliteAgentSessionStore conformance', () => {
     ]);
   });
 
+  test('loads unique dispatch receipts from the selected branch and preserves their local owner across forks', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const receipt = (
+      id: string,
+      connectionId: string,
+      sessionId: string,
+      capabilityId = 'desktop_dispatch_task',
+    ) => ({
+      id,
+      type: 'dynamic-tool' as const,
+      toolCallId: id,
+      toolRef: { source: 'builtin' as const, capabilityId },
+      toolName: capabilityId,
+      title: 'Dispatch task to desktop',
+      state: 'output-available' as const,
+      input: {},
+      output: {
+        value: { status: 'dispatched', connectionId, sessionId, localSessionId: session.id },
+        artifacts: [],
+      },
+    });
+    const storeTurn = async (parts: AgentMessagePart[]) => {
+      const reserved = await store.reserveSubmission({
+        ...messageIds(),
+        ...RESERVATION_FACTS,
+        sessionId: session.id,
+        userParts: [{ id: 'input-0', type: 'text', text: 'Delegate.', state: 'done' }],
+      });
+      await store.finalizeAssistantMessage({
+        assistantMessageId: reserved.assistantMessage.id,
+        status: 'success',
+        parts,
+        usage: null,
+        error: null,
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: terminalTiming() },
+      });
+      return reserved.assistantMessage.id;
+    };
+    const anchor = await storeTurn([receipt('first', 'pc', 'a'), receipt('duplicate', 'pc', 'a')]);
+    const pendingAnchor = await storeTurn([
+      receipt('second', 'pc', 'b'),
+      receipt('other-pc', 'pc-2', 'a'),
+      receipt('blank', 'pc', ' '),
+      {
+        ...receipt('pending', 'pc', ''),
+        output: {
+          value: {
+            status: 'pending_confirmation',
+            connectionId: 'pc',
+            draftId: 'pending-draft',
+            operationId: 'pending-op',
+            localSessionId: session.id,
+          },
+          artifacts: [],
+        },
+      },
+      receipt('other-tool', 'pc', 'x', 'read_file'),
+    ]);
+    expect(await store.loadDispatchedDesktopSessions(session.id)).toEqual([
+      { connectionId: 'pc', sessionId: 'a' },
+      { connectionId: 'pc', sessionId: 'b' },
+      { connectionId: 'pc-2', sessionId: 'a' },
+      { connectionId: 'pc', draftId: 'pending-draft', operationId: 'pending-op' },
+    ]);
+    expect(await store.loadDispatchedDesktopSessions(session.id, anchor)).toEqual([
+      { connectionId: 'pc', sessionId: 'a' },
+    ]);
+    expect(await store.loadDispatchedDesktopSessions(session.id, null)).toEqual([]);
+    const fork = await store.forkSession({ sessionId: session.id, fromMessageId: anchor });
+    if (fork.status !== 'forked') throw new Error(fork.status);
+    expect(await store.loadDispatchedDesktopSessions(fork.session.id)).toEqual([]);
+    const pendingFork = await store.forkSession({
+      sessionId: session.id,
+      fromMessageId: pendingAnchor,
+    });
+    if (pendingFork.status !== 'forked') throw new Error(pendingFork.status);
+    expect(await store.loadDispatchedDesktopSessions(pendingFork.session.id)).toEqual([]);
+  });
+
   test('fork remaps all copied quote sources and deletion preserves surviving snapshots', async () => {
     const session = await harness.createEmptySession({ agentId });
     const first = await store.reserveSubmission({

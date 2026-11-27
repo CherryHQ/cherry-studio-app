@@ -64,6 +64,13 @@ test('screen awake is a known, device-local opt-in with a valid key shape', () =
   expect(key).toMatch(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/);
 });
 
+test('the last desktop dispatch target is device-local and defaults to null', () => {
+  const key = 'desktop.dispatch.last_target';
+  expect(isPreferenceKey(key)).toBe(true);
+  expect(getDefaultValue(key)).toBeNull();
+  expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain(key);
+});
+
 test('dictation is opt-in and voice engine choices stay on the device', () => {
   expect(getDefaultValue('feature.voice.dictation_engine')).toBeNull();
   expect(getDefaultValue('feature.voice.speech_engine')).toBeNull();

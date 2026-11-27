@@ -113,7 +113,8 @@ export type TurnPreparationDependencies = {
     | 'loadRuntimeTurnContext'
     | 'loadSkillActivations'
     | 'loadWorkflowLoads'
-  >;
+  > &
+    Partial<Pick<AgentSessionStore, 'loadDispatchedDesktopSessions'>>;
   systemCapabilities: SystemCapabilitySource;
   webTools?(): Promise<RuntimeWebTools>;
 };
@@ -583,6 +584,14 @@ export async function prepareResolvedTurn(
         ),
       );
     try {
+      const dispatchedDesktopSessions = await raceAbort(
+        dependencies.store.loadDispatchedDesktopSessions?.(parsed.sessionId, scope.through) ?? [],
+        signal,
+      ).catch((error: unknown) => {
+        signal.throwIfAborted();
+        logger.warn('Failed to restore dispatched desktop sessions', error as Error);
+        return [];
+      });
       systemTools = await raceAbort(
         dependencies.systemCapabilities.getTools({
           sessionId: parsed.sessionId,
@@ -592,6 +601,7 @@ export async function prepareResolvedTurn(
           model: agent.model,
           acceptsImages: modelPreflight.inputModalities.includes('image'),
           resources,
+          dispatchedDesktopSessions,
           documentParserMode,
           resolveUsageAttribution: usageAttribution.resolve,
         }),

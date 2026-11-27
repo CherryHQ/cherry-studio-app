@@ -22,6 +22,27 @@ function mcpTool(): RuntimeTool {
 }
 
 describe('buildAgentSystemPrompt', () => {
+  test('adds consent and scoped handoff instructions only for the built-in dispatch capability', () => {
+    const context = { agentInstructions: '', appLanguage: 'en-US' } as const;
+    const prompt = buildAgentSystemPrompt({ ...context, tools: [tool('desktop_dispatch_task')] });
+    expect(prompt).toContain('## Desktop Agent Delegation');
+    expect(prompt).toContain('Wait for the user to agree before dialing');
+    expect(prompt).toContain(
+      '`desktop_list_devices`, then `desktop_list_agents` and `desktop_list_workspaces`',
+    );
+    expect(prompt).toContain('`ask_user_question`');
+    expect(prompt).toContain('keep helping in this local conversation');
+    expect(prompt).toContain('dispatched by this local conversation');
+    expect(
+      buildAgentSystemPrompt({
+        ...context,
+        tools: [
+          tool('desktop_read_session'),
+          { ...mcpTool(), providerName: 'desktop_dispatch_task' },
+        ],
+      }),
+    ).not.toContain('## Desktop Agent Delegation');
+  });
   test('minimal mode keeps chat context and custom instructions without capability guidance', () => {
     const prompt = buildAgentSystemPrompt({
       mode: 'minimal',

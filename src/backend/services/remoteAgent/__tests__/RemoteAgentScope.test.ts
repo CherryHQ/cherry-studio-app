@@ -8,7 +8,10 @@ import {
   RemoteFailureError,
   RemoteTransportError,
 } from '@/backend/services/desktopConnections/remoteErrors';
-import type { RemoteSessionSnapshot } from '@/shared/contracts/remoteAgent';
+import type {
+  RemoteSessionLivePreview,
+  RemoteSessionSnapshot,
+} from '@/shared/contracts/remoteAgent';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import { RemoteAgentActions } from '../RemoteAgentActions';
@@ -23,6 +26,10 @@ function fixture(
   cache = new RemoteSessionReadCache(),
   background?: RemoteBackgroundExecution,
   files?: remoteUploads.RemoteUploadFiles,
+  onLivePreviewReleased?: (
+    sessionId: string,
+    preview: RemoteSessionLivePreview | undefined,
+  ) => void,
 ) {
   let state: DesktopLeaseState = { status: 'ready' };
   const controller = new AbortController();
@@ -138,6 +145,7 @@ function fixture(
     cache,
     background,
     files,
+    onLivePreviewReleased,
   );
   return {
     source,
@@ -275,7 +283,12 @@ it('observes through its lease, suppresses stale command targets, and never owns
   expect(test.lease.release).toHaveBeenCalledTimes(1);
 });
 
-function backgroundFixture() {
+function backgroundFixture(
+  onLivePreviewReleased?: (
+    sessionId: string,
+    preview: RemoteSessionLivePreview | undefined,
+  ) => void,
+) {
   const turn = {
     setInteraction: jest.fn(),
     updateContent: jest.fn(),
@@ -297,12 +310,140 @@ function backgroundFixture() {
     keepAlive: { acquire: jest.fn(() => ({ release: jest.fn() })) },
     translate: (key) => key,
   };
-  const test = fixture(new RemoteSessionReadCache(), background);
+  const test = fixture(new RemoteSessionReadCache(), background, undefined, onLivePreviewReleased);
   return { ...test, turn, startTurn, background };
 }
 
+it('keeps live preview reads and subscriptions passive while projecting known observations', async () => {
+  const test = fixture();
+  const previews = jest.fn(() => test.source.getLiveSessionPreview('s'));
+  const unsubscribe = test.source.subscribeLiveSession('s', previews);
+  expect(test.source.getLiveSessionPreview('s')).toBeUndefined();
+  expect(test.lease.ready).not.toHaveBeenCalled();
+  expect(test.request).not.toHaveBeenCalled();
+  test.setState({ status: 'offline' });
+  expect(previews).toHaveBeenCalled();
+  expect(test.source.getLiveSessionPreview('s')).toBeUndefined();
+  test.setState({ status: 'ready' });
+  expect(test.lease.ready).not.toHaveBeenCalled();
+
+  const tail = 'r'.repeat(240);
+  test.projection.messages.m = {
+    messageId: 'm',
+    revision: '1',
+    role: 'assistant',
+    status: 'pending',
+    partIds: ['reply', 'tool1', 'tool2', 'tool3'],
+  };
+  test.projection.parts.reply = {
+    partId: 'reply',
+    revision: '1',
+    kind: 'text',
+    state: 'streaming',
+    content: { text: ` old ${tail} ` },
+  };
+  for (const id of ['tool1', 'tool2', 'tool3']) {
+    test.projection.parts[id] = {
+      partId: id,
+      revision: '1',
+      kind: 'tool-input',
+      state: 'completed',
+      toolName: id,
+      toolCallId: id,
+      content: { text: '{}' },
+    };
+  }
+  test.projection.executions.e = { executionId: 'e', status: 'awaiting-approval', durable: false };
+  test.projection.interactions.i = {
+    interactionId: 'i',
+    executionId: 'e',
+    toolCallId: 'tool3',
+    revision: '1',
+    status: 'pending',
+    summary: 'Approve access',
+    inputDigest: '0'.repeat(64),
+  };
+  const stop = test.source.observe('s', () => undefined);
+  await settle();
+  const first = test.source.getLiveSessionPreview('s');
+  const second = test.source.getLiveSessionPreview('s');
+  expect(first).toBe(second);
+  expect(previews).toHaveLastReturnedWith({
+    connectionStatus: 'ready',
+    current: true,
+    sessionTitle: 'Session',
+    executionState: 'awaiting-approval',
+    pendingInteraction: { id: 'i', title: 'Approve access', kind: 'decision' },
+    recentTools: [
+      { name: 'tool3', state: 'input-ready' },
+      { name: 'tool2', state: 'input-ready' },
+    ],
+    previewText: tail,
+    updatedAt: Date.parse(test.projection.session.updatedAt),
+  });
+  test.setState({ status: 'suspended' });
+  const suspended = test.source.getLiveSessionPreview('s');
+  expect(suspended).not.toBe(first);
+  expect(test.source.getLiveSessionPreview('s')).toBe(suspended);
+  expect(previews).toHaveLastReturnedWith(
+    expect.objectContaining({ connectionStatus: 'suspended', current: false, previewText: tail }),
+  );
+  unsubscribe();
+  previews.mockClear();
+  test.setState({ status: 'offline' });
+  expect(previews).not.toHaveBeenCalled();
+  stop();
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it('starts tracking a titled handoff with no remote conversation screen', async () => {
+  const test = fixture();
+  test.projection.executions.e = { executionId: 'e', status: 'running', durable: false };
+  const request = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.sessions.get') return { session: test.projection.session };
+    if (method === 'agent.sessions.create' || method === 'agent.messages.send')
+      return {
+        commandId: params.commandId,
+        method,
+        status: 'applied',
+        sessionId: 's',
+        admittedAt: '2026-09-22T00:00:00.000Z',
+      };
+    return request(method, params);
+  });
+  const previews = jest.fn(() => test.source.getLiveSessionPreview('s'));
+  const unsubscribe = test.source.subscribeLiveSession('s', previews);
+  const operation = await test.source.start({
+    draftId: 'handoff',
+    agentId: 'a',
+    title: 'Desktop task',
+    workspaceId: 'w',
+    text: 'Work',
+  });
+  expect(operation).toMatchObject({ status: 'applied', sessionId: 's', title: 'Desktop task' });
+  expect(previews.mock.results.map(({ value }) => value)).toContainEqual(
+    expect.objectContaining({ sessionTitle: 'Desktop task' }),
+  );
+  await settle();
+  expect(test.request).toHaveBeenCalledWith(
+    'agent.sessions.subscribe',
+    expect.objectContaining({ sessionId: 's' }),
+    expect.any(AbortSignal),
+  );
+  expect(test.source.getLiveSessionPreview('s')).toMatchObject({
+    current: true,
+    executionState: 'running',
+  });
+  unsubscribe();
+  test.source.dispose();
+  await test.source.drain();
+});
+
 it('retains an active desktop execution after its screen leaves and releases demand on a terminal checkpoint', async () => {
-  const test = backgroundFixture();
+  const onLivePreviewReleased = jest.fn();
+  const test = backgroundFixture(onLivePreviewReleased);
   test.projection.executions.e = { executionId: 'e', status: 'running', durable: false };
   const unobserve = test.source.observe('s', () => {});
   await settle();
@@ -328,6 +469,11 @@ it('retains an active desktop execution after its screen leaves and releases dem
   expect(test.turn.finish).toHaveBeenCalledWith('completed');
   expect(test.source.hasPendingExecution()).toBe(false);
   expect(test.lease.setBackgroundRequired).toHaveBeenLastCalledWith(false);
+  expect(onLivePreviewReleased).toHaveBeenCalledWith(
+    's',
+    expect.objectContaining({ executionState: 'completed' }),
+  );
+  expect(test.source.getLiveSessionPreview('s')).toBeUndefined();
   test.source.dispose();
   await test.source.drain();
 });
@@ -493,6 +639,10 @@ it('hands a recovered first send to execution observation before releasing comma
     text: 'hello',
   });
   expect(start.status).toBe('pending');
+  expect(test.source.getLiveSessionPreview('s')).toMatchObject({
+    current: false,
+    executionState: 'pending-confirm',
+  });
   confirmed = true;
   test.projection.executions.e = { executionId: 'e', status: 'running', durable: false };
   test.setState({ status: 'ready' });

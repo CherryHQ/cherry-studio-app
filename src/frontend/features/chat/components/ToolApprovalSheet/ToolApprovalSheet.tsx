@@ -6,9 +6,15 @@ import { ScrollView, Text, View } from 'react-native';
 import { MarkdownText } from '@/frontend/components/MarkdownText';
 import { MessageDetailText, MessageDetailValue } from '@/frontend/components/MessageDetail';
 import { getBuiltInToolTitleKey } from '@/shared/data/types/builtInToolTitles';
+import {
+  DESKTOP_DISPATCH_MAX_TEXT_LENGTH,
+  type DesktopDispatchApprovalInput,
+  DesktopDispatchApprovalInputSchema,
+} from '@/shared/data/types/desktopDispatchTool';
 import { CreateSkillInputSchema } from '@/shared/data/types/skill';
 
 const ignoreClose = () => undefined;
+const DESKTOP_BRIEF_PREVIEW_LENGTH = 800;
 
 export type PendingToolApproval = {
   approvalId: string;
@@ -73,12 +79,15 @@ export function ToolApprovalSheet({
   const titleKey = getBuiltInToolTitleKey(approval.toolName ?? '');
   const isSkillApproval =
     approval.toolName === 'create_skill' || approval.toolName === 'install_skill';
+  const isDesktopDispatch = approval.toolName === 'desktop_dispatch_task';
   const approveLabel =
     approval.toolName === 'create_skill'
       ? t('skills.create.name')
       : approval.toolName === 'install_skill'
         ? t('skills.candidate.install')
-        : t('chat.tool.approval.continue');
+        : isDesktopDispatch
+          ? t('desktopDispatch.approval.confirm')
+          : t('chat.tool.approval.continue');
   const submit = async (approved: boolean) => {
     const { approvalId } = approval;
     if (!canDecide || (approved && !canApprove) || submitting.current.has(approvalId)) {
@@ -124,7 +133,7 @@ export function ToolApprovalSheet({
         ) : undefined
       }
       open={isOpen}
-      size={approval.toolName === 'create_skill' ? 'large' : 'medium'}
+      size={approval.toolName === 'create_skill' || isDesktopDispatch ? 'large' : 'medium'}
       title={titleKey ? t(titleKey) : approval.displayName}
     >
       <ScrollView
@@ -158,6 +167,20 @@ export function ToolApprovalSheet({
 function ToolApprovalContent({ approval }: { approval: PendingToolApproval }) {
   const { t } = useTranslation();
   if (approval.sshCommand) return <SshCommandApproval input={approval.input} />;
+  if (approval.toolName === 'desktop_dispatch_task') {
+    const dispatch = DesktopDispatchApprovalInputSchema.safeParse(approval.input);
+    if (dispatch.success)
+      return (
+        <>
+          <DesktopDispatchApproval input={dispatch.data} />
+          <ToolApprovalArguments
+            value={approval.input}
+            showLabel={t('desktopDispatch.approval.showDetails')}
+            hideLabel={t('desktopDispatch.approval.hideDetails')}
+          />
+        </>
+      );
+  }
   if (approval.toolName === 'create_skill') {
     const skill = CreateSkillInputSchema.safeParse(approval.input);
     if (skill.success)
@@ -203,7 +226,70 @@ function ToolApprovalContent({ approval }: { approval: PendingToolApproval }) {
   return <MessageDetailValue title={t('chat.tool.arguments')} value={approval.input} />;
 }
 
-function ToolApprovalArguments({ value }: { value: unknown }) {
+function DesktopDispatchApproval({ input }: { input: DesktopDispatchApprovalInput }) {
+  const { t } = useTranslation();
+  const { connectionName, agentName, workspaceName, title, text, textCharLength, attachments } =
+    input;
+  const preview =
+    text.length > DESKTOP_BRIEF_PREVIEW_LENGTH
+      ? `${text.slice(0, DESKTOP_BRIEF_PREVIEW_LENGTH)}…`
+      : text;
+
+  return (
+    <>
+      <Section>
+        <Section.Item label={t('desktopDispatch.approval.desktop')} description={connectionName} />
+        <Section.Item label={t('desktopDispatch.approval.agent')} description={agentName} />
+        <Section.Item
+          label={t('desktopDispatch.approval.workspace')}
+          description={
+            input.workspace.kind === 'system'
+              ? t('desktopDispatch.workspace.systemDefault')
+              : workspaceName
+          }
+        />
+      </Section>
+      <Section>
+        <Section.Item label={t('desktopDispatch.approval.taskTitle')} description={title} />
+        <Section.Item>
+          <View className="gap-2">
+            <Text className="font-medium text-base text-foreground">
+              {t('desktopDispatch.approval.brief')}
+            </Text>
+            <Text className="text-xs text-muted-foreground">
+              {t('desktopDispatch.approval.characterCount', { count: textCharLength })}
+            </Text>
+            <Text className="text-sm text-foreground" selectable>
+              {preview}
+            </Text>
+            {textCharLength > DESKTOP_DISPATCH_MAX_TEXT_LENGTH ? (
+              <Text className="text-xs text-muted-foreground">
+                {t('desktopDispatch.approval.spillHint', { extension: '.md' })}
+              </Text>
+            ) : null}
+          </View>
+        </Section.Item>
+      </Section>
+      {attachments.length ? (
+        <Section title={t('desktopDispatch.approval.attachments')}>
+          {attachments.map((file) => (
+            <Section.Item key={file.fileEntryId} label={file.name} />
+          ))}
+        </Section>
+      ) : null}
+    </>
+  );
+}
+
+function ToolApprovalArguments({
+  value,
+  showLabel,
+  hideLabel,
+}: {
+  value: unknown;
+  showLabel?: string;
+  hideLabel?: string;
+}) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   return (
@@ -215,7 +301,9 @@ function ToolApprovalArguments({ value }: { value: unknown }) {
         variant="ghost"
       >
         <Button.Label>
-          {t(expanded ? 'skills.approval.hideDetails' : 'skills.approval.showDetails')}
+          {expanded
+            ? (hideLabel ?? t('skills.approval.hideDetails'))
+            : (showLabel ?? t('skills.approval.showDetails'))}
         </Button.Label>
       </Button>
       {expanded ? <MessageDetailValue title={t('chat.tool.arguments')} value={value} /> : null}

@@ -1,6 +1,8 @@
-import type { DesktopDomainLease } from '@/backend/services/desktopConnections';
+import type { DesktopConnections, DesktopDomainLease } from '@/backend/services/desktopConnections';
+import type { RemoteSessionLivePreview } from '@/shared/contracts/remoteAgent';
 
 import { RemoteAgentRuntime } from '../RemoteAgentRuntime';
+import { RemoteAgentScope } from '../RemoteAgentScope';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -80,6 +82,7 @@ let runtime: RemoteAgentRuntime;
 let retain: jest.Mock;
 let prewarmAgent: jest.Mock;
 let lease: DesktopDomainLease;
+let invalidate: Parameters<DesktopConnections['subscribeInvalidation']>[0];
 beforeEach(async () => {
   mockScopes.length = 0;
   lease = { scope: 'binding', release: jest.fn() } as unknown as DesktopDomainLease;
@@ -91,7 +94,10 @@ beforeEach(async () => {
       retain,
       prewarmAgent,
       revoke: jest.fn(),
-      subscribeInvalidation: () => () => undefined,
+      subscribeInvalidation(listener) {
+        invalidate = listener;
+        return () => undefined;
+      },
     },
     journal: {} as never,
   });
@@ -207,6 +213,107 @@ it('one cancelled acquisition cannot release the scope awaited by another route'
   source.dispose();
   expect(lease.release).toHaveBeenCalledTimes(1);
 });
+
+it('attaches passive listeners when a matching scope appears and releases them on close', async () => {
+  const preview = { connectionStatus: 'ready', current: false, recentTools: [] } as const;
+  const detach = jest.fn();
+  const getLiveSessionPreview = jest.fn(() => preview);
+  const subscribeLiveSession = jest.fn((_sessionId: string, _listener: () => void) => detach);
+  jest.mocked(RemoteAgentScope).mockImplementationOnce((lease) => {
+    const scope = Object.assign(mockScope(lease), { getLiveSessionPreview, subscribeLiveSession });
+    mockScopes.push(scope);
+    return scope as unknown as RemoteAgentScope;
+  });
+  const listener = jest.fn();
+  const other = jest.fn();
+  const unsubscribe = runtime.subscribeLiveSession('pc', 'session', listener);
+  const unsubscribeOther = runtime.subscribeLiveSession('other-pc', 'session', other);
+  expect(runtime.peekLiveSession('pc', 'session')).toBeUndefined();
+  expect(retain).not.toHaveBeenCalled();
+
+  const source = await runtime.open('pc', signal());
+  expect(listener).toHaveBeenCalledTimes(1);
+  expect(other).not.toHaveBeenCalled();
+  expect(runtime.peekLiveSession('pc', 'session')).toBe(preview);
+  expect(getLiveSessionPreview).toHaveBeenCalledWith('session');
+  const second = jest.fn();
+  const unsubscribeSecond = runtime.subscribeLiveSession('pc', 'session', second);
+  expect(subscribeLiveSession).toHaveBeenCalledTimes(1);
+  expect(subscribeLiveSession.mock.calls[0][0]).toBe('session');
+  subscribeLiveSession.mock.calls[0][1]();
+  expect(second).toHaveBeenCalledTimes(1);
+  unsubscribeSecond();
+  expect(detach).not.toHaveBeenCalled();
+  source.dispose();
+  expect(detach).toHaveBeenCalledTimes(1);
+  expect(listener).toHaveBeenCalledTimes(3);
+  expect(second).toHaveBeenCalledTimes(1);
+  expect(runtime.peekLiveSession('pc', 'session')).toBeUndefined();
+  unsubscribe();
+  unsubscribeOther();
+  expect(retain).toHaveBeenCalledTimes(1);
+});
+
+it('supports passive callers while a legacy scope is open', async () => {
+  const source = await runtime.open('pc', signal());
+  const listener = jest.fn();
+  const unsubscribe = runtime.subscribeLiveSession('pc', 'session', listener);
+  expect(runtime.peekLiveSession('pc', 'session')).toBeUndefined();
+  unsubscribe();
+  source.dispose();
+  expect(listener).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['completed', 'agent'],
+  ['failed', undefined],
+] as const)(
+  'retains a %s preview when the idle scope closes and clears it on invalidation',
+  async (executionState, domain) => {
+    const terminal: RemoteSessionLivePreview = {
+      connectionStatus: 'ready',
+      current: true,
+      executionState,
+      recentTools: [],
+    };
+    jest.mocked(RemoteAgentScope).mockImplementationOnce((lease) => {
+      const scope = Object.assign(mockScope(lease), {
+        getLivePreviewSessionIds: () => ['session'],
+        getLiveSessionPreview: () => terminal,
+      });
+      mockScopes.push(scope);
+      return scope as unknown as RemoteAgentScope;
+    });
+    const source = await runtime.open('pc', signal());
+    const scope = mockScopes[0];
+    scope.executing(true);
+    source.dispose();
+    await settle();
+    expect(lease.release).not.toHaveBeenCalled();
+    scope.executing(false);
+    await settle();
+    expect(lease.release).toHaveBeenCalledTimes(1);
+    const first = runtime.peekLiveSession('pc', 'session');
+    const second = runtime.peekLiveSession('pc', 'session');
+    expect(first).toBe(terminal);
+    expect(first).toBe(second);
+
+    const listener = jest.fn(() => runtime.peekLiveSession('pc', 'session'));
+    const unsubscribe = runtime.subscribeLiveSession('pc', 'session', listener);
+    const reopened = await runtime.open('pc', signal());
+    expect(runtime.peekLiveSession('pc', 'session')).toBe(terminal);
+    reopened.dispose();
+    expect(runtime.peekLiveSession('pc', 'session')).toBe(terminal);
+
+    invalidate({ connectionId: 'other-pc', domain: 'agent' });
+    invalidate({ connectionId: 'pc', domain: 'configuration' });
+    expect(runtime.peekLiveSession('pc', 'session')).toBe(terminal);
+    invalidate({ connectionId: 'pc', domain });
+    expect(runtime.peekLiveSession('pc', 'session')).toBeUndefined();
+    expect(listener).toHaveLastReturnedWith(undefined);
+    unsubscribe();
+  },
+);
 
 it("retires a released caller's task capability while another caller retains the shared scope", async () => {
   const first = await runtime.open('pc', signal());

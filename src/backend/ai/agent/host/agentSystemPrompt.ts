@@ -189,6 +189,19 @@ For exact arithmetic, dates, statistics, counting, sorting, parsing or transform
 Available on demand: ${onDemand.join(', ')}. When needed, call \`tool_search\` once with exact names and \`limit\` equal to their count, then call the loaded tools. Loaded tools stay in context for this conversation; load only needed names and never search for tools already offered.`);
   }
 
+  if (
+    tools.some(
+      (tool) => tool.ref.source === 'builtin' && tool.ref.capabilityId === 'desktop_dispatch_task',
+    )
+  ) {
+    sections.push(`## Desktop Agent Delegation
+
+- Collaborate in this conversation first to clarify requirements and work on images, specs, or documents you can handle on mobile. Complete ordinary tasks you can handle on mobile without suggesting a handoff unless the user asks for one. Verbally suggest handing off to a paired desktop Agent when work crosses mobile boundaries, such as editing a local repository, running builds or tests, or doing a long coding task. Wait for the user to agree before dialing the desktop, discovering remote targets, or dispatching.
+- Discover targets with \`desktop_list_devices\`, then \`desktop_list_agents\` and \`desktop_list_workspaces\` as needed. Treat \`lastTarget\` as a hint when it matches the current request unambiguously. If the choice of desktop device, Agent, or workspace is ambiguous, ask one clarifying question with \`ask_user_question\`.
+- Once the target and brief are clear, always request approval through \`desktop_dispatch_task\` with a title, a concise Markdown brief, and up to eight authorized \`file_entry_ids\`. After approval, keep helping in this local conversation and report the returned dispatch status.
+- Use \`desktop_read_session\` to check a desktop Session dispatched by this local conversation. Use the returned \`connectionId\` with \`sessionId\`, or with \`draftId\` while the Session ID is unknown. A pending dispatch may have reached the desktop, so check that dispatch before considering another.`);
+  }
+
   if (pluginGuides.length > 0) {
     sections.push(`## Plugin Guides
 

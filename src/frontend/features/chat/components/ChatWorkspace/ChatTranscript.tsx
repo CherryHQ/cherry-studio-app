@@ -22,6 +22,7 @@ type ChatTranscriptProps = Omit<
   ComponentProps<typeof MessageList>,
   'bottomAccessoryHeight' | 'contentTopInset' | 'visualBottomAccessoryHeight'
 > & {
+  contentTopInset?: number;
   hasOlderMessages?: boolean;
   hiddenUserTurnCount?: number;
   isLoadingMore: boolean;
@@ -38,6 +39,7 @@ export function ChatTranscript({
   isLoadingMore,
   onReady,
   turnNavigator,
+  contentTopInset: topInsetOverride,
   ...list
 }: ChatTranscriptProps) {
   const composer = useComposerExpansion();
@@ -67,7 +69,8 @@ export function ChatTranscript({
   const { top } = useSafeAreaInsets();
   const speechInset = useSpeechPlaybackInset();
   const contentTopInset =
-    resolveHeaderContentInset(headerHeight, top + mainHeaderRowHeight) + speechInset;
+    (topInsetOverride ?? resolveHeaderContentInset(headerHeight, top + mainHeaderRowHeight)) +
+    speechInset;
   const { isCoverVisible, markListLoaded } = useMessageListInitialRenderGate({
     renderGateKey: list.dataKey,
     requiresInitialHistoryLayout: requiresInitialLayout,

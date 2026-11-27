@@ -134,7 +134,10 @@ RemoteAgentRuntime → SessionSync (in-memory desktop state) / RemoteAgentAction
 - Remote session state is never written to SQLite. Every new subscription installs a desktop
   checkpoint. The command journal receives its MMKV storage from composition and never resolves
   a replacement host through `application.get` during late work.
-- Local Agent/MCP execution and `DocumentExportRuntime` have no desktop connection dependency.
+- Local Agent turns can use desktop delegation tools when a paired device grants Agent access.
+  Dispatch always requires approval, and readback is limited to receipts owned by the local
+  conversation and its selected branch. Local MCP execution and `DocumentExportRuntime` have no
+  desktop connection dependency.
 
 ## Persistence
 
