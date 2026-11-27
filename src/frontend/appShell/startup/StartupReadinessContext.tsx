@@ -21,7 +21,7 @@ export function StartupCoverVisibleProvider({
   return <StartupCoverVisibleContext value={visible}>{children}</StartupCoverVisibleContext>;
 }
 
-/** Whether the startup cover still hides the application. False outside `StartupCoordinator`. */
+/** Whether the native startup splash still hides the application. False outside `StartupCoordinator`. */
 export function useStartupCoverVisible() {
   return use(StartupCoverVisibleContext);
 }

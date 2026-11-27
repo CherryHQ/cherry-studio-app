@@ -40,7 +40,7 @@ restore flat `create*`, provider, runtime-task, or polyfill files beside `index.
    claims nothing; the host is not installed yet.
 3. `initialize()` installs the host, running the `Gate` phase — cache, SQLite, preferences — ordered
    by the dependency graph, not by the order written here.
-4. Once the React Native startup cover owns the surface, boot theme and i18n initialize behind it.
+4. Once preferences are cached, i18n, initial Agent, and boot theme initialize.
 5. `AppBootstrapGate` opens after required startup work succeeds.
 6. Best-effort post-ready tasks start outside the first-paint critical path: the `PostReady` phase
    plus the work no service owns.
