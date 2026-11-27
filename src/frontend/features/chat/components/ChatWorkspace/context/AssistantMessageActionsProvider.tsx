@@ -35,6 +35,7 @@ import { useChatEditing } from '../../../context/ChatEditingProvider';
 import { editReplyHref } from '../../../editReply/editReplyRoute';
 import { useIsChatShareSelecting } from '../../../share/chatShareSelection';
 import type { ChatShareTranslations } from '../../../share/chatShareTarget';
+import type { SpeechContext } from '../../../voice/useMessageSpeech';
 import { getSendErrorCodeLabelKey } from '../../ChatInput/utils/sendErrorLabel';
 import { AssistantToolbarManageSheet } from '../components/AssistantToolbarManageSheet';
 import { useMessageTranslationStore } from '../translation/MessageTranslationProvider';
@@ -82,6 +83,8 @@ type AssistantMessageActionsState = {
 
 type AssistantMessageActions = {
   openToolbarManager: () => void;
+  /** Resolves conversation and agent metadata on demand when read-aloud starts. */
+  getSpeechContext?: () => SpeechContext | undefined;
   editAnswer?: (input: { messageId: string }) => void;
   retryAssistantMessage?: (input: { messageId: string }) => void;
   shareAssistantMessage: (input: { messageId: string }) => void;
@@ -110,6 +113,8 @@ const AssistantMessageActionsStateContext = createContext<AssistantMessageAction
 const AssistantMessageActionsContext = createContext<AssistantMessageActions | null>(null);
 
 type AssistantMessageActionsProviderProps = PropsWithChildren<{
+  assistantName?: string;
+  connectionId?: string;
   isAssistantToolbarEnabled: boolean;
   /** Opens the source-owned share selector; absent while no Session exists. */
   onShare?: (messageId: string, translations?: ChatShareTranslations) => void;
@@ -120,7 +125,9 @@ type AssistantMessageActionsProviderProps = PropsWithChildren<{
 }>;
 
 export function AssistantMessageActionsProvider({
+  assistantName,
   children,
+  connectionId,
   isAssistantToolbarEnabled,
   onShare,
   sessionId,
@@ -199,15 +206,29 @@ export function AssistantMessageActionsProvider({
   // only whether an action exists or is enabled reaches rows as rendered state.
   const latest = useRef({
     alert,
+    assistantName,
+    connectionId,
     isBusy,
     messages,
     onShare,
+    sessionId,
     snapshot,
     t,
     toast,
   });
   useLayoutEffect(() => {
-    latest.current = { alert, isBusy, messages, onShare, snapshot, t, toast };
+    latest.current = {
+      alert,
+      assistantName,
+      connectionId,
+      isBusy,
+      messages,
+      onShare,
+      sessionId,
+      snapshot,
+      t,
+      toast,
+    };
   });
 
   const run = useCallback(
@@ -385,9 +406,35 @@ export function AssistantMessageActionsProvider({
     },
     [beginEdit],
   );
+  const getSpeechContext = useCallback((): SpeechContext | undefined => {
+    const {
+      assistantName: currentAssistantName,
+      connectionId: currentConnectionId,
+      sessionId: currentSessionId,
+      snapshot: currentSnapshot,
+    } = latest.current;
+    const snapshotTitle = currentSnapshot.title.trim();
+    const source = currentSessionId
+      ? currentConnectionId
+        ? ({
+            kind: 'desktop',
+            connectionId: currentConnectionId,
+            sessionId: currentSessionId,
+          } as const)
+        : ({ kind: 'local', sessionId: currentSessionId } as const)
+      : undefined;
+    return source || snapshotTitle || currentAssistantName
+      ? {
+          ...(snapshotTitle ? { title: snapshotTitle } : {}),
+          ...(currentAssistantName ? { subtitle: currentAssistantName } : {}),
+          ...(source ? { source } : {}),
+        }
+      : undefined;
+  }, []);
   return (
     <ChatMessageActionsProvider
       isAssistantToolbarEnabled={isAssistantToolbarEnabled && !isSelecting}
+      getSpeechContext={getSpeechContext}
       onShare={share}
       onEditAnswer={editableAnswerIds.size ? edit : undefined}
       editableAnswerIds={editableAnswerIds}
@@ -448,6 +495,7 @@ export function AssistantMessageActionsProvider({
 export function ChatMessageActionsProvider({
   children,
   isAssistantToolbarEnabled,
+  getSpeechContext,
   onShare: shareAssistantMessage,
   onEditAnswer: editAnswer,
   onFork: forkFromAssistantMessage,
@@ -466,6 +514,7 @@ export function ChatMessageActionsProvider({
   isEditQuestionDisabled = true,
 }: PropsWithChildren<{
   isAssistantToolbarEnabled: boolean;
+  getSpeechContext?: AssistantMessageActions['getSpeechContext'];
   onShare: AssistantMessageActions['shareAssistantMessage'];
   onEditAnswer?: AssistantMessageActions['editAnswer'];
   onFork?: AssistantMessageActions['forkFromAssistantMessage'];
@@ -580,6 +629,7 @@ export function ChatMessageActionsProvider({
       deleteMessageTurn,
       editQuestion,
       forkFromAssistantMessage,
+      getSpeechContext,
       retryAssistantMessage,
       selectBranch,
       shareAssistantMessage,
@@ -592,6 +642,7 @@ export function ChatMessageActionsProvider({
       deleteMessageTurn,
       editQuestion,
       forkFromAssistantMessage,
+      getSpeechContext,
       retryAssistantMessage,
       selectBranch,
       shareAssistantMessage,

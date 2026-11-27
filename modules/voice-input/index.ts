@@ -15,8 +15,28 @@ export type SystemTranscriptionResult = {
     | 'failed';
 };
 
+export type PlaybackCommandAction =
+  | 'pause'
+  | 'resume'
+  | 'stop'
+  | 'interrupt'
+  | 'resume-interruption';
+
+export type PlaybackState = 'preparing' | 'playing' | 'paused';
+
+export type PlaybackRequest = {
+  id: string;
+  title: string;
+  subtitle?: string;
+  channelName: string;
+  playLabel: string;
+  pauseLabel: string;
+  stopLabel: string;
+  deepLinkUrl?: string;
+};
+
 type VoiceInputEvents = {
-  playbackStopped: (event: { id: string }) => void;
+  playbackCommand: (event: { id: string; action: PlaybackCommandAction }) => void;
   finished: (event: VoiceRecordingResult) => void;
   level: (event: { id: string; value: number }) => void;
 };
@@ -26,7 +46,9 @@ type VoiceInputModule = {
     eventName: EventName,
     listener: VoiceInputEvents[EventName],
   ): { remove(): void };
-  beginPlayback?(id: string, title: string, stop: string): Promise<void>;
+  beginPlayback?(request: PlaybackRequest): Promise<void>;
+  requestPlaybackFocus?(id: string): Promise<boolean>;
+  updatePlaybackState?(id: string, state: PlaybackState): Promise<void>;
   endPlayback?(id: string): Promise<void>;
   /** Persistent model storage excluded from OS backup. */
   modelDirectory(): Promise<string>;

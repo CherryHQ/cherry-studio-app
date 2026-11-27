@@ -65,6 +65,8 @@ type ChatWorkspaceProps = {
   sessionId?: string;
   /** Remote reading aids use this stable source-owned namespace instead of local persistence. */
   readingAidScope?: string;
+  /** Connected desktop host id when presenting a remote conversation. */
+  connectionId?: string;
   /** Translation is enabled only when its source can identify a stable message origin. */
   isTranslationEnabled?: boolean;
   renderUsage?: (message: MessageListItem) => ReactNode;
@@ -94,6 +96,7 @@ export function ChatWorkspace({
   messageWindow,
   isAssistantToolbarEnabled,
   sessionId,
+  connectionId,
   isTranslationEnabled = false,
   readingAidScope,
   renderUsage,
@@ -125,7 +128,16 @@ export function ChatWorkspace({
     feedbackHintBottomOffset,
   );
   const listKey = sessionId ?? pendingSend?.sessionId;
-  useEndReadingWithConversation(sessionId);
+  const speechSource = useMemo(
+    () =>
+      sessionId
+        ? connectionId
+          ? ({ kind: 'desktop', connectionId, sessionId } as const)
+          : ({ kind: 'local', sessionId } as const)
+        : undefined,
+    [connectionId, sessionId],
+  );
+  useEndReadingWithConversation(speechSource);
   const { t } = useTranslation();
   useEffect(() => {
     if (
@@ -308,6 +320,8 @@ export function ChatWorkspace({
       >
         <AssistantMessageActionsProvider
           key={`assistant-actions-${listKey}`}
+          assistantName={assistantPresentation.name}
+          connectionId={connectionId}
           isAssistantToolbarEnabled={isAssistantToolbarEnabled}
           onShare={beginSelection}
           sessionId={sessionId}

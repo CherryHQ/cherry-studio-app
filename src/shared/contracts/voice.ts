@@ -82,14 +82,60 @@ export interface DictationSession {
   stop(): void;
 }
 
+export type SpeechPhase = 'preparing' | 'playing' | 'paused';
+
+export type SpeechSourceRef =
+  | { kind: 'local'; sessionId: string }
+  | { kind: 'desktop'; connectionId: string; sessionId: string };
+
+export type SpeechMetadata = {
+  title?: string;
+  subtitle?: string;
+  source?: SpeechSourceRef;
+};
+
+export type SpeechProgress = {
+  completedChunks: number;
+  totalChunks: number;
+};
+
+/**
+ * Privacy-safe localized labels published to system media surfaces (lock screen, notification
+ * shade, control center). Keep titles generic; never pass conversation titles or message prose.
+ */
+export type SpeakSystemLabels = {
+  title: string;
+  subtitle: string;
+  channelName: string;
+  play: string;
+  pause: string;
+  stop: string;
+  deepLinkUrl?: string;
+};
+
 export type SpeakOptions = VoiceRequestOptions & {
   /** Caller identity of the text being read, for example a message id. */
   key?: string;
   /** Defaults to Markdown. Use plainText for prose that has already been extracted. */
   inputFormat?: 'markdown' | 'plainText';
-  /** Localized system media controls for a user-initiated reading. */
-  playbackLabels?: { title: string; stop: string };
+  /** In-app conversation and agent presentation for the reading capsule. */
+  metadata?: SpeechMetadata;
+  /** Localized system media controls for an opted-in background reading. */
+  systemLabels?: SpeakSystemLabels;
 };
+
+export type SpeechStopTarget = {
+  key?: string;
+  source?: SpeechSourceRef;
+};
+
+export function isSameSpeechSource(
+  a: SpeechSourceRef | undefined,
+  b: SpeechSourceRef | undefined,
+): boolean {
+  if (!a || !b || a.kind !== b.kind || a.sessionId !== b.sessionId) return false;
+  return a.kind === 'local' || (b.kind === 'desktop' && a.connectionId === b.connectionId);
+}
 
 export type VoiceActivity =
   | { kind: 'idle' }
@@ -100,7 +146,13 @@ export type VoiceActivity =
       key?: string;
       progress?: AudioTranscriptionProgress;
     }
-  | { kind: 'speaking'; key: string | null; phase: 'preparing' | 'playing' };
+  | {
+      kind: 'speaking';
+      key: string | null;
+      phase: SpeechPhase;
+      metadata?: SpeechMetadata;
+      progress?: SpeechProgress;
+    };
 
 export type VoiceErrorCode =
   | 'unsupported'
@@ -163,8 +215,11 @@ export interface VoiceModule {
    * Resolves when reading finishes or is stopped.
    */
   speak(text: string, options?: SpeakOptions): Promise<void>;
-  /** Stops the current reading, optionally only if its caller key matches. */
-  stopSpeaking(key?: string): void;
+  pauseSpeaking(): void;
+  resumeSpeaking(): void;
+  togglePauseSpeaking(): void;
+  /** Stops the current reading, optionally filtering by caller key or conversation source. */
+  stopSpeaking(match?: SpeechStopTarget): void;
   getActivity(): VoiceActivity;
   subscribeActivity(listener: () => void): () => void;
 }

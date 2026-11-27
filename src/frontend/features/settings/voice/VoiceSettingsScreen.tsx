@@ -1,14 +1,13 @@
-import { Section, useToast } from '@cherrystudio/ui/components';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform } from 'react-native';
 
 import { useBackendModule, usePreference } from '@/frontend/data';
 import { VOICE_ENGINE_PREFERENCE, type VoiceCapability } from '@/shared/contracts/voice';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
+import { BackgroundReadingSetting } from './components/BackgroundReadingSetting';
 import { OfflineModelSetting } from './components/OfflineModelSetting';
 import { RecognitionLanguageSetting } from './components/RecognitionLanguageSetting';
 import { SpeechVoiceSetting } from './components/SpeechVoiceSetting';
@@ -25,25 +24,6 @@ function useEffectiveEngine(capability: VoiceCapability) {
   }).data;
 }
 
-function BackgroundReadingSetting() {
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  const voice = useBackendModule('voice');
-  const [enabled, setEnabled] = usePreference('app.background_audio.consent');
-  return (
-    <Section.SwitchItem
-      label={t('settings.voice.speech.background')}
-      value={enabled === true}
-      onValueChange={(value) => {
-        if (!value) voice.stopSpeaking();
-        void setEnabled(value, { optimistic: false }).catch(() => {
-          toast.show({ label: t('settings.voice.saveFailed'), variant: 'danger' });
-        });
-      }}
-    />
-  );
-}
-
 /** Keep each engine's controls beside its corresponding capability. */
 export default function VoiceSettingsScreen() {
   const { t } = useTranslation();
@@ -57,6 +37,7 @@ export default function VoiceSettingsScreen() {
   const dictationEngine = useEffectiveEngine('dictation');
   const transcriptionEngine = useEffectiveEngine('transcription');
   const speechEngine = useEffectiveEngine('speech');
+
   return (
     <SettingsScrollPage contentClassName="gap-6" headerProps={{ title: t('settings.voice.title') }}>
       <VoiceEngineSection capability="dictation" effectiveEngine={dictationEngine ?? null}>
@@ -75,7 +56,7 @@ export default function VoiceSettingsScreen() {
       </VoiceEngineSection>
       <VoiceEngineSection capability="speech" effectiveEngine={speechEngine ?? null}>
         {speechEngine ? <SpeechVoiceSetting engine={speechEngine} key={speechEngine} /> : null}
-        {Platform.OS === 'android' ? <BackgroundReadingSetting /> : null}
+        <BackgroundReadingSetting />
       </VoiceEngineSection>
     </SettingsScrollPage>
   );

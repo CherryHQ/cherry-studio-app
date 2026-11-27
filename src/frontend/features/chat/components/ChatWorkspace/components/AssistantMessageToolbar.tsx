@@ -79,6 +79,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
     copyAssistantMessage,
     deleteMessageTurn,
     forkFromAssistantMessage,
+    getSpeechContext,
     retryAssistantMessage,
     shareAssistantMessage,
     openToolbarManager,
@@ -102,7 +103,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
     () => speechAssistantMessageText(message.data.parts ?? [], message.data.citationSources),
     [message.data.parts, message.data.citationSources],
   );
-  const speech = useMessageSpeech(message.id, getSpeechText);
+  const speech = useMessageSpeech(message.id, getSpeechText, getSpeechContext);
   const isSpeechPreparing = speech.phase === 'preparing';
   const isCopied = copiedMessageId === message.id;
   // Turn-scoped, so a row with no turn — synthetic, or not yet reserved — has
@@ -147,7 +148,9 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
             ),
             icon: isSpeechPreparing ? (
               <PreparingSpeechSpinner />
-            ) : speech.isSpeaking ? (
+            ) : speech.phase === 'playing' ? (
+              <SquareIcon className="text-primary" size={15} />
+            ) : speech.phase === 'paused' || speech.isSpeaking ? (
               <SquareIcon className="text-foreground" size={15} />
             ) : (
               <Volume2Icon className="text-muted-foreground" size={15} />

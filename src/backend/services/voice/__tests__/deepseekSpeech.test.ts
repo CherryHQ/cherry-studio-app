@@ -51,6 +51,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  jest.useRealTimers();
   jest.restoreAllMocks();
 });
 
@@ -96,12 +97,12 @@ test('overlaps playback with only one validated WAV in memory and reports the fi
     .mockReturnValueOnce(second.promise)
     .mockReturnValueOnce(third.promise);
   const [firstPlay, secondPlay, thirdPlay] = playbackGates(3);
-  const onPlaybackStart = jest.fn();
+  const onPhase = jest.fn();
   const speaking = createDeepseekSpeech(async () => 'stella').speak({
     text: 'a'.repeat(140) + 'b'.repeat(400) + 'c',
     language: 'en-US',
     signal: new AbortController().signal,
-    onPlaybackStart,
+    playback: { onPhase, onProgress: jest.fn(), onControls: jest.fn() },
   });
 
   await firstRequested.promise;
@@ -112,11 +113,12 @@ test('overlaps playback with only one validated WAV in memory and reports the fi
   expect(mockRequest.mock.calls.map(([request]) => request.body.text.length)).toEqual([140, 400]);
   expect(File).toHaveBeenCalledTimes(1);
   expect(mockCreatePlayer).toHaveBeenCalledTimes(1);
-  expect(onPlaybackStart).not.toHaveBeenCalled();
+  expect(onPhase).toHaveBeenCalledWith('preparing');
+  expect(onPhase).not.toHaveBeenCalledWith('playing');
   updatePlayback({ playing: false });
   updatePlayback({ playing: true });
   updatePlayback({ playing: true });
-  expect(onPlaybackStart).toHaveBeenCalledTimes(1);
+  expect(onPhase.mock.calls.filter(([phase]) => phase === 'playing')).toHaveLength(1);
 
   second.resolve(wav());
   await Promise.resolve();
@@ -141,7 +143,7 @@ test('overlaps playback with only one validated WAV in memory and reports the fi
   updatePlayback({ playing: true });
   updatePlayback({ didJustFinish: true });
   await speaking;
-  expect(onPlaybackStart).toHaveBeenCalledTimes(1);
+  expect(onPhase.mock.calls).toEqual([['preparing'], ['playing']]);
   expect(mockDelete).toHaveBeenCalledTimes(3);
   expect(mockReleaseSession).toHaveBeenCalledTimes(1);
 });
@@ -149,31 +151,31 @@ test('overlaps playback with only one validated WAV in memory and reports the fi
 test('reports playback once when the first chunk finishes without a native start', async () => {
   mockRequest.mockResolvedValue(wav());
   const [firstPlay, secondPlay, thirdPlay] = playbackGates(3);
-  const onPlaybackStart = jest.fn();
+  const onPhase = jest.fn();
   const speaking = createDeepseekSpeech(async () => 'stella').speak({
     text: 'a'.repeat(541),
     language: 'en-US',
     signal: new AbortController().signal,
-    onPlaybackStart,
+    playback: { onPhase, onProgress: jest.fn(), onControls: jest.fn() },
   });
 
   await firstPlay.promise;
   updatePlayback({ didJustFinish: true });
 
   await secondPlay.promise;
-  const callsBeforeSecondStart = onPlaybackStart.mock.calls.length;
+  const callsBeforeSecondStart = onPhase.mock.calls.length;
   updatePlayback({ playing: true });
   updatePlayback({ didJustFinish: true });
 
   await thirdPlay.promise;
-  const callsBeforeThirdStart = onPlaybackStart.mock.calls.length;
+  const callsBeforeThirdStart = onPhase.mock.calls.length;
   updatePlayback({ playing: true });
   updatePlayback({ didJustFinish: true });
 
   await speaking;
-  expect(callsBeforeSecondStart).toBe(1);
-  expect(callsBeforeThirdStart).toBe(1);
-  expect(onPlaybackStart).toHaveBeenCalledTimes(1);
+  expect(callsBeforeSecondStart).toBe(2);
+  expect(callsBeforeThirdStart).toBe(2);
+  expect(onPhase.mock.calls).toEqual([['preparing'], ['playing']]);
 });
 
 test('a failed prefetch is reported after current playback finishes, without writing the bad WAV', async () => {
@@ -238,6 +240,244 @@ test('cancels and joins prefetch after Android player and file cleanup, then rel
   expect(events.at(-1)).toBe('release session');
   expect(File).toHaveBeenCalledTimes(1);
   expect(mockCreatePlayer).toHaveBeenCalledTimes(1);
+});
+
+test('pauses and resumes active playback without treating delayed pause events as interruptions', async () => {
+  jest.clearAllMocks();
+  jest.replaceProperty(Platform, 'OS', 'android');
+  const controller = new AbortController();
+  let listener: ((status: Record<string, unknown>) => void) | undefined;
+  const phases: string[] = [];
+  const progresses: { completedChunks: number; totalChunks: number }[] = [];
+  const onInterrupted = jest.fn(() => controlsHolder.current?.pause());
+  const controlsHolder: { current: { pause(): void; resume(): string | void } | null } = {
+    current: null,
+  };
+
+  mockRequest.mockResolvedValueOnce(wav());
+  mockPlayer.addListener.mockImplementationOnce((_event, callback) => {
+    listener = callback;
+    return { remove: jest.fn() };
+  });
+  mockPlayer.play.mockImplementation(() => {
+    listener?.({ isLoaded: true, playing: true, isBuffering: false, didJustFinish: false });
+  });
+  // Intentionally do not emit playing:false synchronously on pause so we can deliver it late after resume.
+  mockPlayer.pause.mockImplementation(() => {});
+
+  const speech = createDeepseekSpeech(async () => 'stella');
+  const speaking = speech.speak({
+    text: 'Hello.',
+    language: 'en-US',
+    signal: controller.signal,
+    playback: {
+      onPhase: (phase) => phases.push(phase),
+      onProgress: (progress) => progresses.push(progress),
+      onControls: (next) => {
+        controlsHolder.current = next;
+      },
+      onInterrupted,
+    },
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(progresses).toEqual([{ completedChunks: 0, totalChunks: 1 }]);
+  expect(phases).toEqual(['preparing', 'playing']);
+  const controls = controlsHolder.current;
+  expect(controls).not.toBeNull();
+  if (!controls) throw new Error('Expected controls to be registered');
+
+  controls.pause();
+  expect(mockPlayer.pause).toHaveBeenCalledTimes(1);
+  expect(phases.at(-1)).toBe('paused');
+
+  // Queued playing:true followed by playing:false from the prior pause must keep paused intent and never abort.
+  listener?.({ isLoaded: true, playing: true, isBuffering: false, didJustFinish: false });
+  expect(phases.at(-1)).toBe('paused');
+  expect(mockPlayer.pause).toHaveBeenCalledTimes(2);
+  listener?.({ isLoaded: true, playing: false, isBuffering: false, didJustFinish: false });
+  expect(onInterrupted).not.toHaveBeenCalled();
+  expect(mockPlayer.release).not.toHaveBeenCalled();
+
+  // Resume first, then simulate delayed playing:false from the prior pause arriving before the new play confirms.
+  mockPlayer.play.mockImplementationOnce(() => {});
+  controls.resume();
+  listener?.({ isLoaded: true, playing: false, isBuffering: false, didJustFinish: false });
+  expect(onInterrupted).not.toHaveBeenCalled();
+  expect(mockPlayer.release).not.toHaveBeenCalled();
+
+  listener?.({ isLoaded: true, playing: true, isBuffering: false, didJustFinish: false });
+  expect(phases.at(-1)).toBe('playing');
+
+  // Unexpected playing:false while active notifies the runtime via onInterrupted rather than aborting.
+  listener?.({ isLoaded: true, playing: false, isBuffering: false, didJustFinish: false });
+  expect(onInterrupted).toHaveBeenCalledTimes(1);
+  expect(phases.at(-1)).toBe('paused');
+
+  controls.resume();
+  listener?.({ isLoaded: true, playing: false, isBuffering: false, didJustFinish: true });
+  await expect(speaking).resolves.toBeUndefined();
+  expect(progresses.at(-1)).toEqual({ completedChunks: 1, totalChunks: 1 });
+  expect(mockPlayer.release).toHaveBeenCalledTimes(1);
+  expect(controlsHolder.current).toBeNull();
+});
+
+test('pauses watchdog timer while paused and re-arms on resume', async () => {
+  jest.clearAllMocks();
+  jest.useFakeTimers();
+  jest.replaceProperty(Platform, 'OS', 'android');
+  try {
+    const controller = new AbortController();
+    let listener: ((status: Record<string, unknown>) => void) | undefined;
+    const controlsHolder: { current: { pause(): void; resume(): string | void } | null } = {
+      current: null,
+    };
+
+    mockRequest.mockResolvedValueOnce(wav());
+    mockPlayer.addListener.mockImplementationOnce((_event, callback) => {
+      listener = callback;
+      return { remove: jest.fn() };
+    });
+    mockPlayer.play.mockImplementation(() => {
+      listener?.({ isLoaded: true, playing: true, isBuffering: false, didJustFinish: false });
+    });
+
+    const speech = createDeepseekSpeech(async () => 'stella');
+    const speaking = speech.speak({
+      text: 'Hello.',
+      language: 'en-US',
+      signal: controller.signal,
+      playback: {
+        onPhase: jest.fn(),
+        onProgress: jest.fn(),
+        onControls: (next) => {
+          controlsHolder.current = next;
+        },
+      },
+    });
+
+    await jest.advanceTimersByTimeAsync(0);
+    const controls = controlsHolder.current;
+    if (!controls) throw new Error('Expected controls');
+
+    controls.pause();
+    await jest.advanceTimersByTimeAsync(15 * 60_000);
+    // Watchdog must not time out while paused.
+    expect(mockPlayer.release).not.toHaveBeenCalled();
+
+    controls.resume();
+    listener?.({ isLoaded: true, playing: false, isBuffering: false, didJustFinish: true });
+    await expect(speaking).resolves.toBeUndefined();
+    expect(mockPlayer.release).toHaveBeenCalledTimes(1);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test('on iOS pause releases the player so expo-audio cannot resume on interruption end, then resume recreates and seeks', async () => {
+  jest.clearAllMocks();
+  jest.replaceProperty(Platform, 'OS', 'ios');
+  const audioModule = jest.requireMock<{ createAudioPlayer: () => unknown }>('expo-audio');
+
+  const seekGate1: { resolve?: () => void } = {};
+  const listeners: ((status: Record<string, unknown>) => void)[] = [];
+  const lifecycleEvents: string[] = [];
+  const makePlayer = (idx: number, initialTime: number, customSeek?: () => Promise<void>) => {
+    const player = {
+      currentTime: initialTime,
+      muted: false,
+      volume: 1,
+      addListener: jest.fn((_event: string, cb: (status: Record<string, unknown>) => void) => {
+        listeners.push(cb);
+        return { remove: jest.fn() };
+      }),
+      play: jest.fn(),
+      pause: jest.fn(),
+      seekTo: jest.fn(customSeek ?? (async () => {})),
+      replace: jest.fn(() => {
+        lifecycleEvents.push(`replace:${idx}`);
+        player.currentTime = 0;
+      }),
+      release: jest.fn(() => {
+        lifecycleEvents.push(`release:${idx}`);
+      }),
+    };
+    return player;
+  };
+  const players = [
+    makePlayer(0, 3.25),
+    makePlayer(
+      1,
+      0,
+      () =>
+        new Promise<void>((resolve) => {
+          seekGate1.resolve = resolve;
+        }),
+    ),
+    makePlayer(2, 0),
+  ];
+  let index = 0;
+  const spy = jest
+    .spyOn(audioModule, 'createAudioPlayer')
+    .mockImplementation(() => players[index++]!);
+
+  mockRequest.mockResolvedValueOnce(wav());
+  const controlsHolder: { current: { pause(): void; resume(): string | void } | null } = {
+    current: null,
+  };
+
+  try {
+    const speech = createDeepseekSpeech(async () => 'stella');
+    const speaking = speech.speak({
+      text: 'Hello.',
+      language: 'en-US',
+      signal: new AbortController().signal,
+      playback: {
+        onPhase: jest.fn(),
+        onProgress: jest.fn(),
+        onControls: (next) => {
+          controlsHolder.current = next;
+        },
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(players[0]!.play).toHaveBeenCalledTimes(1);
+    listeners[0]?.({ isLoaded: true, playing: true, isBuffering: false, didJustFinish: false });
+
+    // Pausing on iOS captures position, mutes & strips AVPlayerItem before release so a concurrent snapshot cannot emit sound.
+    controlsHolder.current!.pause();
+    expect(players[0]!.pause).not.toHaveBeenCalled();
+    expect(players[0]!.muted).toBe(true);
+    expect(players[0]!.volume).toBe(0);
+    expect(players[0]!.replace).toHaveBeenCalledWith(null);
+    expect(players[0]!.release).toHaveBeenCalledTimes(1);
+    expect(lifecycleEvents.slice(0, 2)).toEqual(['replace:0', 'release:0']);
+
+    // Resuming spawns player 1 and seeks to 3.25s; pausing again while seekTo is pending cancels play.
+    controlsHolder.current!.resume();
+    expect(players[1]!.seekTo).toHaveBeenCalledWith(3.25);
+    expect(players[1]!.play).not.toHaveBeenCalled();
+    controlsHolder.current!.pause();
+    expect(players[1]!.muted).toBe(true);
+    expect(players[1]!.volume).toBe(0);
+    expect(players[1]!.replace).toHaveBeenCalledWith(null);
+    expect(players[1]!.release).toHaveBeenCalledTimes(1);
+    seekGate1.resolve?.();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(players[1]!.play).not.toHaveBeenCalled();
+
+    // Resuming again preserves captured 3.25s position onto player 2 and finishes normally.
+    controlsHolder.current!.resume();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(players[2]!.seekTo).toHaveBeenCalledWith(3.25);
+    expect(players[2]!.play).toHaveBeenCalledTimes(1);
+    listeners[2]?.({ isLoaded: true, playing: false, isBuffering: false, didJustFinish: true });
+    await expect(speaking).resolves.toBeUndefined();
+    expect(players[2]!.release).toHaveBeenCalledTimes(1);
+  } finally {
+    spy.mockRestore();
+  }
 });
 
 function wav() {

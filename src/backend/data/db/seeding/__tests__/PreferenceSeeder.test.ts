@@ -166,3 +166,38 @@ test.each(['preferred', 'fallback', 'disabled', null, 'invalid', false])(
     expect(db.values.get('chat.web_search.model_tools_preferred')).toBe(true);
   },
 );
+
+test('new installs default background reading to false independently of unrelated preferences', async () => {
+  const db = database({ 'app.language': 'zh-CN' });
+  await new PreferenceSeeder().run(db.service);
+  expect(db.values.get('feature.voice.background_reading')).toBe(false);
+});
+
+test.each([
+  [true, true],
+  [false, false],
+  [null, false],
+] as const)(
+  'migrates app.background_audio.consent (%s) once into feature.voice.background_reading (%s) without overwriting explicit values',
+  async (legacyConsent, expected) => {
+    const db = database({ 'app.background_audio.consent': legacyConsent });
+    const seeder = new PreferenceSeeder();
+    await seeder.run(db.service);
+    expect(db.values.get('feature.voice.background_reading')).toBe(expected);
+
+    db.values.set('feature.voice.background_reading', !expected);
+    db.values.set('app.background_audio.consent', !legacyConsent);
+    await seeder.run(db.service);
+    expect(db.values.get('feature.voice.background_reading')).toBe(!expected);
+  },
+);
+
+test('preserves an explicit false background reading choice when legacy audio consent is true', async () => {
+  const db = database({
+    'app.background_audio.consent': true,
+    'feature.voice.background_reading': false,
+  });
+  await new PreferenceSeeder().run(db.service);
+  expect(db.values.get('feature.voice.background_reading')).toBe(false);
+  expect(db.values.get('app.background_audio.consent')).toBe(true);
+});
