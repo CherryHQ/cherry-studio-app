@@ -23,7 +23,3 @@ export function parseRemoteChatRoute(params: RemoteChatRouteParams): RemoteChatT
 export function remoteChatHref(target: RemoteChatTarget) {
   return { pathname: '/remote' as const, params: target };
 }
-
-export function remoteSessionModalHref(target: RemoteChatTarget & { operationId?: string }) {
-  return { pathname: '/remote-session-modal' as const, params: target };
-}

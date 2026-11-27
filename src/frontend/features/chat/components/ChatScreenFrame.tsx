@@ -53,7 +53,8 @@ function ChatScreenContent({
   const isLayerPresented = useIsFullScreenLayerPresented();
   const isShareSelecting = useChatShareHeaderSelection() !== undefined;
   useHideFloatingDock(
-    Boolean(expansion?.state.isPresented || isLayerPresented || isShareSelecting),
+    surface !== 'sheet' &&
+      Boolean(expansion?.state.isPresented || isLayerPresented || isShareSelecting),
   );
   const layerProgress = useFullScreenLayerProgress();
   const headerFadeStyle = useAnimatedStyle(() => ({

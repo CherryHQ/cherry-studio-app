@@ -9,8 +9,7 @@ import {
 } from '@cherrystudio/ui/components';
 import { haptics } from '@cherrystudio/ui/haptics';
 import { pressMotion } from '@cherrystudio/ui/motion';
-import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { use, useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 import Animated, {
@@ -22,7 +21,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { remoteSessionModalHref } from '@/frontend/appShell/navigation/chat';
+import { OpenRemoteSessionSheetContext } from '@/frontend/appShell/navigation/chat';
 import { useBackendModule } from '@/frontend/data';
 
 import { buildDesktopTaskPipViewModel, type DesktopTaskPipViewModel } from './desktopTaskPipModel';
@@ -145,7 +144,7 @@ function DispatchRowStatus({
 
 function DesktopTaskPip({ input, output }: { input: unknown; output: unknown }) {
   const { t } = useTranslation();
-  const router = useRouter();
+  const openSheet = use(OpenRemoteSessionSheetContext);
   const reducedMotion = useReducedMotion();
   const pressScale = useSharedValue(1);
   const isPressedRef = useRef(false);
@@ -186,7 +185,15 @@ function DesktopTaskPip({ input, output }: { input: unknown; output: unknown }) 
   const attachments = view.attachmentCount
     ? t('desktopDispatch.pip.attachments', { count: view.attachmentCount })
     : undefined;
-  const canOpen = Boolean(view.canOpenModal && connectionId);
+  const target =
+    view.canOpenModal && connectionId
+      ? sessionId
+        ? { connectionId, agentId, sessionId }
+        : draftId
+          ? { connectionId, agentId, draftId, operationId }
+          : undefined
+      : undefined;
+  const canOpen = Boolean(openSheet && target);
   const metadata = [connection, view.agentName, workspace].filter(Boolean).join(' · ');
 
   const content = (
@@ -214,7 +221,7 @@ function DesktopTaskPip({ input, output }: { input: unknown; output: unknown }) 
     </>
   );
 
-  if (!canOpen || !connectionId) {
+  if (!openSheet || !target) {
     return (
       <View className={`${CARD_BASE_CLASS} bg-card`} style={CARD_STYLE}>
         {content}
@@ -253,13 +260,7 @@ function DesktopTaskPip({ input, output }: { input: unknown; output: unknown }) 
           accessibilityRole="button"
           onPress={() => {
             haptics.light();
-            router.push(
-              remoteSessionModalHref(
-                sessionId
-                  ? { connectionId, sessionId, agentId }
-                  : { connectionId, agentId, draftId, operationId },
-              ),
-            );
+            openSheet(target);
           }}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}

@@ -57,7 +57,7 @@ type ChatWorkspaceProps = {
   forkBoundaryMessageId?: string;
   /** Direct source Session named by the fork-origin divider. */
   forkedFromSessionId?: string;
-  keyboardOffset: number;
+  keyboardOffset: number | undefined;
   feedbackHintBottomOffset?: SharedValue<number>;
   messageWindow: ConversationHistoryView;
   /** History and live rows already reconciled by the source; the workspace only presents them. */

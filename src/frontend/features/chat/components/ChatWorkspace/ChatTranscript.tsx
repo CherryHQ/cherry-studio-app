@@ -123,7 +123,7 @@ export function ChatTranscript({
           contentBottomInset={list.contentBottomInset}
           contentTopInset={contentTopInset}
           dockLift={dockLift}
-          keyboardOffset={list.keyboardOffset}
+          keyboardOffset={list.keyboardOffset ?? 0}
           navigator={turnNavigator}
           scrollProgress={scrollProgress}
           scrollToMessage={scrollToMessage}

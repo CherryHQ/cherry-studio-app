@@ -2,9 +2,10 @@ import Maximize2Icon from '@cherrystudio/app-icons/icons/maximize-2';
 import XIcon from '@cherrystudio/app-icons/icons/x';
 import { BottomSheet, BottomSheetProvider, ContentState } from '@cherrystudio/ui/components';
 import { ambientMotion } from '@cherrystudio/ui/motion';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, usePathname } from 'expo-router';
 import {
   createContext,
+  type PropsWithChildren,
   use,
   useCallback,
   useMemo,
@@ -17,7 +18,6 @@ import { Keyboard, Pressable, Text, View } from 'react-native';
 import Animated, { type CSSAnimationProperties, useReducedMotion } from 'react-native-reanimated';
 
 import {
-  type ConversationRef,
   ConversationSourceBoundary,
   useConversationSourceState,
   useResolvedConversationAgent,
@@ -27,19 +27,18 @@ import {
   useRemoteConversationSource,
 } from '@/frontend/appShell/conversation/remote';
 import {
-  parseRemoteChatRoute,
+  OpenRemoteSessionSheetContext,
   remoteChatHref,
-  type RemoteChatRouteParams,
-  type RemoteChatTarget,
+  type RemoteSessionSheetTarget,
 } from '@/frontend/appShell/navigation/chat';
 import { AgentAvatar } from '@/frontend/components/Avatar';
 import { useBackendModule } from '@/frontend/data';
 import { useDesktopConnection } from '@/frontend/hooks/useDesktopConnections';
-import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
 import { RemoteConversationBody, useRemoteConversation } from './RemoteConversationBody';
 
-type SessionTarget = RemoteChatTarget & { connectionId: string; sessionId: string };
+type SessionTarget = Extract<RemoteSessionSheetTarget, { sessionId: string }>;
+type DispatchTarget = Extract<RemoteSessionSheetTarget, { draftId: string }>;
 
 const PULSE_ANIMATION = {
   animationDuration: ambientMotion.pulseDuration,
@@ -54,7 +53,7 @@ const PULSE_ANIMATION = {
 } satisfies CSSAnimationProperties;
 const IDLE_DOT_STYLE = { animationName: 'none' } satisfies CSSAnimationProperties;
 
-const ModalConnectionContext = createContext<string | undefined>(undefined);
+const SheetConnectionContext = createContext<string | undefined>(undefined);
 
 const ModalHeaderContext = createContext<{
   agentEmoji?: string;
@@ -67,67 +66,85 @@ const ModalHeaderContext = createContext<{
   onExpand?: (target: SessionTarget) => void;
 }>({});
 
-function renderModalFallback(state: 'loading' | 'error') {
+function renderSheetFallback(state: 'loading' | 'error') {
   return <ModalContentState state={state} />;
 }
 
-export function RemoteSessionModalScreen() {
-  const params = useLocalSearchParams<
-    RemoteChatRouteParams & { operationId?: string | string[] }
-  >();
-  const target = parseRemoteChatRoute(params);
-  const { connectionId, sessionId, draftId } = target;
+export function RemoteSessionSheetHost({ children }: PropsWithChildren) {
+  const pathname = usePathname();
+  const [sheet, setSheet] = useState<{ pathname: string; target: RemoteSessionSheetTarget }>();
+  if (sheet && sheet.pathname !== pathname) setSheet(undefined);
+  const close = useCallback(() => setSheet(undefined), []);
+  useFocusEffect(useCallback(() => close, [close]));
+  const open = useCallback(
+    (target: RemoteSessionSheetTarget) => {
+      Keyboard.dismiss();
+      setSheet({ pathname, target });
+    },
+    [pathname],
+  );
+
+  return (
+    <OpenRemoteSessionSheetContext value={open}>
+      {children}
+      {sheet ? (
+        <View className="absolute inset-0 z-60" pointerEvents="box-none">
+          <RemoteSessionSheet target={sheet.target} onClosed={close} />
+        </View>
+      ) : null}
+    </OpenRemoteSessionSheetContext>
+  );
+}
+
+function RemoteSessionSheet({
+  onClosed,
+  target,
+}: {
+  onClosed: () => void;
+  target: RemoteSessionSheetTarget;
+}) {
+  const { connectionId } = target;
   const [isOpen, setIsOpen] = useState(true);
-  const hasExpandedRef = useRef(false);
+  const expandTargetRef = useRef<SessionTarget | undefined>(undefined);
 
   const handleClose = useCallback(() => setIsOpen(false), []);
   const handleClosed = useCallback(() => {
-    if (!hasExpandedRef.current) closeModal();
-  }, []);
+    const expandTarget = expandTargetRef.current;
+    expandTargetRef.current = undefined;
+    onClosed();
+    if (expandTarget) router.push(remoteChatHref(expandTarget));
+  }, [onClosed]);
   const handleExpand = useCallback((sessionTarget: SessionTarget) => {
-    hasExpandedRef.current = true;
+    expandTargetRef.current = sessionTarget;
     Keyboard.dismiss();
-    router.replace(remoteChatHref(sessionTarget));
+    setIsOpen(false);
   }, []);
 
   return (
-    // Keep approval and question sheets above this transparent modal's own view controller.
     <BottomSheetProvider>
-      <ModalConnectionContext value={connectionId}>
-        <View className="flex-1">
-          <BottomSheet
-            bodyInset="none"
-            onClose={handleClose}
-            onClosed={handleClosed}
-            open={isOpen}
-            size="large"
-            testID="remote-session-sheet"
+      <BottomSheet
+        avoidKeyboard
+        bodyInset="none"
+        onClose={handleClose}
+        onClosed={handleClosed}
+        open={isOpen}
+        size="large"
+        testID="remote-session-sheet"
+      >
+        <SheetConnectionContext value={connectionId}>
+          <ConversationSourceBoundary
+            key={connectionId}
+            source={{ kind: 'desktop', connectionId }}
+            fallback={renderSheetFallback}
           >
-            {!connectionId || (!sessionId && !draftId) ? (
-              <ModalContentState state="missing" />
+            {'sessionId' in target ? (
+              <RemoteSession onExpand={handleExpand} target={target} />
             ) : (
-              <ConversationSourceBoundary
-                key={connectionId}
-                source={{ kind: 'desktop', connectionId }}
-                fallback={renderModalFallback}
-              >
-                {sessionId ? (
-                  <RemoteSession
-                    onExpand={handleExpand}
-                    target={{ ...target, connectionId, sessionId }}
-                  />
-                ) : (
-                  <PendingDispatch
-                    onExpand={handleExpand}
-                    operationId={getSingleRouteParam(params.operationId)}
-                    target={{ ...target, connectionId, draftId: draftId! }}
-                  />
-                )}
-              </ConversationSourceBoundary>
+              <PendingDispatch onExpand={handleExpand} target={target} />
             )}
-          </BottomSheet>
-        </View>
-      </ModalConnectionContext>
+          </ConversationSourceBoundary>
+        </SheetConnectionContext>
+      </BottomSheet>
     </BottomSheetProvider>
   );
 }
@@ -135,29 +152,26 @@ export function RemoteSessionModalScreen() {
 function PendingDispatch({
   onExpand,
   target,
-  operationId,
 }: {
   onExpand: (target: SessionTarget) => void;
-  target: RemoteChatTarget & { connectionId: string; draftId: string };
-  operationId?: string;
+  target: DispatchTarget;
 }) {
   const source = useRemoteConversationSource();
   const { availability } = useConversationSourceState();
   const getReceipt = useCallback(
-    () => source.getDispatch(target.draftId, operationId),
-    [source, target.draftId, operationId],
+    () => source.getDispatch(target.draftId, target.operationId),
+    [source, target.draftId, target.operationId],
   );
   const receipt = useSyncExternalStore(source.subscribeDispatches, getReceipt, getReceipt);
-  if (!receipt) return <ModalContentState connectionId={target.connectionId} state="missing" />;
-  if (receipt.status === 'rejected' || receipt.status === 'interrupted')
-    return <ModalContentState connectionId={target.connectionId} state="failed" />;
+  if (!receipt) return <ModalContentState state="missing" />;
   if (receipt.sessionId)
     return (
       <RemoteSession onExpand={onExpand} target={{ ...target, sessionId: receipt.sessionId }} />
     );
+  if (receipt.status === 'rejected' || receipt.status === 'interrupted')
+    return <ModalContentState state="failed" />;
   return (
     <ModalContentState
-      connectionId={target.connectionId}
       state={
         availability.state === 'disabled' && availability.reason !== 'synchronizing'
           ? 'offline'
@@ -168,17 +182,14 @@ function PendingDispatch({
 }
 
 function ModalContentState({
-  connectionId,
   state,
 }: {
-  connectionId?: string;
   state: 'missing' | 'loading' | 'error' | 'pending' | 'offline' | 'failed';
 }) {
   const { t } = useTranslation();
-  const contextConnectionId = use(ModalConnectionContext);
-  const resolvedConnectionId = connectionId ?? contextConnectionId;
+  const connectionId = use(SheetConnectionContext);
   const desktopConnections = useBackendModule('desktopConnections');
-  const { connection } = useDesktopConnection(resolvedConnectionId);
+  const { connection } = useDesktopConnection(connectionId);
   const header = useMemo(
     () => ({
       connectionName: connection?.name,
@@ -200,10 +211,10 @@ function ModalContentState({
           ) : (
             <ContentState.Error
               primaryAction={
-                state === 'offline' && resolvedConnectionId
+                state === 'offline' && connectionId
                   ? {
                       children: t('remoteAgent.reconnect'),
-                      onPress: () => void desktopConnections.reconnect(resolvedConnectionId),
+                      onPress: () => void desktopConnections.reconnect(connectionId),
                     }
                   : undefined
               }
@@ -298,11 +309,6 @@ function RemoteSession({
       onExpand,
     ],
   );
-  const onSessionCreated = (ref: ConversationRef) => {
-    router.setParams({ sessionId: ref.sessionId, draftId: undefined });
-    return true;
-  };
-
   return (
     <ModalHeaderContext value={header}>
       <RemoteConversationBody
@@ -314,18 +320,12 @@ function RemoteSession({
         agents={agents}
         draftKey={`${source.draftScope}:${connectionId}:${identity}`}
         identity={identity}
-        onSessionCreated={onSessionCreated}
         header={ModalHeader}
         headerPlacement="inline"
         surface="sheet"
       />
     </ModalHeaderContext>
   );
-}
-
-function closeModal() {
-  if (router.canDismiss()) router.dismiss();
-  else router.back();
 }
 
 function BreathingStatusDot({

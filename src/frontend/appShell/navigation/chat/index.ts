@@ -18,10 +18,10 @@ export {
 export { ChatSourceProvider, useChatSource } from './ChatSourceProvider';
 export {
   remoteChatHref,
-  remoteSessionModalHref,
   parseRemoteChatRoute,
   type RemoteChatTarget,
   type RemoteChatRouteParams,
 } from './remoteChatRoute';
+export { OpenRemoteSessionSheetContext, type RemoteSessionSheetTarget } from './remoteSessionSheet';
 
 export { conversationHref, useConversationTarget } from './conversationRoute';

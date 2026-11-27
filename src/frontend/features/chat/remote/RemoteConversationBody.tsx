@@ -112,7 +112,8 @@ export function RemoteConversationBody({
   const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
   const dockClearance = useNavigationDockClearance();
-  const extraBottomOffset = isSheet ? 0 : getComposerExtraBottomOffset(bottom, dockClearance);
+  const extraBottomOffset = getComposerExtraBottomOffset(bottom, dockClearance);
+  const sheetKeyboardTracking = useSharedValue(false);
   const composerHeight = useSharedValue(0);
   const setComposerHeight = useCallback(
     (height: number) => composerHeight.set(height),
@@ -157,7 +158,9 @@ export function RemoteConversationBody({
                 assistantName={agent?.name}
                 isAssistantToolbarEnabled
                 contentBottomInset={composerContentGap}
-                keyboardOffset={getComposerKeyboardStickyOffset(bottom) + extraBottomOffset}
+                keyboardOffset={
+                  isSheet ? undefined : getComposerKeyboardStickyOffset(bottom) + extraBottomOffset
+                }
                 onPendingSendDisplayed={ignorePending}
               />
             )}
@@ -165,6 +168,9 @@ export function RemoteConversationBody({
           <ChatShareComposerGuard>
             <ComposerDock
               backgroundClassName={isSheet ? undefined : 'bg-chat-background'}
+              {...(isSheet
+                ? { extraBottomOffset: 0, keyboardTracking: sheetKeyboardTracking }
+                : {})}
               layoutMode="expandable-overlay"
               onHeightChange={setComposerHeight}
             >
