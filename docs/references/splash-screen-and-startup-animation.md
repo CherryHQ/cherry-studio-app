@@ -1,61 +1,42 @@
 # Splash Screen And Startup Readiness
 
-> Updated: 2026-09-24
+> Updated: 2026-11-27
 >
 > Dependency baseline updated 2026-09-11: Expo `57.0.21`, `expo-splash-screen` `57.0.8`, iOS 17.0+, Android API 26+
 
 ## Current Contract
 
-Cherry uses two visually matching surfaces during every process cold start:
+Cherry uses only the OS-owned native launch screen during cold start:
 
 | Surface | Owner | Appearance | Exit condition |
 | --- | --- | --- | --- |
-| Native launch screen | `expo-splash-screen` config plugin | System Light/Dark | The React Native cover has completed layout and crossed two composited frames |
-| React Native startup cover | App shell `StartupCoordinator` | Appearance frozen from the system at process start | Bootstrap and initial content are ready, and 800 ms has elapsed since the cover visibly replaced the native surface |
+| Native launch screen | `expo-splash-screen` config plugin | System Light/Dark | Bootstrap and initial content are ready (or the 3 s content fallback expires) |
 
-The native and React Native surfaces use the same desktop-aligned `assets/icon.png` at 96 dp on
-`#FFFFFF` in Light appearance and `#000000` in Dark appearance. The brand artwork remains fixed in
-both modes. The native surface contains no attribution or animation.
-
-The React Native cover adds a single-line `Cherry Studio` attribution 48 dp above the bottom
-safe area. The centered logo stays fixed across the native-to-React handoff, while the attribution
-fades in over 260 ms after the React Native cover is confirmed visible. After the application
-renders behind the opaque cover, the cover exits in 340 ms: the logo scales to 1.15× over 320 ms,
-and the cover, including the attribution, starts fading 60 ms later over 280 ms with an ease-in-out
-curve. The slow start of the fade keeps the logo's growth readable before the cover thins out. The
-application tree itself is never animated.
+The native surface uses the desktop-aligned `assets/icon.png` at 96 dp on `#FFFFFF` in Light
+appearance and `#000000` in Dark appearance, with no attribution, JS startup cover, artificial
+minimum display hold, or exit animation.
 
 This lifecycle is process-owned state. Background-to-foreground transitions do not remount or reset
-the coordinator, so they do not replay the launch experience.
+`StartupCoordinator`, so they do not re-hold the launch surface.
 
 ## Startup Sequence
 
 1. The operating system displays the generated native launch screen using the system appearance.
 2. The root module calls `SplashScreen.preventAutoHideAsync()` before React renders.
-3. `AppBootstrapProvider` starts backend and preference initialization. It owns initialization state
-   and post-ready work, but no longer hides the native launch screen.
-4. `StartupCoordinator`, inside the bootstrap provider and outside `AppBootstrapGate`, renders an
-   opaque cover without reading Uniwind or the saved application theme.
-5. After layout and two animation frames, the coordinator hides the native launch screen. Its
-   matching background, centered logo, and status bar style make this a direct visual handoff; the
-   attribution appears as part of the complete React Native startup screen.
-6. `hideAsync()` resolves after dispatching native removal, so the coordinator crosses two more
-   animation frames before starting the 800 ms minimum and the attribution fade-in. It then
-   releases `startupCoverHandoff`,
-   allowing theme and i18n initialization behind the opaque cover. This ordering prevents
-   `Uniwind.setTheme()` from recoloring the still-visible iOS LaunchScreen when the system and saved
-   application themes differ.
-7. When bootstrap is ready, `AppBootstrapGate` mounts the complete navigation tree behind the cover.
-   The application uses the restored local theme even when it differs from the frozen system launch
-   appearance.
-8. The active route reports initial content readiness. The cover exits only after bootstrap,
-   content readiness, and the 800 ms minimum are all satisfied.
-9. The cover continues to intercept touch and hides the application tree from accessibility until
-   its 340 ms UI-thread exit completes. It is then removed from the tree.
+3. `AppBootstrapProvider` starts backend, preference, i18n, initial Agent, and boot-theme
+   initialization (`initializeAppRuntime`) immediately without waiting for any JS cover handoff.
+4. `StartupCoordinator` sits outside `AppBootstrapGate`. While the native splash remains visible, it
+   blocks pointer input and hides the underlying tree from accessibility.
+5. When bootstrap is ready, `AppBootstrapGate` mounts the complete navigation tree using the
+   restored local theme and translations.
+6. The active route reports initial content readiness. As soon as bootstrap and content readiness are
+   both satisfied, `StartupCoordinator` calls `SplashScreen.hideAsync()` immediately with no added
+   delay or exit animation.
+7. Once `SplashScreen.hideAsync()` resolves, `StartupCoordinator` flips `useStartupCoverVisible` to
+   `false`, enabling pointer input, accessibility, and deferred post-launch UI work.
 
 If content does not report readiness within three seconds after bootstrap becomes ready, the
-coordinator records a warning and treats content as ready. The layout and minimum-duration guards
-still apply, so this fallback cannot hide the cover before React has replaced the native surface.
+coordinator records a warning (`startup.content.timeout`) and dismisses the native splash anyway.
 
 ## Initial Content Signal
 
@@ -64,32 +45,26 @@ frames before reporting content ready. Route data such as Agents, Sessions, tran
 providers loads independently and cannot extend the startup gate. The three-second coordinator
 timeout remains a fallback for navigation trees that never report layout.
 
-## Motion And Accessibility
+## Post-Launch Handoff
 
-The cover's logo scale and the cover and attribution opacity transitions use Reanimated timing on
-the UI thread. When the operating system's Reduce Motion setting is enabled, the attribution appears
-without animation and the cover is removed immediately after readiness and the 800 ms minimum.
+Screens and app-shell providers read `useStartupCoverVisible` from the startup module to tell
+whether the native launch screen is still dismissing:
 
-While visible, the cover owns pointer input. The underlying application uses
-`no-hide-descendants`/`accessibilityElementsHidden`, preventing focus from reaching controls that
-are not yet visible. The attribution and logo are decorative and do not become accessibility focus
-targets.
-
-Screens behind the cover can read `useStartupCoverVisible` from the startup module. The onboarding
-welcome intro uses it to wait until the cover has been removed, so the intro is not spent behind it.
+- The onboarding welcome intro waits until `useStartupCoverVisible` is `false` so `LogoDrawAnimation`
+  is not spent behind the native splash.
+- `AppUpdateProvider` defers its required-version prompt check until the native splash is gone.
+- `UuRemoteCallbackBridge` defers opening a cold-start target until the native splash is gone.
 
 ## Native Boundary
 
-The generated launch screen is intentionally static. iOS launch storyboards cannot execute React,
-Skia, Reanimated, Lottie, video, or application code. Android has a native animated-icon API, but
-Expo's shared splash configuration accepts a bitmap and an Android-only implementation would not
-match iOS. `LogoDrawAnimation` therefore remains onboarding-owned and is not part of process
-startup.
+The generated launch screen is static. iOS launch storyboards cannot execute React, Skia,
+Reanimated, Lottie, video, or application code. Android has a native animated-icon API, but Expo's
+shared splash configuration accepts a bitmap and an Android-only implementation would not match iOS.
+`LogoDrawAnimation` therefore remains onboarding-owned and is not part of process startup.
 
-Changing the native image, image width, or launch background requires rebuilding the binary. Expo
-Go is not representative, and development builds may not reproduce every splash property. Validate
-the native-to-React handoff in preview or production builds on both platforms.[^expo-api]
-[^expo-guide]
+Changing the native image, image width, or launch background requires rebuilding the binary. Expo Go
+is not representative, and development builds may not reproduce every splash property. Validate
+splash dismissal in preview or production builds on both platforms.[^expo-api] [^expo-guide]
 
 ## Primary Sources
 
@@ -107,5 +82,4 @@ the native-to-React handoff in preview or production builds on both platforms.[^
 - [`src/frontend/appShell/startup`](../../src/frontend/appShell/startup)
 - [`src/frontend/features/chat/ChatScreen.tsx`](../../src/frontend/features/chat/ChatScreen.tsx)
 - [`src/bootstrap/runtime/AppBootstrapProvider.tsx`](../../src/bootstrap/runtime/AppBootstrapProvider.tsx)
-- [`src/bootstrap/runtime/startupCoverHandoff.ts`](../../src/bootstrap/runtime/startupCoverHandoff.ts)
 - [`src/frontend/features/onboarding/components/LogoDraw`](../../src/frontend/features/onboarding/components/LogoDraw)

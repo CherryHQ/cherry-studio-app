@@ -1,12 +1,79 @@
 # Experimental Pi Durable Migration
 
 The local entry uses `PiDurableAgentRuntime` behind `MobileAgentHost` and `DurableAgentHost`.
-This branch implements Cherry-owned history with disposable Pi execution working copies. Runtime
-and device acceptance of this ownership change have not been run.
+Cherry owns history and Pi owns disposable execution working copies. See
+[Validation Status](#validation-status) for local checks and pending device acceptance.
+
+## Pi 1.6.1 Upgrade
+
+The four direct packages (`chord`, `pi-ai`, `pi-codemode`, `pi-durable`) and the transitive
+`pi-schema` and `pi-telemetry` move from 1.5.0 to 1.6.1. Pi AI now pins `@google/genai` 3.6.1
+directly, replacing Mobile's 2.23.0 override. The Anthropic Vertex SDK stays at 0.22.0 and shares
+`@anthropic-ai/sdk` 0.129.0 with Pi AI. The upgrade audit covers the published packages and the
+1.5.1, 1.5.2, 1.6.0 and 1.6.1 changes. See the
+[Durable](https://github.com/earendil-works/pi/blob/v1.6.1/packages/durable/CHANGELOG.md),
+[Pi AI](https://github.com/earendil-works/pi/blob/v1.6.1/packages/ai/CHANGELOG.md),
+[Code Mode](https://github.com/earendil-works/pi/blob/v1.6.1/packages/codemode/CHANGELOG.md),
+[Chord](https://github.com/earendil-works/pi/blob/v1.6.1/packages/chord/CHANGELOG.md) and
+[Google GenAI](https://github.com/googleapis/js-genai/blob/v3.6.1/CHANGELOG.md) changelogs.
+
+- Cherry still reserves the user and assistant rows before Pi admission. For a normal submission,
+  the runtime commits its display metadata before calling `conversation.submit(draft, context)`.
+  Turning a queued follow-up into a steer uses `conversation.admit(tx, draft)` in the commit that
+  reorders the inbox, updates the display metadata and settles the superseded submission.
+- Code Mode gets its `mcp` namespace from a lane-local `Extension.namespace`. The configured
+  tool's MCP reference determines membership. Shared hooks still authorize both MCP and built-in
+  calls. Restoring a conversation selects the MCP extension before unfinished work resumes while
+  retaining the stored deferred-tool selection and loaded instructions. An already-started script on
+  the same runtime version uses its persisted discovery data on replay; an unsettled script started
+  on `1.5.0` (such as `v0.6.3`) settles as a sandbox-fingerprint error on resume under `1.6.1`
+  because upstream `pi-codemode@1.5.1` ([#11901](https://github.com/earendil-works/pi/issues/11901))
+  updated `PRELUDE_SOURCE` (`NaN`/`Infinity` formatting), changing the native driver fingerprint
+  (`30ea2e35` -> `befb5789`), matching upstream `pi-codemode`'s `PRELUDE_HASH` deterministic replay
+  guard. Completed child tool calls are not undone, and the model inspects their receipts before
+  retrying.
+- Compaction consumes tagged `decline` and `summary` decisions and Mobile's tagged `failure`
+  extension. A failed bounded summary settles the compaction task without placing a new head.
+  Code Mode's host output writer returns tagged `saved` or `failed` results and the script commits
+  its pending cache writes within the existing merged-store budget.
+- The Code Mode wrapper distinguishes tool parks from settled results. A signal-only sleep has
+  no timed wake, and a join with policy `any` becomes runnable when its first child settles.
+  Parked nested tool rows display as pending. Pi's recorded tool duration covers the whole task
+  through result settlement, including parks and restart time for records with a start timestamp.
+  Cherry projects start time from the stored completion timestamp and duration. Older results
+  keep their recorded duration. Mobile has no direct consumers of `Wrap`, `onYield`, `SignalState`,
+  `HookTask` or the raw `Storage.commit()` result. Pi's storage adapters own the new tagged result.
+- Chord moved the JSON, context and watch APIs out of its root entry. Mobile imports the owning
+  subpaths, and Jest resolves their published ESM files, including Pi AI's new
+  `session-resources` entry used by the Harness.
+- Mobile continues to resolve Gemini's explicit `v1beta` endpoint, preserving access to preview
+  model IDs across the GenAI 3.x SDK default change. Vertex still uses the host's complete
+  project/location URL. Pi maps `xhigh` to `XHIGH` for supported models and disables SDK automatic
+  continuation, so a `CONTINUATION` finish is projected as `length` after one request. The Vertex
+  fixture covers this and the new HTTP error response callback. OpenAI 7.59.0 normalizes an
+  omitted streaming `finish_reason` to `null`. The Codex adapter sends translation instructions
+  in a leading developer input so later turns can reuse the prompt prefix.
+  [Pi #12273](https://github.com/earendil-works/pi/issues/12273)
+- Pi 1.5.1 omits empty `tools` arrays when tools are off even if the history contains calls. Gateways that
+  require an empty array in this situation need Pi's `requiresToolsWithToolHistory` compatibility flag.
+
+SQLite's schema stays at version 2. Pi migrates retained `pi.tool` v3 inputs and checkpoints to v4
+and `pi.generation` v2 to v3 on recovery. The reopen regressions seed the old task versions and
+exercise unsettled work, including queued input after a missing model, an unoffered tool, a
+pre-intent tool and an already-persisted unsafe tool intent. Unsettled Code Mode scripts started on
+`1.5.0` fail replay with a sandbox fingerprint mismatch (`30ea2e35` -> `befb5789`) without undoing
+already-settled child tool calls, so the model can inspect receipts and rerun. The 1.5.0 Harness
+can block newer tasks
+as `task_too_old` and misinterpret signal-only sleeps. For a planned downgrade, finish or explicitly stop unfinished work,
+settle the Cherry receipts, and use the existing cache-clearing flow while the newer runtime still
+owns the file. Rebuild from Cherry history after the downgrade. Preserve unsettled working files for
+recovery. The upgrade does not delete them automatically.
+
+See [Validation Status](#validation-status) for the gates run on this upgrade.
 
 ## Pi 1.5.0 Upgrade
 
-The direct dependencies `pi-durable`, `pi-ai`, `pi-codemode`, and `chord` are pinned to `1.5.0`,
+The direct dependencies `pi-durable`, `pi-ai`, `pi-codemode`, and `chord` were pinned to `1.5.0`,
 with transitive `pi-schema` and `pi-telemetry` on the same version. The four package patches and
 lockfile hashes target the published npm files. Sources:
 [Durable changelog](https://github.com/earendil-works/pi/blob/v1.5.0/packages/durable/CHANGELOG.md)
@@ -30,8 +97,13 @@ and [Pi AI changelog](https://github.com/earendil-works/pi/blob/v1.5.0/packages/
   an input as failed; `interrupted` ends it as interrupted. Neither is projected as an indefinitely
   paused reply. Sleeping/blocked work still follows the existing execution-protection policy.
 - `afterFailedRun: 'continue'`, model-specific compaction policy and Cherry client identity remain.
-  `progress.persistWithinMs: 0` explicitly retains immediate streaming persistence for this
-  compatibility upgrade; adopting the new 1000 ms default requires a separate durability decision.
+  `progress.persistWithinMs` uses Pi's 1000 ms default to coalesce streaming progress writes.
+  A successful normal close flushes held progress. Explicit stop saves the partial answer recorded
+  in `pi.live` as an aborted transcript entry. An abrupt process kill can lose progress still held
+  in memory during the coalescing window.
+- Cherry's current-only documents generally checkpoint each change. The growing managed-file grant
+  and Code Mode artifact lists write a new base on the next change after 32 deltas. SQLite replaces
+  prior revisions when it writes a new base, bounding `document_revisions` per document.
 - Tool parameters remain ordinary JSON Schema objects, preserving additional-property semantics.
   Error `afterTool` results retain their diagnostics and failure details; confirmed Code Mode
   artifacts still come from their durable transcript receipts. Unoffered calls must never execute.
@@ -72,8 +144,8 @@ at `1.4.0`. The four remaining patches are rebased against the published npm pac
 upstream sources are the [Durable changelog](https://github.com/earendil-works/pi/blob/v1.4.0/packages/durable/CHANGELOG.md)
 and [Pi AI changelog](https://github.com/earendil-works/pi/blob/v1.4.0/packages/ai/CHANGELOG.md).
 
-- Cherry document definitions explicitly set `checkpointWhen: () => false`, retaining the previous
-  delta-only policy rather than changing stored document behavior during the upgrade.
+- The 1.4.0 upgrade retained delta-only writes for Cherry documents. The current checkpoint policy
+  is described in the 1.5.0 section above.
 - `afterFailedRun: 'continue'` replaces the local generation failure-boundary patch. Missing models,
   final provider errors and failed blocking compactions settle their inputs and advance queued work.
 - Sleeping tasks and tasks blocked by the restart limit remain unfinished work for storage and
@@ -485,8 +557,8 @@ history gains revision zero through the additive migration.
 
 ## Maintained Patch Contracts
 
-The four package patches are version-specific to the pinned `1.5.0` family. Patch application and
-lockfile hashes prove installation identity, not behavioral compatibility. The Mobile AI runtime
+The five rebased patches target the four pinned `1.6.1` Pi packages and GenAI `3.6.1`. Anthropic
+Vertex retains its `0.22.0` patch. The Mobile AI runtime
 owner maintains this inventory with [#1345](https://github.com/CherryHQ/cherry-studio-app/issues/1345).
 The queue fix originated in [#1318](https://github.com/CherryHQ/cherry-studio-app/issues/1318) and
 [#1322](https://github.com/CherryHQ/cherry-studio-app/pull/1322); the 1.3.0 upgrade is
@@ -501,10 +573,18 @@ The generation and startup-repair hunks were removed in the 1.4.0 upgrade:
 | `generation.js`: `failNoModel`, `failModelError`, terminal `classify` | Upstream [`a30c2a81`](https://github.com/earendil-works/pi/commit/a30c2a81df8ee89dfe47ee2855a0c1aa9a7d9533), first released in 1.4.0, with `afterFailedRun: 'continue'`; default `keep` is not equivalent | [PiDurableRuntime.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/PiDurableRuntime.test.ts): admitted-run reopen with missing model and failed blocking compaction; [PiDurableAgentRuntime.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/PiDurableAgentRuntime.test.ts): final failure advances the queue, transient post-tool retry does not repeat the action |
 | `harness.js`: `openTasks` orphaned-inbox scan and ownership guards | No upstream replacement. The explicitly chosen clear/rebuild scope does not preserve old orphaned queues; the idle-inbox repair fixture is replaced by normal admitted-run recovery | Same runtime suite retains existing-run and task-owned conversation exclusions. This is a scope retirement, not a claim of backward-compatible orphan repair |
 
-The remaining [Pi Durable patch](../../../patches/@earendil-works__pi-durable@1.5.0.patch) contains
+The remaining [Pi Durable patch](../../../patches/@earendil-works__pi-durable@1.6.1.patch) contains
 Segmenter fallback and Han search terms, exact-name tool search, and the host Code Mode output
 hook with its final store-commit budget guard. The compaction hook can also fail the native task
-when the bounded summarizer fails, preventing a fallback to one unbounded request.
+when the bounded summarizer fails, preventing a fallback to one unbounded request. The hook uses
+`{ kind: "failure", failure }` alongside the upstream `decline` and `summary` tags.
+`Tx.waitForEntryPublication()` uses Pi's conversation creation and append gates without loading a
+transcript entry. Cold history reads only load bodies for the selected turns. `SqliteStorage` accepts
+`maxPayloadReadBytes` (set to 8 MiB on Android by `AgentSqlDatabase` and unset on iOS) and uses
+a single-query byte-budgeted window CTE (`octet_length()`) for transcript entry scans and
+transactional document revision replay—executing zero extra queries when a page fits in budget
+while avoiding row-by-row bridge overhead and keeping Android JVM allocations bounded. Metadata
+queries and iOS use single bulk reads.
 The `declarations` import is upstream in 1.5.0. Upstream
 [conversation reclamation #11026](https://github.com/earendil-works/pi/issues/11026) is a separate
 storage-lifetime concern. Mobile's manual whole-file clearing
@@ -555,8 +635,8 @@ covers staged source reuse and the separate creation/checking bridge contract;
 [piDurableTools.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piDurableTools.test.ts)
 covers native-store overflow persistence, pending writes and final-commit quota races, unchanged
 inputs and bounded direct/nested validation.
-These regressions and device performance checks have not been run. The earlier 46-second inspection
-delay remains unattributed.
+See [Validation Status](#validation-status) for the runtime regressions. The earlier 46-second
+inspection delay remains unattributed, and device performance checks remain pending.
 
 ### Other Behavioral And Platform Adaptations
 
@@ -565,11 +645,11 @@ delay remains unattributed.
 | Pi Durable Unicode search and exact names | Product behavior: Chinese names and adjacent Han pairs remain discoverable without exposing deferred tools prematurely; exact deferred names in a `tool_search` query load before ranked matches, even when their count exceeds `limit` | [piToolSearch.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piToolSearch.test.ts); upstream must satisfy Chinese and Latin cases and select exact names regardless of BM25 rank |
 | Pi Durable `writeOutput` and store-commit budget | Host boundary: textual console overflow stays in the private working cache, with pending writes counted at admission and the merged store bounded atomically at script settlement; explicit image outputs use managed artifacts. Neither path exposes an unmanaged device path | [piDurableTools.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piDurableTools.test.ts); require an upstream host-output API with atomic store quotas and cancellation/artifact ownership preserved |
 | Pi AI structured diagnostics and retry | Product behavior: retain safe provider failure facts; subscription limits remain terminal and transient failures keep retry classification | [piProviderStreamErrors.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piProviderStreamErrors.test.ts), [PiDurableAgentRuntime.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/PiDurableAgentRuntime.test.ts); require candidate parity for those failure categories |
-| Pi AI Google signatures over Chat Completions | Protocol compatibility: capture streamed `extra_content.google.thought_signature` in the existing durable tool-call field and replay it only for the same provider, model and API; legacy encrypted reasoning remains in `reasoning_details` | [piApiAdapters.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piApiAdapters.test.ts); retire when upstream preserves Google tool signatures through streamed response parsing and replay, with cross-model isolation unchanged. Regression sources are added but unrun |
-| Pi AI Mistral thinking chunks over Chat Completions | Protocol compatibility: parse nested thinking/text chunk lists without coercion, retain optional reasoning signatures and closure metadata in Pi's existing signature field, and replay structured thinking only for the same provider, model and API; scalar reasoning and OpenRouter details keep their existing formats | [piMistralReasoning.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piMistralReasoning.test.ts); retire when upstream preserves streamed Mistral content and persisted reasoning through follow-up requests and tool continuations, with cross-model isolation unchanged. Replay regressions are added but unrun |
-| Pi AI legacy JSON preview fast path (retired) | No production caller found in Mobile or the six published 1.5.0 Pi packages; providers use upstream `ToolCallArgumentsStream`. Final arguments still use unchanged `parseToolCallArguments` | [piStreamingJson.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piStreamingJson.test.ts) now covers the consumed incremental path, string repair and final validation. Behavior and performance checks remain unrun |
+| Pi AI Google signatures over Chat Completions | Protocol compatibility: capture streamed `extra_content.google.thought_signature` in the existing durable tool-call field and replay it only for the same provider, model and API; legacy encrypted reasoning remains in `reasoning_details` | [piApiAdapters.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piApiAdapters.test.ts); retire when upstream preserves Google tool signatures through streamed response parsing and replay, with cross-model isolation unchanged |
+| Pi AI Mistral thinking chunks over Chat Completions | Protocol compatibility: parse nested thinking/text chunk lists without coercion, retain optional reasoning signatures and closure metadata in Pi's existing signature field, and replay structured thinking only for the same provider, model and API; scalar reasoning and OpenRouter details keep their existing formats | [piMistralReasoning.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piMistralReasoning.test.ts); retire when upstream preserves streamed Mistral content and persisted reasoning through follow-up requests and tool continuations, with cross-model isolation unchanged |
+| Pi AI legacy JSON preview fast path (retired) | No production caller found in Mobile or the six published 1.5.0 Pi packages; providers use upstream `ToolCallArgumentsStream`. Final arguments still use unchanged `parseToolCallArguments` | [piStreamingJson.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piStreamingJson.test.ts) now covers the consumed incremental path, string repair and final validation |
 | Pi AI native OAuth; Pi Code Mode native exports | Platform compatibility: native code does not import Node/WASM launchers or discover credentials from a desktop environment | [piReactNativePatches.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piReactNativePatches.test.ts) and native OAuth adapter sources; require equivalent native exports and platform acceptance |
-| Pi AI Gemini fetch and Vertex bearer authentication | Platform compatibility: Gemini and host-authenticated Vertex use instance-scoped `httpOptions.fetch`, preserving native body-failure facts and cancellation without global fetch replacement. Vertex resolves service-account tokens per invocation without API-key placeholders or Node ADC. Google message, image, tool and thought-signature conversion stays upstream | [piProviderStreamErrors.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piProviderStreamErrors.test.ts), [piVertexNative.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piVertexNative.test.ts) and [piModelResolver.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piModelResolver.test.ts). Google GenAI is pinned to 2.23.0: its native `httpOptions.fetch` replaces the 2.21.0 transport patch; [the remaining Web patch](../../../patches/@google__genai@2.23.0.patch) only injects host authentication. Retire the Pi fetch wiring and Web auth hunks when upstream exposes equivalent behavior, followed by native acceptance |
+| Pi AI Google transport and Vertex bearer authentication | Gemini and all Vertex client branches use instance-scoped `httpOptions.fetch`. Vertex resolves the service-account bearer token in Mobile for each invocation and uses the Web SDK. Google message, image, tool and thought-signature conversion stays upstream | [piProviderStreamErrors.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piProviderStreamErrors.test.ts), [piVertexNative.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piVertexNative.test.ts) and [piModelResolver.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piModelResolver.test.ts). The [GenAI Web patch](../../../patches/@google__genai@3.6.1.patch) supplies host authentication; retire it once the Web client accepts that authentication upstream |
 | Anthropic Vertex native Google auth browser map | Platform compatibility: the official SDK receives host-owned `authClient` credentials; Metro redirects its `google-auth-library` import to a guard that requires injection. Node retains its ordinary auth path. Pi's public `stream()` client injection and the SDK's Vertex request shaping are unchanged | [piVertexAnthropic.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piVertexAnthropic.test.ts), [piVertexNative.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piVertexNative.test.ts) and local [metroResolution.test.ts](../../../scripts/__tests__/metroResolution.test.ts); the [0.22.0 patch](../../../patches/@anthropic-ai__vertex-sdk@0.22.0.patch) can retire when the official SDK offers a native-safe injected-auth entry, followed by native acceptance. This SDK version shares Pi's pinned Anthropic SDK 0.129.0 |
 | Chord numeric array keys | Hermes compatibility: JSON changes to array indexes are interpreted consistently | [piChordPatch.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piChordPatch.test.ts); require the behavior on Hermes, not only Node |
 
@@ -581,10 +661,27 @@ Three platform hunks were retired after checking the pristine 1.4.0 packages:
 | Pi AI `provider-env.js` Bun fallback removal | The `require("node:fs")` is inside `try`; Expo's `allowOptionalDependencies` makes Metro skip it, and it runs only under Bun | The graph guard allows only that try-wrapped require; any other Node import still fails |
 | Pi Durable tool-search `Type` import | The `pi-ai` entry adds only `auth/helpers.js`, `auth/types.js` and other import-free modules; its `auth/context.js` uses the native browser-map variant | Same guard's auth module list |
 
-For the remaining adaptation groups, the rebased 1.5.0 patches are the recorded workarounds.
-The declarations import and legacy streaming-parser retirements are described in the 1.5.0 section.
-A future upgrade must attach exact upstream evidence per removed group instead of interpreting a
-clean patch rebase as a fix.
+### Pi 1.6.1 Hunk Audit
+
+| Published file or patch group | 1.6.1 disposition and evidence |
+| --- | --- |
+| Pi AI `google-generative-ai.js` custom-fetch guard, client call and `createClient` setup | Retired. Pi 1.6.0 forwards `options.fetch` to `createClient`, which sets `httpOptions.fetch` with a global fallback. The diagnostic import and catch hunk remain. [#12103](https://github.com/earendil-works/pi/pull/12103), [#12108](https://github.com/earendil-works/pi/pull/12108) |
+| Pi AI `google-vertex.js` custom-fetch restriction and client selection | Retired the `!options?.accessToken && options?.fetch` guard. Pi 1.6.0 passes fetch to `createClientWithApiKey` and `createClient`, and `buildHttpOptions` handles it for all three paths. ADC token retrieval still uses Google's auth library. [#12103](https://github.com/earendil-works/pi/pull/12103), [#12108](https://github.com/earendil-works/pi/pull/12108) |
+| Pi AI `google-vertex.js` bearer branch, `streamSimple` forwarding and diagnostic hunks, plus `google-vertex.d.ts` option and simple-stream signature | Retained. Pristine Vertex constructs API-key or ADC clients, so the access-token branch still opens `@google/genai/web` with host authentication. The 1.6.1 HTTP error callback observes the response but does not emit Mobile's `provider_response_failure`. [#12376](https://github.com/earendil-works/pi/issues/12376) |
+| Pi AI `anthropic-messages.js` imports, SSE error parse and catch | Rebased on the shared SSE decoder and upstream `withCauseDetail`. The upstream SSE error still throws text. Mobile preserves the parsed body, code/type and retry metadata while keeping upstream cause formatting. [#12224](https://github.com/earendil-works/pi/issues/12224), [#11783](https://github.com/earendil-works/pi/pull/11783) |
+| Pi AI `azure-openai-responses.js` and `openai-responses.js` imports and catch hunks; `openai-responses-shared.js` error and `response.failed` hunks | Retained. Upstream response callbacks and input-transformation diagnostics are additive. Mobile retains status/body/retry metadata and keeps the structured error code for both streamed terminal event forms. |
+| Pi AI `openai-codex-responses.js` HTTP error, catch and `parseErrorResponse` hunks | Retained. The final HTTP error carries status and code. Only explicit subscription-limit codes get the terminal hint; a transient 429 can still retry. |
+| Pi AI `openai-completions.js` diagnostics, Mistral signature parser, string/array delta parsing and replay, Google signature capture and replay | Retained. Upstream changes to strict tools, finish reasons and provider error text do not capture Google `extra_content` signatures or preserve Mistral's structured chunks across a same-model replay. |
+| Pi AI `auth/context.native.js`, `auth/oauth/callback-server.native.js`, `env-api-keys.js`, `native-oauth.{js,d.ts}` and both `package.json` hunks | Retained. The new upstream lazy OAuth entry still reaches the desktop auth dependencies when loaded. The native export and browser map select host credentials and manual callbacks. The computed import in `env-api-keys.js` remains unsuitable for Metro. |
+| Pi AI `auth/oauth/platform.{js,d.ts}`, `pkce.js` import and binding, `github-copilot.js`, `openrouter.js`, `xai.js` imports, `kimi-coding.js` import and refresh guard, `openai-codex.js` import, state generation and refresh cause | Retained. These files keep provider-scoped native fetch and PKCE, propagate terminal Kimi refresh failures and preserve Codex refresh causes. Codex's pristine OAuth state generator still reaches `node:crypto`. Upstream Copilot model discovery changes are preserved. |
+| Pi AI `utils/diagnostics.js`, `utils/error-body.js` and `utils/retry.js` | Retained. The structured code/type/cause, explicit retryability and status precedence cover failures that have localized or absent text. Upstream connection-cause formatting and retry patterns remain in use. [#11783](https://github.com/earendil-works/pi/pull/11783), [#12227](https://github.com/earendil-works/pi/issues/12227), [#12206](https://github.com/earendil-works/pi/issues/12206) |
+| Pi Durable `search.js` Segmenter and Han token hunks and `tool-search/tool-search.js` exact names | Retained. The pristine tokenizer assumes Segmenter and uses dictionary segmentation. Search now follows schema references upstream, while exact deferred names still require admission before ranked matches. [#11803](https://github.com/earendil-works/pi/issues/11803) |
+| Pi Durable `codemode/codemode.{js,d.ts}` and `harness/compaction.js`, `harness/types.d.ts` | Adapted. The host output hook uses upstream `OutputFile`'s tagged result, forwards pending writes during formatting and checks the merged cache atomically at settlement. Compaction preserves the tagged failure path. |
+| Pi Durable `session/session.js`, `session/transaction.{js,d.ts}`, `types.d.ts`, and `storage/sqlite/storage.{js,d.ts}` | Rebased from #1917. Neither `Tx.waitForEntryPublication()` nor `SqliteStorage` `maxPayloadReadBytes` / `octet_length()` byte-budgeted CTE reads is upstream in 1.6.1; `storage.d.ts` tracks 1.6.1's split `@earendil-works/chord/{context,json}` imports. |
+| Pi Code Mode `native.{js,d.ts}` and `package.json` | Retained. The published `portable` entry lacks `PRELUDE_SOURCE` and exports `InlineCodemodeSandbox`, which reaches the WASM engine. The native entry provides the protocol and prelude for the host's QuickJS engine. |
+| Chord `json.js` | Retained. The pristine `copyJson` still passes a numeric array index to `Object.getOwnPropertyDescriptor`. The Hermes fix supplies a string key. |
+| Google GenAI `dist/web/index.mjs` API-key check and auth construction, plus `dist/web/web.d.ts` | Rebased. The pristine 3.6.1 Web constructor still requires a key and constructs `WebAuth`; the Web options lack `auth`. The two JS changes and one declaration hunk preserve native bearer injection. |
+| Anthropic Vertex `package.json` browser map and `google-auth.native.js` | Both unchanged. The published 0.22.0 client accepts injected `authClient` but imports `google-auth-library` unconditionally. Pi AI 1.6.1 retains client injection and pins the same Anthropic SDK. |
 
 ### Upgrade And Retirement Evidence
 
@@ -601,18 +698,18 @@ clean patch rebase as a fix.
    be an explicit upgrade choice through the existing lifecycle, not an unexplained workaround for
    a failing check. Do not read/write private upstream SQL. Storage ownership remains unchanged.
 
-The ownership/recovery regressions added in this architecture change are authored but unrun; they
-are not evidence that a candidate dependency or a device has passed. The 1.4.0 dependency upgrade
-and patch retirements above have not received runtime acceptance; nothing was published upstream.
-
 ## Validation Status
 
-Vertex Gemini's token, resolver, URL, UI credential-gating and published SDK contract regressions
-are authored but unrun. Native signing and real Google service acceptance remain pending; the
-versioned patches and static lint results alone do not establish runtime compatibility.
-
-Regression sources cover reservation ordering, recovery before reclamation, failed settlement,
-independent forks, revision invalidation, normalized history import, queued inputs and backup
-format boundaries. For this ownership change, only formatting and static linting are run; tests,
-type checks, builds and device verification remain pending explicit user authorization. No runtime
-acceptance result from the earlier Pi-authoritative experiment validates this design.
+Local validation on the final tree passed `pnpm typecheck`, `pnpm lint` (0 warnings, 0 errors across
+`oxlint`, `expo lint`, and workspace `eslint`), `pnpm format:check`, `pnpm docs:check-links`, and
+46 Jest suites (1,527 tests: 43 suites under `src/backend/ai/agent/runtime/pi/__tests__/`, plus
+`src/backend/data/db/__tests__/AgentSqlDatabase.test.ts`,
+`scripts/__tests__/metroResolution.test.ts`, and `scripts/__tests__/architectureBoundaries.test.ts`).
+A read-only non-reapplicability check matching `scripts/__tests__/patchReapplication.test.ts` also
+passed 5/5 for the upgraded patches (`chord`, `pi-ai`, `pi-codemode`, `pi-durable`, `@google/genai`)
+against their active `node_modules` installs; `scripts/__tests__/patchReapplication.test.ts`
+itself was left unchanged (pre-existing `virtualStoreDirMaxLength: 40` store lookup and unrelated
+`react-native-enriched-markdown@1.1.1.patch` `EventEmitters.cpp` findings remain out of scope).
+Dependency installation and deduplication used pnpm 12.2.1 with lifecycle scripts disabled. Native
+Hermes/device tests, production provider calls, and reopening a released app's actual working file
+remain pending. The Jest reopen fixtures exercise published task versions using in-memory storage.

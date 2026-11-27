@@ -47,6 +47,7 @@ export interface RuntimeSqlExecutor {
   all<Row extends object>(sql: string, ...params: RuntimeSqlValue[]): Promise<Row[]>;
 }
 export interface RuntimeSqlDatabase extends RuntimeSqlExecutor {
+  readonly maxPayloadReadBytes?: number;
   transaction<Value>(callback: (transaction: RuntimeSqlExecutor) => Promise<Value>): Promise<Value>;
   close(): Promise<void>;
 }
@@ -357,6 +358,7 @@ export interface DurableAgentRuntime {
     turns: readonly RuntimeDurableTurn[];
     nextCursor?: string;
   }>;
+  assistantMessageIdForRequest?(lane: RuntimeLane, requestId: string): Promise<string | undefined>;
   message(
     lane: RuntimeLane,
     messageId: string,

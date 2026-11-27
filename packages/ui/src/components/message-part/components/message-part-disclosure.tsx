@@ -127,6 +127,9 @@ export function MessagePartToolGroup({
   const isRunning = state === 'running';
   const isOpen = expanded ?? localOpen;
   const colorClassName = toneClassName[statusTone];
+  const statusAccessibilityText = typeof statusText === 'string' ? statusText : undefined;
+  const hasStatusText =
+    statusText !== undefined && statusText !== null && statusText !== false && statusText !== '';
   const toggle = () => {
     onDisclosureToggle?.();
     if (expanded === undefined) setLocalOpen(!isOpen);
@@ -136,7 +139,9 @@ export function MessagePartToolGroup({
   return (
     <View className="gap-1.5">
       <MessagePartStatus
-        accessibilityLabel={statusText ? `${title}, ${statusText}` : title}
+        accessibilityLabel={
+          statusAccessibilityText ? `${title}, ${statusAccessibilityText}` : title
+        }
         expanded={isOpen}
         onPress={toggle}
         testID={`${testID}-trigger`}
@@ -154,8 +159,13 @@ export function MessagePartToolGroup({
         </View>
         <DisclosureChevron expanded={isOpen} className="size-3 shrink-0 text-foreground-tertiary" />
         <View className="flex-1" />
-        {statusText ? (
-          <Text className={`max-w-[50%] shrink-0 text-xs ${colorClassName}`}>{statusText}</Text>
+        {hasStatusText ? (
+          <Text
+            className={`max-w-[50%] shrink-0 text-xs tabular-nums ${colorClassName}`}
+            numberOfLines={1}
+          >
+            {statusText}
+          </Text>
         ) : null}
       </MessagePartStatus>
       <MessagePartCollapsible className="gap-1" isOpen={isOpen} testID={`${testID}-steps`}>

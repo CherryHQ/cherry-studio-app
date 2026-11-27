@@ -107,7 +107,7 @@ notification's large-icon content slot.
 
 Enterprise profiles use the official blue desktop artwork in `assets/enterprise-logo.png`.
 App-shell `branding` selects it on sign-in, account and About surfaces. The launcher icon, native
-splash, its matching React cover, notification and Live Activity artwork stay unchanged.
+splash, notification and Live Activity artwork stay unchanged.
 
 Use `control-active` for switch fills, `primary` for emphasized actions and adjustable progress,
 `link` for links and tool mentions,

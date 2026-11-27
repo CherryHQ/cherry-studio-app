@@ -1,7 +1,8 @@
 diff --git a/dist/json.js b/dist/json.js
+index 376682d69b..100d83dd9c 100644
 --- a/dist/json.js
 +++ b/dist/json.js
-@@ -30,7 +30,8 @@
+@@ -30,7 +30,8 @@ function copy(value, ancestors, omitUndefinedProperties) {
              }
              const result = new Array(value.length);
              for (let index = 0; index < value.length; index++) {

@@ -23,7 +23,7 @@ metrics. Changing native reporting policy requires a new installation package. S
 ## Prerequisites
 
 - Install the repository dependencies with Node.js 24 and `pnpm@12.2.1`.
-- `pnpm install` installs the pinned EAS CLI (24.4.2) and local build plugin (24.3.0).
+- `pnpm install` installs the pinned EAS CLI (27.11.0) and local build plugin (27.11.0).
   Authenticate with `pnpm exec eas login`, or provide `EXPO_TOKEN` in the process environment.
 - Install the native build tools for the selected platform: Xcode, CocoaPods, and fastlane for
   iOS; the Android SDK and NDK for Android.
@@ -42,7 +42,7 @@ local plugin's executable path. It does not depend on a global `eas`, a personal
 or a nested `npx` download. Invoke `pnpm build:local` directly; wrapping it in `npm exec --package`
 can leak npm's package-selection settings into child tools. An explicit
 `EAS_LOCAL_BUILD_PLUGIN_PATH` remains available for intentional upstream-plugin development.
-Keep both pinned packages compatible: EAS CLI 24.4.2 uses `@expo/eas-build-job` 24.3.0, which
+Keep both pinned packages compatible: EAS CLI 27.11.0 uses `@expo/eas-build-job` 27.11.0, which
 determines the local plugin version. Release workflows and `eas.json` require the same CLI version.
 
 `@siteed/sherpa-onnx.rn`'s patched installation script verifies the pinned SHA-256 of the

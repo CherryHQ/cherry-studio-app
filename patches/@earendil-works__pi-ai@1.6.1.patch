@@ -1,18 +1,19 @@
 diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
-index de2b2d8c209f5576c18b020de297d4ef5fad5960..8a963c5704073df0f54ef806d05fe9a1f4ca2f2d 100644
+index e54a4db070..bf3a1b3578 100644
 --- a/dist/api/anthropic-messages.js
 +++ b/dist/api/anthropic-messages.js
-@@ -1,7 +1,8 @@
- import Anthropic, {} from "@anthropic-ai/sdk";
+@@ -2,8 +2,8 @@ import Anthropic, {} from "@anthropic-ai/sdk";
  import { ANTHROPIC_FEDERATION_RULE_ID_ENV, ANTHROPIC_IDENTITY_TOKEN_FILE_ENV, ANTHROPIC_ORGANIZATION_ID_ENV, ANTHROPIC_SERVICE_ACCOUNT_ID_ENV, ANTHROPIC_WORKSPACE_ID_ENV, } from "../env-api-keys.js";
  import { calculateCost } from "../models.js";
+ import { registerSessionResourceCleanup } from "../session-resources.js";
 -import { appendAssistantMessageDiagnostic } from "../utils/diagnostics.js";
+-import { withCauseDetail } from "../utils/error-body.js";
 +import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
-+import { normalizeProviderError } from "../utils/error-body.js";
++import { normalizeProviderError, withCauseDetail } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
+ import { shortHash } from "../utils/hash.js";
  import { headersToRecord } from "../utils/headers.js";
- import { getIdentityHeaders } from "../utils/identity.js";
-@@ -351,7 +352,14 @@ async function* iterateAnthropicEvents(response, signal) {
+@@ -435,7 +435,14 @@ async function* iterateAnthropicEvents(response, signal) {
      let sawMessageEnd = false;
      for await (const sse of iterateSseMessages(response.body, signal)) {
          if (sse.event === "error") {
@@ -28,12 +29,12 @@ index de2b2d8c209f5576c18b020de297d4ef5fad5960..8a963c5704073df0f54ef806d05fe9a1
          }
          if (!ANTHROPIC_MESSAGE_EVENTS.has(sse.event ?? "")) {
              continue;
-@@ -701,7 +709,13 @@ export const stream = (model, context, options) => {
+@@ -808,7 +815,13 @@ export const stream = (model, context, options) => {
          }
          catch (error) {
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
 +            const normalizedError = normalizeProviderError(error);
-             output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
+             output.errorMessage = error instanceof Error ? withCauseDetail(error) : JSON.stringify(error);
 +            appendAssistantMessageDiagnostic(output, createAssistantMessageDiagnostic("provider_response_failure", error, {
 +                status: normalizedError.status,
 +                body: normalizedError.body,
@@ -43,7 +44,7 @@ index de2b2d8c209f5576c18b020de297d4ef5fad5960..8a963c5704073df0f54ef806d05fe9a1
              stream.end();
          }
 diff --git a/dist/api/azure-openai-responses.js b/dist/api/azure-openai-responses.js
-index e6a50f20ab31a3f3de0d2a71190dd98b6f1d401d..fadb936ab37c7a3ac345511c042c892fe94652e5 100644
+index 295c45fd08..fdc29a7712 100644
 --- a/dist/api/azure-openai-responses.js
 +++ b/dist/api/azure-openai-responses.js
 @@ -1,5 +1,6 @@
@@ -53,7 +54,7 @@ index e6a50f20ab31a3f3de0d2a71190dd98b6f1d401d..fadb936ab37c7a3ac345511c042c892f
  import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { headersToRecord } from "../utils/headers.js";
-@@ -86,7 +87,13 @@ export const stream = (model, context, options) => {
+@@ -87,7 +88,13 @@ export const stream = (model, context, options) => {
          }
          catch (error) {
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -68,7 +69,7 @@ index e6a50f20ab31a3f3de0d2a71190dd98b6f1d401d..fadb936ab37c7a3ac345511c042c892f
              stream.end();
          }
 diff --git a/dist/api/google-generative-ai.js b/dist/api/google-generative-ai.js
-index feb37cc3b55ab8011b12e316ee41203194d84fa6..748c13458c74fc47abab21730fe1d5af1a6c1202 100644
+index 47af0d3639..4f67a31aae 100644
 --- a/dist/api/google-generative-ai.js
 +++ b/dist/api/google-generative-ai.js
 @@ -1,5 +1,6 @@
@@ -78,23 +79,7 @@ index feb37cc3b55ab8011b12e316ee41203194d84fa6..748c13458c74fc47abab21730fe1d5af
  import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { providerHeadersToRecord } from "../utils/headers.js";
-@@ -33,14 +34,11 @@ export const stream = (model, context, options) => {
-             timestamp: Date.now(),
-         };
-         try {
--            if (options?.fetch && options.fetch !== globalThis.fetch) {
--                throw new Error("Custom fetch is not supported by the Google Generative AI adapter");
--            }
-             const apiKey = options?.apiKey;
-             if (!apiKey) {
-                 throw new Error(`No API key for provider: ${model.provider}`);
-             }
--            const client = createClient(model, apiKey, options?.headers, options?.identity);
-+            const client = createClient(model, apiKey, options?.headers, options?.identity, options?.fetch);
-             let params = buildParams(model, normalizedContext, options);
-             const nextParams = await options?.onPayload?.(params, model);
-             if (nextParams !== undefined) {
-@@ -220,7 +218,13 @@ export const stream = (model, context, options) => {
+@@ -226,7 +227,13 @@ export const stream = (model, context, options) => {
          }
          catch (error) {
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -109,21 +94,8 @@ index feb37cc3b55ab8011b12e316ee41203194d84fa6..748c13458c74fc47abab21730fe1d5af
              stream.push({ type: "error", reason: output.stopReason, error: output });
              stream.end();
          }
-@@ -261,8 +265,11 @@ export const streamSimple = (model, context, options) => {
-         },
-     });
- };
--function createClient(model, apiKey, optionsHeaders, identity) {
-+function createClient(model, apiKey, optionsHeaders, identity, fetch) {
-     const httpOptions = {};
-+    if (fetch) {
-+        httpOptions.fetch = fetch;
-+    }
-     if (model.baseUrl) {
-         httpOptions.baseUrl = model.baseUrl;
-         httpOptions.apiVersion = ""; // baseUrl already includes version path, don't append
 diff --git a/dist/api/google-vertex.d.ts b/dist/api/google-vertex.d.ts
-index 9ef58caf6a76cdece4643120045ba995307ce0f2..abb54348969c2f1ace298366a48506d47872a8c0 100644
+index 9ef58caf6a..abb5434896 100644
 --- a/dist/api/google-vertex.d.ts
 +++ b/dist/api/google-vertex.d.ts
 @@ -1,6 +1,8 @@
@@ -144,7 +116,7 @@ index 9ef58caf6a76cdece4643120045ba995307ce0f2..abb54348969c2f1ace298366a48506d4
  //# sourceMappingURL=google-vertex.d.ts.map
 \ No newline at end of file
 diff --git a/dist/api/google-vertex.js b/dist/api/google-vertex.js
-index 1b7cb58ec7ad745938a5684014867601454acdcb..9f262e41a5293a0358c651768920354a9744426b 100644
+index 2247e82b89..c5e03b8d40 100644
 --- a/dist/api/google-vertex.js
 +++ b/dist/api/google-vertex.js
 @@ -1,5 +1,6 @@
@@ -154,29 +126,22 @@ index 1b7cb58ec7ad745938a5684014867601454acdcb..9f262e41a5293a0358c651768920354a
  import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { providerHeadersToRecord } from "../utils/headers.js";
-@@ -36,14 +37,15 @@ export const stream = (model, context, options) => {
-             timestamp: Date.now(),
-         };
+@@ -38,9 +39,11 @@ export const stream = (model, context, options) => {
          try {
--            if (options?.fetch && options.fetch !== globalThis.fetch) {
--                throw new Error("Custom fetch is not supported by the Google Vertex adapter");
-+            if (!options?.accessToken && options?.fetch && options.fetch !== globalThis.fetch) {
-+                throw new Error("Custom fetch requires host-owned Vertex authentication");
-             }
              const apiKey = resolveApiKey(options);
--            // Create the client using either a Vertex API key, if provided, or ADC with project and location
+             // Create the client using either a Vertex API key, if provided, or ADC with project and location
 -            const client = apiKey
--                ? createClientWithApiKey(model, apiKey, options?.headers, options?.identity)
--                : createClient(model, resolveProject(options), resolveLocation(options), options?.headers, options?.env, options?.identity);
+-                ? createClientWithApiKey(model, apiKey, options?.headers, options?.identity, options?.fetch)
+-                : createClient(model, resolveProject(options), resolveLocation(options), options?.headers, options?.env, options?.identity, options?.fetch);
 +            const client = options?.accessToken
 +                ? await createClientWithAccessToken(model, options)
 +                : apiKey
-+                    ? createClientWithApiKey(model, apiKey, options?.headers, options?.identity)
-+                    : createClient(model, resolveProject(options), resolveLocation(options), options?.headers, options?.env, options?.identity);
++                    ? createClientWithApiKey(model, apiKey, options?.headers, options?.identity, options?.fetch)
++                    : createClient(model, resolveProject(options), resolveLocation(options), options?.headers, options?.env, options?.identity, options?.fetch);
              let params = buildParams(model, normalizedContext, options);
              const nextParams = await options?.onPayload?.(params, model);
              if (nextParams !== undefined) {
-@@ -222,7 +224,13 @@ export const stream = (model, context, options) => {
+@@ -228,7 +231,13 @@ export const stream = (model, context, options) => {
          }
          catch (error) {
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -191,7 +156,7 @@ index 1b7cb58ec7ad745938a5684014867601454acdcb..9f262e41a5293a0358c651768920354a
              stream.push({ type: "error", reason: output.stopReason, error: output });
              stream.end();
          }
-@@ -233,6 +241,7 @@ export const streamSimple = (model, context, options) => {
+@@ -239,6 +248,7 @@ export const streamSimple = (model, context, options) => {
      const base = {
          ...buildBaseOptions(model, context, options, undefined),
          toolChoice: options?.toolChoice,
@@ -199,7 +164,7 @@ index 1b7cb58ec7ad745938a5684014867601454acdcb..9f262e41a5293a0358c651768920354a
      };
      if (!options?.reasoning) {
          return stream(model, context, {
-@@ -265,6 +274,21 @@ export const streamSimple = (model, context, options) => {
+@@ -271,6 +281,21 @@ export const streamSimple = (model, context, options) => {
          },
      });
  };
@@ -215,17 +180,17 @@ index 1b7cb58ec7ad745938a5684014867601454acdcb..9f262e41a5293a0358c651768920354a
 +            },
 +        },
 +        // The host has already resolved the complete project collection and API version.
-+        httpOptions: { ...buildHttpOptions(model, options.headers, options.identity), apiVersion: "", fetch: options.fetch },
++        httpOptions: { ...buildHttpOptions(model, options.headers, options.identity, options.fetch), apiVersion: "" },
 +    });
 +}
- function createClient(model, project, location, optionsHeaders, env, identity) {
+ function createClient(model, project, location, optionsHeaders, env, identity, fetch) {
      const googleAuthOptions = buildGoogleAuthOptions(env);
      return new GoogleGenAI({
 diff --git a/dist/api/openai-codex-responses.js b/dist/api/openai-codex-responses.js
-index 427df0a7054cc4b2071c8e5c2dc2ac1a82ea166a..978d1a4cfe85983fc7874cbb1a40bb20f9d92ba8 100644
+index 255f14d32f..625d500886 100644
 --- a/dist/api/openai-codex-responses.js
 +++ b/dist/api/openai-codex-responses.js
-@@ -302,7 +302,12 @@ export const stream = (model, context, options) => {
+@@ -310,7 +310,12 @@ export const stream = (model, context, options) => {
                          statusText: response.statusText,
                      });
                      const info = await parseErrorResponse(fakeResponse);
@@ -239,7 +204,7 @@ index 427df0a7054cc4b2071c8e5c2dc2ac1a82ea166a..978d1a4cfe85983fc7874cbb1a40bb20
                  }
                  catch (error) {
                      if (error instanceof Error) {
-@@ -342,7 +347,13 @@ export const stream = (model, context, options) => {
+@@ -350,7 +355,13 @@ export const stream = (model, context, options) => {
          }
          catch (error) {
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -254,7 +219,7 @@ index 427df0a7054cc4b2071c8e5c2dc2ac1a82ea166a..978d1a4cfe85983fc7874cbb1a40bb20
              stream.push({ type: "error", reason: output.stopReason, error: output });
              stream.end();
          }
-@@ -1243,12 +1254,13 @@ async function parseErrorResponse(response) {
+@@ -1241,12 +1252,13 @@ async function parseErrorResponse(response) {
      const raw = await response.text();
      let message = raw || response.statusText || "Request failed";
      let friendlyMessage;
@@ -270,7 +235,7 @@ index 427df0a7054cc4b2071c8e5c2dc2ac1a82ea166a..978d1a4cfe85983fc7874cbb1a40bb20
                  const plan = err.plan_type ? ` (${err.plan_type.toLowerCase()} plan)` : "";
                  const mins = err.resets_at
                      ? Math.max(0, Math.round((err.resets_at * 1000 - Date.now()) / 60000))
-@@ -1260,7 +1272,7 @@ async function parseErrorResponse(response) {
+@@ -1258,7 +1270,7 @@ async function parseErrorResponse(response) {
          }
      }
      catch { }
@@ -280,7 +245,7 @@ index 427df0a7054cc4b2071c8e5c2dc2ac1a82ea166a..978d1a4cfe85983fc7874cbb1a40bb20
  // ============================================================================
  // Auth & Headers
 diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
-index 12ec37eaf976340d2b29234dab2f17964ed56c91..d1e16bde6e6794787a83192bacb655d0a5635a2c 100644
+index b3aa0a0025..480f01c7a6 100644
 --- a/dist/api/openai-completions.js
 +++ b/dist/api/openai-completions.js
 @@ -1,5 +1,6 @@
@@ -290,7 +255,7 @@ index 12ec37eaf976340d2b29234dab2f17964ed56c91..d1e16bde6e6794787a83192bacb655d0
  import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { shortHash } from "../utils/hash.js";
-@@ -99,6 +100,22 @@
+@@ -100,6 +101,22 @@ function parseOpenAIReasoningDetails(signature) {
          return undefined;
      }
  }
@@ -313,7 +278,7 @@ index 12ec37eaf976340d2b29234dab2f17964ed56c91..d1e16bde6e6794787a83192bacb655d0
  function parseLegacyEncryptedReasoningDetail(signature) {
      if (!signature)
          return undefined;
-@@ -412,8 +429,7 @@
+@@ -425,8 +442,7 @@ export const stream = (model, context, options) => {
                              appendOpenAIReasoningDetail(streamedReasoningDetails, detail);
                          }
                      }
@@ -323,7 +288,7 @@ index 12ec37eaf976340d2b29234dab2f17964ed56c91..d1e16bde6e6794787a83192bacb655d0
                          choice.delta.content.length > 0) {
                          const block = ensureTextBlock();
                          block.text += choice.delta.content;
-@@ -424,9 +440,60 @@
+@@ -437,9 +453,60 @@ export const stream = (model, context, options) => {
                              partial: output,
                          });
                      }
@@ -384,7 +349,7 @@ index 12ec37eaf976340d2b29234dab2f17964ed56c91..d1e16bde6e6794787a83192bacb655d0
                              if (!block.id && toolCall.id) {
                                  block.id = toolCall.id;
                                  toolCallBlocksById.set(toolCall.id, block);
-@@ -484,7 +551,13 @@
+@@ -500,7 +567,13 @@ export const stream = (model, context, options) => {
                  }
              }
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -399,7 +364,7 @@ index 12ec37eaf976340d2b29234dab2f17964ed56c91..d1e16bde6e6794787a83192bacb655d0
              // Some providers via OpenRouter give additional information in this field.
              // normalizeProviderError already stringifies the parsed body (error.error)
              // into errorMessage, so only append the raw metadata when it is not already
-@@ -970,7 +1043,19 @@
+@@ -989,7 +1062,19 @@ export function convertMessages(model, context, compat, options) {
                  .filter((detail) => detail !== undefined);
              const preservedReasoningDetails = signedReasoningDetails ?? (legacyReasoningDetails.length > 0 ? legacyReasoningDetails : undefined);
              const nonEmptyThinkingBlocks = thinkingBlocks.filter((block) => block.thinking.trim().length > 0);
@@ -420,7 +385,7 @@ index 12ec37eaf976340d2b29234dab2f17964ed56c91..d1e16bde6e6794787a83192bacb655d0
                  if (compat.requiresThinkingAsText) {
                      // Convert thinking blocks to plain text (no tags to avoid model mimicking them)
                      const thinkingText = nonEmptyThinkingBlocks
-@@ -1021,6 +1106,9 @@
+@@ -1040,6 +1125,9 @@ export function convertMessages(model, context, compat, options) {
                              },
                          };
                      }
@@ -430,7 +395,7 @@ index 12ec37eaf976340d2b29234dab2f17964ed56c91..d1e16bde6e6794787a83192bacb655d0
                      return {
                          id: tc.id,
                          type: "function",
-@@ -1028,6 +1116,9 @@
+@@ -1047,6 +1135,9 @@ export function convertMessages(model, context, compat, options) {
                              name: tc.name,
                              arguments: JSON.stringify(tc.arguments),
                          },
@@ -441,10 +406,10 @@ index 12ec37eaf976340d2b29234dab2f17964ed56c91..d1e16bde6e6794787a83192bacb655d0
                  });
              }
 diff --git a/dist/api/openai-responses-shared.js b/dist/api/openai-responses-shared.js
-index 3901bfc4bc6dee0eb45a209dbcbdb59d6c55d054..e9ab0623ae51a68856b0a6a7cddaf7ff9b94bbc6 100644
+index 7b58756cfe..b46a7e89b3 100644
 --- a/dist/api/openai-responses-shared.js
 +++ b/dist/api/openai-responses-shared.js
-@@ -685,7 +685,10 @@ export async function processResponsesStream(openaiStream, output, stream, model
+@@ -712,7 +712,10 @@ export async function processResponsesStream(openaiStream, output, stream, model
              finalizeResponse(event.response);
          }
          else if (event.type === "error") {
@@ -456,7 +421,7 @@ index 3901bfc4bc6dee0eb45a209dbcbdb59d6c55d054..e9ab0623ae51a68856b0a6a7cddaf7ff
          }
          else if (event.type === "response.failed") {
              sawTerminalResponseEvent = true;
-@@ -697,7 +700,7 @@ export async function processResponsesStream(openaiStream, output, stream, model
+@@ -724,7 +727,7 @@ export async function processResponsesStream(openaiStream, output, stream, model
                  : details?.reason
                      ? `incomplete: ${details.reason}`
                      : "Unknown error (no error details in response)";
@@ -466,7 +431,7 @@ index 3901bfc4bc6dee0eb45a209dbcbdb59d6c55d054..e9ab0623ae51a68856b0a6a7cddaf7ff
      }
      if (!sawTerminalResponseEvent) {
 diff --git a/dist/api/openai-responses.js b/dist/api/openai-responses.js
-index 7b3b0d733c3495fd0815f563212acac457224dc0..7e115d8ece2144a3db487b91d0f07d5c3ceba56b 100644
+index 78abc6efa0..83248df1db 100644
 --- a/dist/api/openai-responses.js
 +++ b/dist/api/openai-responses.js
 @@ -1,6 +1,7 @@
@@ -477,7 +442,7 @@ index 7b3b0d733c3495fd0815f563212acac457224dc0..7e115d8ece2144a3db487b91d0f07d5c
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { headersToRecord } from "../utils/headers.js";
  import { getIdentityHeaders } from "../utils/identity.js";
-@@ -173,7 +174,8 @@ export const stream = (model, context, options) => {
+@@ -175,7 +176,8 @@ export const stream = (model, context, options) => {
          }
          catch (error) {
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -487,7 +452,7 @@ index 7b3b0d733c3495fd0815f563212acac457224dc0..7e115d8ece2144a3db487b91d0f07d5c
              // Sign in with ChatGPT shares the subscription's usage limit with other apps.
              // On ChatGPT Business plans, the workspace admin also sets a per-user limit.
              if (errorMessage.includes("subscription_sharing_usage_limit_exceeded")) {
-@@ -185,6 +187,11 @@ export const stream = (model, context, options) => {
+@@ -187,6 +189,11 @@ export const stream = (model, context, options) => {
              else {
                  output.errorMessage = errorMessage;
              }
@@ -499,9 +464,9 @@ index 7b3b0d733c3495fd0815f563212acac457224dc0..7e115d8ece2144a3db487b91d0f07d5c
              stream.push({ type: "error", reason: output.stopReason, error: output });
              stream.end();
          }
-diff --git adist/auth/context.native.js b/dist/auth/context.native.js
+diff --git a/dist/auth/context.native.js b/dist/auth/context.native.js
 new file mode 100644
-index 0000000000000000000000000000000000000000..d6566ebc672b228de917c0643811734b89cea4ef
+index 0000000000..d6566ebc67
 --- /dev/null
 +++ b/dist/auth/context.native.js
 @@ -0,0 +1,7 @@
@@ -512,9 +477,9 @@ index 0000000000000000000000000000000000000000..d6566ebc672b228de917c0643811734b
 +        fileExists: async () => false,
 +    };
 +}
-diff --git adist/auth/oauth/callback-server.native.js b/dist/auth/oauth/callback-server.native.js
+diff --git a/dist/auth/oauth/callback-server.native.js b/dist/auth/oauth/callback-server.native.js
 new file mode 100644
-index 0000000000000000000000000000000000000000..c19117c951d82e6a9a5c3479b8845c327e0e0fa9
+index 0000000000..c19117c951
 --- /dev/null
 +++ b/dist/auth/oauth/callback-server.native.js
 @@ -0,0 +1,50 @@
@@ -569,7 +534,7 @@ index 0000000000000000000000000000000000000000..c19117c951d82e6a9a5c3479b8845c32
 +    }
 +}
 diff --git a/dist/auth/oauth/github-copilot.js b/dist/auth/oauth/github-copilot.js
-index 0f94684f4bde2caabad70f5d1f22e8cd742d1e77..3b6296b698c2adf1ad9b3e2f558d7a96db86bacd 100644
+index d1880cfec9..6582943255 100644
 --- a/dist/auth/oauth/github-copilot.js
 +++ b/dist/auth/oauth/github-copilot.js
 @@ -1,6 +1,7 @@
@@ -581,7 +546,7 @@ index 0f94684f4bde2caabad70f5d1f22e8cd742d1e77..3b6296b698c2adf1ad9b3e2f558d7a96
  import { sleep } from "../../utils/sleep.js";
  import { pollOAuthDeviceCodeFlow } from "./device-code.js";
 diff --git a/dist/auth/oauth/kimi-coding.js b/dist/auth/oauth/kimi-coding.js
-index 6e99a8c61f2fdafaea0b8c2aeec5719a70ae69fa..f9b5c23c1677b1294c9079e6e7ac1e6ee4f10b0b 100644
+index 6e99a8c61f..f9b5c23c16 100644
 --- a/dist/auth/oauth/kimi-coding.js
 +++ b/dist/auth/oauth/kimi-coding.js
 @@ -5,6 +5,7 @@
@@ -603,7 +568,7 @@ index 6e99a8c61f2fdafaea0b8c2aeec5719a70ae69fa..f9b5c23c1677b1294c9079e6e7ac1e6e
              continue;
          }
 diff --git a/dist/auth/oauth/openai-codex.js b/dist/auth/oauth/openai-codex.js
-index b543b9381352951833aeeaa1fc27ebdddda570bf..b87d3f5724a4f9c6604ea7f70bec245e905b30f6 100644
+index b543b93813..b87d3f5724 100644
 --- a/dist/auth/oauth/openai-codex.js
 +++ b/dist/auth/oauth/openai-codex.js
 @@ -1,16 +1,10 @@
@@ -646,7 +611,7 @@ index b543b9381352951833aeeaa1fc27ebdddda570bf..b87d3f5724a4f9c6604ea7f70bec245e
      return readTokenResponse(response, "refresh");
  }
 diff --git a/dist/auth/oauth/openrouter.js b/dist/auth/oauth/openrouter.js
-index b9587c246449505a6f0e6e5bed96f050a05f48ef..e18bba567da8cd3c6ea8c518ab32d822bd234574 100644
+index b9587c2464..e18bba567d 100644
 --- a/dist/auth/oauth/openrouter.js
 +++ b/dist/auth/oauth/openrouter.js
 @@ -10,6 +10,7 @@
@@ -658,7 +623,7 @@ index b9587c246449505a6f0e6e5bed96f050a05f48ef..e18bba567da8cd3c6ea8c518ab32d822
  import { startOAuthCallbackServer, waitForCallbackOrManualInput } from "./callback-server.js";
  import { generatePKCE } from "./pkce.js";
 diff --git a/dist/auth/oauth/pkce.js b/dist/auth/oauth/pkce.js
-index d69bf462dfddde17f048f705f99f8c11c4ecfd07..bf24d3e5bcf0502d6e24f20670d75f27d9013f90 100644
+index d69bf462df..bf24d3e5bc 100644
 --- a/dist/auth/oauth/pkce.js
 +++ b/dist/auth/oauth/pkce.js
 @@ -1,3 +1,4 @@
@@ -675,9 +640,9 @@ index d69bf462dfddde17f048f705f99f8c11c4ecfd07..bf24d3e5bcf0502d6e24f20670d75f27
      // Generate random verifier
      const verifierBytes = new Uint8Array(32);
      crypto.getRandomValues(verifierBytes);
-diff --git adist/auth/oauth/platform.d.ts b/dist/auth/oauth/platform.d.ts
+diff --git a/dist/auth/oauth/platform.d.ts b/dist/auth/oauth/platform.d.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..5693ef42314206ca8d348f0e3ad1676d3403304f
+index 0000000000..5693ef4231
 --- /dev/null
 +++ b/dist/auth/oauth/platform.d.ts
 @@ -0,0 +1,6 @@
@@ -687,9 +652,9 @@ index 0000000000000000000000000000000000000000..5693ef42314206ca8d348f0e3ad1676d
 +}): void;
 +export declare function oauthFetch(input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]): ReturnType<typeof fetch>;
 +export declare function platformPKCE(): Promise<{ verifier: string; challenge: string }> | undefined;
-diff --git adist/auth/oauth/platform.js b/dist/auth/oauth/platform.js
+diff --git a/dist/auth/oauth/platform.js b/dist/auth/oauth/platform.js
 new file mode 100644
-index 0000000000000000000000000000000000000000..01e9e24a043d89e4e58e6d6242ad7d03e2e97789
+index 0000000000..01e9e24a04
 --- /dev/null
 +++ b/dist/auth/oauth/platform.js
 @@ -0,0 +1,4 @@
@@ -698,7 +663,7 @@ index 0000000000000000000000000000000000000000..01e9e24a043d89e4e58e6d6242ad7d03
 +export function oauthFetch(input, init) { return (platform?.fetch ?? globalThis.fetch)(input, init); }
 +export function platformPKCE() { return platform?.generatePKCE?.(); }
 diff --git a/dist/auth/oauth/xai.js b/dist/auth/oauth/xai.js
-index f70a3beaf50222a12006d8f4ffc951397d1a9b62..29bab79ba6ea19ef305e7f33798e1bc74b3c9462 100644
+index f70a3beaf5..29bab79ba6 100644
 --- a/dist/auth/oauth/xai.js
 +++ b/dist/auth/oauth/xai.js
 @@ -1,6 +1,7 @@
@@ -710,7 +675,7 @@ index f70a3beaf50222a12006d8f4ffc951397d1a9b62..29bab79ba6ea19ef305e7f33798e1bc7
  const XAI_CLIENT_ID = "b1a00492-073a-47ea-816f-4c329264a828";
  const XAI_SCOPE = "openid profile email offline_access grok-cli:access api:access";
 diff --git a/dist/env-api-keys.js b/dist/env-api-keys.js
-index e27cf6f1015a5d0d0058df808b5737879eeb90c4..4c3d66faa784f16f1d604c6cac71eea1b523aba2 100644
+index cf5c45f435..54eb9a0eab 100644
 --- a/dist/env-api-keys.js
 +++ b/dist/env-api-keys.js
 @@ -10,7 +10,8 @@ var __rewriteRelativeImportExtension = (this && this.__rewriteRelativeImportExte
@@ -723,9 +688,9 @@ index e27cf6f1015a5d0d0058df808b5737879eeb90c4..4c3d66faa784f16f1d604c6cac71eea1
  const NODE_FS_SPECIFIER = "node:" + "fs";
  const NODE_OS_SPECIFIER = "node:" + "os";
  const NODE_PATH_SPECIFIER = "node:" + "path";
-diff --git adist/native-oauth.d.ts b/dist/native-oauth.d.ts
+diff --git a/dist/native-oauth.d.ts b/dist/native-oauth.d.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..99aab2e56915d82cf23f7a7a1e502a1a0f96961c
+index 0000000000..99aab2e569
 --- /dev/null
 +++ b/dist/native-oauth.d.ts
 @@ -0,0 +1,9 @@
@@ -738,9 +703,9 @@ index 0000000000000000000000000000000000000000..99aab2e56915d82cf23f7a7a1e502a1a
 +export { openaiCodexOAuth } from "./auth/oauth/openai-codex.ts";
 +export { openRouterOAuth } from "./auth/oauth/openrouter.ts";
 +export type * from "./auth/types.ts";
-diff --git adist/native-oauth.js b/dist/native-oauth.js
+diff --git a/dist/native-oauth.js b/dist/native-oauth.js
 new file mode 100644
-index 0000000000000000000000000000000000000000..84dd2ccd027d5ce91854ee1d4fc7932ca0c83134
+index 0000000000..84dd2ccd02
 --- /dev/null
 +++ b/dist/native-oauth.js
 @@ -0,0 +1,8 @@
@@ -753,7 +718,7 @@ index 0000000000000000000000000000000000000000..84dd2ccd027d5ce91854ee1d4fc7932c
 +export { openaiCodexOAuth } from "./auth/oauth/openai-codex.js";
 +export { openRouterOAuth } from "./auth/oauth/openrouter.js";
 diff --git a/dist/utils/diagnostics.js b/dist/utils/diagnostics.js
-index 4c207b278438337ff61736ca388c317719ad2203..743e40b63705852397de5c994d5b6b8d2505a268 100644
+index 4c207b2784..743e40b637 100644
 --- a/dist/utils/diagnostics.js
 +++ b/dist/utils/diagnostics.js
 @@ -8,7 +8,7 @@ export function formatThrownValue(value) {
@@ -766,22 +731,26 @@ index 4c207b278438337ff61736ca388c317719ad2203..743e40b63705852397de5c994d5b6b8d
          name: error.name || undefined,
          message: error.message || error.name,
 diff --git a/dist/utils/error-body.js b/dist/utils/error-body.js
-index 60c2521b69b3cb5ddfabbaa4c5aded9b37f8f64a..de01ff9b61b06e1d961152fd5ba99bbaf1aba003 100644
+index bfe17c5a33..9b5d5d16e8 100644
 --- a/dist/utils/error-body.js
 +++ b/dist/utils/error-body.js
-@@ -21,14 +21,23 @@ export function normalizeProviderError(error) {
+@@ -21,11 +21,13 @@ export function normalizeProviderError(error) {
      const sdkError = error;
      const status = extractStatus(sdkError);
      const body = extractBody(sdkError);
 +    const retryable = extractRetryable(sdkError);
      const messageCarriesBody = body === undefined || error.message.includes(body);
+     const message = status === undefined && body === undefined ? withCauseDetail(error) : error.message;
      return {
          status,
          body,
 +        retryable,
-         message: error.message,
+         message,
          messageCarriesBody,
      };
+@@ -56,6 +58,13 @@ export function withCauseDetail(error) {
+         return error.message;
+     return error.message ? `${error.message}: ${detail}` : detail;
  }
 +function extractRetryable(error) {
 +    if (typeof error.isRetryable === "boolean")
@@ -794,10 +763,10 @@ index 60c2521b69b3cb5ddfabbaa4c5aded9b37f8f64a..de01ff9b61b06e1d961152fd5ba99bba
   * Probe the HTTP status, first numeric hit wins, in SDK-field order:
   * `statusCode` (Mistral) → `status` (`openai`, `@google/genai`) →
 diff --git a/dist/utils/retry.js b/dist/utils/retry.js
-index d33b8069b80bc454b0db59a221aba9332d522bf3..5a4378f5d671632fc94102d35181a6939619fb09 100644
+index a2b1fd3a53..5865d2b56d 100644
 --- a/dist/utils/retry.js
 +++ b/dist/utils/retry.js
-@@ -203,11 +203,21 @@ export async function retryAssistantCall(produce, policy, signal, callbacks) {
+@@ -252,11 +252,21 @@ export async function retryAssistantCall(produce, policy, signal, callbacks) {
   * before restarting the assistant turn.
   */
  export function isRetryableAssistantError(message) {
@@ -823,13 +792,13 @@ index d33b8069b80bc454b0db59a221aba9332d522bf3..5a4378f5d671632fc94102d35181a693
  //# sourceMappingURL=retry.js.map
 \ No newline at end of file
 diff --git a/package.json b/package.json
-index 57e8f262c954d7c9277adea1e49348e0bcb2212a..b7ed6c42077589fa80abe3528f8b9b1155d0540a 100644
+index 2a3694cabb..22a5abd4b2 100644
 --- a/package.json
 +++ b/package.json
-@@ -46,6 +46,10 @@
- 		"./bun-oauth": {
- 			"types": "./dist/bun-oauth.d.ts",
- 			"import": "./dist/bun-oauth.js"
+@@ -58,6 +58,10 @@
+ 		"./lazy-oauth": {
+ 			"types": "./dist/lazy-oauth.d.ts",
+ 			"import": "./dist/lazy-oauth.js"
 +		},
 +		"./native-oauth": {
 +			"types": "./dist/native-oauth.d.ts",
@@ -837,7 +806,7 @@ index 57e8f262c954d7c9277adea1e49348e0bcb2212a..b7ed6c42077589fa80abe3528f8b9b11
  		}
  	},
  	"bin": {
-@@ -103,5 +107,9 @@
+@@ -116,5 +120,9 @@
  		"canvas": "3.2.3",
  		"typebox": "1.3.27",
  		"vitest": "4.1.12"

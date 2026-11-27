@@ -108,6 +108,35 @@ export function canUnpinTab(
   return !REQUIRED_MIDDLE_TABS.has(id) && normalized.includes(id);
 }
 
+export type DockPopoverActions = {
+  canMoveLeft: boolean;
+  canMoveRight: boolean;
+  canUnpin: boolean;
+  currentIndex: number;
+};
+
+export function resolveDockPopoverActions(
+  pinnedTabs: readonly NavigationPinTabId[],
+  id: NavigationPinTabId,
+): DockPopoverActions {
+  const normalized = normalizePinnedTabs(pinnedTabs);
+  const currentIndex = normalized.indexOf(id);
+  return {
+    canMoveLeft: currentIndex > 0,
+    canMoveRight: currentIndex >= 0 && currentIndex < normalized.length - 1,
+    canUnpin: !REQUIRED_MIDDLE_TABS.has(id) && currentIndex >= 0,
+    currentIndex,
+  };
+}
+
+export function hasDockPopoverActions(
+  pinnedTabs: readonly NavigationPinTabId[],
+  id: NavigationPinTabId,
+): boolean {
+  const { canMoveLeft, canMoveRight, canUnpin } = resolveDockPopoverActions(pinnedTabs, id);
+  return canMoveLeft || canMoveRight || canUnpin;
+}
+
 export function pinTab(
   pinnedTabs: readonly NavigationPinTabId[],
   id: NavigationPinTabId,

@@ -35,12 +35,11 @@ jest.mock('@/frontend/components/Selection', () =>
 );
 jest.mock('@/frontend/data', () => ({ useMutation: () => ({ trigger: mockDelete }) }));
 jest.mock('@/frontend/components/ModelPicker', () => ({
-  MODEL_SETTING_KINDS: ['default', 'fast', 'translate', 'painting', 'naming'],
+  MODEL_SETTING_KINDS: ['default', 'translate', 'painting', 'naming'],
   MODEL_SETTING_KIND_TITLE_KEYS: { default: 'Default', naming: 'Naming' },
   useModelSettingSelections: () => ({
     selections: {
       default: mockDefaultModelId,
-      fast: null,
       translate: null,
       painting: null,
       naming: mockNamingModelId,

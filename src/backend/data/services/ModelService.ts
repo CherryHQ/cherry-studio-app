@@ -919,7 +919,6 @@ export class ModelService {
       this.preferenceService.get('agent.default_model_id'),
       this.preferenceService.get('agent.session_naming.model_id'),
       this.preferenceService.get('feature.paintings.default_model_id'),
-      this.preferenceService.get('feature.quick_assistant.model_id'),
       this.preferenceService.get('feature.translate.model_id'),
     ]);
     return new Set(values.filter((id): id is string => typeof id === 'string' && id.length > 0));
