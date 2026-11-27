@@ -2,6 +2,7 @@ import { APICallError, type ImageModelV3, type ImageModelV3CallOptions } from '@
 import { combineHeaders, type FetchFunction, removeUndefinedEntries } from '@ai-sdk/provider-utils';
 
 import { fileToDataUrl } from '../transportUtils';
+import { generateMinimaxH3Image, isMinimaxH3ImageModel } from './minimaxH3Image';
 
 export interface MinimaxImageModelConfig {
   provider: string;
@@ -39,7 +40,9 @@ function parseSize(size: `${number}x${number}` | undefined): { width?: number; h
 
 export class MinimaxImageModel implements ImageModelV3 {
   readonly specificationVersion = 'v3';
-  readonly maxImagesPerCall = 9;
+  get maxImagesPerCall(): number {
+    return isMinimaxH3ImageModel(this.modelId) ? 10 : 9;
+  }
 
   get provider(): string {
     return this.config.provider;
@@ -53,6 +56,9 @@ export class MinimaxImageModel implements ImageModelV3 {
   async doGenerate(
     options: ImageModelV3CallOptions,
   ): Promise<Awaited<ReturnType<ImageModelV3['doGenerate']>>> {
+    if (isMinimaxH3ImageModel(this.modelId))
+      return generateMinimaxH3Image(this.modelId, this.config, options);
+
     const { prompt, n, size, seed, aspectRatio, files, providerOptions, headers, abortSignal } =
       options;
     const bag = (providerOptions?.minimax ?? {}) as Record<string, unknown>;
