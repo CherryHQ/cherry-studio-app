@@ -1873,6 +1873,7 @@
   "remoteAgent.uploadVerificationFailed": "Не удалось проверить файл. Повторите попытку.",
   "remoteAgent.uploadVerifying": "Проверка файла…",
   "remoteAgent.workspace": "Выберите рабочую область PC",
+  "remoteAgent.workspaceLabel": "Рабочая область PC",
   "remoteTasks.agent": "Агент",
   "remoteTasks.emptyDescription": "Создайте задачи по расписанию на компьютере, чтобы просматривать их диалоги здесь.",
   "remoteTasks.emptyTitle": "Нет задач по расписанию",

@@ -1825,6 +1825,7 @@
   "remoteAgent.uploadVerificationFailed": "ファイルを検証できません。再試行してください。",
   "remoteAgent.uploadVerifying": "ファイルを検証中…",
   "remoteAgent.workspace": "PC のワークスペースを選択",
+  "remoteAgent.workspaceLabel": "PC ワークスペース",
   "remoteTasks.agent": "エージェント",
   "remoteTasks.emptyDescription": "デスクトップで予約タスクを作成すると、ここで会話を確認できます。",
   "remoteTasks.emptyTitle": "予約タスクはありません",

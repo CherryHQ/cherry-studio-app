@@ -1825,6 +1825,7 @@
   "remoteAgent.uploadVerificationFailed": "無法驗證檔案，請重試。",
   "remoteAgent.uploadVerifying": "正在驗證檔案…",
   "remoteAgent.workspace": "選擇 PC 工作區",
+  "remoteAgent.workspaceLabel": "PC 工作區",
   "remoteTasks.agent": "智慧體",
   "remoteTasks.emptyDescription": "在桌面端建立定時任務後，可在這裡查看其對話。",
   "remoteTasks.emptyTitle": "暫無定時任務",

@@ -1841,6 +1841,7 @@
   "remoteAgent.uploadVerificationFailed": "Dosya doğrulanamıyor. Tekrar deneyin.",
   "remoteAgent.uploadVerifying": "Dosya doğrulanıyor…",
   "remoteAgent.workspace": "PC çalışma alanı seçin",
+  "remoteAgent.workspaceLabel": "PC çalışma alanı",
   "remoteTasks.agent": "Aracı",
   "remoteTasks.emptyDescription": "Konuşmalarını burada görmek için bilgisayarınızda zamanlanmış görevler oluşturun.",
   "remoteTasks.emptyTitle": "Zamanlanmış görev yok",

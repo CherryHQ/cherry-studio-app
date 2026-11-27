@@ -1857,6 +1857,7 @@
   "remoteAgent.uploadVerificationFailed": "Fișierul nu poate fi verificat. Încercați din nou.",
   "remoteAgent.uploadVerifying": "Se verifică fișierul…",
   "remoteAgent.workspace": "Alegeți un spațiu de lucru pe PC",
+  "remoteAgent.workspaceLabel": "Spațiu de lucru PC",
   "remoteTasks.agent": "Agent",
   "remoteTasks.emptyDescription": "Creează sarcini programate pe computer pentru a vedea conversațiile lor aici.",
   "remoteTasks.emptyTitle": "Nu există sarcini programate",

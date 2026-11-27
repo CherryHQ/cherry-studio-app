@@ -1841,6 +1841,7 @@
   "remoteAgent.uploadVerificationFailed": "Unable to verify the file. Retry.",
   "remoteAgent.uploadVerifying": "Verifying file…",
   "remoteAgent.workspace": "Choose a PC workspace",
+  "remoteAgent.workspaceLabel": "PC workspace",
   "remoteTasks.agent": "Agent",
   "remoteTasks.emptyDescription": "Create scheduled tasks on your desktop to view their conversations here.",
   "remoteTasks.emptyTitle": "No scheduled tasks",

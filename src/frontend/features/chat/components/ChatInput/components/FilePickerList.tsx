@@ -29,6 +29,7 @@ type FilePickerDirectoryItem =
 
 type FilePickerSelection = {
   attachedIds: ReadonlySet<FileEntryId>;
+  isSelectionLimitReached?: boolean;
   selectedIds: ReadonlySet<FileEntryId>;
   onToggle: (file: ResolvedFileEntry) => void;
 };
@@ -166,6 +167,7 @@ function FilePickerItem({
         <FilePickerFileRow
           isAttached={data.attachedIds.has(item.file.entry.id)}
           isSelected={data.selectedIds.has(item.file.entry.id)}
+          isSelectionLimitReached={Boolean(data.isSelectionLimitReached)}
           item={item.file}
           modifiedDate={data.dateFormatter.format(item.file.entry.updatedAt)}
           onToggle={data.onToggle}
@@ -274,18 +276,21 @@ function FilePickerError({ onRetry }: { onRetry: () => Promise<unknown> }) {
 function FilePickerFileRow({
   isAttached,
   isSelected,
+  isSelectionLimitReached,
   item,
   modifiedDate,
   onToggle,
 }: {
   isAttached: boolean;
   isSelected: boolean;
+  isSelectionLimitReached: boolean;
   item: ResolvedFileEntry;
   modifiedDate: string;
   onToggle: (file: ResolvedFileEntry) => void;
 }) {
   const { t } = useTranslation();
-  const isDisabled = isAttached || !item.uri;
+  const isLimitDisabled = !isAttached && !isSelected && isSelectionLimitReached;
+  const isDisabled = isAttached || !item.uri || isLimitDisabled;
   const description = !item.uri
     ? t('filePreview.unavailable')
     : isAttached
@@ -297,7 +302,11 @@ function FilePickerFileRow({
       accessibilityLabel={`${item.libraryFile?.name ?? item.entry.filename}, ${description}`}
       accessibilityRole="checkbox"
       accessibilityState={{ checked: isAttached || isSelected, disabled: isDisabled }}
-      className="min-h-18 flex-row items-center gap-4 py-3 active:opacity-60"
+      className={
+        isLimitDisabled
+          ? 'min-h-18 flex-row items-center gap-4 py-3 opacity-50 active:opacity-60'
+          : 'min-h-18 flex-row items-center gap-4 py-3 active:opacity-60'
+      }
       disabled={isDisabled}
       onPress={() => onToggle(item)}
       testID={`file-picker-entry-${item.entry.id}`}

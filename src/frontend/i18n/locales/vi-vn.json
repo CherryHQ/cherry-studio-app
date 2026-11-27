@@ -1825,6 +1825,7 @@
   "remoteAgent.uploadVerificationFailed": "Không thể xác minh tệp. Vui lòng thử lại.",
   "remoteAgent.uploadVerifying": "Đang xác minh tệp…",
   "remoteAgent.workspace": "Chọn không gian làm việc trên PC",
+  "remoteAgent.workspaceLabel": "Không gian làm việc trên PC",
   "remoteTasks.agent": "Trợ lý",
   "remoteTasks.emptyDescription": "Tạo tác vụ theo lịch trên máy tính để xem các cuộc trò chuyện của chúng tại đây.",
   "remoteTasks.emptyTitle": "Chưa có tác vụ theo lịch",
