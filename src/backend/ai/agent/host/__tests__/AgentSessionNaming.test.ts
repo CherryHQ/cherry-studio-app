@@ -51,7 +51,6 @@ function createNaming(input: {
       if (key === 'agent.session_naming.enabled') return input.namingEnabled ?? true;
       if (key === 'agent.session_naming.model_id') return input.namingModelId ?? null;
       if (key === 'agent.default_model_id') return defaultModelId;
-      if (key === 'agent.session_naming.prompt') return '';
       return null;
     }),
   } as unknown as PreferenceService;
