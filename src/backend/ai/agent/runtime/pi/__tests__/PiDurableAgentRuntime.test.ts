@@ -1306,13 +1306,25 @@ describe('Persistent Agent facade', () => {
     }
   });
 
-  test('migrates an unfinished v1 conversation across midnight without resetting loaded instructions', async () => {
+  test.each([1, 2] as const)('recovers v%i date, loaded instructions and MCP', async (version) => {
     const state = fixture();
     const now = jest.spyOn(Date, 'now').mockReturnValue(new Date(2026, 11, 31, 23, 59).getTime());
     const tools: RuntimeTool[] = [
       {
         ref: { source: 'builtin', capabilityId: 'find_skills' },
         providerName: 'find_skills',
+        displayName: 'Find skills',
+        description: 'Find available skills.',
+        inputSchema: { type: 'object', properties: {} },
+        approval: 'auto',
+        deferred: true,
+        execute: async () => {
+          throw new Error('Recovery must not replay tools.');
+        },
+      },
+      {
+        ref: { source: 'mcp', serverId: 'catalog', rawToolName: 'find_skills' },
+        providerName: 'mcp_catalog_find_skills',
         displayName: 'Find skills',
         description: 'Find available skills.',
         inputSchema: { type: 'object', properties: {} },
@@ -1348,12 +1360,12 @@ describe('Persistent Agent facade', () => {
         agent: {
           model: { provider: reference.providerId, modelId: reference.modelId },
           extensions: [{ name: 'cherry.capabilities:session' }],
-          instructions: legacyInstructions,
+          ...(version === 1 ? { instructions: legacyInstructions } : {}),
         },
         configuration: {
           ...seed.configuration,
-          version: 1,
-          instructions: legacyInstructions,
+          version,
+          instructions: version === 1 ? legacyInstructions : instructions,
           initialInstructions: [initial],
           tools: tools.map(piToolBlueprint),
         },
@@ -1372,7 +1384,7 @@ describe('Persistent Agent facade', () => {
       });
       await conversation.commit(async (tx) => {
         const agent = await tx.doc(AgentDoc, conversation.id);
-        agent.modelTools = { add: ['find_skills'] };
+        agent.modelTools = { add: ['find_skills', 'mcp_catalog_find_skills'] };
         const live = await tx.doc(LiveDoc, conversation.id);
         const retained = await tx.doc(ToolInstructions, conversation.id);
         retained.sections.push(loaded);
@@ -1380,16 +1392,19 @@ describe('Persistent Agent facade', () => {
         const entry = await tx.appendEntry(UserEntry, conversation.id, {
           model: [{ role: 'user', content: 'Question unfinished', timestamp: Date.now() }],
         });
-        await tx.appendEntry(SystemEntry, conversation.id, {
-          model: [
-            {
-              role: 'system',
-              content: '',
-              sections: { instructions: `<instructions>\n${legacyInstructions}\n</instructions>` },
-              timestamp: Date.now(),
-            },
-          ],
-        });
+        if (version === 1)
+          await tx.appendEntry(SystemEntry, conversation.id, {
+            model: [
+              {
+                role: 'system',
+                content: '',
+                sections: {
+                  instructions: `<instructions>\n${legacyInstructions}\n</instructions>`,
+                },
+                timestamp: Date.now(),
+              },
+            ],
+          });
         const record = await tx.createSubmission({
           conversationId: conversation.id,
           type: 'input',
@@ -1432,7 +1447,8 @@ describe('Persistent Agent facade', () => {
         await restored.commit(async (tx) => {
           const agent = await tx.doc(AgentDoc, restored.id);
           expect(agent.instructions).toBeUndefined();
-          expect(agent.modelTools).toEqual({ add: ['find_skills'] });
+          expect(agent.extensions).toEqual(['cherry.capabilities:session', 'cherry.mcp:session']);
+          expect(agent.modelTools).toEqual({ add: ['find_skills', 'mcp_catalog_find_skills'] });
           expect((await tx.doc(ToolInstructions, restored.id)).sections).toEqual([initial, loaded]);
         }, BACKGROUND_CONTEXT);
       } finally {
@@ -1454,8 +1470,8 @@ describe('Persistent Agent facade', () => {
         expect(prompt).not.toContain('2026-12-31');
         expect(prompt).toContain(initial.text);
         expect(prompt).toContain(loaded.text);
-        expect(getCurrentTools(state.requests[0]!.messages).map((tool) => tool.name)).toContain(
-          'find_skills',
+        expect(getCurrentTools(state.requests[0]!.messages).map((tool) => tool.name)).toEqual(
+          expect.arrayContaining(['find_skills', 'mcp_catalog_find_skills']),
         );
       } finally {
         await observation.unsubscribe();

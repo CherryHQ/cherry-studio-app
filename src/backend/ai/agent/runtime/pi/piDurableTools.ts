@@ -1,4 +1,5 @@
-import type { Context, JsonValue } from '@earendil-works/chord';
+import type { Context } from '@earendil-works/chord/context';
+import type { JsonValue } from '@earendil-works/chord/json';
 import {
   defineExtension,
   defineTool,
@@ -275,7 +276,9 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
             toolCallId: api.callId,
             turnId,
             run: async () => {
-              result = await tool.execute(args, api, context);
+              const outcome = await tool.execute(args, api, context);
+              if (outcome.kind !== undefined) throw new Error('The JavaScript tool cannot park.');
+              result = outcome;
               const value: RuntimeJsonValue = result.isError
                 ? { status: 'error', code: piCodemodeFailureCode(result) }
                 : { status: 'ok' };

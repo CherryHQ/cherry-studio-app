@@ -3,12 +3,14 @@ import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
 import { createModels } from '@earendil-works/pi-ai/models';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 import {
+  AssistantEntry,
   CompactionTask,
   createRegistry,
   CompactionEntry,
   ResetEntry,
   defineDocFamily,
   defineTask,
+  defineTool,
   Harness,
   hook,
   InboxDoc,
@@ -16,6 +18,7 @@ import {
   GenerationTask,
   MemoryStorage,
   ProviderDoc,
+  ToolTask,
   UserEntry,
   type ConversationId,
   type TaskGraphNode,
@@ -61,6 +64,28 @@ test('execution protection follows runnable work, including due sleeps and cance
   };
   expect(hasRunnablePiTasks({ tasks: { '1': task } }, 1000)).toBe(false);
   expect(hasRunnablePiTasks({ tasks: { '1': task } }, 2000)).toBe(true);
+  const signalSleep: TaskGraphNode = {
+    ...task,
+    state: { status: 'sleeping', phase: 'generate', signals: [{ signal: 'resume', key: 'key' }] },
+  };
+  expect(hasRunnablePiTasks({ tasks: { '1': signalSleep } }, 3000)).toBe(false);
+  const joining = {
+    ...task,
+    id: 3 as TaskId,
+    state: { status: 'waiting', phase: 'generate', on: [task.id, 2 as TaskId], policy: 'any' },
+  } satisfies TaskGraphNode;
+  expect(hasRunnablePiTasks({ tasks: { '1': task, '3': joining } }, 1000)).toBe(true);
+  expect(
+    hasRunnablePiTasks(
+      {
+        tasks: {
+          '1': task,
+          '3': { ...joining, state: { ...joining.state, policy: 'allSettled' } },
+        },
+      },
+      1000,
+    ),
+  ).toBe(false);
   expect(hasRunnablePiTasks({ tasks: { '1': { ...task, abortRequested: true } } }, 1000)).toBe(
     true,
   );
@@ -560,7 +585,11 @@ describe('PiDurableRuntime identity and handoff', () => {
       class ReopenableStorage extends MemoryStorage {
         override async close() {}
       }
-      const legacyGeneration = defineTask({ ...GenerationTask.definition, version: 1 });
+      const generationVersion = version === '1.4.0' ? 1 : 2;
+      const legacyGeneration = defineTask({
+        ...GenerationTask.definition,
+        version: generationVersion,
+      });
       const storage = new ReopenableStorage();
       const first = await Harness.open(storage, options(), BACKGROUND_CONTEXT);
       const conversation = await first.createConversation(
@@ -579,7 +608,7 @@ describe('PiDurableRuntime identity and handoff', () => {
           entry: entry.id,
         });
         const taskId = await tx.createTask(
-          version === '1.4.0' ? legacyGeneration : GenerationTask,
+          legacyGeneration,
           {},
           {
             ownership: { kind: 'conversation' },
@@ -621,8 +650,10 @@ describe('PiDurableRuntime identity and handoff', () => {
           BACKGROUND_CONTEXT,
         );
         expect((await storage.document(live!.id, 'current', BACKGROUND_CONTEXT))?.version).toBe(1);
-        expect((await storage.task(savedRun.taskId, BACKGROUND_CONTEXT))?.version).toBe(1);
       }
+      expect((await storage.task(savedRun.taskId, BACKGROUND_CONTEXT))?.version).toBe(
+        generationVersion,
+      );
       const reopened = await Harness.open(storage, options(), BACKGROUND_CONTEXT);
       try {
         const inspected = await reopened.inspect(BACKGROUND_CONTEXT);
@@ -635,6 +666,9 @@ describe('PiDurableRuntime identity and handoff', () => {
           (await reopened.snapshot(LiveDoc, conversation.id, BACKGROUND_CONTEXT))?.run?.turns,
         ).toBe(0);
         reopened.resume();
+        expect(await reopened.waitForTask(savedRun.taskId, BACKGROUND_CONTEXT)).toMatchObject({
+          version: 3,
+        });
         await reopened.waitForIdle(BACKGROUND_CONTEXT);
         const records = await Promise.all(
           inspected.submissions.map(async ({ id }) =>
@@ -650,6 +684,78 @@ describe('PiDurableRuntime identity and handoff', () => {
     },
   );
 
+  test('reopens a 1.5.0 tool task at v4 and preserves its unoffered flag', async () => {
+    class ReopenableStorage extends MemoryStorage {
+      override async close() {}
+    }
+    const storage = new ReopenableStorage();
+    const configuration = options();
+    const execute = jest.fn(async () => ({
+      output: [{ type: 'text' as const, text: 'Executed' }],
+    }));
+    configuration.registry.install({
+      name: 'test.lookup',
+      tools: [
+        defineTool({
+          name: 'lookup',
+          description: 'Look up an item.',
+          parameters: { type: 'object' },
+          execute,
+        }),
+      ],
+    });
+    const first = await Harness.open(storage, configuration, BACKGROUND_CONTEXT);
+    const conversation = await first.createConversation(
+      { ownership: { kind: 'ownerless' } },
+      BACKGROUND_CONTEXT,
+    );
+    const taskId = await conversation.commit(async (tx) => {
+      const assistant = await tx.appendEntry(AssistantEntry, conversation.id, {
+        model: [
+          {
+            ...emptyAssistantMessage({
+              api: 'openai-responses',
+              provider: 'test',
+              id: 'model',
+              name: 'Model',
+              baseUrl: '',
+              input: ['text'],
+              reasoning: false,
+              contextWindow: 1024,
+              maxTokens: 128,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            }),
+            stopReason: 'toolUse',
+            content: [{ type: 'toolCall', id: 'call', name: 'lookup', arguments: {} }],
+          },
+        ],
+      });
+      const legacyTool = defineTask({ ...ToolTask.definition, version: 3 });
+      return tx.createTask(
+        legacyTool,
+        { kind: 'model', assistant: assistant.id, callId: 'call', unoffered: true },
+        { ownership: { kind: 'conversation' } },
+      );
+    }, BACKGROUND_CONTEXT);
+    await first.close(BACKGROUND_CONTEXT);
+    expect(await storage.task(taskId, BACKGROUND_CONTEXT)).toMatchObject({ version: 3 });
+
+    const reopened = await Harness.open(storage, configuration, BACKGROUND_CONTEXT);
+    try {
+      reopened.resume();
+      expect(await reopened.waitForTask(taskId, BACKGROUND_CONTEXT)).toMatchObject({ version: 4 });
+      const restored = (await reopened.conversation(conversation.id, BACKGROUND_CONTEXT))!;
+      expect((await restored.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
+        role: 'toolResult',
+        toolCallId: 'call',
+        isError: true,
+      });
+      expect(execute).not.toHaveBeenCalled();
+    } finally {
+      await reopened.close(BACKGROUND_CONTEXT);
+    }
+  });
+
   test.each(['provider', 'hook'])('settles failed compaction (%s)', async (source) => {
     const configuration = options();
     if (source === 'hook') {
@@ -657,7 +763,7 @@ describe('PiDurableRuntime identity and handoff', () => {
         name: 'test.summary-failure',
         hooks: [
           hook(CompactionTask, {
-            beforeCompact: () => ({ failure: 'Compaction provider failed' }),
+            beforeCompact: () => ({ kind: 'failure', failure: 'Compaction provider failed' }),
           }),
         ],
       });
@@ -1328,7 +1434,7 @@ describe('PiDurableRuntime identity and handoff', () => {
 
   test('joins an idle background compaction instead of reporting busy and spares it on caller abort', async () => {
     const configuration = options();
-    let resolveSummary!: (decision: { summary: string }) => void;
+    let resolveSummary!: (decision: { kind: 'summary'; summary: string }) => void;
     let compactSignal!: AbortSignal;
     let markStarted!: () => void;
     const compactStarted = new Promise<void>((resolve) => {
@@ -1339,7 +1445,7 @@ describe('PiDurableRuntime identity and handoff', () => {
         _compaction: unknown,
         _api: unknown,
         context: { abortSignal?: AbortSignal },
-      ): Promise<{ summary: string }> => {
+      ): Promise<{ kind: 'summary'; summary: string }> => {
         compactSignal = context.abortSignal!;
         markStarted();
         return new Promise((resolve) => {
@@ -1415,7 +1521,7 @@ describe('PiDurableRuntime identity and handoff', () => {
 
       const joined = runtime.compactContext(seed.sessionId, new AbortController().signal);
       expect(beforeCompact).toHaveBeenCalledTimes(1);
-      resolveSummary({ summary: 'Background compacted summary' });
+      resolveSummary({ kind: 'summary', summary: 'Background compacted summary' });
       await expect(joined).resolves.toBe('compacted');
       expect((await conversation.context(BACKGROUND_CONTEXT)).messages).toEqual(
         expect.arrayContaining([
@@ -1431,7 +1537,7 @@ describe('PiDurableRuntime identity and handoff', () => {
         ]),
       );
     } finally {
-      resolveSummary?.({ summary: 'Cleanup' });
+      resolveSummary?.({ kind: 'summary', summary: 'Cleanup' });
       await runtime.close();
     }
   });

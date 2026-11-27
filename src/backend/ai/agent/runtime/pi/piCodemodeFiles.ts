@@ -1,4 +1,4 @@
-import type { Context } from '@earendil-works/chord';
+import type { Context } from '@earendil-works/chord/context';
 import { defineDoc, defineEntry, type ToolExecutionApi } from '@earendil-works/pi-durable';
 
 import type { RuntimeArtifact } from '../types';

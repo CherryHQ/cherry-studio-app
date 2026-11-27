@@ -122,17 +122,18 @@ test('sends a text-only translation through the installed Codex adapter with OAu
       : await sentBody.text(),
   );
   expect(sent).toMatchObject({
-    instructions: request.instructions,
     stream: true,
     store: false,
     reasoning: { effort: 'none' },
     input: [
+      { role: 'developer', content: request.instructions },
       expect.objectContaining({
         role: 'user',
         content: [{ type: 'input_text', text: request.text }],
       }),
     ],
   });
+  expect(sent.instructions).toBeUndefined();
   expect(sent.temperature).toBeUndefined();
   expect(sent.tools).toBeUndefined();
 });

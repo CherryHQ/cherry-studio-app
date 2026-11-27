@@ -1,5 +1,5 @@
-import type { Context, JsonValue } from '@earendil-works/chord';
-import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/chord/context';
+import { BACKGROUND_CONTEXT, withAbortSignal, type Context } from '@earendil-works/chord/context';
+import type { JsonValue } from '@earendil-works/chord/json';
 import {
   configure,
   defineDoc,
@@ -24,6 +24,7 @@ import {
   ProviderDoc,
   type Storage,
   type TaskGraph,
+  type TaskId,
 } from '@earendil-works/pi-durable';
 
 import type { RuntimeInputParent, RuntimeQueueSelection } from '../durableTypes';
@@ -827,7 +828,7 @@ export class PiDurableRuntime {
       inbox.items = inbox.items.filter(
         (entry) => entry.id !== original.id && entry.mode !== 'followUp',
       );
-      await conversation.submit(tx, {
+      await conversation.admit(tx, {
         type: 'input',
         requestId: replacementId,
         content: item.content,
@@ -1226,9 +1227,13 @@ export function hasRunnablePiTasks(graph: TaskGraph, now = Date.now()): boolean 
       case 'running':
         return true;
       case 'sleeping':
-        return task.state.until <= now;
-      case 'waiting':
-        return task.state.on.every((id) => graph.tasks[String(id)] === undefined);
+        return task.state.until !== undefined && task.state.until <= now;
+      case 'waiting': {
+        const isSettled = (id: TaskId) => graph.tasks[String(id)] === undefined;
+        return task.state.policy === 'any'
+          ? task.state.on.some(isSettled)
+          : task.state.on.every(isSettled);
+      }
     }
   });
 }
