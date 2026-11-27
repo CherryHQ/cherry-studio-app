@@ -3,7 +3,7 @@ import {
   NAV_ROUTE_MANIFEST,
   type NavRouteSpec,
   type SidebarNavDestination,
-} from '@/frontend/appShell/navigationShell/navRouteManifest';
+} from '@/frontend/appShell/navigationShell/state';
 
 /** Sidebar entries that open a page in the content region instead of a conversation. */
 export type SidebarDestination = SidebarNavDestination | 'scheduled-tasks';

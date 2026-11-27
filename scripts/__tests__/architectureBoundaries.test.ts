@@ -67,6 +67,15 @@ describe('resolved architecture boundaries', () => {
       'src/frontend/appShell/header/probe.ts',
       "import '@/frontend/components/AgentEditor/AgentEditor';",
     ],
+    [
+      'src/frontend/appShell/sidebar/probe.ts',
+      "import '@/frontend/appShell/navigationShell/navRouteManifest';",
+    ],
+    [
+      'src/frontend/features/more/probe.ts',
+      "import '@/frontend/appShell/navigationShell/dockTabs';",
+    ],
+    ['src/app/probe.ts', "import '@/frontend/appShell/navigationShell/FloatingNavDock';"],
     ['src/shared/utils/probe.ts', "import '../../frontend/data';"],
     ['src/shared/data/probe.ts', "import 'react-native';"],
     ['src/shared/utils/probe.ts', "import 'expo-file-system';"],
@@ -143,6 +152,15 @@ describe('resolved architecture boundaries', () => {
       'src/frontend/components/ModelPicker/components/probe.ts',
       "import '../utils/modelPickerBadges';",
     ],
+    [
+      'src/app/probe.ts',
+      "import { FloatingNavDock, useNavigationShell } from '@/frontend/appShell/navigationShell';",
+    ],
+    [
+      'src/frontend/appShell/sidebar/probe.ts',
+      "import { NAV_ROUTE_MANIFEST, useOptionalNavigationShell } from '@/frontend/appShell/navigationShell/state';",
+    ],
+    ['src/frontend/appShell/navigationShell/probe.ts', "import './navRouteManifest';"],
     [
       'src/frontend/features/chat/probe.ts',
       "import '@/frontend/components/Composer/utils/composerAttachments';",

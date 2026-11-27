@@ -205,6 +205,17 @@ const frontendPublicSurfaceZones = [
     ],
     message: 'Import the shared Agent form from @/frontend/components/AgentEditor.',
   },
+  {
+    target: [
+      'src/app',
+      'src/frontend/!(appShell)/**/*',
+      'src/frontend/appShell/!(navigationShell)/**/*',
+    ],
+    from: 'src/frontend/appShell/navigationShell',
+    except: ['./index.ts', './state.ts'],
+    message:
+      'Import navigation shell UI from @/frontend/appShell/navigationShell or state and layout contracts from @/frontend/appShell/navigationShell/state.',
+  },
 ];
 
 const backendPublicSurfaceZones = [
