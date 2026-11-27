@@ -175,6 +175,8 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     };
   };
   readonly generationLease = (tag: string) => this.screenAwake.acquire(tag);
+  readonly onSessionDeleted: NonNullable<MobileAgentHostPorts['onSessionDeleted']> = (sessionId) =>
+    this.ssh?.forgetSession(sessionId);
   readonly durableStorage = {
     open: () => AgentSqlDatabase.open(),
     size: () => agentDatabaseSize(),

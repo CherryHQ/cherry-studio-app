@@ -26,6 +26,17 @@ import type {
 /** Provider name of the Host tool that runs an explicitly submitted image request. */
 export const DURABLE_IMAGE_TOOL_NAME = 'cherry_generate_image';
 
+/** Durable lane payload or configuration failed schema validation and must be isolated. */
+export class RuntimeCorruptLaneError extends Error {
+  readonly lane?: RuntimeLane;
+
+  constructor(message: string, options?: { lane?: RuntimeLane; cause?: unknown }) {
+    super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = 'RuntimeCorruptLaneError';
+    this.lane = options?.lane;
+  }
+}
+
 /** Portable storage capability supplied by composition; no Expo, data service, or Pi types. */
 export type RuntimeSqlValue = null | number | bigint | string | Uint8Array;
 export interface RuntimeSqlExecutor {

@@ -108,15 +108,22 @@ async function flushMicrotasks() {
 
 describe('Sortable', () => {
   let renderer: ReactTestRenderer | undefined;
+  const viewPrototype = View.prototype as unknown as {
+    measureInWindow?: (cb: (x: number, y: number, w: number, h: number) => void) => void;
+  };
+  let originalMeasureInWindow: typeof viewPrototype.measureInWindow;
 
   beforeEach(() => {
     panGesturesByOrder.length = 0;
     mockFail.mockReset();
     mockLightHaptic.mockReset();
     mockSelectionHaptic.mockReset();
+    originalMeasureInWindow = viewPrototype.measureInWindow;
+    viewPrototype.measureInWindow = jest.fn((cb) => cb(0, 0, 0, 0));
   });
 
   afterEach(() => {
+    viewPrototype.measureInWindow = originalMeasureInWindow;
     act(() => renderer?.unmount());
     renderer = undefined;
   });

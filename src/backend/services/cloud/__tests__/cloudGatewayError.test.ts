@@ -18,3 +18,10 @@ test.each([
 ] as const)('preserves a valid server Retry-After: %s', (retryAfter, deadline) => {
   expect(cloudRetryDeadline(retryAfter, NOW)).toBe(deadline);
 });
+
+test.each(['86400', '99999999', 'Fri, 31 Dec 2099 23:59:59 GMT'])(
+  'caps an oversized server Retry-After at 15 minutes: %s',
+  (retryAfter) => {
+    expect(cloudRetryDeadline(retryAfter, NOW)).toBe(NOW + 15 * 60_000);
+  },
+);

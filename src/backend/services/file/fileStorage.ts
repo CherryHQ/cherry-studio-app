@@ -1,6 +1,6 @@
 import { Directory, File } from 'expo-file-system';
 
-import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
+import { createOrderedUuid } from '@/backend/data/db/schemas';
 import { publishFileEntryChanges } from '@/backend/data/fileEntryChanges';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import { storageDirectory } from '@/backend/data/storage/storagePaths';

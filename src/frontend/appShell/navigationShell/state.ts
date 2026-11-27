@@ -55,6 +55,7 @@ export {
   WIDE_RAIL_WIDTH,
   type NavigationShellMode,
 } from './shellMode';
+export type { SidebarNavDestination } from './navRouteManifest';
 
 export type DockRect = {
   height: number;

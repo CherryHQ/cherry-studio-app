@@ -182,7 +182,7 @@ describe('NavigationShellProvider', () => {
     expect(latest.shellMode).toBe('compact-dock');
     expect(latest.isDockVisible).toBe(true);
     expect(latest.isVerticalRailVisible).toBe(false);
-    expect(latest.dockClearance).toBe(38);
+    expect(latest.dockClearance).toBe(42);
 
     mockInsets = { bottom: 0, left: 0, right: 0, top: 20 };
     act(() => {
@@ -194,7 +194,7 @@ describe('NavigationShellProvider', () => {
     });
     expect(latest.shellMode).toBe('compact-dock');
     expect(latest.isVerticalRailVisible).toBe(false);
-    expect(latest.dockClearance).toBe(66);
+    expect(latest.dockClearance).toBe(70);
 
     mockWindowClass = 'wide';
     mockDimensions = { height: 834, width: 1194 };
@@ -247,7 +247,7 @@ describe('NavigationShellProvider', () => {
       expect(addListenerSpy).not.toHaveBeenCalled();
 
       act(() => {
-        latest.registerDockRect({ height: 44, width: 400, x: 0, y: 760 });
+        latest.registerDockRect({ height: 46, width: 400, x: 0, y: 760 });
         latest.startDrag({ id: 'drawings', source: 'more', x: 140, y: 700 });
       });
       expect(latestInteraction.dragState).not.toBeNull();
@@ -278,7 +278,7 @@ describe('NavigationShellProvider', () => {
       });
       expect(latest.isDockVisible).toBe(false);
       expect(latest.dockClearance).toBe(0);
-      expect(latest.restingDockClearance).toBe(38);
+      expect(latest.restingDockClearance).toBe(42);
     } finally {
       addListenerSpy.mockRestore();
     }
@@ -337,11 +337,11 @@ describe('NavigationShellProvider', () => {
       );
     });
 
-    expect(latest.dockClearance).toBe(60);
-    expect(latest.restingDockClearance).toBe(60);
+    expect(latest.dockClearance).toBe(66);
+    expect(latest.restingDockClearance).toBe(66);
 
     act(() => {
-      latest.registerDockRect({ height: 44, width: 400, x: 0, y: 760 });
+      latest.registerDockRect({ height: 46, width: 400, x: 0, y: 760 });
       latest.startDrag({ id: 'drawings', source: 'more', x: 140, y: 700 });
     });
     expect(latestInteraction.dragState).not.toBeNull();
@@ -355,7 +355,7 @@ describe('NavigationShellProvider', () => {
       );
     });
     expect(latest.dockClearance).toBe(0);
-    expect(latest.restingDockClearance).toBe(60);
+    expect(latest.restingDockClearance).toBe(66);
     expect(latestInteraction.dragState).toBeNull();
   });
 
@@ -389,7 +389,7 @@ describe('NavigationShellProvider', () => {
     });
 
     act(() => {
-      latest.registerDockRect({ height: 44, width: 400, x: 0, y: 780 });
+      latest.registerDockRect({ height: 46, width: 400, x: 0, y: 780 });
       // Enter top hit slop (780 - 72 = 708): x in left half of middle band -> insertIndex 0
       latest.startDrag({ id: 'drawings', source: 'more', x: 140, y: 720 });
     });
@@ -584,7 +584,7 @@ describe('NavigationShellProvider', () => {
     expect(interactionRenders).toBe(1);
 
     act(() => {
-      actionsRef.registerDockRect({ height: 44, width: 400, x: 0, y: 780 });
+      actionsRef.registerDockRect({ height: 46, width: 400, x: 0, y: 780 });
       actionsRef.openPinPopover({ id: 'drawings', source: 'more', x: 100, y: 200 });
     });
 

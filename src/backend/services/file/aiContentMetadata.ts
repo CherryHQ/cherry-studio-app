@@ -1,7 +1,7 @@
 import { Directory, File, FileMode } from 'expo-file-system';
 import { strFromU8 } from 'fflate/browser';
 
-import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
+import { createOrderedUuid } from '@/backend/data/db/schemas';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import {
   AiContentLabelSchema,
@@ -222,11 +222,11 @@ export async function completeFileAiContent(
     const extracted = await readFileAiContent({ uri: temporary.uri, mediaType }, signal);
     if (JSON.stringify(extracted) !== JSON.stringify(label))
       throw new Error('AI content metadata did not round-trip');
+    const expectedSize = temporary.size;
     await temporary.copy(file, { overwrite: true });
     signal?.throwIfAborted();
-    const published = await readFileAiContent({ uri: file.uri, mediaType }, signal);
-    if (JSON.stringify(published) !== JSON.stringify(label))
-      throw new Error('Final file AI metadata did not round-trip');
+    if (file.size !== expectedSize)
+      throw new Error('Final file size did not match staged AI metadata');
     return label;
   } finally {
     if (temporary.exists) temporary.delete();

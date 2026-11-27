@@ -1,4 +1,5 @@
 import { and, asc, eq, inArray, isNotNull, isNull, notInArray, sql } from 'drizzle-orm';
+import { ZodError } from 'zod';
 
 import {
   AppStatePolicy,
@@ -15,10 +16,10 @@ import {
   agentSessionMessageTable,
   agentSessionTable,
   agentTable,
+  createOrderedUuid,
   monotonicUpdateTimestamp,
   userModelTable,
 } from '@/backend/data/db/schemas';
-import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import { agentRowPolicy } from '@/backend/data/services/managedResources';
 import {
   messagePathIdsSql,
@@ -34,6 +35,7 @@ import {
   toAgentMessageView,
   toReadableAgentMessageViews,
   toAgentSessionView,
+  type AgentMessageViewRow,
 } from '@/backend/data/services/utils/agentSessionRows';
 import { requireActiveFolder } from '@/backend/data/services/utils/fileLibraryRows';
 import { toSearchableText } from '@/backend/data/services/utils/searchSnippet';
@@ -50,7 +52,7 @@ import { applyReplyEdits } from '@/shared/utils/assistantReply';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
-import type { RuntimeContextCheckpoint } from '../runtime';
+import { RuntimeCorruptLaneError, type RuntimeContextCheckpoint } from '../runtime';
 import type {
   AgentSessionStore,
   DeleteTurnInput,
@@ -1005,9 +1007,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       )
       .limit(1);
     if (!row) return null;
-    return options?.tolerateInvalidParts
-      ? (toReadableAgentMessageViews([row])[0] ?? null)
-      : toAgentMessageView(row);
+    if (options?.tolerateInvalidParts) {
+      return toReadableAgentMessageViews([row])[0] ?? null;
+    }
+    return toRuntimeMessageView(row);
   }
 
   async listTurnMessages(sessionId: string, turnId: string): Promise<AgentMessageView[]> {
@@ -1349,10 +1352,21 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
         })
         .where(eq(agentSessionTable.id, existing.sessionId));
-      return toAgentMessageView(row);
+      return toRuntimeMessageView(row);
     });
     publishDataApiChanges(['/agent-sessions', `/agent-sessions/${message.sessionId}`]);
     return message;
+  }
+}
+
+function toRuntimeMessageView(row: AgentMessageViewRow): AgentMessageView {
+  try {
+    return toAgentMessageView(row);
+  } catch (error) {
+    if (!(error instanceof ZodError)) throw error;
+    throw new RuntimeCorruptLaneError('Stored agent message failed schema validation.', {
+      cause: error,
+    });
   }
 }
 

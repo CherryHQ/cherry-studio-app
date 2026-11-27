@@ -24,7 +24,7 @@ import { withUniwind } from 'uniwind';
 import { AppBootstrapGate, AppBootstrapProvider, useAppBootstrapState } from '@/bootstrap';
 import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHandoff';
 import { AccountSessionGate, OrganizationLockAppearance } from '@/frontend/appShell/account';
-import { AppUpdateObserver, AppUpdateProvider } from '@/frontend/appShell/appUpdate';
+import { AppUpdateProvider } from '@/frontend/appShell/appUpdate';
 import { BackgroundActivityBridge } from '@/frontend/appShell/backgroundActivity';
 import { BackupDialog, RestoreOutcomeNotice } from '@/frontend/appShell/backup';
 import { CloudAmdReturnBridge } from '@/frontend/appShell/cloud';
@@ -80,7 +80,6 @@ function RootLayout() {
                                   <BottomSheetProvider>
                                     <RouteHeaderProvider rootAction="back">
                                       <AppUpdateProvider>
-                                        <AppUpdateObserver />
                                         <BackgroundActivityBridge />
                                         <CloudAmdReturnBridge />
                                         <LanguagePreferenceObserver />

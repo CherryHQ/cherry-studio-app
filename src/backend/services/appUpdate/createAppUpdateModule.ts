@@ -17,6 +17,7 @@ import { type ApkReleaseSource, assertApkRelease, checkApkRelease } from './apkR
 import { checkAppStoreRelease } from './appStoreRelease';
 import { resolveAppUpdateChannel } from './appUpdateChannel';
 import { createApkDownload } from './createApkDownload';
+import { createMinimumVersionPolicy } from './minimumSupportedVersion';
 import { checkNativeDomesticStoreRelease } from './nativeDomesticStoreRelease';
 import { readReleaseNotes } from './releaseNotes';
 import { parseReleaseVersion } from './releaseVersion';
@@ -83,6 +84,7 @@ export function createAppUpdateModule(dependencies: {
   }
 
   return {
+    ...createMinimumVersionPolicy(Application.nativeApplicationVersion, lifetime.signal),
     channel,
     isEnabled: channel !== null,
     async check(signal, options): Promise<AppUpdateResult> {

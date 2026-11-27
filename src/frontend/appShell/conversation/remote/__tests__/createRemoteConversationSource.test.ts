@@ -816,28 +816,29 @@ test('remote input rejects local SSH display metadata instead of silently droppi
   ).toThrow();
 });
 
+const citationToolMessage = (id: string, output: string) => ({
+  ...message(id),
+  parts: [
+    {
+      id: `${id}:tool`,
+      kind: 'tool' as const,
+      callId: `${id}:call`,
+      name: 'mcp__cherry-tools__web_search',
+      state: 'completed' as const,
+      output,
+    },
+  ],
+});
+
 it('finds earlier tool sources independently of the visible window and excludes later results', async () => {
   const test = fixture();
-  const toolMessage = (id: string, output: string) => ({
-    ...message(id),
-    parts: [
-      {
-        id: `${id}:tool`,
-        kind: 'tool' as const,
-        callId: `${id}:call`,
-        name: 'mcp__cherry-tools__web_search',
-        state: 'completed' as const,
-        output,
-      },
-    ],
-  });
   jest
     .mocked(test.remote.history)
     .mockResolvedValueOnce({
-      items: [toolMessage('later', 'later-output'), message('answer')],
+      items: [citationToolMessage('later', 'later-output'), message('answer')],
       next: 'older',
     })
-    .mockResolvedValueOnce({ items: [toolMessage('earlier', 'earlier-output')] });
+    .mockResolvedValueOnce({ items: [citationToolMessage('earlier', 'earlier-output')] });
   jest.mocked(test.remote.readResource).mockImplementation(async (key) => ({
     kind: 'text',
     text: JSON.stringify([{ id: 'lookup-1', title: key, url: 'https://example.com' }]),
@@ -848,6 +849,60 @@ it('finds earlier tool sources independently of the visible window and excludes 
   ]);
   expect(test.remote.readResource).not.toHaveBeenCalledWith('later-output', expect.anything());
   test.source.dispose();
+});
+
+it('shares an answer without citation markers even when its tool output has expired', async () => {
+  const test = fixture();
+  const tool = citationToolMessage('answer', 'expired-output');
+  const answer = message('answer');
+  jest.mocked(test.remote.history).mockResolvedValue({
+    items: [{ ...answer, parts: [...tool.parts, ...answer.parts] }],
+  });
+  jest
+    .mocked(test.remote.readResource)
+    .mockRejectedValue(Object.assign(new Error('Gone'), { code: 'RESOURCE_UNAVAILABLE' }));
+  const handle = await test.source.openSession(address, signal());
+  try {
+    const prepared = await handle.history.prepareSelection(['answer'], signal());
+    expect(prepared.messages[0]).toMatchObject({
+      id: 'answer',
+      parts: expect.arrayContaining([expect.objectContaining({ type: 'text', text: 'answer' })]),
+    });
+    expect(test.remote.readResource).not.toHaveBeenCalled();
+  } finally {
+    test.source.dispose();
+  }
+});
+
+it('uses the nearest source in the pinned history even when the selection skips it', async () => {
+  const test = fixture();
+  const first = citationToolMessage('first', 'first-output');
+  const answer = message('answer');
+  answer.parts[0].text = '[cite:lookup-1]';
+  jest.mocked(test.remote.history).mockResolvedValue({
+    items: [
+      answer,
+      citationToolMessage('nearby', 'nearby-output'),
+      { ...first, parts: [...first.parts, { ...answer.parts[0], id: 'first:text' }] },
+    ],
+  });
+  jest.mocked(test.remote.readResource).mockImplementation(async (key) => ({
+    kind: 'text',
+    text: JSON.stringify([{ id: 'lookup-1', title: key, url: `https://example.com/${key}` }]),
+  }));
+  const handle = await test.source.openSession(address, signal());
+  jest.mocked(test.remote.history).mockClear();
+  jest.mocked(test.remote.readSession).mockClear();
+  try {
+    const prepared = await handle.history.prepareSelection(['first', 'answer'], signal());
+    expect(prepared.messages[1].citationSources).toEqual([
+      { id: 'lookup-1', title: 'nearby-output', url: 'https://example.com/nearby-output' },
+    ]);
+    expect(jest.mocked(test.remote.history).mock.calls.map((call) => call[1])).toEqual(['1', '1']);
+    expect(test.remote.readSession).toHaveBeenCalledTimes(2);
+  } finally {
+    test.source.dispose();
+  }
 });
 
 it('keeps prose and other messages exportable when a remote image returns metadata only or unavailable', async () => {

@@ -8,18 +8,12 @@ import {
   ContentState,
   SearchField,
 } from '@cherrystudio/ui/components';
-import { useGlobalSearchParams } from 'expo-router';
 import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useCloudModelBrowser, useReturnedCloudModel } from '@/frontend/appShell/cloud';
-import {
-  chatReturnToHref,
-  parseChatRoute,
-  type ChatRouteParamsInput,
-} from '@/frontend/appShell/navigation/chat';
 import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
 import { useModelChoice } from '@/frontend/components/Policy';
@@ -302,10 +296,7 @@ function ModelPickerDrawerContent({
     refresh: refreshCloud,
     signInAgain,
   } = useCloudModelBrowser(canOfferCherryAi && open, cloudUse);
-  const { sessionId, agentId, workspaceDraftId, sshDraftId } =
-    useGlobalSearchParams<ChatRouteParamsInput>();
-  const chat = parseChatRoute({ sessionId, agentId, workspaceDraftId, sshDraftId });
-  const returnTo = loginReturnTo ?? (chat.status === 'ready' ? chatReturnToHref(chat.target) : '/');
+  const returnTo = loginReturnTo ?? '/';
   const pressCloudOffer = useCallback(
     (id: string) => {
       press(id, returnTo, onClose, Boolean(loginReturnTo));
