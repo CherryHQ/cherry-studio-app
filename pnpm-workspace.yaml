@@ -85,6 +85,8 @@ allowBuilds:
   protobufjs: false
   # EAS CLI optional tracing; local builds do not need its native addon.
   dtrace-provider: false
+  # @expo/build-tools ships prebuilt node-pty binaries; local/CI builds do not need its install scripts.
+  node-pty: false
 
 patchedDependencies:
   '@siteed/sherpa-onnx.rn@1.3.1': patches/@siteed__sherpa-onnx.rn@1.3.1.patch
