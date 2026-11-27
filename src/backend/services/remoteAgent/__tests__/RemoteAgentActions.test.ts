@@ -194,11 +194,12 @@ const startInput = { draftId: 'draft', agentId: 'agent', workspaceId: 'workspace
 
 it('settles more than 200 handoffs without retaining composer starts or undelivered drafts', async () => {
   const { storage, port } = journal();
-  const request = jest.fn(async (name: string, body: { commandId: string; text?: string }) => {
+  const request = jest.fn(async (name: string, body: unknown) => {
+    const payload = body as { commandId: string; text?: string };
     if (name === 'agent.sessions.get') return sessionResult('s');
     return receipt(
-      body.commandId,
-      body.text === 'private rejected brief' ? 'rejected' : 'applied',
+      payload.commandId,
+      payload.text === 'private rejected brief' ? 'rejected' : 'applied',
       {
         method: name,
       },
@@ -260,11 +261,12 @@ it.each([true, false])(
         'pc:grant',
         JSON.stringify({ version: 3, starts: saved.starts, records: saved.records }),
       );
-    const recover = jest.fn(async (name: string, body: { commandId: string }) => {
+    const recover = jest.fn(async (name: string, body: unknown) => {
+      const payload = body as { commandId: string };
       if (name === 'agent.sessions.get') return sessionResult('s');
       if (name === 'agent.commands.get')
-        return receipt(body.commandId, 'applied', { method: 'agent.sessions.create' });
-      return receipt(body.commandId, 'applied', { method: name });
+        return receipt(payload.commandId, 'applied', { method: 'agent.sessions.create' });
+      return receipt(payload.commandId, 'applied', { method: name });
     });
     const restored = new RemoteAgentActions('pc:grant', port, recover, () => {});
     expect(restored.getDispatch(input.draftId, pending.id)).toMatchObject({ status: 'pending' });

@@ -55,6 +55,7 @@ describe('createSystemCapabilitySource', () => {
       lastFetchedAt: null,
     };
     const options: Parameters<typeof resolve>[1] = {
+      sessionId: 'conversation',
       desktopDispatch: {
         connections: { list, getById: jest.fn() },
         remoteAgent: { open },

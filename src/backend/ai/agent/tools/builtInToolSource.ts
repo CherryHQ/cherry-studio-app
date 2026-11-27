@@ -230,7 +230,7 @@ export function createSystemCapabilitySource(
             deps.desktopDispatch,
             fileAccess,
             managedFileResolver,
-            dispatchedDesktopSessions,
+            dispatchedDesktopSessions ?? [],
             { devices, availableFiles: resources.availableFiles, localSessionId: sessionId },
           ))
             catalog.set(tool.providerName, tool);

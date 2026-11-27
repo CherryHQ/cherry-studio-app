@@ -125,7 +125,13 @@ function projectStart(
 }
 
 function projectDispatch({ id, draftId, status, sessionId, error }: StartEntry) {
-  return { id, draftId, status, sessionId, error };
+  return {
+    id,
+    draftId,
+    status,
+    ...(sessionId !== undefined ? { sessionId } : {}),
+    ...(error !== undefined ? { error } : {}),
+  };
 }
 
 /** The journal is unreleased state; a record this build cannot read is evidence of nothing. */
