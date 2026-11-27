@@ -42,8 +42,6 @@ const colorLiteralAllowlist: Record<string, string> = {
     'outside the render tree: Android notification badge colour, mirrors BackgroundExecution.kt',
   'src/frontend/components/Avatar/utils/brandAvatarStyles.ts':
     'upstream of the tokens: picks ink by luminance, its output is the colour decision',
-  'src/frontend/appShell/startup/StartupCover.tsx':
-    'outside the theme runtime: paints before the CSS variable tree exists',
   'src/frontend/features/onboarding/components/LogoDraw/utils/logoPalette.ts':
     'artwork: the logo colours encode relationships with each other, not roles',
 };
