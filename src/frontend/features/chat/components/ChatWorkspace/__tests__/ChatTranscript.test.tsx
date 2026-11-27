@@ -4,6 +4,7 @@ import { ChatTranscript } from '../ChatTranscript';
 import type { ChatTurnNavigator } from '../chatTurns';
 
 let mockHeaderHeight = 0;
+let mockSpeechPlaybackInset = 0;
 const mockList = jest.fn((_props: { contentTopInset: number }) => null);
 const mockTurnDirectory = jest.fn(
   (_props: { navigator: ChatTurnNavigator; scrollProgress: unknown; turnCount?: number }) => null,
@@ -28,6 +29,10 @@ jest.mock('@/frontend/appShell/navigation', () => ({
 
 jest.mock('@/frontend/appShell/header', () => ({ mainHeaderRowHeight: 56 }));
 
+jest.mock('@/frontend/appShell/speechPlayback', () => ({
+  useSpeechPlaybackInset: () => mockSpeechPlaybackInset,
+}));
+
 jest.mock('@/frontend/components/Message', () => ({
   MessageList: (props: { contentTopInset: number }) => mockList(props),
 }));
@@ -51,6 +56,8 @@ describe('ChatTranscript', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
+    mockHeaderHeight = 0;
+    mockSpeechPlaybackInset = 0;
     mockList.mockClear();
     mockTurnDirectory.mockClear();
   });
@@ -74,6 +81,15 @@ describe('ChatTranscript', () => {
     mockHeaderHeight = 100;
     act(() => renderer!.update(transcript()));
     expect(mockList.mock.lastCall?.[0].contentTopInset).toBe(100);
+  });
+
+  test('adds speech playback capsule inset onto contentTopInset when visible', () => {
+    mockHeaderHeight = 96;
+    mockSpeechPlaybackInset = 64;
+    act(() => {
+      renderer = create(transcript());
+    });
+    expect(mockList.mock.lastCall?.[0].contentTopInset).toBe(160);
   });
 
   test('hides turn directory for fewer than two turns and shows it once two user turns exist', () => {

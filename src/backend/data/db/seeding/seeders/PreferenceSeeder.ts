@@ -39,6 +39,12 @@ export class PreferenceSeeder implements DatabaseSeeder {
             ? 'fallback'
             : 'preferred';
     }
+    if (!storedKeys.has('feature.voice.background_reading')) {
+      const legacy = stored.find(
+        (preference) => preference.key === 'app.background_audio.consent',
+      )?.value;
+      defaults['feature.voice.background_reading'] = legacy === true;
+    }
     const profile = getActiveProfile();
     // A single transaction seeds every preference. Restarts, upgrades and existing databases
     // keep their own values, even when the registry still holds the original snapshot.

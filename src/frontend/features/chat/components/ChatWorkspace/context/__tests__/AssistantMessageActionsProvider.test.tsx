@@ -378,6 +378,9 @@ describe('AssistantMessageActionsProvider', () => {
     act(() => renderer?.update(<ProviderHarness probeRef={probeRef} />));
     expect(probeRef.current?.actions).toBe(actions);
     expect(probeRef.current?.state).toBe(state);
+    expect(probeRef.current?.actions.getSpeechContext?.()).toEqual({
+      title: 'Renamed while streaming',
+    });
 
     await act(async () => {
       probeRef.current?.actions.forkFromAssistantMessage?.({ messageId: 'assistant-1' });
