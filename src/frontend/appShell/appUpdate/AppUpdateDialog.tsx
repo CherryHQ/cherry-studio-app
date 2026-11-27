@@ -1,6 +1,6 @@
 import { Button, Dialog, MarkdownText, Spinner } from '@cherrystudio/ui/components';
 import { normalizeFontSizeStep, type TypographySizeStep } from '@cherrystudio/ui/utils';
-import { useIsFetching, useQueries } from '@tanstack/react-query';
+import { useIsFetching, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BackHandler, Platform, ScrollView, Text, View } from 'react-native';
@@ -85,15 +85,9 @@ function AppUpdateDialogContent({
   const [fontSizeStep] = usePreference('ui.font_size_step');
   const { t, i18n } = useTranslation();
   const checking = useIsFetching({ queryKey: queryKeys.appUpdate.latest(appUpdate.channel) }) > 0;
-  const [notes] = useQueries({
-    queries: current
-      ? [
-          {
-            ...appUpdateReleaseNotesQueryOptions(appUpdate, current, i18n.language),
-            enabled: open,
-          },
-        ]
-      : [],
+  const notes = useQuery({
+    ...appUpdateReleaseNotesQueryOptions(appUpdate, current, i18n.language),
+    enabled: open && current !== null,
   });
 
   const dismiss = () => {
@@ -130,8 +124,8 @@ function AppUpdateDialogContent({
               (current.channel === 'domestic-stores' && current.notesSource === 'gitcode')
             }
             fontSizeStep={normalizeFontSizeStep(fontSizeStep)}
-            loading={notes?.isPending ?? false}
-            notes={notes?.data ?? null}
+            loading={notes.isPending}
+            notes={notes.data ?? null}
           />
           <AppUpdateDialogActionsView
             actions={actions}

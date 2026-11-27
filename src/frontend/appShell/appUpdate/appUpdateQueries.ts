@@ -1,4 +1,4 @@
-import { queryOptions } from '@tanstack/react-query';
+import { queryOptions, skipToken } from '@tanstack/react-query';
 import { useSyncExternalStore } from 'react';
 
 import { queryKeys } from '@/frontend/data';
@@ -23,12 +23,12 @@ export function appUpdateQueryOptions(
 /** Notes may be corrected after publication, so refresh them after six hours. */
 export function appUpdateReleaseNotesQueryOptions(
   appUpdate: AppUpdateModule,
-  release: AppUpdateRelease,
+  release: AppUpdateRelease | null,
   language: string,
 ) {
   return queryOptions({
     queryKey: queryKeys.appUpdate.notes(release, language),
-    queryFn: () => appUpdate.releaseNotes(release, language),
+    queryFn: release ? () => appUpdate.releaseNotes(release, language) : skipToken,
     staleTime: 6 * 60 * 60 * 1000,
     gcTime: 6 * 60 * 60 * 1000,
   });
