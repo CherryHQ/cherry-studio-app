@@ -9,24 +9,36 @@ import { useBackendModule, usePreference } from '@/frontend/data';
 import { voiceErrorLabelKey } from '@/frontend/utils/voiceErrorLabel';
 import { createBackgroundTaskUrl } from '@/shared/backgroundActivity/taskLink';
 import {
+  isSameSpeechSource,
   type SpeechMetadata,
   type SpeechPhase,
   type SpeechSourceRef,
+  type VoiceActivity,
 } from '@/shared/contracts/voice';
 
 export type SpeechContext = {
   title?: string;
   subtitle?: string;
-  source?: SpeechSourceRef;
 };
 
 export type MessageSpeechPhase = 'idle' | SpeechPhase;
+
+function matchesMessageActivity(
+  activity: VoiceActivity,
+  messageId: string,
+  source: SpeechSourceRef | undefined,
+): activity is Extract<VoiceActivity, { kind: 'speaking' }> {
+  if (activity.kind !== 'speaking' || activity.key !== messageId) return false;
+  if (!source && !activity.metadata?.source) return true;
+  return isSameSpeechSource(activity.metadata?.source, source);
+}
 
 /** Read-aloud state of one message; starting another message replaces it. */
 export function useMessageSpeech(
   messageId: string,
   text: string | (() => string | undefined) | undefined,
-  context?: SpeechContext | (() => SpeechContext | undefined),
+  getContext?: () => SpeechContext | undefined,
+  source?: SpeechSourceRef,
 ) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -34,35 +46,38 @@ export function useMessageSpeech(
   // A primitive phase snapshot re-renders only the toolbars whose own phase changed.
   const phase = useSyncExternalStore<MessageSpeechPhase>(voice.subscribeActivity, () => {
     const activity = voice.getActivity();
-    return activity.kind === 'speaking' && activity.key === messageId ? activity.phase : 'idle';
+    return matchesMessageActivity(activity, messageId, source) ? activity.phase : 'idle';
   });
   const isSpeaking = phase !== 'idle';
   const toggle = useCallback(() => {
     haptics.light();
     const current = voice.getActivity();
-    if (current.kind === 'speaking' && current.key === messageId) {
-      voice.stopSpeaking({ key: messageId });
+    if (matchesMessageActivity(current, messageId, source)) {
+      voice.stopSpeaking({
+        key: messageId,
+        ...(source ? { source } : {}),
+      });
       return;
     }
     const content = typeof text === 'function' ? text() : text;
     if (!content) return;
-    const resolvedContext = typeof context === 'function' ? context() : context;
+    const context = getContext?.();
     const genericTitle = t('settings.voice.speech.title');
-    const inAppTitle = resolvedContext?.title?.trim() || genericTitle;
-    const subtitle = resolvedContext?.subtitle?.trim() || undefined;
+    const inAppTitle = context?.title?.trim() || genericTitle;
+    const subtitle = context?.subtitle?.trim() || undefined;
     let deepLinkUrl: string | undefined;
-    if (resolvedContext?.source) {
+    if (source) {
       try {
         const scheme = resolveScheme({});
         deepLinkUrl = createBackgroundTaskUrl(
           scheme,
-          resolvedContext.source.kind === 'desktop'
+          source.kind === 'desktop'
             ? {
                 kind: 'remote-chat',
-                connectionId: resolvedContext.source.connectionId,
-                sessionId: resolvedContext.source.sessionId,
+                connectionId: source.connectionId,
+                sessionId: source.sessionId,
               }
-            : { kind: 'chat', sessionId: resolvedContext.source.sessionId },
+            : { kind: 'chat', sessionId: source.sessionId },
         );
       } catch {
         // Headless/test environments without a registered URI scheme keep playback working.
@@ -71,7 +86,7 @@ export function useMessageSpeech(
     const metadata: SpeechMetadata = {
       title: inAppTitle,
       ...(subtitle ? { subtitle } : {}),
-      ...(resolvedContext?.source ? { source: resolvedContext.source } : {}),
+      ...(source ? { source } : {}),
     };
     voice
       .speak(content, {
@@ -92,7 +107,7 @@ export function useMessageSpeech(
       .catch((error: unknown) => {
         toast.show({ label: t(voiceErrorLabelKey(error)), variant: 'danger' });
       });
-  }, [context, messageId, t, text, toast, voice]);
+  }, [getContext, messageId, source, t, text, toast, voice]);
   return { phase, isSpeaking, toggle };
 }
 

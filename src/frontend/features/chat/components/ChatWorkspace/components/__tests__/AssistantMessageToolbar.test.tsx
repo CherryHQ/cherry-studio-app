@@ -41,6 +41,7 @@ const mockSpeech = jest.fn(
     _messageId: string,
     _text: string | (() => string),
     _context?: unknown,
+    _source?: unknown,
   ): {
     isSpeaking: boolean;
     phase: 'idle' | 'preparing' | 'playing' | 'paused';
@@ -52,8 +53,12 @@ const mockSpeech = jest.fn(
   }),
 );
 jest.mock('../../../../voice/useMessageSpeech', () => ({
-  useMessageSpeech: (messageId: string, text: string | (() => string), context?: unknown) =>
-    mockSpeech(messageId, text, context),
+  useMessageSpeech: (
+    messageId: string,
+    text: string | (() => string),
+    context?: unknown,
+    source?: unknown,
+  ) => mockSpeech(messageId, text, context, source),
 }));
 const mockUseThemeColor = jest.fn(() => 'foreground-test');
 jest.mock('@/frontend/hooks/useThemeColor', () => ({
@@ -297,15 +302,15 @@ describe('AssistantMessageToolbar', () => {
     renderToolbar(createMessage('success', '**Answer** <https://example.com>'));
     expect(mockUseThemeColor).not.toHaveBeenCalled();
 
-    const [id, textOrGetter, contextOrGetter] = mockSpeech.mock.lastCall!;
+    const [id, textOrGetter, contextOrGetter, speechSource] = mockSpeech.mock.lastCall!;
     expect(id).toBe('assistant-1');
     expect(typeof textOrGetter).toBe('function');
     expect(typeof textOrGetter === 'function' ? textOrGetter() : textOrGetter).toBe('Answer');
     expect(typeof contextOrGetter).toBe('function');
     expect(typeof contextOrGetter === 'function' ? contextOrGetter() : contextOrGetter).toEqual({
-      source: { kind: 'local', sessionId: 'session-1' },
       title: 'Arithmetic drills',
     });
+    expect(speechSource).toEqual({ kind: 'local', sessionId: 'session-1' });
     const button = renderer?.root.findByProps({ testID: 'assistant-message-read-aloud' });
     expect(button?.props.accessibilityLabel).toBe('voice.speech.start');
     act(() => button?.props.onPress());
@@ -602,6 +607,7 @@ describe('AssistantMessageToolbar', () => {
         <AssistantMessageActionsProvider
           isAssistantToolbarEnabled
           sessionId="session-1"
+          speechSource={{ kind: 'local', sessionId: 'session-1' }}
           onShare={mockShare}
           snapshot={{
             title: 'Arithmetic drills',

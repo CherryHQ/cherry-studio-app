@@ -2,34 +2,44 @@ export type SpeechPauseGate = {
   isPaused(): boolean;
   pause(): boolean;
   resume(): boolean;
+  release(): void;
   waitIfPaused(): Promise<void>;
 };
 
 /**
  * Shared pause/resume barrier for multi-chunk speech engines.
- * Resolves immediately when unpaused and unwinds via `signal.reason` on abort while paused.
+ * Resolves immediately when unpaused or released and unwinds via `signal.reason` on abort.
  */
 export function createSpeechPauseGate(signal: AbortSignal): SpeechPauseGate {
   let paused = false;
+  let released = false;
   let resumeWaiter: (() => void) | undefined;
 
   return {
-    isPaused: () => paused,
+    isPaused: () => paused && !released,
     pause() {
-      if (paused) return false;
+      if (paused || released) return false;
       paused = true;
       return true;
     },
     resume() {
-      if (!paused) return false;
+      if (!paused || released) return false;
       paused = false;
       const waiter = resumeWaiter;
       resumeWaiter = undefined;
       waiter?.();
       return true;
     },
+    release() {
+      if (released) return;
+      released = true;
+      paused = false;
+      const waiter = resumeWaiter;
+      resumeWaiter = undefined;
+      waiter?.();
+    },
     waitIfPaused() {
-      if (!paused) return Promise.resolve();
+      if (!paused || released) return Promise.resolve();
       signal.throwIfAborted();
       return new Promise<void>((resolve, reject) => {
         const onAbort = () => {

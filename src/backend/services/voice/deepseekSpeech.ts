@@ -46,7 +46,8 @@ async function play(
 
   function detachPlayer(capturePosition: boolean) {
     const player = activePlayer;
-    if (!player) return;
+    if (!player) return false;
+    let finished = false;
     if (capturePosition) {
       const currentTime = (player as { currentTime?: unknown }).currentTime;
       if (typeof currentTime === 'number' && Number.isFinite(currentTime) && currentTime > 0) {
@@ -63,6 +64,17 @@ async function play(
       } catch {
         // Ignore best-effort teardown hardening if the native player is already released.
       }
+    } else if (capturePosition) {
+      try {
+        player.muted = true;
+        player.volume = 0;
+        // Clear expo-audio's focus-resume intent before its asynchronous release.
+        player.pause();
+        // An end event queued before pause can be lost when we remove the listener.
+        finished = player.currentStatus.playbackState === 'ended';
+      } catch {
+        // Ignore best-effort teardown hardening if the native player is already released.
+      }
     }
     activePlayer = null;
     const sub = subscription;
@@ -72,6 +84,7 @@ async function play(
     } finally {
       player.release();
     }
+    return finished;
   }
 
   function releasePlayer() {
@@ -196,29 +209,23 @@ async function play(
           clearTimeout(timer);
           timer = undefined;
           try {
-            // Releasing the iOS player evicts it from expo-audio's interruption registry so
-            // AVAudioSession .shouldResume cannot restart audio after a user pause.
-            if (Platform.OS === 'ios') detachPlayer(true);
-            else activePlayer?.pause();
+            // Releasing the paused player removes its listener and evicts it from expo-audio's
+            // platform interruption registries so delayed events or focus regain cannot resume it.
+            if (detachPlayer(true)) settle();
           } catch (error) {
             settle(error);
           }
         },
         resume() {
           if (settled || isReleased || state !== 'paused') return;
-          // Require fresh playing confirmation so late pause events cannot fake an interruption.
           state = 'starting';
           armTimer();
           try {
-            if (Platform.OS === 'ios' || !activePlayer) {
-              attachAndPlay(resumePosition);
-            } else {
-              activePlayer.play();
-            }
+            attachAndPlay(resumePosition);
           } catch (error) {
             settle(error);
           }
-          return 'playing';
+          return 'preparing';
         },
       });
       signal.addEventListener('abort', stop, { once: true });
@@ -291,8 +298,6 @@ export function createDeepseekSpeech(voice: () => Promise<string>): SpeechEngine
       const release = await voiceAudioSession.acquire('speech');
       const gate = createSpeechPauseGate(signal);
       const prefetchController = new AbortController();
-      let synthesizing = false;
-      let hasChunkAudio = false;
       let needsPlayingPhase = true;
       let playerControls: SpeechPlaybackControls | null = null;
       let prefetched:
@@ -313,12 +318,10 @@ export function createDeepseekSpeech(voice: () => Promise<string>): SpeechEngine
       };
       const resume = () => {
         if (!gate.resume()) return;
-        const shouldPrepare = synthesizing || (!hasChunkAudio && !playerControls);
-        const phase = shouldPrepare ? 'preparing' : 'playing';
-        needsPlayingPhase = shouldPrepare;
-        playback?.onPhase(phase);
+        needsPlayingPhase = true;
+        playback?.onPhase('preparing');
         playerControls?.resume();
-        return phase;
+        return 'preparing' as const;
       };
 
       try {
@@ -330,14 +333,7 @@ export function createDeepseekSpeech(voice: () => Promise<string>): SpeechEngine
         signal.throwIfAborted();
         playback?.onProgress({ completedChunks: 0, totalChunks: chunks.length });
         playback?.onPhase('preparing');
-        synthesizing = true;
-        let bytes: Uint8Array;
-        try {
-          bytes = await synthesize(chunks[0]!, signal);
-          hasChunkAudio = true;
-        } finally {
-          synthesizing = false;
-        }
+        let bytes = await synthesize(chunks[0]!, signal);
         for (let index = 0; index < chunks.length; index += 1) {
           await gate.waitIfPaused();
           signal.throwIfAborted();
@@ -379,21 +375,14 @@ export function createDeepseekSpeech(voice: () => Promise<string>): SpeechEngine
           if (index + 1 >= chunks.length) break;
           await gate.waitIfPaused();
           signal.throwIfAborted();
-          hasChunkAudio = false;
-          synthesizing = true;
-          try {
-            if (!prefetched) {
-              bytes = await synthesize(chunks[index + 1]!, signal);
-            } else {
-              const result = await raceAbort(prefetched, signal);
-              prefetched = undefined;
-              signal.throwIfAborted();
-              if (!result.ok) throw result.error;
-              bytes = result.bytes;
-            }
-            hasChunkAudio = true;
-          } finally {
-            synthesizing = false;
+          if (!prefetched) {
+            bytes = await synthesize(chunks[index + 1]!, signal);
+          } else {
+            const result = await raceAbort(prefetched, signal);
+            prefetched = undefined;
+            signal.throwIfAborted();
+            if (!result.ok) throw result.error;
+            bytes = result.bytes;
           }
         }
       } finally {

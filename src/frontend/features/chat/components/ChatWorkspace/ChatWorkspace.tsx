@@ -321,10 +321,10 @@ export function ChatWorkspace({
         <AssistantMessageActionsProvider
           key={`assistant-actions-${listKey}`}
           assistantName={assistantPresentation.name}
-          connectionId={connectionId}
           isAssistantToolbarEnabled={isAssistantToolbarEnabled}
           onShare={beginSelection}
           sessionId={sessionId}
+          speechSource={speechSource}
           snapshot={live}
           messages={mergedMessages}
         >

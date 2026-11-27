@@ -3,6 +3,7 @@ import {
   type AudioTranscriptionOptions,
   type AudioTranscriptionResult,
   type DictationSession,
+  type SpeechPhase,
   type VoiceEngineId,
   type VoiceEngineStatus,
 } from '@/shared/contracts/voice';
@@ -453,7 +454,7 @@ describe('one voice activity at a time', () => {
 
   test('publishes metadata, progress, pause/resume phases, and scopes stopSpeaking by key and source', async () => {
     const enginePause = jest.fn();
-    const engineResume = jest.fn(() => 'playing' as const);
+    const engineResume = jest.fn((): SpeechPhase => 'playing');
     const updateState = jest.fn(async () => {});
     const end = jest.fn(async () => {});
     let capturedCallbacks: Parameters<SpeechEngine['speak']>[0]['playback'] | undefined;
@@ -551,12 +552,20 @@ describe('one voice activity at a time', () => {
     expect(runtime.module.getActivity()).toEqual({ kind: 'idle' });
 
     finished = deferred<void>();
+    engineResume.mockReturnValueOnce('preparing');
     const desktopSource = { kind: 'desktop', connectionId: 'conn-1', sessionId: 'sess-1' } as const;
     const remote = runtime.module.speak('Remote', {
       key: 'msg-r',
       metadata: { source: desktopSource },
     });
     await flush();
+    capturedCallbacks!.onControls({ pause: enginePause, resume: engineResume });
+    capturedCallbacks!.onPhase('playing');
+    runtime.module.pauseSpeaking();
+    runtime.module.resumeSpeaking();
+    expect(runtime.module.getActivity()).toMatchObject({ kind: 'speaking', phase: 'preparing' });
+    capturedCallbacks!.onPhase('playing');
+    expect(runtime.module.getActivity()).toMatchObject({ kind: 'speaking', phase: 'playing' });
     runtime.module.stopSpeaking({ source: { kind: 'local', sessionId: 'sess-1' } });
     expect(runtime.module.getActivity().kind).toBe('speaking');
     runtime.module.stopSpeaking({ source: desktopSource });

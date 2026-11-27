@@ -183,14 +183,15 @@ export function createSystemSpeechEngine({
 
       const pause = () => {
         if (!gate.pause()) return;
+        needsPlayingPhase = false;
         playback?.onPhase('paused');
         activePause?.();
       };
       const resume = () => {
         if (!gate.resume()) return;
-        needsPlayingPhase = false;
-        playback?.onPhase('playing');
-        return 'playing' as const;
+        needsPlayingPhase = true;
+        playback?.onPhase('preparing');
+        return 'preparing' as const;
       };
 
       try {
@@ -222,6 +223,9 @@ export function createSystemSpeechEngine({
               if (utteranceToken !== currentToken || index !== expectedIndex) return;
               index += 1;
               playback?.onProgress({ completedChunks: index, totalChunks: chunks.length });
+              if (index >= chunks.length) {
+                gate.release();
+              }
             },
             () => utteranceToken === currentToken,
           );

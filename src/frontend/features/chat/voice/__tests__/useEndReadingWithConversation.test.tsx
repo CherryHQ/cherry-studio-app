@@ -127,15 +127,13 @@ test('one message observes its own phase and cancels only its own reading', () =
 
 test('resolves lazy speech text and context getters only when reading starts', () => {
   const getText = jest.fn(() => 'Lazy speech body');
-  const getContext = jest.fn(() => ({
-    title: 'Lazy session',
-    source: { kind: 'local' as const, sessionId: 'lazy-sess' },
-  }));
+  const getContext = jest.fn(() => ({ title: 'Lazy session' }));
   function Control(_props: ReturnType<typeof useMessageSpeech>) {
     return null;
   }
   function Message() {
-    return <Control {...useMessageSpeech('lazy', getText, getContext)} />;
+    const source = { kind: 'local', sessionId: 'lazy-sess' } as const;
+    return <Control {...useMessageSpeech('lazy', getText, getContext, source)} />;
   }
   let renderer!: ReactTestRenderer;
   act(() => {

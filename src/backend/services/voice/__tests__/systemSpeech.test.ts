@@ -245,19 +245,25 @@ test('pauses active utterance cleanly and resumes without replaying already-comp
   await flush();
   expect(utterances).toHaveLength(1);
   expect(progresses).toEqual([{ completedChunks: 0, totalChunks: 2 }]);
+  utterances[0]!.options?.onStart?.();
+  expect(phases).toEqual(['playing']);
   const controls = controlsHolder.current;
   expect(controls).not.toBeNull();
   if (!controls) throw new Error('Expected controls to be registered');
 
   controls.pause();
   await flush();
-  expect(phases).toContain('paused');
+  expect(phases.at(-1)).toBe('paused');
   expect(utterances).toHaveLength(1);
 
-  controls.resume();
+  expect(controls.resume()).toBe('preparing');
+  expect(phases.at(-1)).toBe('preparing');
   await flush();
   expect(utterances).toHaveLength(2);
   expect(utterances[1]!.text).toBe(firstSentence);
+  expect(phases.at(-1)).toBe('preparing');
+  utterances[1]!.options?.onStart?.();
+  expect(phases.at(-1)).toBe('playing');
 
   // If Speech.stop() settles before a trailing onDone arrives, chunk 0 still advances without replay.
   jest.mocked(Speech.stop).mockResolvedValueOnce(undefined);
@@ -269,10 +275,12 @@ test('pauses active utterance cleanly and resumes without replaying already-comp
   expect(utterances).toHaveLength(2);
   expect(progresses.at(-1)).toEqual({ completedChunks: 1, totalChunks: 2 });
 
-  controls.resume();
+  expect(controls.resume()).toBe('preparing');
   await flush();
   expect(utterances).toHaveLength(3);
   expect(utterances[2]!.text).toBe(secondSentence);
+  utterances[2]!.options?.onStart?.();
+  expect(phases.at(-1)).toBe('playing');
 
   // If neither onDone nor onStopped fires after Speech.stop(), fallback timer pauses cleanly.
   jest.mocked(Speech.stop).mockResolvedValueOnce(undefined);
@@ -364,14 +372,14 @@ test('advances paused chunk when onDone arrives after the 50ms fallback timer wi
   expect(utterances).toHaveLength(2);
   expect(utterances[1]!.text).toBe(secondSentence);
 
-  // Even on the final chunk, late onDone past 50ms completes on resume without replaying chunk 1.
+  // On the final chunk, late onDone past 50ms completes and tears down reading immediately without needing manual resume.
   controlsHolder.current!.pause();
   await new Promise((resolve) => setTimeout(resolve, 70));
   utterances[1]!.options?.onDone?.();
   expect(progresses.at(-1)).toEqual({ completedChunks: 2, totalChunks: 2 });
-  controlsHolder.current!.resume();
   await expect(speaking).resolves.toBeUndefined();
   expect(utterances).toHaveLength(2);
+  expect(controlsHolder.current).toBeNull();
 });
 
 function deferred<T>() {

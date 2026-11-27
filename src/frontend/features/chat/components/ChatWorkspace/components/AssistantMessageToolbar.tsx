@@ -71,6 +71,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
     retryableMessageIds,
     editableAnswerIds,
     isEditAnswerDisabled,
+    speechSource,
     toolbarConfig,
   } = useAssistantMessageActionsState();
   const {
@@ -103,7 +104,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
     () => speechAssistantMessageText(message.data.parts ?? [], message.data.citationSources),
     [message.data.parts, message.data.citationSources],
   );
-  const speech = useMessageSpeech(message.id, getSpeechText, getSpeechContext);
+  const speech = useMessageSpeech(message.id, getSpeechText, getSpeechContext, speechSource);
   const isSpeechPreparing = speech.phase === 'preparing';
   const isCopied = copiedMessageId === message.id;
   // Turn-scoped, so a row with no turn — synthetic, or not yet reserved — has
