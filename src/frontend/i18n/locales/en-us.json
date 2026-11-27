@@ -2988,6 +2988,7 @@
   "systemEntry.destination.title": "Share to",
   "systemEntry.failed": "Could not open this share. Share the content again.",
   "teamAgent.accountRequired": "Sign in to an account with access to Team Agents.",
+  "teamAgent.cloudExecution": "Cloud execution",
   "teamAgent.details": "Agent details",
   "teamAgent.disabled": "Disabled",
   "teamAgent.enabled": "Enabled",

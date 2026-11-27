@@ -77,6 +77,12 @@ export function ConversationSourceBoundary({
     </SourceContext>
   );
 }
+export function ConversationSourceScope({
+  value,
+  children,
+}: PropsWithChildren<{ value: ConversationSource }>) {
+  return <SourceContext value={value}>{children}</SourceContext>;
+}
 export function useConversationSource() {
   const source = use(SourceContext);
   if (!source) throw new Error('ConversationSourceBoundary is required');

@@ -7,6 +7,7 @@ export {
 export { HeaderChrome } from './components/HeaderChrome';
 export { headerScreenOptions, mainHeaderRowHeight } from './headerScreenOptions';
 export { MainHeader } from './MainHeader/MainHeader';
+export { UnifiedAgentPicker } from './MainHeader/UnifiedAgentPicker';
 export {
   RouteHeader,
   RouteHeaderProvider,

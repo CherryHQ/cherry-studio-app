@@ -29,6 +29,7 @@ import Animated, { FadeIn, FadeOut, LinearTransition, ReduceMotion } from 'react
 import {
   type AgentRef,
   type AgentSummary,
+  ConversationSourceScope,
   type ConversationSummary,
   type ConversationListStatus,
   useConversationAgents,
@@ -40,10 +41,16 @@ import {
   useConversationPreview,
   useConversationAgentStatus,
 } from '@/frontend/appShell/conversation';
+import { useOptionalTeamCatalogOverlay } from '@/frontend/appShell/conversation/team';
 import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/appShell/navigation';
-import { conversationHref, useConversationTarget } from '@/frontend/appShell/navigation/chat';
+import {
+  conversationHref,
+  useConversationTarget,
+  useOptionalChatSource,
+} from '@/frontend/appShell/navigation/chat';
 import { useExportConversation } from '@/frontend/appShell/sharing';
 import { AgentAvatar } from '@/frontend/components/Avatar';
+import { CloudMark } from '@/frontend/components/CloudMark';
 import { ConversationStatus } from '@/frontend/components/ConversationStatus';
 import { usePreference } from '@/frontend/data/hooks';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
@@ -52,6 +59,7 @@ import { appSidebar } from '@/frontend/utils/constants';
 import { useSidebarActions } from '../context';
 import { useSidebarPresence } from '../hooks/useSidebarPresence';
 import { useSidebarSelection, useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
+import { mergeCatalogAgents, mergeCatalogSessions } from '../utils/mergeCatalogItems';
 import {
   useSidebarBranchLayoutRefresh,
   useSidebarBranchTransition,
@@ -169,13 +177,16 @@ function SidebarAgentGroups({
 }) {
   const { t } = useTranslation();
   const query = useConversationAgents();
-  if (query.isPending)
+  const teamOverlay = useOptionalTeamCatalogOverlay();
+  const items =
+    !onSelect && teamOverlay ? mergeCatalogAgents(query.items, teamOverlay.agents) : query.items;
+  if (query.isPending && !items.length)
     return showLoading && query.isLoading ? (
       <View className="py-4">
         <ContentState.Loading title={t('agent.list.loading')} />
       </View>
     ) : null;
-  if (query.isError && !query.data)
+  if (query.isError && !query.data && !items.length)
     return (
       <View className="px-5 py-4">
         <ContentState.Error
@@ -184,7 +195,7 @@ function SidebarAgentGroups({
         />
       </View>
     );
-  if (query.isSuccess && !query.items.length)
+  if (query.isSuccess && !items.length)
     return (
       <View className="px-5 py-4">
         <ContentState.Empty description={t('agent.list.emptyTitle')} />
@@ -195,14 +206,24 @@ function SidebarAgentGroups({
       {!onSelect && query.isCachedCatalog && query.items.length > 0 ? (
         <Text className="px-5 text-muted-foreground text-sm">{t('remoteAgent.cachedCatalog')}</Text>
       ) : null}
-      {query.items.map((agent) => (
-        <SidebarAgentGroup
-          key={agent.id}
-          agent={agent}
-          onSelect={onSelect}
-          showLoading={showLoading}
-        />
-      ))}
+      {items.map((agent) => {
+        const key = `${agent.source?.kind ?? 'local'}:${agent.id}`;
+        const group = (
+          <SidebarAgentGroup
+            key={key}
+            agent={agent}
+            onSelect={onSelect}
+            showLoading={showLoading}
+          />
+        );
+        return agent.source?.kind === 'team' && teamOverlay ? (
+          <ConversationSourceScope key={key} value={teamOverlay.source}>
+            {group}
+          </ConversationSourceScope>
+        ) : (
+          group
+        );
+      })}
       {query.isError ? (
         <View className="px-2">
           <LoadMore label={t('common.retry')} onPress={() => void query.refetch()} />
@@ -230,11 +251,13 @@ function SidebarAgentGroup({
   showLoading: boolean;
 }) {
   const { t } = useTranslation();
+  const source = useConversationSource();
   const setBranchTransition = useSidebarBranchTransition();
   const [expanded, setExpanded] = useState(false);
   const status = useConversationAgentStatus(agent.ref, !expanded);
   const toggle = () => setExpanded((value) => !value);
   const disclosure = <DisclosureChevron expanded={expanded} />;
+  const isPhoneSplit = !onSelect && source.ref.kind !== 'desktop';
   return (
     <View testID={`sidebar-agent-group-${agent.id}`}>
       <View className="px-2">
@@ -279,6 +302,14 @@ function SidebarAgentGroup({
               )}
             </Pressable>
           </View>
+        ) : isPhoneSplit ? (
+          <SidebarPhoneAgentGroupHeader
+            agent={agent}
+            disclosure={disclosure}
+            expanded={expanded}
+            status={status}
+            toggle={toggle}
+          />
         ) : (
           <Pressable
             accessibilityRole="button"
@@ -317,6 +348,79 @@ function SidebarAgentGroup({
   );
 }
 
+function SidebarPhoneAgentGroupHeader({
+  agent,
+  disclosure,
+  expanded,
+  status,
+  toggle,
+}: {
+  agent: AgentSummary;
+  disclosure: ReactNode;
+  expanded: boolean;
+  status?: ConversationListStatus;
+  toggle: () => void;
+}) {
+  const { t } = useTranslation();
+  const { closeDrawer } = useSidebarActions('SidebarAgentGroup');
+  const chatSource = useOptionalChatSource();
+  const isCloud = agent.source?.kind === 'team';
+  const accessibilityLabel = isCloud
+    ? `${agent.name}, ${t('teamAgent.cloudExecution')}`
+    : agent.name;
+  const openAgentChat = () => {
+    closeDrawer();
+    if (agent.source?.kind === 'team') {
+      chatSource?.openTeam({ bindingId: agent.source.bindingId, agentId: agent.id });
+    } else {
+      chatSource?.openLocal({ kind: 'draft', agentId: agent.id });
+    }
+  };
+
+  return (
+    <View className="flex-row items-center">
+      <View className="min-w-0 flex-1">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={accessibilityLabel}
+          accessibilityValue={
+            status
+              ? { text: t('session.status.group', { status: t(statusLabelKeys[status]) }) }
+              : undefined
+          }
+          onPress={openAgentChat}
+          testID={`sidebar-agent-${agent.id}`}
+        >
+          {({ pressed }) => (
+            <SidebarAgentRowContent agent={agent} pressed={pressed} status={status} />
+          )}
+        </Pressable>
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t(
+          expanded ? 'conversation.destination.collapse' : 'conversation.destination.expand',
+          { name: agent.name },
+        )}
+        accessibilityState={{ expanded }}
+        onPress={toggle}
+        testID={`sidebar-agent-expand-${agent.id}`}
+      >
+        {({ pressed }) => (
+          <View
+            className={cn(
+              'min-h-12 w-11 items-center justify-center rounded-xl',
+              pressed && 'bg-sidebar-accent',
+            )}
+          >
+            {disclosure}
+          </View>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
 function SidebarAgentRowContent({
   agent,
   children,
@@ -328,6 +432,7 @@ function SidebarAgentRowContent({
   pressed: boolean;
   status?: ConversationListStatus;
 }) {
+  const isCloud = agent.source?.kind === 'team';
   return (
     <SidebarRowContent
       className={cn('w-full', pressed && 'bg-sidebar-accent')}
@@ -344,9 +449,12 @@ function SidebarAgentRowContent({
         </SidebarAgentIconSlot>
       }
     >
-      <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
-        {agent.name}
-      </Text>
+      <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
+        <Text className="min-w-0 shrink text-base text-sidebar-foreground" numberOfLines={1}>
+          {agent.name}
+        </Text>
+        {isCloud ? <CloudMark /> : null}
+      </View>
       <SidebarSessionStatus status={status} />
       {children}
     </SidebarRowContent>
@@ -415,6 +523,8 @@ function SidebarSessionList({
   const { t } = useTranslation();
   const refreshBranchLayout = useSidebarBranchLayoutRefresh();
   const source = useConversationSource();
+  const teamOverlay = useOptionalTeamCatalogOverlay();
+  const overlay = !agentRef && !onSelect ? teamOverlay : null;
   const navigation = useConversationTarget(source.ref);
   const groupExpanded = use(AgentGroupExpanded);
   const query = useConversationSessions(
@@ -430,7 +540,8 @@ function SidebarSessionList({
   if (query.isLoading && !wasLoading) setWasLoading(true);
   else if (!query.isPending && wasLoading) setWasLoading(false);
   const leading = agentRef ? <SidebarAgentIconSlot /> : undefined;
-  const { hasNextPage, isFetchingNextPage, fetchNextPage, items: sessions, isError } = query;
+  const { hasNextPage, isFetchingNextPage, fetchNextPage, isError } = query;
+  const sessions = overlay ? mergeCatalogSessions(query.items, overlay.sessions) : query.items;
   const root = activePath[0];
   // The selected family's identity restores its path on navigation or drawer reopening.
   // Other expanded families keep their own state.
@@ -439,6 +550,7 @@ function SidebarSessionList({
     sessions.slice(0, limit),
     isSessionTreeEnabled && (!agentRef || root?.agentId === agentId) ? root : undefined,
   );
+  const selectableSessions = shownSessions.filter((session) => session.ref.source.kind === 'local');
   const loadMore = useCallback(() => {
     if (isFetchingNextPage || isError || (limit >= sessions.length && !hasNextPage)) return;
     const next = limit + appSidebar.recentSessionLimit;
@@ -450,13 +562,13 @@ function SidebarSessionList({
     registerEndReachedHandler?.(showAll ? loadMore : undefined);
     return () => registerEndReachedHandler?.();
   }, [loadMore, registerEndReachedHandler, showAll]);
-  if (query.isPending)
+  if (query.isPending && !sessions.length)
     return showLoading && (query.isLoading || (!groupExpanded && wasLoading)) ? (
       <View className="py-4">
         <ContentState.Loading title={t('session.list.loading')} />
       </View>
     ) : null;
-  if (query.isError && !query.data)
+  if (query.isError && !query.data && !sessions.length)
     return (
       <View className="px-5 py-4">
         <ContentState.Error
@@ -473,7 +585,7 @@ function SidebarSessionList({
     );
   return (
     <View className="px-2" onLayout={refreshBranchLayout}>
-      {!agentRef && !onSelect && query.isCachedCatalog && shownSessions.length > 0 ? (
+      {!agentRef && !onSelect && query.isCachedCatalog && query.items.length > 0 ? (
         <Text className="px-3 pb-2 text-muted-foreground text-sm">
           {t('remoteAgent.cachedCatalog')}
         </Text>
@@ -481,41 +593,60 @@ function SidebarSessionList({
       {onSelect ? null : (
         <SidebarSessionSelectionRegistration
           agentRef={agentRef}
-          sessions={shownSessions}
-          limit={shownSessions.length}
+          sessions={selectableSessions}
+          limit={selectableSessions.length}
         />
       )}
-      {shownSessions.map((session) =>
-        isSessionTreeEnabled && session.hasChildren && source.catalog.listSessionChildren ? (
-          <SidebarSessionTreeNode
-            key={
-              session.ref.sessionId === root?.ref.sessionId && pathTarget
-                ? JSON.stringify([session.ref.sessionId, pathTarget])
-                : session.ref.sessionId
-            }
-            session={session}
-            leading={leading}
-            onSelect={onSelect}
-            activePath={activePath}
-            visible={visible}
-          />
-        ) : onSelect ? (
-          <DestinationSessionRow
-            key={session.ref.sessionId}
-            leading={leading}
-            onSelect={onSelect}
-            session={session}
-          />
-        ) : (
+      {shownSessions.map((session) => {
+        const key = `${session.ref.source.kind}:${session.ref.sessionId}`;
+        if (isSessionTreeEnabled && session.hasChildren && source.catalog.listSessionChildren) {
+          return (
+            <SidebarSessionTreeNode
+              key={
+                session.ref.sessionId === root?.ref.sessionId && pathTarget
+                  ? JSON.stringify([session.ref.sessionId, pathTarget])
+                  : key
+              }
+              session={session}
+              leading={leading}
+              onSelect={onSelect}
+              activePath={activePath}
+              visible={visible}
+            />
+          );
+        }
+        if (onSelect) {
+          return (
+            <DestinationSessionRow
+              key={key}
+              leading={leading}
+              onSelect={onSelect}
+              session={session}
+            />
+          );
+        }
+        if (overlay && session.ref.source.kind === 'team' && source.ref.kind !== 'team') {
+          return (
+            <ConversationSourceScope key={key} value={overlay.source}>
+              <SidebarSessionRow
+                session={session}
+                selectionKey={JSON.stringify([overlay.source.scope, session.ref.sessionId])}
+                leading={leading}
+                selected={session.ref.sessionId === overlay.selectedSessionId}
+              />
+            </ConversationSourceScope>
+          );
+        }
+        return (
           <SidebarSessionRow
-            key={session.ref.sessionId}
+            key={key}
             session={session}
             selectionKey={JSON.stringify([source.scope, session.ref.sessionId])}
             leading={leading}
             selected={session.ref.sessionId === navigation.sessionId}
           />
-        ),
-      )}
+        );
+      })}
       {query.isError ? (
         <LoadMore
           leading={leading}
@@ -819,6 +950,8 @@ function SidebarSessionRow({
   const { t } = useTranslation();
   const { alert } = useAlert();
   const { toast } = useToast();
+  const source = useConversationSource();
+  const chatSource = useOptionalChatSource();
   const { closeDrawer } = useSidebarActions('Sidebar session');
   const { rename, remove, status } = useConversationPreview(session.ref, {
     includeDescendants: branch?.expanded === false,
@@ -830,6 +963,12 @@ function SidebarSessionRow({
   const checked = useSidebarSelectionSnapshot((state) => state.selectedIds.has(selectionKey));
   const deleted = useSidebarSelectionSnapshot((state) => state.deletedIds.has(selectionKey));
   if (deleted) return null;
+  const isCloud = session.ref.source.kind === 'team';
+  const replace = chatSource
+    ? (source.ref.kind === 'team') !== (chatSource.source === 'team')
+    : false;
+  const baseLabel = session.title || t('session.list.untitled');
+  const accessibilityLabel = isCloud ? `${baseLabel}, ${t('teamAgent.cloudExecution')}` : baseLabel;
   const menu: ContextMenuLinkItem[] = [];
   if (rename)
     menu.push({
@@ -902,7 +1041,7 @@ function SidebarSessionRow({
   }
   const renderRow = (renderCanvas: (content: ReactNode) => ReactNode) => (
     <ContextMenu.Trigger
-      accessibilityLabel={session.title || t('session.list.untitled')}
+      accessibilityLabel={accessibilityLabel}
       accessibilityValue={
         status
           ? {
@@ -937,6 +1076,7 @@ function SidebarSessionRow({
             className={cn('w-full', pressed && 'bg-sidebar-accent')}
           >
             <SidebarSessionContent
+              isCloud={isCloud}
               title={session.title}
               status={status}
               isSelected={!isSelecting && selected}
@@ -978,7 +1118,11 @@ function SidebarSessionRow({
             {isSelecting ? (
               renderRow(renderCanvas)
             ) : (
-              <ContextMenuLink href={conversationHref(session.ref)} items={isDeleting ? [] : menu}>
+              <ContextMenuLink
+                href={conversationHref(session.ref)}
+                items={isDeleting ? [] : menu}
+                replace={replace}
+              >
                 {renderRow(renderCanvas)}
               </ContextMenuLink>
             )}
@@ -993,24 +1137,29 @@ function SidebarSessionRow({
 function SidebarSessionContent({
   title,
   status,
+  isCloud = false,
   isSelected = false,
 }: {
   title: string;
   status?: ConversationListStatus;
+  isCloud?: boolean;
   isSelected?: boolean;
 }) {
   const { t } = useTranslation();
   return (
     <>
-      <Text
-        className={cn(
-          'min-w-0 flex-1 text-base text-sidebar-foreground',
-          isSelected && 'font-medium',
-        )}
-        numberOfLines={1}
-      >
-        {title || t('session.list.untitled')}
-      </Text>
+      <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
+        <Text
+          className={cn(
+            'min-w-0 shrink text-base text-sidebar-foreground',
+            isSelected && 'font-medium',
+          )}
+          numberOfLines={1}
+        >
+          {title || t('session.list.untitled')}
+        </Text>
+        {isCloud ? <CloudMark /> : null}
+      </View>
       <SidebarSessionStatus status={status} />
     </>
   );

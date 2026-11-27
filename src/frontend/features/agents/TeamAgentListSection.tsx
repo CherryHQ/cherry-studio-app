@@ -8,6 +8,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useTeamAgentState, useTeamDirectorySync } from '@/frontend/appShell/conversation/team';
 import { AgentAvatar } from '@/frontend/components/Avatar';
+import { CloudMark } from '@/frontend/components/CloudMark';
 import type { TeamAgent } from '@/shared/contracts/teamAgent';
 
 // A 40pt avatar, its 12pt vertical padding, and the hairline separator.
@@ -21,6 +22,7 @@ type TeamAgentListSectionProps = {
 };
 
 type TeamAgentExtraData = {
+  cloudLabel: string;
   lastId: string | undefined;
   onSelectAgent: (agentId: string) => void;
 };
@@ -56,14 +58,15 @@ export function TeamAgentListSection({
   );
   const listExtraData = useMemo<TeamAgentExtraData>(
     () => ({
+      cloudLabel: t('teamAgent.cloudExecution'),
       lastId: filteredAgents.at(-1)?.id,
       onSelectAgent,
     }),
-    [filteredAgents, onSelectAgent],
+    [filteredAgents, onSelectAgent, t],
   );
   const renderItem = useCallback(
     ({ extraData, index, item }: LegendListRenderItemProps<TeamAgent>) => {
-      const { lastId, onSelectAgent: selectAgent } = extraData as TeamAgentExtraData;
+      const { cloudLabel, lastId, onSelectAgent: selectAgent } = extraData as TeamAgentExtraData;
       const isFirst = index === 0;
       const isLast = item.id === lastId;
       const subtitle = [
@@ -85,7 +88,7 @@ export function TeamAgentListSection({
           >
             {isFirst ? null : <View className="mx-4 h-px bg-border" />}
             <Pressable
-              accessibilityLabel={item.name}
+              accessibilityLabel={`${item.name}, ${cloudLabel}`}
               accessibilityRole="button"
               className="w-full active:bg-foreground/5"
               onPress={() => selectAgent(item.id)}
@@ -94,9 +97,12 @@ export function TeamAgentListSection({
               <View className="min-w-0 flex-row items-center gap-3 px-4 py-3">
                 <AgentAvatar name={item.name} />
                 <View className="min-w-0 flex-1 gap-0.5">
-                  <Text className="text-base text-foreground" numberOfLines={1}>
-                    {item.name}
-                  </Text>
+                  <View className="min-w-0 flex-row items-center gap-1.5">
+                    <Text className="min-w-0 shrink text-base text-foreground" numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <CloudMark />
+                  </View>
                   {subtitle ? (
                     <Text className="text-sm text-muted-foreground" numberOfLines={1}>
                       {subtitle}

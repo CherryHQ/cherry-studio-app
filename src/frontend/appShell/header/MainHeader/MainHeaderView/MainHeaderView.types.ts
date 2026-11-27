@@ -6,7 +6,8 @@ import type { Agent } from '@/shared/data/types/agent';
 import type { HeaderToolbarAction } from '../../components/HeaderAction';
 
 export type MainHeaderViewProps = {
-  agent?: Pick<Agent, 'name'> & Partial<Pick<Agent, 'avatar' | 'avatarUri'>> & { emoji?: string };
+  agent?: Pick<Agent, 'name'> &
+    Partial<Pick<Agent, 'avatar' | 'avatarUri'>> & { emoji?: string; isCloud?: boolean };
   blurTarget: RefObject<ViewInstance | null>;
   hidden?: boolean;
   selection?: { selectedCount: number; onExit(): void };

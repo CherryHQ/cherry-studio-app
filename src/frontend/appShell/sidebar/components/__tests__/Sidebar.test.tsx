@@ -18,7 +18,7 @@ const mockDispatch = jest.fn();
 const mockOpenSessionSearch = jest.fn<Promise<AppSearchOutcome<SessionSearchResult>>, []>();
 const mockSetContent = jest.fn();
 let mockConnectionId: string | undefined;
-let mockSource: 'local' | 'remote' = 'local';
+let mockSource: 'local' | 'remote' | 'team' = 'local';
 let mockCanDock = false;
 let mockPage = ['(chat)'];
 let mockParams: Record<string, string> = {};
@@ -323,6 +323,25 @@ describe('Sidebar', () => {
     render();
 
     expect(mockActions.openSearch).toBeUndefined();
+  });
+
+  test('enables search while viewing a team chat and replaces the route when selecting a result', async () => {
+    const search = Promise.withResolvers<AppSearchOutcome<SessionSearchResult>>();
+    mockOpenSessionSearch.mockReturnValueOnce(search.promise);
+    mockSource = 'team';
+    render();
+
+    expect(mockActions.openSearch).toBeDefined();
+    act(() => mockActions.openSearch?.());
+    await act(async () =>
+      search.resolve({
+        type: 'selected',
+        item: { kind: 'session', item: { id: 'found' } as never },
+      }),
+    );
+
+    expect(mockCloseDrawer).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledWith({ pathname: '/', params: { sessionId: 'found' } });
   });
 
   test.each(['recent conversation', 'search', 'incoming link'])(

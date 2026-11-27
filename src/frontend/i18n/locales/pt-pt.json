@@ -3009,6 +3009,7 @@
   "systemEntry.destination.title": "Partilhar com",
   "systemEntry.failed": "Não foi possível abrir esta partilha. Partilhe o conteúdo novamente.",
   "teamAgent.accountRequired": "Inicie sessão com uma conta com acesso aos Agents da equipa.",
+  "teamAgent.cloudExecution": "Execução na nuvem",
   "teamAgent.details": "Detalhes do Agent",
   "teamAgent.disabled": "Desativado",
   "teamAgent.enabled": "Ativado",

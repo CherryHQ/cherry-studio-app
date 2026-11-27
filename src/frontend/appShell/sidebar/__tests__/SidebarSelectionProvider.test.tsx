@@ -415,3 +415,25 @@ test('leaves back to a route pushed beside a permanent sidebar while selecting',
   expect(selection.getSnapshot().isSelecting).toBe(false);
   addListener.mockRestore();
 });
+
+test('ignores non-local sessions registered alongside phone lists', () => {
+  const { source, sessions } = createCatalog();
+  const teamSessions: ConversationSummary[] = [
+    {
+      ref: { source: { kind: 'team', bindingId: 'binding-1' }, sessionId: 'team-1' },
+      agentId: 'team-agent',
+      title: 'Team chat',
+    },
+    ...sessions,
+  ];
+  act(() => {
+    selection.registerList('sessions', source, teamSessions);
+    selection.enter();
+    selection.toggleAll();
+  });
+
+  expect(selection.selectedEntries().map((entry) => entry.ref.sessionId)).toEqual([
+    'first',
+    'second',
+  ]);
+});

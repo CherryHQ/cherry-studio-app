@@ -1,3 +1,8 @@
+export {
+  TeamCatalogOverlayProvider,
+  useOptionalTeamCatalogOverlay,
+  type TeamCatalogOverlay,
+} from './TeamCatalogOverlay';
 export { startTeamSessionAndSend, type StartTeamSessionResult } from './startTeamSessionAndSend';
 export { createTeamConversationProjector } from './teamConversationView';
 export { teamSessionId, teamSessionRef } from './teamReferences';

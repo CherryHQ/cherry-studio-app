@@ -48,8 +48,8 @@ over the existing progressive blur on iOS.
 fills that inset (an upright iPhone Duo inner display) or keeps its own margin below a zero inset
 (the same display on its side); there the row centers on the header's controls.
 
-The circular search button beside the sidebar title opens the shared `/search` page for local
-conversations in compact windows. In wide windows the same request renders as `AppSearchPanel` in
+The circular search button beside the sidebar title opens the shared `/search` page for all phone
+conversations (`local` and overlaid `team` chats) in compact windows (using route replacement when switching away from `/team`). In wide windows the same request renders as `AppSearchPanel` in
 the left column: selecting a result opens its chat beside the panel and marks it, and the close button
 returns the column to the sidebar. Before a query is entered, it shows the ten most recently active conversations.
 Title matches use the cursor-paginated `/agent-sessions?q=...` collection and message matches use
@@ -101,8 +101,10 @@ The navigation and native menu targets stay outside that moving canvas at the vi
 their content callback places only row content and rails inside it. Native menu previews therefore
 use the visible row bounds, including at deep offsets.
 Selection uses the existing whole-row surface, with no additional selected label or branch count.
-Every Agent group starts collapsed, including the current chat's. Tapping an Agent's header toggles
-its conversations without navigating; multiple groups can stay open. Only expanded groups query
+Every Agent group starts collapsed, including the current chat's. In desktop catalogs (`remote`),
+tapping an Agent's header toggles its conversations without navigating; in unified phone mode (`local`
+and overlaid `team`), Agent headers split into two targets: tapping the Agent name/avatar opens that
+Agent's chat (closing a compact drawer), while tapping the trailing chevron toggles its sessions. Multiple groups can stay open. Only expanded groups query
 Sessions by their Agent id, show ten initially, and own independent "Load more" actions.
 Conversation rows share selection and navigation; status, rename and deletion are supplied by the
 source preview contract. Local previews retain these capabilities without opening transcripts.
@@ -129,22 +131,18 @@ scrolling rows and disclosure targets behind the controls. The container retains
 handling: controls own their taps, while gaps keep the existing pass-through behavior. The body's
 existing bottom padding keeps the final conversation reachable above the dock.
 
-The drawer title names whose chats it shows: "Cherry Studio" for this phone, or the selected
+The drawer title names whose chats it shows: "Cherry Studio" for this phone (unifying local and overlaid enterprise Team chats under one phone source), or the selected
 desktop's name. The name always reads in full and never ends in an ellipsis: a long one shrinks
 from 24 to at most 18 points, and one that still overflows is clipped and scrolls by in a single
 marquee lap each time the drawer opens or the name changes (`SidebarTitle` documents the motion;
-reduced motion keeps it still). Without a paired desktop it stays plain text. Once any desktop is saved, a centered
+reduced motion keeps it still). Without a paired desktop (`connections.length === 0`) it stays plain text with no switcher chevron. Once any desktop is saved, a centered
 disclosure chevron follows it and tapping opens a native menu listing "Cherry Studio" first, then
 every saved desktop, with a separate "Manage devices" entry that opens Device Connections; pairing,
 renaming and removal stay in Settings. The Conversations/Agents menu only switches the list view.
-`ChatSourceProvider` keeps the source-specific view mode and last chat target; returning to the
-last desktop resumes its chat, while another desktop opens at its catalog. Both sources mount
-`SidebarConversationList` inside `ConversationSourceBoundary`; the same Agent groups, rows,
-pagination, selection and menu presentation consume catalog summaries and bound preview actions.
+`ChatSourceProvider` shares `ui.sidebar.recent_view_mode` across phone `local` and `team` chats while tracking `lastPhoneKind` and last chat target per source, and keeps desktop `remoteViewMode` separate: returning to `"Cherry Studio"` resumes whichever phone kind (`local` or `team`) was most recently open, returning to the last desktop resumes its chat, while another desktop opens at its catalog. Phone recents mount `SidebarConversationList` inside local `ConversationSourceBoundary` plus `TeamCatalogOverlayProvider`, merging local and Team entries (`mergeCatalogAgents` / `mergeCatalogSessions`), wrapping each Team Agent group or flat Team session row in `ConversationSourceScope` for its owning source, marking Team entries with a neutral `CloudMark`, and keeping local-only multi-select registration limited to local sessions. Remote sources mount `SidebarConversationList` inside desktop `ConversationSourceBoundary` without phone search or Team overlays.
 `SidebarDesktopSource` owns only connection framing.
-The original local sidebar is the visual and interaction baseline for both sources. Agent headers
-keep the full-width avatar/name/disclosure row; tapping anywhere on that row only toggles the
-group. New chat lives in the chat header. The bottom dock shows the avatar and nickname in one
+The original local sidebar is the visual and interaction baseline across sources. Agent headers
+keep the full-width avatar/name/disclosure row. New chat lives in the chat header. The bottom dock shows the avatar and nickname in one
 settings row. Community accounts with a confirmed, currently effective paid subscription also show
 the dashed plan badge beside the nickname. Opening the overlay displays the Cloud service's last
 confirmed snapshot without triggering a refresh. A permanent sidebar refreshes stale data when it

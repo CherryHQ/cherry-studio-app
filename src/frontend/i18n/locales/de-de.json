@@ -2988,6 +2988,7 @@
   "systemEntry.destination.title": "Teilen mit",
   "systemEntry.failed": "Diese Freigabe konnte nicht geöffnet werden. Teilen Sie den Inhalt erneut.",
   "teamAgent.accountRequired": "Melde dich mit einem Konto an, das Zugriff auf Team-Agents hat.",
+  "teamAgent.cloudExecution": "Cloud-Ausführung",
   "teamAgent.details": "Agent-Details",
   "teamAgent.disabled": "Deaktiviert",
   "teamAgent.enabled": "Aktiviert",

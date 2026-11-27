@@ -2967,6 +2967,7 @@
   "systemEntry.destination.title": "共有先",
   "systemEntry.failed": "この共有を開けませんでした。もう一度共有してください。",
   "teamAgent.accountRequired": "チーム Agent にアクセスできるアカウントでログインしてください。",
+  "teamAgent.cloudExecution": "クラウド実行",
   "teamAgent.details": "Agent の詳細",
   "teamAgent.disabled": "無効",
   "teamAgent.enabled": "有効",

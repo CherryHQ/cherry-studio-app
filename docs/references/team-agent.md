@@ -29,8 +29,8 @@ Team conversations or grant access to Team execution.
 
 | Feature | Current behavior |
 | --- | --- |
-| Entry | Sidebar source menu and the `Agents` tab (`/agents`) Team Agents view for an authenticated enterprise account; `/team` also handles sign-in and empty states |
-| Directory | Employee groups and main/assistant Agents; partial list reads retain healthy sessions, with concurrency four |
+| Entry | Merged directly into the unified phone drawer (`Cherry Studio`), the unified chat-header Agent switcher (`UnifiedAgentPicker`), and the `Agents` tab (`/agents`) Team Agents view for an authenticated enterprise account (marked with a neutral `CloudMark`); `/team` also handles sign-in and empty states |
+| Directory | Flat normalized Agents (with optional `groupName` metadata); partial list reads retain healthy sessions, with concurrency four |
 | Personal sessions | List and create on the user's first send (or header new-chat draft); selecting an Agent never creates a session automatically |
 | Chat | Text, reasoning, tool progress/results, cancellation and failed-run state in the shared workspace |
 | Live updates | Full snapshots over SSE while the selected session runs; foreground/reentry reads the server again |
@@ -39,7 +39,7 @@ Team conversations or grant access to Team execution.
 | Stop | Send a cancellation signal; only a subsequent server snapshot establishes terminal state |
 | Approval / clarification | Hermes plus server authorization; match the current pending ID and request ID |
 | Delete | Single-session deletion for ready Astra targets with explicit `canDelete`; other delete actions are absent |
-| Details | Model, Skills and MCP status are readonly (header info action, with memory notice); optional WebP portrait falls back to the existing avatar |
+| Details | Model, Skills and MCP status are readonly (opened by tapping the header Agent pill, with memory notice); optional WebP portrait falls back to the existing avatar |
 | Usage | Render model, tokens and timing only when the server supplies them |
 | Community Team | Adapter boundary available; no speculative endpoints or credentials |
 

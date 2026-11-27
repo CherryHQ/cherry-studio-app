@@ -2967,6 +2967,7 @@
   "systemEntry.destination.title": "分享至",
   "systemEntry.failed": "無法開啟此分享，請重新分享內容。",
   "teamAgent.accountRequired": "請登入有權使用團隊 Agent 的帳號。",
+  "teamAgent.cloudExecution": "雲端執行",
   "teamAgent.details": "Agent 詳細資訊",
   "teamAgent.disabled": "已停用",
   "teamAgent.enabled": "已啟用",

@@ -2988,6 +2988,7 @@
   "systemEntry.destination.title": "Şununla paylaş",
   "systemEntry.failed": "Bu paylaşım açılamadı. İçeriği yeniden paylaşın.",
   "teamAgent.accountRequired": "Takım Agent’larına erişimi olan bir hesapla oturum açın.",
+  "teamAgent.cloudExecution": "Bulut yürütmesi",
   "teamAgent.details": "Agent ayrıntıları",
   "teamAgent.disabled": "Devre dışı",
   "teamAgent.enabled": "Etkin",

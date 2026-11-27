@@ -37,6 +37,7 @@ export { localConversationFailure } from './local/localConversationFailure';
 export { ConversationProvider, useConversationSources } from './ConversationProvider';
 export {
   ConversationSourceBoundary,
+  ConversationSourceScope,
   useConversationSource,
   useConversationSourceState,
 } from './ConversationSourceBoundary';

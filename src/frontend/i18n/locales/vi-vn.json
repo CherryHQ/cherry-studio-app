@@ -2967,6 +2967,7 @@
   "systemEntry.destination.title": "Chia sẻ đến",
   "systemEntry.failed": "Không thể mở nội dung chia sẻ này. Hãy chia sẻ lại.",
   "teamAgent.accountRequired": "Đăng nhập bằng tài khoản có quyền truy cập Agent của nhóm.",
+  "teamAgent.cloudExecution": "Thực thi trên đám mây",
   "teamAgent.details": "Chi tiết Agent",
   "teamAgent.disabled": "Đã tắt",
   "teamAgent.enabled": "Đã bật",

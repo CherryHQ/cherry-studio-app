@@ -243,7 +243,9 @@ export type AgentSummary = {
   /** Stable source-local address for navigation; never a grant or capability. */
   id: string;
   ref: AgentRef;
+  source?: ConversationSourceRef;
   name: string;
+  groupName?: string;
   configuration: 'available' | 'unavailable' | 'unknown';
   modelName?: string | null;
   emoji?: string;

@@ -106,3 +106,32 @@ it('emits session changes explicitly or when directory content changes', () => {
   expect(listener).toHaveBeenCalledTimes(3);
   source.dispose();
 });
+
+it('lists flat agent summaries with team source metadata and optional distinct groupName', async () => {
+  const { source } = fixture({
+    ...ready,
+    agents: [
+      { id: 'a1', name: 'Researcher', groupName: 'Data Team', canCreateSession: true },
+      { id: 'a2', name: 'Helper', groupName: 'Helper', canCreateSession: true },
+    ],
+  });
+  const { items } = await source.catalog.listAgents(undefined, new AbortController().signal);
+
+  expect(items).toEqual([
+    expect.objectContaining({
+      id: 'a1',
+      name: 'Researcher',
+      groupName: 'Data Team',
+      source: { kind: 'team', bindingId: 'enterprise' },
+      configuration: 'unknown',
+    }),
+    expect.objectContaining({
+      id: 'a2',
+      name: 'Helper',
+      source: { kind: 'team', bindingId: 'enterprise' },
+      configuration: 'unknown',
+    }),
+  ]);
+  expect(items[1]).not.toHaveProperty('groupName');
+  source.dispose();
+});

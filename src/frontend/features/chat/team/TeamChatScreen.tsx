@@ -1,4 +1,3 @@
-import InfoIcon from '@cherrystudio/app-icons/icons/info';
 import {
   composerContentGap,
   ContentState,
@@ -24,7 +23,6 @@ import {
   ConversationSourceBoundary,
   type ConversationHistoryView,
   type ConversationSnapshot,
-  useConversationAgents,
 } from '@/frontend/appShell/conversation';
 import {
   createTeamConversationProjector,
@@ -35,7 +33,7 @@ import {
   useTeamConversation,
   useTeamDirectorySync,
 } from '@/frontend/appShell/conversation/team';
-import { type HeaderToolbarAction, MainHeaderView } from '@/frontend/appShell/header';
+import { MainHeaderView, UnifiedAgentPicker } from '@/frontend/appShell/header';
 import {
   parseTeamChatRoute,
   type TeamChatRouteParams,
@@ -46,7 +44,6 @@ import {
   useNavigationDockClearance,
   useRootNavigationDockClearance,
 } from '@/frontend/appShell/navigationShell/state';
-import { AgentPickerSheet } from '@/frontend/components/AgentPicker';
 import {
   ComposerDismissArea,
   ComposerDock,
@@ -82,7 +79,7 @@ const EMPTY: ConversationSnapshot = {
   interactions: [],
 };
 type Header = {
-  agent?: { name: string; avatarUri?: string };
+  agent?: { name: string; avatarUri?: string; isCloud?: boolean };
   newChat(): void;
   detail(): void;
   pick(): void;
@@ -99,33 +96,15 @@ function TeamHeader({
   blurTarget: RefObject<ViewInstance | null>;
   hidden?: boolean;
 }) {
-  const { t } = useTranslation();
   const header = use(HeaderContext);
-  const actions = useMemo<readonly HeaderToolbarAction[]>(
-    () =>
-      header?.agent
-        ? [
-            {
-              accessibilityLabel: t('teamAgent.details'),
-              icon: InfoIcon,
-              key: 'team-agent-details',
-              nativeIcon: require('@/assets/header-toolbar/info.png'),
-              onPress: header.detail,
-              testID: 'team-header-agent-details',
-              type: 'icon',
-            },
-          ]
-        : [],
-    [header, t],
-  );
   return (
     <MainHeaderView
       blurTarget={blurTarget}
       hidden={hidden}
       agent={header?.agent}
-      actions={actions}
       onNewChat={header?.newChat}
-      onAgentPress={header?.pick}
+      onAgentPress={header?.detail}
+      onAgentSwitch={header?.pick}
     />
   );
 }
@@ -177,7 +156,6 @@ function TeamChatContent({
   const { module, state: directory } = useTeamAgentState();
   const { t } = useTranslation();
   const { openTeam } = useChatSource();
-  const catalog = useConversationAgents();
   let session: TeamSessionRef | undefined;
   let invalid = false;
   if (target.sessionId) {
@@ -245,7 +223,7 @@ function TeamChatContent({
   );
   const header = useMemo<Header>(
     () => ({
-      agent: agent ? { name: agent.name, avatarUri: portrait } : undefined,
+      agent: agent ? { name: agent.name, avatarUri: portrait, isCloud: true } : undefined,
       newChat: () => {
         if (agent) openTeam({ bindingId: context.bindingId, agentId: agent.id });
         else setPicker(true);
@@ -372,20 +350,14 @@ function TeamChatContent({
             ) : null}
           </ComposerSessionProvider>
         </ChatShareSelectionProvider>
-        <AgentPickerSheet
-          testID="main-header-agent-picker"
+        <UnifiedAgentPicker
+          currentAgentId={agentId}
+          currentAgentSource="team"
           open={picker}
           onClose={() => setPicker(false)}
-          catalog={catalog}
-          currentAgentId={agentId}
-          onSelect={(id) => openTeam({ bindingId: context.bindingId, agentId: id })}
         />
-        {details && agentId ? (
-          <TeamAgentDetailSheet
-            module={module}
-            agentId={agentId}
-            onClose={() => setDetails(false)}
-          />
+        {details && agent ? (
+          <TeamAgentDetailSheet module={module} agent={agent} onClose={() => setDetails(false)} />
         ) : null}
       </ChatScreenFrame>
     </HeaderContext>

@@ -3009,6 +3009,7 @@
   "systemEntry.destination.title": "Distribuie către",
   "systemEntry.failed": "Această partajare nu a putut fi deschisă. Partajați din nou conținutul.",
   "teamAgent.accountRequired": "Conectați-vă cu un cont care are acces la Agents ai echipei.",
+  "teamAgent.cloudExecution": "Execuție în cloud",
   "teamAgent.details": "Detalii Agent",
   "teamAgent.disabled": "Dezactivat",
   "teamAgent.enabled": "Activat",

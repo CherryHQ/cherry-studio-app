@@ -3,23 +3,36 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { useTeamAgentDetail } from '@/frontend/appShell/conversation/team';
-import type { TeamAgentModule } from '@/shared/contracts/teamAgent';
+import { CloudMark } from '@/frontend/components/CloudMark';
+import type { TeamAgent, TeamAgentModule } from '@/shared/contracts/teamAgent';
 
 export function TeamAgentDetailSheet({
   module,
-  agentId,
+  agent,
   onClose,
 }: {
   module: TeamAgentModule;
-  agentId: string;
+  agent: TeamAgent;
   onClose(): void;
 }) {
   const { t } = useTranslation();
-  const { detail, error, retry } = useTeamAgentDetail(module, agentId);
+  const { detail, error, retry } = useTeamAgentDetail(module, agent.id);
   const hasDetails = Boolean(detail && (detail.model || detail.skills.length || detail.mcp.length));
   return (
     <BottomSheet open onClose={onClose} size="content" title={t('teamAgent.details')}>
       <View className="gap-5 px-5 py-4">
+        <View className="gap-1">
+          <View className="flex-row items-center gap-1.5">
+            <Text className="shrink font-semibold text-base text-foreground">{agent.name}</Text>
+            <CloudMark />
+          </View>
+          {agent.groupName && agent.groupName !== agent.name ? (
+            <Text className="text-sm text-muted-foreground">{agent.groupName}</Text>
+          ) : null}
+          {agent.description ? (
+            <Text className="text-sm text-muted-foreground">{agent.description}</Text>
+          ) : null}
+        </View>
         {detail ? (
           <>
             {hasDetails ? (

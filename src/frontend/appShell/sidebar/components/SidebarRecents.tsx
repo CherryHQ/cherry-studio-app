@@ -6,9 +6,10 @@ import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 
 import { ConversationSourceBoundary } from '@/frontend/appShell/conversation';
-import { useTeamAgentState } from '@/frontend/appShell/conversation/team';
+import { TeamCatalogOverlayProvider } from '@/frontend/appShell/conversation/team';
 import { useChatSource } from '@/frontend/appShell/navigation/chat';
 
+import { useSidebarPresence } from '../hooks/useSidebarPresence';
 import { useSidebarSelection, useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
 import { SidebarConversationList } from './SidebarConversationList';
 import { SidebarDesktopSource } from './SidebarDesktopSource';
@@ -19,18 +20,12 @@ type SidebarRecentsProps = {
 
 export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProps) {
   const { t } = useTranslation();
-  const {
-    source,
-    remoteTarget,
-    teamTarget,
-    viewMode: mode,
-    setViewMode: setMode,
-  } = useChatSource();
+  const { source, remoteTarget, viewMode: mode, setViewMode: setMode } = useChatSource();
   const { toast } = useToast();
-  const { state: team } = useTeamAgentState();
+  const visible = useSidebarPresence() !== 'closed';
   const isSelecting = useSidebarSelectionSnapshot((state) => state.isSelecting);
   const isDeleting = useSidebarSelectionSnapshot((state) => state.isDeleting);
-  const loadingKey = `${source}:${source === 'team' ? (teamTarget.bindingId ?? '') : (remoteTarget.connectionId ?? '')}:${mode}`;
+  const loadingKey = `${source === 'remote' ? (remoteTarget.connectionId ?? '') : 'phone'}:${mode}`;
   const [loadingFeedback, setLoadingFeedback] = useState<string>();
   useEffect(() => {
     const timer = setTimeout(() => setLoadingFeedback(loadingKey), 200);
@@ -99,30 +94,6 @@ export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProp
         {content}
       </SidebarDesktopSource>
     );
-  if (source === 'team')
-    return (
-      <>
-        <View className="flex-row items-center justify-between gap-2 px-5 pt-2 pb-1">{header}</View>
-        <ConversationSourceBoundary
-          key={team.context?.key ?? 'signed-out'}
-          source={{
-            kind: 'team',
-            bindingId: teamTarget.bindingId ?? team.context?.bindingId ?? '',
-          }}
-          fallback={(state) => (
-            <View className="px-5 py-4">
-              {state === 'loading' ? (
-                <ContentState.Loading title={t('remoteAgent.loading')} />
-              ) : (
-                <ContentState.Error title={t('teamAgent.unavailable')} />
-              )}
-            </View>
-          )}
-        >
-          {content}
-        </ConversationSourceBoundary>
-      </>
-    );
   return (
     <>
       {/* The whole break below the navigation rows, which add no trailing space of their own. */}
@@ -145,7 +116,9 @@ export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProp
           )
         }
       >
-        {content}
+        <TeamCatalogOverlayProvider enabled={visible} loadSessions={mode === 'sessions'}>
+          {content}
+        </TeamCatalogOverlayProvider>
       </ConversationSourceBoundary>
     </>
   );

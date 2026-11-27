@@ -5,18 +5,25 @@ import { ChatSourceProvider, useChatSource } from '../ChatSourceProvider';
 
 let mockPathname = '/';
 let mockParams: Record<string, string> = {};
+let mockLocalViewMode: 'sessions' | 'agents' = 'sessions';
+let mockConnections: { id: string; available: boolean }[] = [];
+const mockReplace = jest.fn();
+const mockSetParams = jest.fn();
+const mockSetLocalViewMode = jest.fn(async (mode: 'sessions' | 'agents') => {
+  mockLocalViewMode = mode;
+});
 let snapshot: ReturnType<typeof useChatSource>;
 
 jest.mock('expo-router', () => ({
   useGlobalSearchParams: () => mockParams,
   usePathname: () => mockPathname,
-  useRouter: () => ({ replace: jest.fn(), setParams: jest.fn() }),
+  useRouter: () => ({ replace: mockReplace, setParams: mockSetParams }),
 }));
 jest.mock('@/frontend/data/hooks', () => ({
-  usePreference: () => ['sessions', jest.fn()],
+  usePreference: () => [mockLocalViewMode, mockSetLocalViewMode] as const,
 }));
 jest.mock('@/frontend/hooks/useDesktopConnections', () => ({
-  useDesktopConnections: () => ({ connections: [] }),
+  useDesktopConnections: () => ({ connections: mockConnections }),
 }));
 
 function Probe() {
@@ -34,6 +41,14 @@ function navigate(pathname: string, params: Record<string, string>) {
 
 describe('ChatSourceProvider', () => {
   let renderer: ReactTestRenderer;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPathname = '/';
+    mockParams = {};
+    mockLocalViewMode = 'sessions';
+    mockConnections = [];
+  });
 
   afterEach(() => act(() => renderer.unmount()));
 
@@ -100,5 +115,66 @@ describe('ChatSourceProvider', () => {
       sessionId: 't1',
     });
     expect(snapshot.localChat).toBeUndefined();
+  });
+
+  test('shares ui.sidebar.recent_view_mode across local and team while keeping remoteViewMode separate', async () => {
+    navigate('/', {});
+    render();
+    expect(snapshot.viewMode).toBe('sessions');
+
+    await act(async () => {
+      await snapshot.setViewMode('agents');
+    });
+    expect(mockSetLocalViewMode).toHaveBeenCalledWith('agents');
+
+    rerender();
+    expect(snapshot.viewMode).toBe('agents');
+
+    navigate('/team', { bindingId: 'ent-1', agentId: 'a1' });
+    rerender();
+    expect(snapshot.viewMode).toBe('agents');
+
+    navigate('/remote', { connectionId: 'pc', sessionId: 'r1' });
+    rerender();
+    expect(snapshot.remoteViewMode).toBe('agents');
+    await act(async () => {
+      await snapshot.setViewMode('sessions');
+    });
+    expect(snapshot.remoteViewMode).toBe('sessions');
+    expect(mockLocalViewMode).toBe('agents');
+  });
+
+  test('restores the most recent phone source when leaving remote via selectDevice()', () => {
+    mockConnections = [{ id: 'pc', available: true }];
+    navigate('/team', { bindingId: 'ent-1', sessionId: 't1' });
+    render();
+
+    act(() => snapshot.selectDevice());
+    expect(mockReplace).not.toHaveBeenCalled();
+
+    act(() => snapshot.selectDevice('pc'));
+    expect(mockReplace).toHaveBeenLastCalledWith({
+      pathname: '/remote',
+      params: { connectionId: 'pc' },
+    });
+
+    navigate('/remote', { connectionId: 'pc', sessionId: 'r1' });
+    rerender();
+
+    act(() => snapshot.selectDevice());
+    expect(mockReplace).toHaveBeenLastCalledWith({
+      pathname: '/team',
+      params: { bindingId: 'ent-1', agentId: undefined, sessionId: 't1' },
+    });
+
+    act(() => snapshot.openLocal({ kind: 'session', sessionId: 'l1' }));
+    expect(mockReplace).toHaveBeenLastCalledWith({ pathname: '/', params: { sessionId: 'l1' } });
+    navigate('/', { sessionId: 'l1' });
+    rerender();
+
+    navigate('/remote', { connectionId: 'pc', sessionId: 'r1' });
+    rerender();
+    act(() => snapshot.selectDevice());
+    expect(mockReplace).toHaveBeenLastCalledWith({ pathname: '/', params: { sessionId: 'l1' } });
   });
 });

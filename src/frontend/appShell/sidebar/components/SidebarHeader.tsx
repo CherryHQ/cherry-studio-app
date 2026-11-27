@@ -9,7 +9,6 @@ import { View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useTeamAgentState } from '@/frontend/appShell/conversation/team';
 import { useChatSource } from '@/frontend/appShell/navigation/chat';
 import { useUuRemoteAction } from '@/frontend/appShell/uuRemote';
 import { useDesktopConnections } from '@/frontend/hooks/useDesktopConnections';
@@ -116,8 +115,7 @@ function SidebarDeviceTitle() {
   const router = useRouter();
   const { closeDrawer, prepareExternalNavigation, returnToChat } =
     useSidebarActions('SidebarDeviceTitle');
-  const { source, remoteTarget, remoteViewMode, selectDevice, openTeam } = useChatSource();
-  const { state: team } = useTeamAgentState();
+  const { source, remoteTarget, remoteViewMode, selectDevice } = useChatSource();
   const { connections } = useDesktopConnections();
   useSidebarDesktopPrewarm(
     connections,
@@ -130,7 +128,7 @@ function SidebarDeviceTitle() {
       ? connections.find((connection) => connection.id === remoteTarget.connectionId)
       : undefined;
   const remoteDesktop = useUuRemoteAction(prepareExternalNavigation);
-  const name = source === 'team' ? t('teamAgent.title') : (current?.name ?? brand);
+  const name = source === 'remote' ? (current?.name ?? brand) : brand;
   const [width, setWidth] = useState(0);
   const frame = (content: ReactNode) => (
     <View
@@ -140,12 +138,11 @@ function SidebarDeviceTitle() {
       {content}
     </View>
   );
-  if (!connections.length && !team.context && source !== 'team')
-    return frame(<SidebarTitle name={name} width={width} />);
+  if (!connections.length) return frame(<SidebarTitle name={name} width={width} />);
   const items: MenuItem[] = [
     {
       id: 'device-local',
-      checked: source === 'local',
+      checked: source !== 'remote',
       label: brand,
       onPress: () => {
         returnToChat();
@@ -161,19 +158,6 @@ function SidebarDeviceTitle() {
         selectDevice(connection.id);
       },
     })),
-    ...(team.context
-      ? [
-          {
-            id: 'team-agents',
-            checked: source === 'team',
-            label: t('teamAgent.title'),
-            onPress: () => {
-              returnToChat();
-              openTeam({ bindingId: team.context!.bindingId });
-            },
-          },
-        ]
-      : []),
     ...(current
       ? [
           {

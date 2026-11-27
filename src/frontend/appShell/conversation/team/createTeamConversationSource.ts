@@ -89,11 +89,12 @@ export function createTeamConversationSource(
             items: module.getState().agents.map((agent) => ({
               id: agent.id,
               ref: refs.issue<AgentRef>('agent', agent.id),
-              name:
-                agent.groupName && agent.groupName !== agent.name
-                  ? `${agent.groupName} · ${agent.name}`
-                  : agent.name,
-              configuration: 'available' as const,
+              source: ref,
+              name: agent.name,
+              ...(agent.groupName && agent.groupName !== agent.name
+                ? { groupName: agent.groupName }
+                : {}),
+              configuration: 'unknown' as const,
             })),
           };
         }),

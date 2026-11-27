@@ -15,7 +15,7 @@ export {
   takeChatSelectionHandoff,
   type ChatComposerHandoff,
 } from './chatComposerHandoff';
-export { ChatSourceProvider, useChatSource } from './ChatSourceProvider';
+export { ChatSourceProvider, useChatSource, useOptionalChatSource } from './ChatSourceProvider';
 export {
   remoteChatHref,
   parseRemoteChatRoute,

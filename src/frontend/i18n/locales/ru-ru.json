@@ -3030,6 +3030,7 @@
   "systemEntry.destination.title": "Поделиться с",
   "systemEntry.failed": "Не удалось открыть этот материал. Поделитесь содержимым ещё раз.",
   "teamAgent.accountRequired": "Войдите в учётную запись с доступом к Agents команды.",
+  "teamAgent.cloudExecution": "Выполнение в облаке",
   "teamAgent.details": "Сведения об Agent",
   "teamAgent.disabled": "Отключено",
   "teamAgent.enabled": "Включено",

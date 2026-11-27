@@ -2967,6 +2967,7 @@
   "systemEntry.destination.title": "分享到",
   "systemEntry.failed": "无法打开此分享，请重新分享内容。",
   "teamAgent.accountRequired": "请登录有权使用团队 Agent 的账号。",
+  "teamAgent.cloudExecution": "云端执行",
   "teamAgent.details": "Agent 详情",
   "teamAgent.disabled": "已停用",
   "teamAgent.enabled": "已启用",

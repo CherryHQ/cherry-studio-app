@@ -9,20 +9,38 @@ import { MainHeader } from '../MainHeader';
 import { MainHeaderAgentLabel, useMainHeaderAgent } from '../MainHeaderAgentLabel';
 
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
 const mockSetParams = jest.fn();
 const mockStartNewChat = jest.fn();
+const mockOpenLocal = jest.fn();
+const mockOpenTeam = jest.fn();
 const mockCreateHandoff = jest.fn((_value: unknown) => 'blank-composer');
 let mockAgent: Agent | undefined;
 let mockAgentId: string | undefined;
 let mockSessionAgentId: string | undefined;
 let mockSessionId: string | undefined;
+let mockChatSource: {
+  source: 'local' | 'remote' | 'team';
+  openLocal: jest.Mock;
+  openTeam: jest.Mock;
+} | null = null;
+let mockTeamOverlay: {
+  agents: {
+    id: string;
+    name: string;
+    groupName?: string;
+    source: { kind: 'team'; bindingId: string };
+    configuration: 'unknown';
+  }[];
+  isAgentsLoading?: boolean;
+} | null = null;
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({
     agentId: mockAgentId,
     sessionId: mockSessionId,
   }),
-  useRouter: () => ({ push: mockPush, setParams: mockSetParams }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace, setParams: mockSetParams }),
 }));
 
 jest.mock('@/frontend/components/AgentEditor', () => ({
@@ -37,6 +55,14 @@ jest.mock('@/frontend/components/Avatar', () => ({
 }));
 
 jest.mock('@/frontend/appShell/navigation/chat', () => ({
+  chatHref: (target: { agentId?: string }) => ({
+    pathname: '/',
+    params: { agentId: target.agentId },
+  }),
+  teamChatHref: (target: { bindingId: string; agentId?: string }) => ({
+    pathname: '/team',
+    params: target,
+  }),
   chatRouteParams: (target: {
     agentId: string;
     kind: string;
@@ -57,6 +83,7 @@ jest.mock('@/frontend/appShell/navigation/chat', () => ({
         ? { status: 'ready', target: { agentId: params.agentId, kind: 'draft' } }
         : { status: 'empty' },
   createChatComposerHandoff: (value: unknown) => mockCreateHandoff(value),
+  useOptionalChatSource: () => mockChatSource,
   useStartNewChat: () => mockStartNewChat,
 }));
 
@@ -65,7 +92,14 @@ jest.mock('@/frontend/appShell/conversation', () => ({
   useConversationAgents: () => ({
     items: mockAgent ? [mockAgent, { id: 'agent-2', name: 'Cherry' }] : [],
     isLoading: false,
+    isError: false,
+    refetch: jest.fn(),
   }),
+}));
+
+jest.mock('@/frontend/appShell/conversation/team', () => ({
+  TeamCatalogOverlayProvider: ({ children }: { children: React.ReactNode }) => children,
+  useOptionalTeamCatalogOverlay: () => mockTeamOverlay,
 }));
 
 jest.mock('@/frontend/hooks/agent', () => ({
@@ -125,7 +159,12 @@ jest.mock('@cherrystudio/ui/components', () => {
         </>
       ) : null,
     Button,
-    ContentState: { Loading: () => null, Error: () => null, Empty: () => null },
+    ContentState: {
+      Loading: () => null,
+      Error: () => null,
+      Empty: (props: object) => createElement('ContentStateEmpty', props),
+    },
+    SearchField: (props: object) => createElement('SearchField', props),
   };
 });
 
@@ -154,6 +193,8 @@ describe('MainHeaderAgentLabel', () => {
     mockAgentId = 'agent-1';
     mockSessionAgentId = 'agent-1';
     mockSessionId = 'session-1';
+    mockChatSource = null;
+    mockTeamOverlay = null;
   });
 
   afterEach(async () => {
@@ -215,7 +256,7 @@ describe('MainHeaderAgentLabel', () => {
     expect(renderer!.root.findAllByProps({ accessibilityRole: 'radio' })).toHaveLength(0);
   });
 
-  it('omits the agent switch trigger outside wide-rail mode', async () => {
+  it('shows the agent switch trigger in compact-dock mode and opens the picker', async () => {
     await act(async () => {
       renderer = create(
         <NavigationShellContext value={{ shellMode: 'compact-dock' } as never}>
@@ -223,8 +264,81 @@ describe('MainHeaderAgentLabel', () => {
         </NavigationShellContext>,
       );
     });
-    const switchNodes = renderer!.root.findAllByProps({ testID: 'main-header-agent-switch' });
-    expect(switchNodes).toHaveLength(0);
+    await act(async () =>
+      renderer!.root.findByProps({ testID: 'main-header-agent-switch' }).props.onPress(),
+    );
+    expect(
+      renderer!.root.findAllByProps({ accessibilityRole: 'radio' }, { deep: false }),
+    ).toHaveLength(2);
+  });
+
+  it('shows CloudMark and accessible suffix on MainHeaderAgentLabel when isCloud is true', async () => {
+    await act(async () => {
+      renderer = create(<MainHeaderAgentLabel agent={{ name: 'Peanut', isCloud: true }} />);
+    });
+    const label = renderer!.root.findByProps({ testID: 'current-agent-label' });
+    expect(label.props.accessibilityLabel).toBe('Peanut, teamAgent.cloudExecution');
+    expect(
+      renderer!.root.findAllByProps({ testID: 'cloud-execution-mark' }, { deep: false }),
+    ).toHaveLength(1);
+  });
+
+  it('merges team agents with search, hides edit actions on cloud rows, distinguishes matching IDs by source, and switches to team chat', async () => {
+    mockChatSource = { source: 'local', openLocal: mockOpenLocal, openTeam: mockOpenTeam };
+    mockTeamOverlay = {
+      agents: [
+        {
+          id: 'agent-1',
+          name: 'Cloud Twin',
+          groupName: 'Research',
+          source: { kind: 'team', bindingId: 'binding-1' },
+          configuration: 'unknown',
+        },
+      ],
+    };
+
+    await act(async () => {
+      renderer = create(<MainHeader blurTarget={{ current: null }} />);
+    });
+    await act(async () =>
+      renderer!.root.findByProps({ testID: 'main-header-agent-switch' }).props.onPress(),
+    );
+
+    const searchField = renderer!.root.findByProps({ testID: 'main-header-agent-picker-search' });
+    expect(searchField).toBeDefined();
+
+    const options = renderer!.root.findAllByProps({ accessibilityRole: 'radio' }, { deep: false });
+    const localOption = options.find((node) => node.props.accessibilityLabel === 'Peanut');
+    const cloudOption = options.find(
+      (node) => node.props.accessibilityLabel === 'Cloud Twin, teamAgent.cloudExecution',
+    );
+    expect(localOption?.props.accessibilityState.checked).toBe(true);
+    expect(cloudOption?.props.accessibilityState.checked).toBe(false);
+    expect(
+      renderer!.root.findAllByProps({ accessibilityLabel: 'common.edit: Peanut' }, { deep: false }),
+    ).toHaveLength(1);
+    expect(
+      renderer!.root.findAllByProps(
+        { accessibilityLabel: 'common.edit: Cloud Twin' },
+        { deep: false },
+      ),
+    ).toHaveLength(0);
+    expect(
+      renderer!.root.findAllByProps({ testID: 'cloud-execution-mark' }, { deep: false }),
+    ).toHaveLength(1);
+
+    await act(async () => searchField.props.onChangeText('no-match'));
+    expect(renderer!.root.findByType('ContentStateEmpty').props.title).toBe('agent.list.noResults');
+
+    await act(async () => searchField.props.onChangeText('Research'));
+    const filteredOptions = renderer!.root.findAllByProps(
+      { accessibilityRole: 'radio' },
+      { deep: false },
+    );
+    expect(filteredOptions).toHaveLength(1);
+    await act(async () => filteredOptions[0].props.onPress());
+
+    expect(mockOpenTeam).toHaveBeenCalledWith({ bindingId: 'binding-1', agentId: 'agent-1' });
   });
 
   it('selects from a remote catalog without local edit/create actions or a false missing-model label', async () => {

@@ -2988,6 +2988,7 @@
   "systemEntry.destination.title": "Κοινοποίηση σε",
   "systemEntry.failed": "Δεν ήταν δυνατό το άνοιγμα αυτής της κοινοποίησης. Κοινοποιήστε ξανά το περιεχόμενο.",
   "teamAgent.accountRequired": "Συνδεθείτε με λογαριασμό που έχει πρόσβαση στους Agents ομάδας.",
+  "teamAgent.cloudExecution": "Εκτέλεση στο cloud",
   "teamAgent.details": "Λεπτομέρειες Agent",
   "teamAgent.disabled": "Ανενεργό",
   "teamAgent.enabled": "Ενεργό",
