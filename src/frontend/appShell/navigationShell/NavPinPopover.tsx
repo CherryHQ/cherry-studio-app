@@ -8,7 +8,7 @@ import { Pressable, Text, useWindowDimensions, View } from 'react-native';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
-import { canPinTab, canUnpinTab } from './dockTabs';
+import { canPinTab, resolveDockPopoverActions } from './dockTabs';
 import {
   useNavigationShell,
   useNavigationShellActions,
@@ -39,11 +39,16 @@ export function NavPinPopover() {
   const top = Math.max(72, Math.min(windowHeight - 130, popover.y - 68));
 
   const currentIndex = pinnedTabs.indexOf(popover.id);
-  const canMoveLeft = popover.source === 'dock' && currentIndex > 0;
-  const canMoveRight =
-    popover.source === 'dock' && currentIndex >= 0 && currentIndex < pinnedTabs.length - 1;
-  const canUnpin = popover.source === 'dock' && canUnpinTab(pinnedTabs, popover.id);
+  const dockActions =
+    popover.source === 'dock'
+      ? resolveDockPopoverActions(pinnedTabs, popover.id)
+      : { canMoveLeft: false, canMoveRight: false, canUnpin: false };
+  const { canMoveLeft, canMoveRight, canUnpin } = dockActions;
   const canPin = popover.source === 'more' && canPinTab(pinnedTabs, popover.id);
+
+  if (popover.source === 'dock' && !canMoveLeft && !canMoveRight && !canUnpin) {
+    return null;
+  }
 
   return (
     <>
@@ -109,26 +114,22 @@ export function NavPinPopover() {
                     <ChevronRightIcon color={foregroundColor} size={14} />
                   </Pressable>
                 ) : null}
-                <Pressable
-                  accessibilityRole="button"
-                  className={`flex-row items-center gap-1.5 rounded-full px-3 py-2 ${
-                    canUnpin ? '' : 'opacity-60'
-                  }`}
-                  onPress={() => {
-                    unpinTabFromDock(popover.id);
-                    closePinPopover();
-                  }}
-                  testID={`nav-popover-unpin-${popover.id}`}
-                >
-                  <PinOffIcon color={canUnpin ? foregroundColor : mutedForegroundColor} size={15} />
-                  <Text
-                    className={`text-xs font-medium ${
-                      canUnpin ? 'text-foreground' : 'text-muted-foreground'
-                    }`}
+                {canUnpin ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    className="flex-row items-center gap-1.5 rounded-full px-3 py-2 active:opacity-70"
+                    onPress={() => {
+                      unpinTabFromDock(popover.id);
+                      closePinPopover();
+                    }}
+                    testID={`nav-popover-unpin-${popover.id}`}
                   >
-                    {t('navigation.unpinFromDock')}
-                  </Text>
-                </Pressable>
+                    <PinOffIcon color={foregroundColor} size={15} />
+                    <Text className="text-foreground text-xs font-medium">
+                      {t('navigation.unpinFromDock')}
+                    </Text>
+                  </Pressable>
+                ) : null}
               </>
             )}
           </View>

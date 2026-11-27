@@ -1,3 +1,4 @@
+import { haptics } from '@cherrystudio/ui/haptics';
 import { NavigationContext } from 'expo-router/react-navigation';
 import { type ContextType, useLayoutEffect } from 'react';
 import { Keyboard, type KeyboardEvent } from 'react-native';
@@ -377,6 +378,37 @@ describe('NavigationShellProvider', () => {
 
     expect(latest.unpinTabFromDock('drawings')).toBe(true);
     expect(mockSetPreference).toHaveBeenLastCalledWith(['agents', 'files']);
+  });
+
+  it('skips opening dock popover when no dock action is available and opens it once reorderable', () => {
+    act(() => {
+      renderer = create(
+        <NavigationShellProvider>
+          <Probe />
+        </NavigationShellProvider>,
+      );
+    });
+
+    act(() => {
+      latest.openPinPopover({ id: 'agents', source: 'dock', x: 100, y: 200 });
+    });
+    expect(latestInteraction.popover).toBeNull();
+    expect(haptics.light).not.toHaveBeenCalled();
+
+    mockPinnedPreference = ['agents', 'drawings'];
+    act(() => {
+      renderer.update(
+        <NavigationShellProvider>
+          <Probe />
+        </NavigationShellProvider>,
+      );
+    });
+
+    act(() => {
+      latest.openPinPopover({ id: 'agents', source: 'dock', x: 100, y: 200 });
+    });
+    expect(latestInteraction.popover).toEqual({ id: 'agents', source: 'dock', x: 100, y: 200 });
+    expect(haptics.light).toHaveBeenCalledTimes(1);
   });
 
   it('tracks symmetrical middle drop slots, 72pt top slop, and executes pin/reorder/unpin on drop', () => {

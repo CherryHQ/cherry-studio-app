@@ -24,6 +24,7 @@ import {
   canPinTab,
   canUnpinTab,
   getNavHref,
+  hasDockPopoverActions,
   isRootNavPathname,
   type NavDestinationId,
   normalizePinnedTabs,
@@ -250,6 +251,9 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
   }, []);
 
   const openPinPopover = useCallback((next: NavPinPopoverState) => {
+    if (next.source === 'dock' && !hasDockPopoverActions(pinnedTabsRef.current, next.id)) {
+      return;
+    }
     haptics.light();
     setPopover(next);
   }, []);
