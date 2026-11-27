@@ -1,6 +1,7 @@
 import { Directory } from 'expo-file-system';
 import * as SQLite from 'expo-sqlite';
 import type { SQLiteBindValue, SQLiteDatabase } from 'expo-sqlite';
+import { Platform } from 'react-native';
 
 import { AgentSqlDatabase, type AgentSqlExecutor } from '../AgentSqlDatabase';
 
@@ -33,7 +34,7 @@ function connection() {
     }),
     getAllAsync: jest.fn(async (sql: string) => {
       operations.push(sql);
-      return [];
+      return [{ id: 2 }, { id: 1 }];
     }),
     getEachAsync: jest.fn(async function* (sql: string, _params: SQLiteBindValue[]) {
       operations.push(sql);
@@ -52,6 +53,10 @@ function connection() {
 }
 
 describe('AgentSqlDatabase', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   test.each([0, 1, 4])(
     'returns %i changed rows on the connection and inside a transaction',
     async (changes) => {
@@ -136,6 +141,7 @@ describe('AgentSqlDatabase', () => {
   });
 
   test('rolls back a failed row stream and preserves the original error', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
     const { database, operations, sqlite } = connection();
     const failure = new Error('row stream failed');
     sqlite.getEachAsync.mockImplementationOnce(async function* (sql) {
@@ -143,7 +149,7 @@ describe('AgentSqlDatabase', () => {
       yield { id: 1 };
       throw failure;
     });
-    const transaction = database.transaction((tx) => tx.all('SELECT rows'));
+    const transaction = database.transaction((tx) => tx.allPayloadRows('SELECT rows'));
     await expect(transaction).rejects.toBe(failure);
     expect(operations).toEqual(['BEGIN IMMEDIATE', 'SELECT rows', 'ROLLBACK']);
   });
@@ -175,8 +181,10 @@ describe('AgentSqlDatabase', () => {
     await expect(escaped.runCounted('late counted write')).rejects.toThrow('already settled');
     await expect(escaped.get('late read')).rejects.toThrow('already settled');
     await expect(escaped.all('late multi-row read')).rejects.toThrow('already settled');
+    await expect(escaped.allPayloadRows('late payload read')).rejects.toThrow('already settled');
     expect(sqlite.runAsync).not.toHaveBeenCalled();
     expect(sqlite.getFirstAsync).not.toHaveBeenCalled();
+    expect(sqlite.getAllAsync).not.toHaveBeenCalled();
     expect(sqlite.getEachAsync).not.toHaveBeenCalled();
   });
 
@@ -208,27 +216,33 @@ describe('AgentSqlDatabase', () => {
     await expect(database.get('absent')).resolves.toBeUndefined();
   });
 
-  test.each([false, true])(
-    'streams rows in order (inside transaction: %s)',
-    async (inTransaction) => {
+  test.each([
+    ['android', false],
+    ['android', true],
+    ['ios', false],
+    ['ios', true],
+  ] as const)(
+    'reads payload rows on %s (inside transaction: %s)',
+    async (platform, inTransaction) => {
+      jest.replaceProperty(Platform, 'OS', platform);
       const { database, sqlite } = connection();
       const blob = new Uint8Array([0, 255]);
       const read = async (executor: AgentSqlExecutor) => {
+        await expect(executor.all('SELECT metadata')).resolves.toEqual([{ id: 2 }, { id: 1 }]);
         await expect(
-          executor.all<{ id: number }>('SELECT ordered rows', null, 'value', blob, 42n),
+          executor.allPayloadRows<{ id: number }>('SELECT payload rows', null, 'value', blob, 42n),
         ).resolves.toEqual([{ id: 2 }, { id: 1 }]);
-        await expect(executor.all('unsafe', 9_007_199_254_740_993n)).rejects.toThrow('precision');
+        await expect(executor.allPayloadRows('unsafe', 9_007_199_254_740_993n)).rejects.toThrow(
+          'precision',
+        );
       };
       if (inTransaction) await database.transaction(read);
       else await read(database);
-      expect(sqlite.getEachAsync).toHaveBeenCalledTimes(1);
-      expect(sqlite.getEachAsync).toHaveBeenCalledWith('SELECT ordered rows', [
-        null,
-        'value',
-        blob,
-        42,
-      ]);
-      expect(sqlite.getAllAsync).not.toHaveBeenCalled();
+      const payload = ['SELECT payload rows', [null, 'value', blob, 42]];
+      expect(sqlite.getAllAsync.mock.calls).toEqual(
+        platform === 'android' ? [['SELECT metadata', []]] : [['SELECT metadata', []], payload],
+      );
+      expect(sqlite.getEachAsync.mock.calls).toEqual(platform === 'android' ? [payload] : []);
     },
   );
 });

@@ -35,8 +35,8 @@ and [Pi AI changelog](https://github.com/earendil-works/pi/blob/v1.5.0/packages/
   in `pi.live` as an aborted transcript entry. An abrupt process kill can lose progress still held
   in memory during the coalescing window.
 - Cherry's current-only documents generally checkpoint each change. The growing managed-file grant
-  list writes a new base on the next change after 32 deltas. SQLite replaces prior revisions when
-  it writes a new base, bounding `document_revisions` per document.
+  and Code Mode artifact lists write a new base on the next change after 32 deltas. SQLite replaces
+  prior revisions when it writes a new base, bounding `document_revisions` per document.
 - Tool parameters remain ordinary JSON Schema objects, preserving additional-property semantics.
   Error `afterTool` results retain their diagnostics and failure details; confirmed Code Mode
   artifacts still come from their durable transcript receipts. Unoffered calls must never execute.
@@ -510,6 +510,10 @@ The remaining [Pi Durable patch](../../../patches/@earendil-works__pi-durable@1.
 Segmenter fallback and Han search terms, exact-name tool search, and the host Code Mode output
 hook with its final store-commit budget guard. The compaction hook can also fail the native task
 when the bounded summarizer fails, preventing a fallback to one unbounded request.
+`Tx.waitForEntryPublication()` uses Pi's conversation creation and append gates without loading a
+transcript entry. Cold history reads only load bodies for the selected turns. The SQLite adapter
+marks transcript and document revision reads so Android can stream those rows through the native
+boundary. Metadata queries and iOS use the normal bulk adapter.
 The `declarations` import is upstream in 1.5.0. Upstream
 [conversation reclamation #11026](https://github.com/earendil-works/pi/issues/11026) is a separate
 storage-lifetime concern. Mobile's manual whole-file clearing

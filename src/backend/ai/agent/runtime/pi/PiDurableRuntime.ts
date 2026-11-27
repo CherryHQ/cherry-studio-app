@@ -946,8 +946,8 @@ export class PiDurableRuntime {
     if (!Number.isSafeInteger(query.limit) || query.limit < 1 || requestIds?.size === 0) return [];
     const conversation = await this.requireSession(sessionId, context);
     const matched = await this.harness.commit(async (tx) => {
-      // The append publishes its placed submissions to the index before Pi releases this read.
-      if (!requestIds) await tx.latestEntryId(conversation.id);
+      // The publication observer updates the submission index before the wait resolves.
+      if (!requestIds) await tx.waitForEntryPublication(conversation.id);
 
       const records: SubmissionRecord[] = [];
       // Global entry IDs increase. Each fork's own entries are newer than its inherited prefix.

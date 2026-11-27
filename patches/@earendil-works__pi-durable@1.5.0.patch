@@ -169,3 +169,148 @@ diff --git a/dist/harness/types.d.ts b/dist/harness/types.d.ts
      }>;
  }
  export {};
+diff --git a/dist/session/session.js b/dist/session/session.js
+index e9ae9ebfc2c45765ccda141d7e60cdc9a15a0894..5404a70f4746a90fd09e2d4d165c2167a9a8db08 100644
+--- a/dist/session/session.js
++++ b/dist/session/session.js
+@@ -226,7 +226,8 @@ export class SessionImpl {
+             },
+             conversationCreated: (tx, record) => this.conversationCreated(tx, record),
+             taskDocuments: (taskId) => this.#taskDocuments.get(taskId)?.values(),
+-            latestEntryId: (conversationId, context) => this.latestEntryId(conversationId, context),
++            waitForEntryPublication: (id) => this.#touchEntries(id) ?? SETTLED,
++            latestEntryId: (id, context) => this.latestEntryId(id, context),
+             latestHeadMarker: (conversationId, context) => this.latestHeadMarker(conversationId, undefined, context),
+         };
+     }
+diff --git a/dist/session/transaction.d.ts b/dist/session/transaction.d.ts
+index 5508fa2d021d2153f4f104b4ef69b99ef98a6a74..e1ac1f355f567c5c150686800a404678ba7fea5f 100644
+--- a/dist/session/transaction.d.ts
++++ b/dist/session/transaction.d.ts
+@@ -51,7 +51,9 @@ export interface TransactionHost {
+     /** Stage writes that belong to every newly created or forked conversation, in its creating transaction. */
+     conversationCreated(tx: Transaction, record: ConversationRecord): Promise<void>;
+     /** The newest entry ID visible from a conversation, known from the Session's commits. */
+-    latestEntryId(conversationId: ConversationId, context: Context): Promise<EntryId | undefined>;
++    latestEntryId(id: ConversationId, context: Context): Promise<EntryId | undefined>;
++    /** Wait for the conversation's creation and appends to publish without loading entries. */
++    waitForEntryPublication(conversationId: ConversationId): Promise<void>;
+     /**
+      * The current documents of a live task when the Session knows all of them (it created the task), else `undefined`.
+      */
+@@ -98,7 +100,8 @@ export declare class Transaction implements Tx {
+     latestHeadMarker(conversationId: ConversationId): Promise<(EntryRecord & {
+         readonly head: EntryId;
+     }) | undefined>;
+-    latestEntryId(conversationId: ConversationId): Promise<EntryId | undefined>;
++    waitForEntryPublication(conversationId: ConversationId): Promise<void>;
++    latestEntryId(id: ConversationId): Promise<EntryId | undefined>;
+     scanTasks(query: TaskQuery, limit: number, cursor?: Cursor): Promise<import("../types.ts").Page<TaskRecord<JsonValue, JsonValue, JsonValue>, Readonly<Record<string, JsonValue>>>>;
+     /** Internal: committed submission record. */
+     submission(id: SubmissionId): Promise<SubmissionRecord | undefined>;
+diff --git a/dist/session/transaction.js b/dist/session/transaction.js
+index 7fbe75b11bb2a9ab28f4f23800143231172d71b7..8a692c6c23919b076c19086f1fbed259d2e69cb4 100644
+--- a/dist/session/transaction.js
++++ b/dist/session/transaction.js
+@@ -102,8 +102,11 @@ export class Transaction {
+     latestHeadMarker(conversationId) {
+         return this.#read("latestHeadMarker", () => this.#host.latestHeadMarker(conversationId, this.#context));
+     }
+-    latestEntryId(conversationId) {
+-        return this.#read("latestEntryId", () => this.#host.latestEntryId(conversationId, this.#context));
++    waitForEntryPublication(conversationId) {
++        return this.#read("waitForEntryPublication", () => this.#host.waitForEntryPublication(conversationId));
++    }
++    latestEntryId(id) {
++        return this.#read("latestEntryId", () => this.#host.latestEntryId(id, this.#context));
+     }
+     scanTasks(query, limit, cursor) {
+         return this.#read("scanTasks", () => this.#host.storage.scanTasks(query, limit, cursor, this.#context));
+diff --git a/dist/storage/sqlite/storage.d.ts b/dist/storage/sqlite/storage.d.ts
+index bdf2b1f550f601fc12f33cf9ab3835772f89e7a7..548c967fec005f2f72c0e416eba540405518c327 100644
+--- a/dist/storage/sqlite/storage.d.ts
++++ b/dist/storage/sqlite/storage.d.ts
+@@ -1,7 +1,14 @@
+ import type { Context, JsonValue } from "@earendil-works/chord";
+-import type { SqliteDatabase } from "@earendil-works/chord/sqlite";
++import type { SqliteDatabase, SqliteExecutor } from "@earendil-works/chord/sqlite";
+ import type { CommitResult, ConversationId, ConversationQuery, ConversationRecord, Cursor, DocumentAddress, DocumentId, DocumentPoint, DocumentQuery, DocumentRecord, EntryId, EntryQuery, EntryRecord, Id, Page, Seq, Storage, StorageWrite, StoredDocument, SubmissionId, SubmissionQuery, SubmissionRecord, TaskId, TaskQuery, TaskRecord } from "../../types.ts";
+ type StoredTask = TaskRecord<JsonValue, JsonValue, JsonValue>;
++interface DurableSqliteExecutor extends SqliteExecutor {
++    /** Optional transport for rows containing transcript or revision payloads. */
++    allPayloadRows?: SqliteExecutor["all"];
++}
++interface DurableSqliteDatabase extends SqliteDatabase, DurableSqliteExecutor {
++    transaction<T>(callback: (transaction: DurableSqliteExecutor) => Promise<T>): Promise<T>;
++}
+ export type SqliteStorageOptions = {
+     /**
+      * Prefix for every table and index in the durable schema. It must be a SQLite identifier and must not use
+@@ -20,7 +27,7 @@ export declare class SqliteStorage implements Storage {
+     private readsDrained;
+     private constructor();
+     /** Initialize storage over an owned SQLite database facade. */
+-    static open(db: SqliteDatabase, options?: SqliteStorageOptions): Promise<SqliteStorage>;
++    static open(db: DurableSqliteDatabase, options?: SqliteStorageOptions): Promise<SqliteStorage>;
+     /**
+      * Commit `batches` in one SQL transaction, each with its own seq. Each batch is checked before it writes anything,
+      * against the state the earlier ones left, and the first one refused ends the batch: the transaction commits the ones
+diff --git a/dist/storage/sqlite/storage.js b/dist/storage/sqlite/storage.js
+index 890f1428f8855e05f18007ab3ca70218a7a32ef8..380fee7d88765365baf4b13bc8710dfb4c19e2f2 100644
+--- a/dist/storage/sqlite/storage.js
++++ b/dist/storage/sqlite/storage.js
+@@ -89,9 +89,14 @@ function watchCalls(executor, calls) {
+         run: (sql, ...params) => watched(() => executor.run(sql, ...params)),
+         runCounted: (sql, ...params) => watched(() => executor.runCounted(sql, ...params)),
+         get: (sql, ...params) => watched(() => executor.get(sql, ...params)),
+-        all: (sql, ...params) => watched(() => executor.all(sql, ...params)),
++        all: (...args) => watched(() => executor.all(...args)),
++        allPayloadRows: (sql, ...params) => watched(() => readPayloadRows(executor, sql, ...params)),
+     };
+ }
++/** Drivers can opt into bounded native reads for transcript bodies and document revisions. */
++function readPayloadRows(executor, sql, ...params) {
++    return (executor.allPayloadRows ?? executor.all).call(executor, sql, ...params);
++}
+ /** Portable SQLite implementation of the Pico storage contract. */
+ export class SqliteStorage {
+     db;
+@@ -302,7 +307,7 @@ export class SqliteStorage {
+                 params.push(upper);
+             }
+             params.push(limit + 1 - values.length);
+-            const rows = await this.db.all(`SELECT record FROM ${this.schema.tables.entries} WHERE ${clauses.join(" AND ")} ORDER BY id DESC LIMIT ?`, ...params);
++            const rows = await readPayloadRows(this.db, `SELECT record FROM ${this.schema.tables.entries} WHERE ${clauses.join(" AND ")} ORDER BY id DESC LIMIT ?`, ...params);
+             values.push(...rows.map((row) => parseJson(row.record)));
+             if (values.length > limit || conversation.parent === undefined)
+                 break;
+@@ -345,7 +350,7 @@ export class SqliteStorage {
+                 params.push(segment.upper);
+             }
+             params.push(limit + 1 - values.length);
+-            const rows = await this.db.all(`SELECT record FROM ${this.schema.tables.entries} WHERE ${clauses.join(" AND ")} ORDER BY id ASC LIMIT ?`, ...params);
++            const rows = await readPayloadRows(this.db, `SELECT record FROM ${this.schema.tables.entries} WHERE ${clauses.join(" AND ")} ORDER BY id ASC LIMIT ?`, ...params);
+             values.push(...rows.map((row) => parseJson(row.record)));
+             if (values.length > limit)
+                 break;
+@@ -507,4 +512,4 @@ export class SqliteStorage {
+         if (base === undefined)
+             throw new Error(`Document ${id} is missing a required base`);
+         let value = parseJson(base.content);
+-        const tail = await executor.all(`SELECT seq, kind, version, content FROM ${this.schema.tables.documentRevisions}
++        const tail = await readPayloadRows(executor, `SELECT seq, kind, version, content FROM ${this.schema.tables.documentRevisions}
+diff --git a/dist/types.d.ts b/dist/types.d.ts
+index b43143c5e7998b36034ffe9577f74f3d88ab932b..b7cded0c7be7782a4312dd4031caa272b625a3ce 100644
+--- a/dist/types.d.ts
++++ b/dist/types.d.ts
+@@ -902,7 +902,9 @@ export interface Tx {
+     latestHeadMarker(conversationId: ConversationId): Promise<(EntryRecord & {
+         readonly head: EntryId;
+     }) | undefined>;
+-    /** ID of the newest entry visible from the conversation; `undefined` when it has none. */
++    /** Wait for this conversation's creation and appends to publish without reading entries. */
++    waitForEntryPublication(conversationId: ConversationId): Promise<void>;
++    /** ID of the newest published entry visible from the conversation; `undefined` when it has none. */
+     latestEntryId(conversationId: ConversationId): Promise<EntryId | undefined>;
+     scanTasks(query: TaskQuery, limit: number, cursor?: Cursor): Promise<Page<TaskRecord<JsonValue, JsonValue, JsonValue>, Cursor>>;
+     /** Committed submission with a conversation-scoped request ID. */

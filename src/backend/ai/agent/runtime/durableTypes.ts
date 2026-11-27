@@ -34,6 +34,7 @@ export interface RuntimeSqlExecutor {
   runCounted(sql: string, ...params: RuntimeSqlValue[]): Promise<number>;
   get<Row extends object>(sql: string, ...params: RuntimeSqlValue[]): Promise<Row | undefined>;
   all<Row extends object>(sql: string, ...params: RuntimeSqlValue[]): Promise<Row[]>;
+  allPayloadRows?<Row extends object>(sql: string, ...params: RuntimeSqlValue[]): Promise<Row[]>;
 }
 export interface RuntimeSqlDatabase extends RuntimeSqlExecutor {
   transaction<Value>(callback: (transaction: RuntimeSqlExecutor) => Promise<Value>): Promise<Value>;

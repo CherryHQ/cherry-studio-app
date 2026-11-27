@@ -958,11 +958,11 @@ describe('PiDurableRuntime identity and handoff', () => {
       jest.spyOn(harness, 'commit').mockImplementationOnce((read, context, commitOptions) =>
         commit(
           async (tx) => {
-            const latestEntryId = tx.latestEntryId.bind(tx);
-            jest.spyOn(tx, 'latestEntryId').mockImplementationOnce((id) => {
-              const gatedRead = latestEntryId(id);
+            const waitForEntryPublication = tx.waitForEntryPublication.bind(tx);
+            jest.spyOn(tx, 'waitForEntryPublication').mockImplementationOnce((id) => {
+              const publicationWait = waitForEntryPublication(id);
               publish();
-              return gatedRead;
+              return publicationWait;
             });
             try {
               return await read(tx);
@@ -1052,7 +1052,7 @@ describe('PiDurableRuntime identity and handoff', () => {
       ]);
       expect(await runtime.placedInputs('grandchild', { limit: 3 })).toEqual([newer, inherited]);
       expect(await runtime.latestInput('grandchild', hidden.record.entry!)).toEqual(inherited);
-      expect(scanEntries.mock.calls.every(([, limit]) => limit === 1)).toBe(true);
+      expect(scanEntries).not.toHaveBeenCalled();
       expect(readEntry).not.toHaveBeenCalledWith(
         grandchild.id,
         hidden.record.entry,

@@ -1,5 +1,6 @@
 import { File } from 'expo-file-system';
 import { openDatabaseAsync, type SQLiteBindValue, type SQLiteDatabase } from 'expo-sqlite';
+import { Platform } from 'react-native';
 
 import { databaseDirectory } from '@/backend/data/storage/storagePaths';
 
@@ -33,6 +34,7 @@ export interface AgentSqlExecutor {
   runCounted(sql: string, ...params: AgentSqlValue[]): Promise<number>;
   get<T extends object>(sql: string, ...params: AgentSqlValue[]): Promise<T | undefined>;
   all<T extends object>(sql: string, ...params: AgentSqlValue[]): Promise<T[]>;
+  allPayloadRows<T extends object>(sql: string, ...params: AgentSqlValue[]): Promise<T[]>;
 }
 
 /** Owns one connection. Unrelated reads and writes wait for an active transaction. */
@@ -91,7 +93,11 @@ export class AgentSqlDatabase implements AgentSqlExecutor {
   }
 
   all<T extends object>(sql: string, ...params: AgentSqlValue[]): Promise<T[]> {
-    return this.enqueue(() => this.readAll<T>(sql, params));
+    return this.enqueue(() => this.sqlite.getAllAsync<T>(sql, bindings(params)));
+  }
+
+  allPayloadRows<T extends object>(sql: string, ...params: AgentSqlValue[]): Promise<T[]> {
+    return this.enqueue(() => this.readPayloadRows<T>(sql, params));
   }
 
   transaction<T>(callback: (transaction: AgentSqlExecutor) => Promise<T>): Promise<T> {
@@ -120,7 +126,11 @@ export class AgentSqlDatabase implements AgentSqlExecutor {
         },
         all: async <Row extends object>(sql: string, ...params: AgentSqlValue[]) => {
           assertActive();
-          return this.readAll<Row>(sql, params);
+          return this.sqlite.getAllAsync<Row>(sql, bindings(params));
+        },
+        allPayloadRows: async <Row extends object>(sql: string, ...params: AgentSqlValue[]) => {
+          assertActive();
+          return this.readPayloadRows<Row>(sql, params);
         },
       };
       try {
@@ -152,8 +162,12 @@ export class AgentSqlDatabase implements AgentSqlExecutor {
     return this.closing;
   }
 
-  private async readAll<T extends object>(sql: string, params: AgentSqlValue[]): Promise<T[]> {
+  private async readPayloadRows<T extends object>(
+    sql: string,
+    params: AgentSqlValue[],
+  ): Promise<T[]> {
     const boundParams = bindings(params);
+    if (Platform.OS !== 'android') return this.sqlite.getAllAsync<T>(sql, boundParams);
     const rows: T[] = [];
     for await (const row of this.sqlite.getEachAsync<T>(sql, boundParams)) rows.push(row);
     return rows;

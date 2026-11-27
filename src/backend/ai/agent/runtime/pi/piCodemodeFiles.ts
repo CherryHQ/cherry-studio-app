@@ -11,7 +11,7 @@ export const PiCodemodeFiles = defineDoc<{
   kind: 'cherry.codemode-files',
   version: 1,
   scope: 'task',
-  checkpointWhen: () => true,
+  checkpointWhen: (_value, _ops, { deltasSinceBase }) => deltasSinceBase >= 32,
   initial: () => ({ outputs: {}, artifacts: [] }),
 });
 
