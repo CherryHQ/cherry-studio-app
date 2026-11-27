@@ -197,6 +197,13 @@ export class DurableAgentHost implements AgentProtocol {
   private suspended = false;
   /** A failing stored turn can only trigger one automatic reopen until new input is admitted. */
   private storageRecovery: 'idle' | 'scheduled' | 'attempted' = 'idle';
+  private autoReopen:
+    | {
+        kind: 'storage' | 'lease' | 'storage-failed';
+        cancelled: boolean;
+        promise: Promise<void>;
+      }
+    | undefined;
   private workWatch: { unsubscribe(): Promise<void> } | undefined;
   private executionLease: KeepAliveLease | undefined;
   /** One stable lease per user-started Session, independent of reply presentation. */
@@ -461,7 +468,7 @@ export class DurableAgentHost implements AgentProtocol {
           );
           await this.conversations.close();
         } else {
-          await this.suspend(error instanceof Error ? error : new Error(String(error)));
+          await this.suspendInternal(error instanceof Error ? error : new Error(String(error)));
         }
       }
       throw error;
@@ -476,6 +483,7 @@ export class DurableAgentHost implements AgentProtocol {
   private async closeGeneration() {
     this.accepting = false;
     this.controller.abort(new Error('The Agent Host generation is closing.'));
+    if (this.autoReopen) this.autoReopen.cancelled = true;
     this.reconcileScreenAwake();
     for (const admission of this.admissions.values())
       admission.controller.abort(this.controller.signal.reason);
@@ -523,30 +531,111 @@ export class DurableAgentHost implements AgentProtocol {
     if (lease) this.sessionExecutions.set(sessionId, { lease, completed: false });
   }
 
+  private publishRuntimeEvent(event: AgentEvent) {
+    for (const sessionId of this.listeners.keys()) this.publish(sessionId, event);
+  }
+
+  private publishStorageFailureEvent(
+    isForegroundStorageFailure: boolean,
+    attemptedRecovery: boolean,
+  ) {
+    if (this.controller.signal.aborted) return;
+    const recoveryExhausted =
+      attemptedRecovery || (isForegroundStorageFailure && this.storageRecovery === 'attempted');
+    this.publishRuntimeEvent(
+      recoveryExhausted ? { type: 'runtime.failed', retryable: false } : { type: 'runtime.failed' },
+    );
+  }
+
+  private async finishScheduledStorageRecovery(
+    operation?: NonNullable<DurableAgentHost['autoReopen']>,
+  ) {
+    let attemptedRecovery = false;
+    try {
+      if (
+        this.storageRecovery === 'scheduled' &&
+        !this.controller.signal.aborted &&
+        this.ports.shouldRecoverStorage?.() &&
+        !storageMutationGate.isFrozen
+      ) {
+        this.storageRecovery = 'attempted';
+        attemptedRecovery = true;
+        await this.reopenSuspended(false);
+        if (operation && this.autoReopen === operation) this.autoReopen = undefined;
+        if (this.accepting) {
+          this.publishRuntimeEvent({ type: 'runtime.recovered' });
+          return;
+        }
+      }
+    } catch (cause) {
+      logger.error('Agent operation failed', { error: cause, operation: 'ai.storage_recovery' });
+    }
+    if (operation && this.autoReopen === operation) this.autoReopen = undefined;
+    if (this.storageRecovery === 'scheduled') this.storageRecovery = 'idle';
+    const isForegroundStorageFailure =
+      Boolean(this.ports.shouldRecoverStorage?.()) && !storageMutationGate.isFrozen;
+    this.publishStorageFailureEvent(isForegroundStorageFailure, attemptedRecovery);
+  }
+
   private async handleExecutionLeaseInterrupted(reason: Error): Promise<void> {
-    await this.suspend(reason);
-    if (
+    if (this.autoReopen) {
+      const active = this.autoReopen;
+      await this.suspendInternal(reason);
+      await active.promise;
+      return;
+    }
+    const blockedByTerminalStorage =
+      this.suspended && !this.accepting && this.storageRecovery === 'attempted';
+    const canAutoReopen =
       !this.controller.signal.aborted &&
-      this.ports.isForeground?.() &&
-      !storageMutationGate.isFrozen
-    ) {
+      !blockedByTerminalStorage &&
+      Boolean(this.ports.isForeground?.()) &&
+      !storageMutationGate.isFrozen;
+    if (!canAutoReopen) {
+      await this.suspendInternal(reason);
+      return;
+    }
+    const operation: NonNullable<typeof this.autoReopen> = {
+      kind: 'lease',
+      cancelled: false,
+      promise: Promise.resolve(),
+    };
+    this.autoReopen = operation;
+    operation.promise = (async () => {
+      await this.suspendInternal(reason);
+      if (operation.cancelled || this.controller.signal.aborted || storageMutationGate.isFrozen) {
+        if (this.autoReopen === operation) this.autoReopen = undefined;
+        if (operation.kind === 'storage') {
+          if (this.storageRecovery === 'scheduled') this.storageRecovery = 'idle';
+          if (!this.controller.signal.aborted) {
+            this.publishStorageFailureEvent(Boolean(this.ports.shouldRecoverStorage?.()), false);
+          }
+        }
+        return;
+      }
+      if (operation.kind === 'storage') {
+        await this.finishScheduledStorageRecovery(operation);
+        return;
+      }
+      if (!this.ports.isForeground?.()) return;
       try {
         await this.resumeSuspended();
-        if (this.accepting) {
-          for (const sessionId of this.listeners.keys())
-            this.publish(sessionId, { type: 'runtime.recovered' });
-        }
+        if (this.autoReopen === operation) this.autoReopen = undefined;
+        if (!operation.cancelled && this.accepting)
+          this.publishRuntimeEvent({ type: 'runtime.recovered' });
       } catch (error) {
+        if (this.autoReopen === operation) this.autoReopen = undefined;
         logger.error(
           'Failed to resume durable Agent work after foreground lease expiry',
           error as Error,
         );
-        if (!this.controller.signal.aborted) {
-          for (const sessionId of this.listeners.keys())
-            this.publish(sessionId, { type: 'runtime.failed' });
-        }
+        if (!operation.cancelled && !this.controller.signal.aborted)
+          this.publishRuntimeEvent({ type: 'runtime.failed' });
       }
-    }
+    })().finally(() => {
+      if (this.autoReopen === operation) this.autoReopen = undefined;
+    });
+    await operation.promise;
   }
 
   private updateSessionExecution(sessionId: string): void {
@@ -595,6 +684,11 @@ export class DurableAgentHost implements AgentProtocol {
   /** OS expiration closes invocations without abort marks; foreground reopens persisted tasks. */
   suspend(reason = new Error('Background execution expired.')): Promise<void> {
     if (this.storageRecovery === 'scheduled') this.storageRecovery = 'idle';
+    if (this.autoReopen) this.autoReopen.cancelled = true;
+    return this.suspendInternal(reason);
+  }
+
+  private suspendInternal(reason: Error): Promise<void> {
     if (this.controller.signal.aborted) return this.closing ?? Promise.resolve();
     return (this.suspension ??= this.traceOperation('ai.suspend', {}, async () => {
       this.accepting = false;
@@ -627,49 +721,79 @@ export class DurableAgentHost implements AgentProtocol {
       error.code === 'runtime_storage_failed' &&
       Boolean(this.ports.shouldRecoverStorage?.()) &&
       !storageMutationGate.isFrozen;
+    const failure = new Error(error.message);
+    if (this.autoReopen) {
+      if (this.autoReopen.kind === 'lease' && !this.autoReopen.cancelled) {
+        logger.error('Durable Agent storage failed', failure);
+        if (isForegroundStorageFailure && !this.resuming && this.storageRecovery === 'idle') {
+          this.autoReopen.kind = 'storage';
+          this.storageRecovery = 'scheduled';
+          await this.autoReopen.promise;
+          return;
+        }
+        this.autoReopen.kind = 'storage-failed';
+        this.autoReopen.cancelled = true;
+        const suspension = this.suspendInternal(failure).catch((cause: unknown) =>
+          logger.warn('Failed to suspend the Agent after storage failure', cause as Error),
+        );
+        this.publishStorageFailureEvent(isForegroundStorageFailure, false);
+        await suspension;
+        return;
+      }
+      if (this.autoReopen.kind === 'storage' || this.autoReopen.kind === 'storage-failed') {
+        await this.autoReopen.promise;
+        return;
+      }
+    }
     const canRecover =
       isForegroundStorageFailure &&
       this.accepting &&
       !this.resuming &&
       this.storageRecovery === 'idle';
-    const failure = new Error(error.message);
     logger.error('Durable Agent storage failed', failure);
-    const suspension = this.suspend(failure).catch((cause: unknown) =>
+    const suspension = this.suspendInternal(failure).catch((cause: unknown) =>
       logger.warn('Failed to suspend the Agent after storage failure', cause as Error),
     );
-    let attemptedRecovery = false;
     if (canRecover) {
       this.storageRecovery = 'scheduled';
-      await suspension;
-      try {
-        if (
-          this.storageRecovery === 'scheduled' &&
-          !this.controller.signal.aborted &&
-          this.ports.shouldRecoverStorage?.() &&
-          !storageMutationGate.isFrozen
-        ) {
-          this.storageRecovery = 'attempted';
-          attemptedRecovery = true;
-          await this.reopenSuspended(false);
-          if (this.accepting) {
-            for (const sessionId of this.listeners.keys())
-              this.publish(sessionId, { type: 'runtime.recovered' });
-            return;
+      const operation: NonNullable<typeof this.autoReopen> = {
+        kind: 'storage',
+        cancelled: false,
+        promise: Promise.resolve(),
+      };
+      this.autoReopen = operation;
+      operation.promise = (async () => {
+        await suspension;
+        if (operation.cancelled) {
+          if (this.autoReopen === operation) this.autoReopen = undefined;
+          if (this.storageRecovery === 'scheduled') this.storageRecovery = 'idle';
+          if (!this.controller.signal.aborted) {
+            this.publishStorageFailureEvent(
+              Boolean(this.ports.shouldRecoverStorage?.()) && !storageMutationGate.isFrozen,
+              false,
+            );
           }
+          return;
         }
-      } catch (cause) {
-        logger.error('Agent operation failed', { error: cause, operation: 'ai.storage_recovery' });
-      }
-      if (this.storageRecovery === 'scheduled') this.storageRecovery = 'idle';
+        await this.finishScheduledStorageRecovery(operation);
+      })().finally(() => {
+        if (this.autoReopen === operation) this.autoReopen = undefined;
+      });
+      await operation.promise;
+      return;
     }
-    if (!this.controller.signal.aborted) {
-      const recoveryExhausted =
-        attemptedRecovery || (isForegroundStorageFailure && this.storageRecovery === 'attempted');
-      const event: AgentEvent = recoveryExhausted
-        ? { type: 'runtime.failed', retryable: false }
-        : { type: 'runtime.failed' };
-      for (const sessionId of this.listeners.keys()) this.publish(sessionId, event);
-    }
+    const operation: NonNullable<typeof this.autoReopen> = {
+      kind: 'storage-failed',
+      cancelled: false,
+      promise: suspension
+        .then(() => undefined)
+        .finally(() => {
+          if (this.autoReopen === operation) this.autoReopen = undefined;
+        }),
+    };
+    this.autoReopen = operation;
+    this.publishStorageFailureEvent(isForegroundStorageFailure, false);
+    await operation.promise;
   }
 
   async resumeSuspended() {

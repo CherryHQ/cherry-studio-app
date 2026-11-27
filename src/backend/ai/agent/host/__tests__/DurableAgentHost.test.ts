@@ -4934,6 +4934,148 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test.each(['storage-first', 'lease-first'] as const)(
+    'serializes overlapping storage recovery and foreground lease expiry (%s)',
+    async (order) => {
+      const protection = executionProtection();
+      const state = fixture({
+        executionLease: protection.acquire,
+        isForeground: () => true,
+        shouldRecoverStorage: () => true,
+      });
+      await state.reserve('completed');
+      await state.host.initialize();
+      const runtimeEvents: AgentEvent[] = [];
+      const observation = await state.host.observeSession(state.sessionId, (event) => {
+        if (event.type === 'runtime.recovered' || event.type === 'runtime.failed') {
+          runtimeEvents.push(event);
+        }
+      });
+      let releaseClose!: () => void;
+      jest.spyOn(state.conversations, 'close').mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            releaseClose = resolve;
+          }),
+      );
+      const failure = {
+        code: 'runtime_storage_failed',
+        message: 'Storage unavailable',
+        retryable: true,
+      };
+      try {
+        await askTwoModels(state);
+        await settle();
+
+        let leasePromise!: Promise<void>;
+        if (order === 'storage-first') {
+          state.execution()!.onFailure!(failure);
+          await settle();
+          leasePromise = protection.acquire.mock.calls[0]![0](
+            new KeepAliveInterruptionError('continued-processing-expired'),
+          ) as Promise<void>;
+        } else {
+          leasePromise = protection.acquire.mock.calls[0]![0](
+            new KeepAliveInterruptionError('continued-processing-expired'),
+          ) as Promise<void>;
+          await settle();
+          state.execution()!.onFailure!(failure);
+        }
+
+        await settle();
+        releaseClose();
+        await leasePromise;
+        await settle();
+
+        expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+        expect(runtimeEvents).toEqual([{ type: 'runtime.recovered' }]);
+
+        state.execution()!.onFailure!(failure);
+        expect(runtimeEvents).toEqual([
+          { type: 'runtime.recovered' },
+          { type: 'runtime.failed', retryable: false },
+        ]);
+        expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+      } finally {
+        observation.unsubscribe();
+        await state.host.close();
+      }
+    },
+  );
+
+  test.each(['storage-first', 'lease-first'] as const)(
+    'does not reopen behind a terminal storage failure when foreground lease expiry overlaps (%s)',
+    async (order) => {
+      const protection = executionProtection();
+      const state = fixture({
+        executionLease: protection.acquire,
+        isForeground: () => true,
+        shouldRecoverStorage: () => true,
+      });
+      await state.reserve('completed');
+      await state.host.initialize();
+      const runtimeEvents: AgentEvent[] = [];
+      const observation = await state.host.observeSession(state.sessionId, (event) => {
+        if (event.type === 'runtime.recovered' || event.type === 'runtime.failed') {
+          runtimeEvents.push(event);
+        }
+      });
+      const failure = {
+        code: 'runtime_storage_failed',
+        message: 'Storage unavailable',
+        retryable: true,
+      };
+      try {
+        await askTwoModels(state);
+        await settle();
+
+        // Exhaust the single automatic storage recovery first while work is in flight.
+        state.execution()!.onFailure!(failure);
+        await settle();
+        expect(runtimeEvents).toEqual([{ type: 'runtime.recovered' }]);
+        expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+
+        runtimeEvents.length = 0;
+
+        let releaseClose!: () => void;
+        jest.spyOn(state.conversations, 'close').mockImplementationOnce(
+          () =>
+            new Promise<void>((resolve) => {
+              releaseClose = resolve;
+            }),
+        );
+
+        let leasePromise!: Promise<void>;
+        const onInterrupt = protection.acquire.mock.calls.at(-1)![0];
+        if (order === 'storage-first') {
+          state.execution()!.onFailure!(failure);
+          await settle();
+          leasePromise = onInterrupt(
+            new KeepAliveInterruptionError('continued-processing-expired'),
+          ) as Promise<void>;
+        } else {
+          leasePromise = onInterrupt(
+            new KeepAliveInterruptionError('continued-processing-expired'),
+          ) as Promise<void>;
+          await settle();
+          state.execution()!.onFailure!(failure);
+        }
+
+        await settle();
+        releaseClose();
+        await leasePromise;
+        await settle();
+
+        expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+        expect(state.host.isReady).toBe(false);
+        expect(runtimeEvents).toEqual([{ type: 'runtime.failed', retryable: false }]);
+      } finally {
+        observation.unsubscribe();
+        await state.host.close();
+      }
+    },
+  );
+
   test('the background reply passes to a running answer and ends with the last one', async () => {
     const state = fixture();
     await state.reserve('completed');
