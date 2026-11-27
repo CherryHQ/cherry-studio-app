@@ -373,6 +373,30 @@ test('unlabeled conversions do not receive a fabricated producer', async () => {
   expect(await new File(uri).text()).toBe('<main>Converted</main>');
 });
 
+test('verifies staged metadata once without re-reading the published file', async () => {
+  const file = new File(uri);
+  file.writeSync('Body\n');
+  const openSpy = jest.spyOn(File.prototype, 'open');
+  try {
+    const metadata = await completeFileAiContent({
+      uri,
+      mediaType: 'text/markdown',
+      aiOperation: 'generate',
+      aiContentLabel: null,
+    });
+    expect(metadata).not.toBeNull();
+    const openedUris = openSpy.mock.instances.map(
+      (instance) => (instance as unknown as { uri: string }).uri,
+    );
+    expect(openedUris).toHaveLength(1);
+    expect(openedUris[0]).toMatch(/\.metadata$/);
+    expect(openedUris).not.toContain(uri);
+    expect(await readFileAiContent({ uri, mediaType: 'text/markdown' })).toEqual(metadata);
+  } finally {
+    openSpy.mockRestore();
+  }
+});
+
 test('unknown ordinary text is unchanged and a cancelled write never replaces pending content', async () => {
   new File(uri).writeSync('Ordinary user text\n');
   await expect(completeFileAiContent({ uri, mediaType: 'text/markdown' })).resolves.toBeNull();

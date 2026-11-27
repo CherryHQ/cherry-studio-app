@@ -1,5 +1,11 @@
 # iOS symbol recovery records
 
+For a historical EAS cloud build, run `bash scripts/verifyEasIosSymbols.sh <build-id>`
+from the release checkout with authenticated EAS access. The command downloads the original
+recovery archive when EAS still retains it and invokes the same verifier as the local archive flow.
+With the release's Sentry credentials configured, append `--retry-upload` to retry the symbol upload
+for that build.
+
 ## Build 59
 
 As of 2026-11-17, the matching original main dSYM for iOS 0.6.0 build 59 is unavailable in the documented searches; no repair upload was performed. The issue reports EAS build `0d597a16-b6ff-4429-8e74-aca9960f9e8b`, source `1e1bc7acbe0e23dbde016b0e97976f24651c487f`, [Actions run 44035114046](https://github.com/CherryHQ/cherry-studio-app/actions/runs/44035114046), and main executable UUID `c82992fb-86a8-3d5e-847c-bb9132aa9dd3` (issue-reported). The widget and share UUIDs are `unknown`; their reported full-debug status is unverified. The reported identities and Sentry state were not independently re-extracted or queried in the documented searches.

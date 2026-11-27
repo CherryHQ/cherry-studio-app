@@ -3,9 +3,8 @@ import { appendFileSync, existsSync, openAsBlob, readFileSync, statSync } from '
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
-import { fileEvidence, parseReleaseTag, sanitizeSecrets } from './releaseLocalBuild';
+import { SHA_RE, fileEvidence, parseReleaseTag, sanitizeSecrets } from './release/shared';
 
-const SHA_RE = /^[a-f0-9]{40}$/i;
 const DEFAULT_API_URL = 'https://api.gitcode.com/api/v5';
 const DEFAULT_OWNER = 'CherryHQ';
 const DEFAULT_REPO = 'cherry-studio-app';

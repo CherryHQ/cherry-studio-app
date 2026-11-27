@@ -16,10 +16,10 @@ import {
   agentSessionMessageTable,
   agentSessionTable,
   agentTable,
+  createOrderedUuid,
   monotonicUpdateTimestamp,
   userModelTable,
 } from '@/backend/data/db/schemas';
-import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import { agentRowPolicy } from '@/backend/data/services/managedResources';
 import {
   messagePathIdsSql,

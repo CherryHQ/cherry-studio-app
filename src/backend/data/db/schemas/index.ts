@@ -26,7 +26,7 @@ export * from './agentSession';
 export * from './agentSessionMessage';
 export * from './aiUsageRecord';
 export * from './desktopConnection';
-export { monotonicUpdateTimestamp } from './_columnHelpers';
+export { createOrderedUuid, monotonicUpdateTimestamp } from './_columnHelpers';
 export * from './job';
 export * from './mcpServer';
 export * from './painting';
