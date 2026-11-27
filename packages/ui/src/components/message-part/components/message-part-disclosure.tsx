@@ -128,6 +128,8 @@ export function MessagePartToolGroup({
   const isOpen = expanded ?? localOpen;
   const colorClassName = toneClassName[statusTone];
   const statusAccessibilityText = typeof statusText === 'string' ? statusText : undefined;
+  const hasStatusText =
+    statusText !== undefined && statusText !== null && statusText !== false && statusText !== '';
   const toggle = () => {
     onDisclosureToggle?.();
     if (expanded === undefined) setLocalOpen(!isOpen);
@@ -157,8 +159,11 @@ export function MessagePartToolGroup({
         </View>
         <DisclosureChevron expanded={isOpen} className="size-3 shrink-0 text-foreground-tertiary" />
         <View className="flex-1" />
-        {statusText ? (
-          <Text className={`max-w-[50%] shrink-0 text-xs tabular-nums ${colorClassName}`}>
+        {hasStatusText ? (
+          <Text
+            className={`max-w-[50%] shrink-0 text-xs tabular-nums ${colorClassName}`}
+            numberOfLines={1}
+          >
             {statusText}
           </Text>
         ) : null}

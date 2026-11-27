@@ -290,5 +290,59 @@ describe('useToolElapsed', () => {
     });
     expect(readStatusText()).toBe('chat.toolGroup.approvalCount:1');
     expect(jest.getTimerCount()).toBe(0);
+
+    act(() => {
+      renderer!.update(
+        <ToolGroupPart
+          expanded={false}
+          isStreaming={false}
+          isThinking={false}
+          onExpandedChange={jest.fn()}
+          startedAt={10_000}
+          tools={[runningTool]}
+        >
+          <View testID="step-child" />
+        </ToolGroupPart>,
+      );
+    });
+    expect(renderer!.root.findAllByProps({ testID: 'tool-group-status' })).toHaveLength(0);
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('clamps future startedAt timestamps, handles non-active mount, and updates on startedAt change', () => {
+    let appStateListener: ((state: AppStateStatus) => void) | undefined;
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
+      appStateListener = listener;
+      return { remove: jest.fn() };
+    });
+
+    AppState.currentState = 'background';
+    act(() => {
+      renderer = create(<ElapsedProbe startedAt={11_400} isRunning />);
+    });
+    const readText = () => renderer!.root.findByProps({ testID: 'elapsed-label' }).props.children;
+    expect(readText()).toBe('Elapsed 0s');
+    expect(jest.getTimerCount()).toBe(0);
+
+    act(() => {
+      AppState.currentState = 'active';
+      appStateListener?.('active');
+    });
+    expect(readText()).toBe('Elapsed 0s');
+
+    act(() => {
+      jest.advanceTimersByTime(1_400);
+    });
+    expect(readText()).toBe('Elapsed 0s');
+
+    act(() => {
+      jest.advanceTimersByTime(1_000);
+    });
+    expect(readText()).toBe('Elapsed 1s');
+
+    act(() => {
+      renderer!.update(<ElapsedProbe startedAt={9_000} isRunning />);
+    });
+    expect(readText()).toBe('Elapsed 3s');
   });
 });

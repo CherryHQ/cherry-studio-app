@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppState } from 'react-native';
 
@@ -24,7 +24,7 @@ export function useToolElapsed(startedAt: number | undefined, isRunning: boolean
   const visible = useMessageListLiveTailVisible(isRunning);
   const [now, setNow] = useState(Date.now);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isRunning || !visible || startedAt === undefined || !Number.isFinite(startedAt)) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -32,9 +32,9 @@ export function useToolElapsed(startedAt: number | undefined, isRunning: boolean
       clearTimeout(timer);
       timer = undefined;
     };
-    const syncAndSchedule = () => {
+    const syncAndSchedule = (appState: typeof AppState.currentState = AppState.currentState) => {
       clearTimer();
-      if (cancelled || AppState.currentState !== 'active') return;
+      if (cancelled || appState !== 'active') return;
       const currentNow = Date.now();
       setNow((prev) =>
         computeElapsedSeconds(startedAt, prev) === computeElapsedSeconds(startedAt, currentNow)
@@ -43,7 +43,7 @@ export function useToolElapsed(startedAt: number | undefined, isRunning: boolean
       );
       timer = setTimeout(syncAndSchedule, computeNextTickDelayMs(startedAt, currentNow));
     };
-    syncAndSchedule();
+    syncAndSchedule(AppState.currentState);
     const listener = AppState.addEventListener('change', syncAndSchedule);
     return () => {
       cancelled = true;
