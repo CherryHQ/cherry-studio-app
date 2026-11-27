@@ -10,7 +10,6 @@ import {
   hook,
   section,
   type AgentChange,
-  type Cursor,
   type EntryId,
   CompactionEntry,
   ResetEntry,
@@ -227,7 +226,6 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
           steeringMode: 'all',
           followUpMode: 'one-at-a-time',
           afterFailedRun: 'continue',
-          progress: { persistWithinMs: 0 },
           compaction: { modelOverrides: this.models.compactionOverrides },
         }),
         identity: cherryClientIdentity(),
@@ -598,41 +596,37 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 128)
       throw new Error('A history page must contain between 1 and 128 turns.');
     const runtime = this.requireRuntime();
-    let maxEntryId = query.cursor !== undefined ? parseBoundary(query.cursor) : undefined;
-    const turns: RuntimeDurableTurn[] = [];
-    let nextCursor: string | undefined;
-    let cursor: Cursor | undefined;
+    const maxEntryId = query.cursor !== undefined ? parseBoundary(query.cursor) : undefined;
     try {
-      do {
-        const page = await runtime.history(
-          laneKey(lane),
-          256,
-          cursor,
-          BACKGROUND_CONTEXT,
-          maxEntryId !== undefined ? { maxEntryId } : {},
-        );
-        const visible = new Set(page.entries.map((entry) => entry.id));
-        for (const { record, metadata } of [...page.submissions].sort(
-          (a, b) => (b.record.entry ?? 0) - (a.record.entry ?? 0),
-        )) {
-          if (record.type !== 'input' || record.entry === undefined || !visible.has(record.entry))
-            continue;
-          if (
-            query.requestIds &&
-            (!record.requestId || !query.requestIds.includes(record.requestId))
-          )
-            continue;
-          turns.push(await this.project(lane, record, metadata));
-          if (turns.length === query.limit) {
-            maxEntryId = (Number(record.entry) - 1) as EntryId;
-            nextCursor = `pi:${maxEntryId}`;
-            break;
-          }
-        }
-        if (turns.length === query.limit || !page.next) break;
-        cursor = page.next;
-      } while (cursor !== undefined);
-      return { turns, ...(nextCursor ? { nextCursor } : {}) };
+      const matched = await runtime.placedInputs(laneKey(lane), {
+        limit: query.limit,
+        ...(maxEntryId !== undefined ? { maxEntryId } : {}),
+        ...(query.requestIds ? { requestIds: query.requestIds } : {}),
+      });
+      const turns: RuntimeDurableTurn[] = [];
+      for (const { record, metadata } of matched)
+        turns.push(await this.project(lane, record, metadata));
+      return {
+        turns,
+        ...(turns.length === query.limit
+          ? { nextCursor: `pi:${Number(matched.at(-1)!.record.entry) - 1}` }
+          : {}),
+      };
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
+  }
+
+  async assistantMessageIdForRequest(
+    lane: RuntimeLane,
+    requestId: string,
+  ): Promise<string | undefined> {
+    try {
+      const [match] = await this.requireRuntime().placedInputs(laneKey(lane), {
+        limit: 1,
+        requestIds: [requestId],
+      });
+      return match ? readPiSubmission(match.metadata).assistantMessageId : undefined;
     } catch (error) {
       throw this.wrapCorruptLaneError(error, lane);
     }

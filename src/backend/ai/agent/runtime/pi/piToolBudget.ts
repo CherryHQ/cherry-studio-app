@@ -8,7 +8,7 @@ export const PiToolBudget = defineDoc<{
   kind: 'cherry.tool-budget',
   version: 1,
   scope: 'conversation',
-  checkpointWhen: () => false,
+  checkpointWhen: () => true,
   history: 'latest',
   fork: 'current',
   initial: () => ({ inputId: 0, failedGroups: [] }),

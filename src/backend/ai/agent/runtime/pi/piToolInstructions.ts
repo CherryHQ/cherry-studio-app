@@ -19,7 +19,7 @@ export const ToolInstructions = defineDoc<{ sections: { key: string; text: strin
   kind: 'cherry.tool-instructions',
   version: 1,
   scope: 'conversation',
-  checkpointWhen: () => false,
+  checkpointWhen: () => true,
   history: 'latest',
   fork: 'initial',
   initial: () => ({ sections: [] }),
