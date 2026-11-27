@@ -13,17 +13,12 @@ type StartupOperation =
   | 'startup.database.migrate'
   | 'startup.database.custom_migrate'
   | 'startup.database.seed'
-  | 'startup.cover.wait'
   | 'startup.theme'
   | 'startup.i18n'
   | 'startup.agent'
   | 'startup.skills'
-  | 'startup.cover.layout'
-  | 'startup.cover.presented'
-  | 'startup.cover.minimum_elapsed'
   | 'startup.content.ready'
-  | 'startup.cover.exit'
-  | 'startup.cover.hidden';
+  | 'startup.splash.hidden';
 
 type StartupOutcome = 'started' | 'completed' | 'failed' | 'cancelled';
 type StartupFacts = {
