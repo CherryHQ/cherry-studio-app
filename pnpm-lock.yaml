@@ -709,6 +709,9 @@ importers:
       babel-preset-expo:
         specifier: ~58.0.20
         version: 58.0.23(@babel/core@7.29.7(supports-color@8.1.1))(@babel/runtime@7.29.7)(expo-widgets@58.0.26)(expo@58.0.22)(react-refresh@0.14.2)(supports-color@8.1.1)
+      detect-libc:
+        specifier: 2.1.2
+        version: 2.1.2
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10

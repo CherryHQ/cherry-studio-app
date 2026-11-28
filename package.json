@@ -98,7 +98,7 @@
     "lint:fix": "oxlint --fix && expo lint --fix && eslint --no-inline-config --quiet --config eslint.todo.config.js packages scripts",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
-    "prepare": "prek install"
+    "prepare": "node scripts/installGitHooks.ts"
   },
   "dependencies": {
     "@ai-sdk/amazon-bedrock": "^4.0.96",
@@ -281,6 +281,7 @@
     "@types/ws": "^8.18.1",
     "babel-plugin-inline-import": "^3.0.0",
     "babel-preset-expo": "~58.0.20",
+    "detect-libc": "2.1.2",
     "drizzle-kit": "^0.31.10",
     "eas-cli": "27.11.0",
     "eas-cli-local-build-plugin": "27.11.0",
