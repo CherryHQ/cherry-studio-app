@@ -68,6 +68,42 @@ it('returns to the saved caller after the URL is cleared, exchanging the callbac
   expect(mockRouter.dismissTo.mock.calls).toEqual([['/settings']]);
 });
 
+it('handles a second link on the mounted route if the first callback is rejected', async () => {
+  let rejectFirst!: (error: Error) => void;
+  mockReceiveRedirect.mockReturnValueOnce(
+    new Promise((_, reject) => {
+      rejectFirst = reject;
+    }),
+  );
+  mockReceiveRedirect.mockResolvedValueOnce(true);
+  render();
+  mockUrl = 'cherrystudio://auth/callback?code=current';
+  render();
+  await act(async () => rejectFirst(new Error('stale callback')));
+  expect(mockReceiveRedirect.mock.calls).toEqual([
+    ['cherrystudio://auth/callback?code=one-use'],
+    [mockUrl],
+  ]);
+  expect(mockReportError).not.toHaveBeenCalled();
+  expect(mockRouter.dismissTo.mock.calls).toEqual([['/settings']]);
+});
+
+it('keeps a successful route completion when an overlapping link is rejected', async () => {
+  let accept!: (stayed: boolean) => void;
+  mockReceiveRedirect.mockReturnValueOnce(
+    new Promise((resolve) => {
+      accept = resolve;
+    }),
+  );
+  mockReceiveRedirect.mockRejectedValueOnce(new Error('stale callback'));
+  render();
+  mockUrl = 'cherrystudio://auth/callback?code=stale';
+  render();
+  await act(async () => accept(true));
+  expect(mockReportError).not.toHaveBeenCalled();
+  expect(mockRouter.dismissTo.mock.calls).toEqual([['/settings']]);
+});
+
 it('uses persisted onboarding progress as the cold-callback fallback', async () => {
   mockReturnTo = undefined;
   mockOnboarding = 'login';

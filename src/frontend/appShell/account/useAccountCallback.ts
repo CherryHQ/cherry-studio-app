@@ -23,17 +23,27 @@ export function useAccountCallback() {
         : '/settings/profile',
     ),
   );
-  const completion = useRef<Promise<boolean> | null>(null);
+  const completion = useRef<{ url: string; result: Promise<boolean> } | null>(null);
 
   useEffect(() => {
-    if (!completion.current) {
-      if (!url) return;
-      // Clear before activation so a profile reload cannot redeem the callback again.
+    if (url && completion.current?.url !== url) {
+      // Clearing the initial URL can rerender this route before the exchange finishes.
       clearInitialURL();
-      completion.current = account.receiveRedirect(url);
+      const previous = completion.current?.result;
+      const delivery = account.receiveRedirect(url);
+      // A rejected late link must not replace an earlier successful route completion.
+      const result = previous
+        ? delivery.catch((error: unknown) =>
+            previous.catch(() => {
+              throw error;
+            }),
+          )
+        : delivery;
+      completion.current = { url, result };
     }
+    if (!completion.current) return;
     let active = true;
-    void completion.current.then(
+    void completion.current.result.then(
       (stayed) => {
         if (active && stayed) router.dismissTo(returnTo as Href);
       },

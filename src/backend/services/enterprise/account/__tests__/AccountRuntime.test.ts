@@ -214,6 +214,55 @@ describe('AccountRuntime', () => {
     expect(options.reload).toHaveBeenCalledTimes(1);
   });
 
+  it('admits the current browser callback after a stale deep link fails, including during validation', async () => {
+    const { options, runtime } = setup(signedIn('cloud'));
+    let rejectStale!: (error: Error) => void;
+    let started!: () => void;
+    const validating = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    options.portal.completeSignIn.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectStale = reject;
+          started();
+        }),
+    );
+    let stale!: Promise<void>;
+    options.openBrowser.mockImplementationOnce(async () => {
+      stale = expect(runtime.receiveRedirect('cb://?state=old')).rejects.toThrow('state_mismatch');
+      return 'cb://?state=current';
+    });
+    const login = runtime.signIn();
+    // The live browser's result is ready while the SDK is reading the stale delivery.
+    await validating;
+    expect(options.portal.completeSignIn).toHaveBeenCalledTimes(1);
+    rejectStale(new Error('state_mismatch'));
+    await stale;
+    await expect(login).resolves.toBe(true);
+    expect(options.portal.completeSignIn.mock.calls.map(([url]) => url)).toEqual([
+      'cb://?state=old',
+      'cb://?state=current',
+    ]);
+  });
+
+  it('coalesces duplicate current deliveries behind a rejected cold callback', async () => {
+    const { options, runtime } = setup(signedIn('enterprise'));
+    options.portal.completeSignIn.mockRejectedValueOnce(new Error('unexpected issuer'));
+    const stale = runtime.receiveRedirect('cb://?state=old');
+    const current = runtime.receiveRedirect('cb://?state=current');
+    const duplicate = runtime.receiveRedirect('cb://?state=current');
+    await expect(stale).rejects.toThrow('unexpected issuer');
+    await Promise.all([current, duplicate]);
+    await runtime.receiveRedirect('cb://?state=current');
+    expect(options.portal.completeSignIn).toHaveBeenCalledTimes(2);
+    expect(options.reload).toHaveBeenCalledTimes(1);
+    await expect(runtime.receiveRedirect('cb://?state=other')).rejects.toMatchObject({
+      code: 'rejected',
+    });
+    expect(options.portal.completeSignIn).toHaveBeenCalledTimes(2);
+  });
+
   it('lets the callback route own navigation when the live browser also receives the result', async () => {
     const { runtime, options } = setup(signedIn('cloud'));
     options.openBrowser.mockImplementationOnce(async () => {
