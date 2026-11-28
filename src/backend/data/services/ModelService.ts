@@ -190,6 +190,22 @@ function lookupStoredModel(
   return registryData;
 }
 
+function resolveLegacyMimoApiModelId(
+  row: UserModelRow,
+  providerConfig?: ModelProviderConfig,
+): string | undefined {
+  return row.presetModelId === row.modelId &&
+    (row.providerId === 'mimo' || providerConfig?.presetProviderId === 'mimo')
+    ? LEGACY_MIMO_API_MODEL_IDS.get(row.modelId)
+    : undefined;
+}
+
+function materializeStoredModel(row: UserModelRow, providerConfig?: ModelProviderConfig): Model {
+  const baseline = createCustomModel(row.providerId, row.modelId);
+  const legacyMimoApiModelId = resolveLegacyMimoApiModelId(row, providerConfig);
+  return applyStoredFields(baseline, row, legacyMimoApiModelId ?? row.modelId);
+}
+
 function enrichModelFromRegistry(row: UserModelRow, providerConfig?: ModelProviderConfig): Model {
   const registryData = lookupStoredModel(row, providerConfig);
 
@@ -206,11 +222,7 @@ function enrichModelFromRegistry(row: UserModelRow, providerConfig?: ModelProvid
   const baseline = row.presetModelId
     ? (registryBaseline ?? createCustomModel(row.providerId, row.modelId))
     : createCustomModel(row.providerId, row.modelId);
-  const legacyMimoApiModelId =
-    row.presetModelId === row.modelId &&
-    (row.providerId === 'mimo' || providerConfig?.presetProviderId === 'mimo')
-      ? LEGACY_MIMO_API_MODEL_IDS.get(row.modelId)
-      : undefined;
+  const legacyMimoApiModelId = resolveLegacyMimoApiModelId(row, providerConfig);
   const model = applyStoredFields(
     baseline,
     row,
@@ -437,7 +449,26 @@ export class ModelService {
     return configs;
   }
 
-  private async enrichModels(rows: UserModelRow[]): Promise<Model[]> {
+  private async ensureRegistryReady(): Promise<void> {
+    if (providerRegistryService.isReady()) return;
+    if (application.current?.container.has('ProviderRegistryUpdaterService')) {
+      await application.get('ProviderRegistryUpdaterService').ensureReady();
+    }
+    providerRegistryService.assertReady();
+  }
+
+  private async enrichModels(
+    rows: UserModelRow[],
+    options?: { allowStoredFallback?: boolean },
+  ): Promise<Model[]> {
+    if (rows.length === 0) return [];
+    if (!providerRegistryService.isReady()) {
+      if (options?.allowStoredFallback) {
+        const configs = await this.getProviderConfigs(rows.map((row) => row.providerId));
+        return rows.map((row) => materializeStoredModel(row, configs.get(row.providerId)));
+      }
+      await this.ensureRegistryReady();
+    }
     const configs = await this.getProviderConfigs(rows.map((row) => row.providerId));
     return rows.map((row) => enrichModelFromRegistry(row, configs.get(row.providerId)));
   }
@@ -449,6 +480,9 @@ export class ModelService {
 
   async list(query: ModelListQuery = {}): Promise<Model[]> {
     const conditions: SQL[] = [];
+    if (query.id) {
+      conditions.push(eq(userModelTable.id, query.id));
+    }
     if (query.providerId) {
       conditions.push(eq(userModelTable.providerId, query.providerId));
     }
@@ -461,7 +495,7 @@ export class ModelService {
       .from(userModelTable)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(asc(userModelTable.providerId), asc(userModelTable.orderKey));
-    const models = await this.enrichModels(rows);
+    const models = await this.enrichModels(rows, { allowStoredFallback: true });
     return query.capability
       ? models.filter((model) => model.capabilities.includes(query.capability as never))
       : models;

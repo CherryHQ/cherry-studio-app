@@ -18,8 +18,8 @@ const EMPTY_MCP_RUNTIME_SUMMARIES: Readonly<Record<string, McpServerRuntimeSumma
 const EMPTY_MCP_PROMPTS: Readonly<Record<string, readonly McpPromptEntry[]>> = Object.freeze({});
 type McpServerListData = { items: McpServer[]; total: number };
 
-export function useMcpServersApi() {
-  const query = useQuery('/mcp-servers');
+export function useMcpServersApi(options?: { enabled?: boolean }) {
+  const query = useQuery('/mcp-servers', { enabled: options?.enabled });
 
   return {
     servers: query.data?.items ?? EMPTY_MCP_SERVERS,
@@ -66,20 +66,23 @@ export function useMcpServerRuntimeSummaries(servers: readonly McpServer[]) {
 }
 
 /** Connection discovery owns refresh; chat only observes the local catalog. */
-export function useCachedMcpPrompts() {
+export function useCachedMcpPrompts(options?: { enabled?: boolean }) {
+  const enabled = options?.enabled !== false;
   const mcp = useBackendModule('mcp');
   const queryClient = useQueryClient();
-  useEffect(
-    () =>
-      mcp.subscribePromptCatalogs(() => {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.prompts() });
-      }),
-    [mcp, queryClient],
-  );
+  useEffect(() => {
+    if (!enabled) return;
+    return mcp.subscribePromptCatalogs(() => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.prompts() });
+    });
+  }, [enabled, mcp, queryClient]);
   const query = useTanStackQuery({
+    enabled,
     queryKey: queryKeys.mcpServers.prompts(),
     queryFn: () => mcp.getCachedPrompts(),
-    staleTime: Infinity,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    staleTime: 0,
     retry: false,
   });
   return query.data ?? EMPTY_MCP_PROMPTS;

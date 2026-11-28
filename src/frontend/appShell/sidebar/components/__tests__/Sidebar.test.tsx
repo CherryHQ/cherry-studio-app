@@ -24,6 +24,8 @@ let mockPage = ['(chat)'];
 let mockParams: Record<string, string> = {};
 let mockContentStack: { index: number; key: string } | undefined;
 let mockActions: SidebarActions;
+let mockDrawerStatus: 'open' | 'closed' = 'open';
+let mockCoverVisible = false;
 
 jest.mock('expo-router', () => ({
   useSegments: () =>
@@ -39,7 +41,10 @@ jest.mock('expo-router', () => ({
   }),
 }));
 
-jest.mock('expo-router/drawer', () => ({ useDrawerStatus: () => 'open' }));
+jest.mock('expo-router/drawer', () => ({ useDrawerStatus: () => mockDrawerStatus }));
+jest.mock('@/frontend/appShell/startup', () => ({
+  useStartupCoverVisible: () => mockCoverVisible,
+}));
 
 jest.mock('expo-router/react-navigation', () => ({
   StackActions: { popToTop: () => ({ type: 'POP_TO_TOP' }) },
@@ -84,11 +89,14 @@ jest.mock('../../hooks/useCloseDrawerForNavigation', () => ({
 jest.mock('../../SidebarSelectionProvider', () => ({
   SidebarSelectionProvider: ({ children }: { children: ReactNode }) => children,
 }));
+let mockBodyMountCount = 0;
+
 jest.mock('../SidebarHeader', () => ({ SidebarHeader: () => null }));
 jest.mock('../SidebarFooter', () => ({ SidebarFooter: () => null }));
 jest.mock('../SidebarBody', () => ({
   SidebarBody: () => {
     const { useSidebarActions } = jest.requireActual('../../context');
+    mockBodyMountCount += 1;
     mockActions = useSidebarActions('SidebarBody');
     return null;
   },
@@ -114,6 +122,9 @@ describe('Sidebar', () => {
     mockPage = ['(chat)'];
     mockParams = {};
     mockContentStack = { index: 0, key: 'main' };
+    mockDrawerStatus = 'open';
+    mockCoverVisible = false;
+    mockBodyMountCount = 0;
   });
 
   afterEach(() => {
@@ -351,5 +362,43 @@ describe('Sidebar', () => {
     render();
     act(() => mockActions.closeDrawer());
     expect(mockDispatch).not.toHaveBeenCalled();
+  });
+
+  test('defers mounting a closed phone sidebar while the startup cover is visible and warms up after dismissal', () => {
+    jest.useFakeTimers();
+    try {
+      mockDrawerStatus = 'closed';
+      mockCoverVisible = true;
+      render();
+      expect(mockBodyMountCount).toBe(0);
+
+      mockCoverVisible = false;
+      act(() => renderer.update(sidebar()));
+      expect(mockBodyMountCount).toBe(0);
+
+      act(() => jest.advanceTimersByTime(249));
+      expect(mockBodyMountCount).toBe(0);
+
+      act(() => jest.advanceTimersByTime(1));
+      expect(mockBodyMountCount).toBe(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('mounts the deferred phone sidebar immediately when opened before warmup completes', () => {
+    jest.useFakeTimers();
+    try {
+      mockDrawerStatus = 'closed';
+      mockCoverVisible = true;
+      render();
+      expect(mockBodyMountCount).toBe(0);
+
+      mockDrawerStatus = 'open';
+      act(() => renderer.update(sidebar()));
+      expect(mockBodyMountCount).toBe(1);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

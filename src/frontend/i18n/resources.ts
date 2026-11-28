@@ -1,32 +1,38 @@
 import type { AppLanguage } from '@/shared/utils/languages';
 
-import deDE from './locales/de-de.json';
-import elGR from './locales/el-gr.json';
-import enUS from './locales/en-us.json';
-import esES from './locales/es-es.json';
-import frFR from './locales/fr-fr.json';
-import jaJP from './locales/ja-jp.json';
-import ptPT from './locales/pt-pt.json';
-import roRO from './locales/ro-ro.json';
-import ruRU from './locales/ru-ru.json';
-import trTR from './locales/tr-tr.json';
-import viVN from './locales/vi-vn.json';
-import zhCN from './locales/zh-cn.json';
-import zhTW from './locales/zh-tw.json';
+export type TranslationCatalog = Record<string, string>;
 
-// Static imports keep every supported language available offline in Metro.
-export const resources = {
-  'de-DE': { translation: deDE },
-  'el-GR': { translation: elGR },
-  'en-US': { translation: enUS },
-  'es-ES': { translation: esES },
-  'fr-FR': { translation: frFR },
-  'ja-JP': { translation: jaJP },
-  'pt-PT': { translation: ptPT },
-  'ro-RO': { translation: roRO },
-  'ru-RU': { translation: ruRU },
-  'tr-TR': { translation: trTR },
-  'vi-VN': { translation: viVN },
-  'zh-CN': { translation: zhCN },
-  'zh-TW': { translation: zhTW },
-} satisfies Record<AppLanguage, { translation: Record<string, string> }>;
+// Lazy require keeps every supported language bundled offline in Metro while
+// avoiding parsing unused locale JSON catalogs during startup.
+const localeLoaders: Record<AppLanguage, () => TranslationCatalog> = {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy offline bundle loading
+  'de-DE': () => require('./locales/de-de.json') as TranslationCatalog,
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy offline bundle loading
+  'el-GR': () => require('./locales/el-gr.json') as TranslationCatalog,
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy offline bundle loading
+  'en-US': () => require('./locales/en-us.json') as TranslationCatalog,
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy offline bundle loading
+  'es-ES': () => require('./locales/es-es.json') as TranslationCatalog,
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy offline bundle loading
+  'fr-FR': () => require('./locales/fr-fr.json') as TranslationCatalog,
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy offline bundle loading
+  'ja-JP': () => require('./locales/ja-jp.json') as TranslationCatalog,
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy offline bundle loading
+  'pt-PT': () => require('./locales/pt-pt.json') as TranslationCatalog,
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy offline bundle loading
+  'ro-RO': () => require('./locales/ro-ro.json') as TranslationCatalog,
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy offline bundle loading
+  'ru-RU': () => require('./locales/ru-ru.json') as TranslationCatalog,
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy offline bundle loading
+  'tr-TR': () => require('./locales/tr-tr.json') as TranslationCatalog,
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy offline bundle loading
+  'vi-VN': () => require('./locales/vi-vn.json') as TranslationCatalog,
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy offline bundle loading
+  'zh-CN': () => require('./locales/zh-cn.json') as TranslationCatalog,
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy offline bundle loading
+  'zh-TW': () => require('./locales/zh-tw.json') as TranslationCatalog,
+};
+
+export function loadLocaleCatalog(language: AppLanguage): TranslationCatalog {
+  return localeLoaders[language]();
+}

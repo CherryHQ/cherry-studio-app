@@ -13,6 +13,8 @@ import {
   type CatalogManifest,
   CatalogManifestSchema,
   isCatalogManifestCompatible,
+  type MobileRemoteRegistrySnapshot,
+  PARSED_REGISTRY_CACHE_VERSION,
   REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
   REGISTRY_SCHEMA_VERSION,
   REMOTE_REGISTRY_FILES,
@@ -25,8 +27,14 @@ import { raceAbort } from '@/backend/utils/raceAbort';
 import type { ProviderRegistryUpdateResult } from '@/shared/contracts';
 
 import {
+  type ActiveProviderRegistrySlot,
   type ProviderRegistrySnapshot,
+  readActiveProviderRegistrySlot,
+  readParsedProviderRegistryCache,
   readProviderRegistrySnapshots,
+  readProviderRegistrySnapshotSlot,
+  type SnapshotSlot,
+  writeParsedProviderRegistryCache,
   writeProviderRegistrySnapshot,
 } from './providerRegistrySnapshot';
 import { providerRegistryUpdates } from './providerRegistryUpdates';
@@ -175,8 +183,101 @@ export class ProviderRegistryUpdaterService extends BaseService {
     providerRegistryUpdates.clear();
   }
 
+  private activateParsedSnapshot(
+    parsed: MobileRemoteRegistrySnapshot,
+    manifest: CatalogManifest,
+    slot: SnapshotSlot,
+  ): void {
+    this.activeSlot = slot;
+    providerRegistryService.installRemoteSnapshot(parsed);
+    this.activeManifest = manifest;
+    providerRegistryUpdates.emit({ revision: manifest.revision, source: 'cache' });
+  }
+
+  private async tryActivateRawSlot(
+    snapshot: ProviderRegistrySnapshot,
+    options: { backfillParsedCache: boolean },
+  ): Promise<boolean> {
+    try {
+      this.assertManifestFiles(snapshot.manifest);
+      if (!isCatalogManifestCompatible(snapshot.manifest)) return false;
+      const parsed = this.parseAndValidateFiles(snapshot.files, snapshot.manifest);
+      if (this.stopped) return false;
+      this.activateParsedSnapshot(parsed, snapshot.manifest, snapshot.slot);
+      if (options.backfillParsedCache && !this.stopped) {
+        void writeParsedProviderRegistryCache(snapshot.slot, snapshot.manifest, parsed);
+      }
+      return true;
+    } catch (error) {
+      logger.warn(
+        'Saved registry snapshot is unusable; trying the previous snapshot',
+        toError(error),
+      );
+      return false;
+    }
+  }
+
+  private async tryActivateParsedCache(
+    slot: SnapshotSlot,
+    expectedPointer?: ActiveProviderRegistrySlot,
+  ): Promise<boolean> {
+    const cached = await readParsedProviderRegistryCache(slot);
+    if (!cached || this.stopped) return false;
+    try {
+      this.assertManifestFiles(cached.manifest);
+      if (
+        cached.cacheVersion !== PARSED_REGISTRY_CACHE_VERSION ||
+        cached.desktopCompatibilityVersion !== REGISTRY_DESKTOP_COMPATIBILITY_VERSION ||
+        !isCatalogManifestCompatible(cached.manifest) ||
+        (expectedPointer &&
+          (cached.manifest.revision !== expectedPointer.revision ||
+            cached.manifest.schemaVersion !== expectedPointer.schemaVersion))
+      ) {
+        return false;
+      }
+      const hydrated = providerRegistryService.hydrateCachedSnapshot(cached.snapshot, {
+        modelsVersion: cached.manifest.files['models.json'],
+        providerModelsVersion: cached.manifest.files['provider-models.json'],
+      });
+      if (!hydrated || this.stopped) return false;
+      this.activateParsedSnapshot(hydrated, cached.manifest, slot);
+      return true;
+    } catch (error) {
+      logger.warn(
+        'Saved parsed registry cache is unusable; falling back to snapshot',
+        toError(error),
+      );
+      return false;
+    }
+  }
+
   private async activateCachedSnapshot(): Promise<void> {
-    const snapshots = Platform.OS === 'web' ? [] : await readProviderRegistrySnapshots();
+    if (Platform.OS === 'web') return;
+    const activePointer = await readActiveProviderRegistrySlot();
+    if (activePointer) {
+      const orderedSlots: readonly SnapshotSlot[] = [
+        activePointer.slot,
+        activePointer.slot === 'a' ? 'b' : 'a',
+      ];
+      for (const slot of orderedSlots) {
+        if (this.stopped) return;
+        if (
+          await this.tryActivateParsedCache(
+            slot,
+            slot === activePointer.slot ? activePointer : undefined,
+          )
+        ) {
+          return;
+        }
+        if (this.stopped) return;
+        const raw = await readProviderRegistrySnapshotSlot(slot);
+        if (this.stopped) return;
+        if (raw && (await this.tryActivateRawSlot(raw, { backfillParsedCache: true }))) return;
+      }
+      return;
+    }
+
+    const snapshots = await readProviderRegistrySnapshots();
     snapshots.sort(
       (left, right) =>
         right.manifest.schemaVersion - left.manifest.schemaVersion ||
@@ -184,21 +285,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
     );
     for (const snapshot of snapshots) {
       if (this.stopped) return;
-      try {
-        this.assertManifestFiles(snapshot.manifest);
-        if (!isCatalogManifestCompatible(snapshot.manifest)) continue;
-        const parsed = this.parseAndValidateFiles(snapshot.files, snapshot.manifest);
-        this.activeSlot = snapshot.slot;
-        providerRegistryService.installRemoteSnapshot(parsed);
-        this.activeManifest = snapshot.manifest;
-        providerRegistryUpdates.emit({ revision: snapshot.manifest.revision, source: 'cache' });
-        return;
-      } catch (error) {
-        logger.warn(
-          'Saved registry snapshot is unusable; trying the previous snapshot',
-          toError(error),
-        );
-      }
+      if (await this.tryActivateRawSlot(snapshot, { backfillParsedCache: true })) return;
     }
   }
 
@@ -253,6 +340,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
         staged.files,
         staged.manifest,
         this.activeSlot,
+        staged.parsed,
       );
     }
     if (this.stopped) {

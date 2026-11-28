@@ -4,12 +4,17 @@ import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { AppBootstrapRuntime } from '@/bootstrap/runtime/createAppBootstrapRuntime';
+import { cacheService } from '@/frontend/data/CacheService';
 import type { Backend } from '@/shared/contracts';
 import type { ApiClient } from '@/shared/data/api/types';
 import type { PreferenceClient } from '@/shared/data/preference';
 
 import { AppBootstrapGate } from '../AppBootstrapGate';
-import { AppBootstrapProvider, useAppBootstrapState } from '../AppBootstrapProvider';
+import {
+  AppBootstrapPostReady,
+  AppBootstrapProvider,
+  useAppBootstrapState,
+} from '../AppBootstrapProvider';
 
 // Jest normally skips the production React Compiler. Exercise the provider after
 // compilation so a cached runtime factory cannot silently break startup retry.
@@ -54,7 +59,10 @@ jest.mock('@/bootstrap/runtime/createAppBootstrapRuntime', () => ({
   createAppBootstrapRuntime: jest.fn(),
 }));
 
-function makeRuntime(initializeImplementation: () => Promise<void>): {
+function makeRuntime(
+  initializeImplementation: () => Promise<void>,
+  dataApi: Partial<ApiClient> = {},
+): {
   dispose: jest.Mock;
   initialize: jest.Mock;
   runPostReadyTasks: jest.Mock;
@@ -74,7 +82,7 @@ function makeRuntime(initializeImplementation: () => Promise<void>): {
         skills: { subscribeChanges: () => () => {} },
         backup: { getState: () => backupState, subscribe: () => () => {} },
       } as unknown as Backend,
-      dataApi: {} as ApiClient,
+      dataApi: dataApi as ApiClient,
       preference: {} as PreferenceClient,
       dispose,
       initialize,
@@ -230,5 +238,97 @@ describe('AppBootstrapProvider startup gate', () => {
 
     await act(async () => renderer?.unmount());
     expect(next.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  test('defers post-ready tasks until AppBootstrapPostReady marks startup ready', async () => {
+    const originalRaf = globalThis.requestAnimationFrame;
+    const originalCancelRaf = globalThis.cancelAnimationFrame;
+    const queuedFrames = new Map<number, FrameRequestCallback>();
+    let nextFrameId = 1;
+    globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      const id = nextFrameId++;
+      queuedFrames.set(id, callback);
+      return id;
+    }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((id: number) => {
+      queuedFrames.delete(id);
+    }) as typeof cancelAnimationFrame;
+
+    try {
+      const { runPostReadyTasks, runtime } = makeRuntime(async () => undefined);
+      let renderer: ReactTestRenderer | undefined;
+      const tree = (ready: boolean) =>
+        withQueryClient(
+          <AppBootstrapProvider createRuntime={() => runtime} deferPostReady>
+            <AppBootstrapPostReady ready={ready} />
+            <AppBootstrapGate>
+              <Text>gate-open</Text>
+            </AppBootstrapGate>
+          </AppBootstrapProvider>,
+        );
+
+      await act(async () => {
+        renderer = create(tree(false));
+      });
+      await flush();
+
+      expect(renderer && hasText(renderer, 'gate-open')).toBe(true);
+      expect(runPostReadyTasks).not.toHaveBeenCalled();
+
+      await act(async () => {
+        renderer?.update(tree(true));
+      });
+      expect(runPostReadyTasks).not.toHaveBeenCalled();
+
+      await act(async () => {
+        const callbacks = [...queuedFrames.values()];
+        queuedFrames.clear();
+        for (const callback of callbacks) callback(0);
+      });
+      expect(runPostReadyTasks).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        renderer?.update(tree(false));
+        renderer?.update(tree(true));
+        const callbacks = [...queuedFrames.values()];
+        queuedFrames.clear();
+        for (const callback of callbacks) callback(0);
+      });
+      expect(runPostReadyTasks).toHaveBeenCalledTimes(1);
+
+      await act(async () => renderer?.unmount());
+    } finally {
+      globalThis.requestAnimationFrame = originalRaf;
+      globalThis.cancelAnimationFrame = originalCancelRaf;
+    }
+  });
+
+  test('prefetches the persisted last chat agent when opening the gate', async () => {
+    cacheService.setPersist('chat.last_agent_id', 'agent-remembered');
+    const get = jest.fn(async () => ({ id: 'agent-remembered' }));
+    const { runtime } = makeRuntime(async () => undefined, {
+      get: get as unknown as ApiClient['get'],
+    });
+    let renderer: ReactTestRenderer | undefined;
+
+    try {
+      await act(async () => {
+        renderer = create(
+          withQueryClient(
+            <AppBootstrapProvider createRuntime={() => runtime}>
+              <AppBootstrapGate>
+                <Text>gate-open</Text>
+              </AppBootstrapGate>
+            </AppBootstrapProvider>,
+          ),
+        );
+      });
+      await flush();
+
+      expect(get).toHaveBeenCalledWith('/agents/agent-remembered');
+    } finally {
+      cacheService.deletePersist('chat.last_agent_id');
+      await act(async () => renderer?.unmount());
+    }
   });
 });

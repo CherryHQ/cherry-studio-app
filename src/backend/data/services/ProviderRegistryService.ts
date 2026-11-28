@@ -406,6 +406,13 @@ export class ProviderRegistryService {
     return this.loader.parseRemoteSnapshot(input);
   }
 
+  hydrateCachedSnapshot(
+    input: unknown,
+    expectedVersions: { modelsVersion: string; providerModelsVersion: string },
+  ): MobileRemoteRegistrySnapshot | null {
+    return this.loader.hydrateCachedSnapshot(input, expectedVersions);
+  }
+
   installRemoteSnapshot(snapshot: MobileRemoteRegistrySnapshot): void {
     this.loader.installRemoteSnapshot(snapshot);
   }

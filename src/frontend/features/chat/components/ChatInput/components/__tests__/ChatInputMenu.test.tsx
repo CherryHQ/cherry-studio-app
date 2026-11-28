@@ -38,8 +38,22 @@ jest.mock('@/frontend/components/Composer', () => ({
   useComposerMediaActions: () => ({ openCamera: mockCamera, openPhotoLibrary: mockPhotos }),
   useComposerDocumentPicker: () => mockUpload,
 }));
-jest.mock('@/frontend/hooks/file', () => ({ useFileWorkspace: () => ({}) }));
+const mockUseFileWorkspace = jest.fn((..._args: unknown[]) => ({}));
+const mockUsePluginCatalog = jest.fn(() => ({ data: [] }));
+const mockUsePluginConnections = jest.fn(() => ({ data: [] }));
+const mockUseChatInputMcpPrompts = jest.fn((..._args: unknown[]) => []);
+
+jest.mock('@/frontend/hooks/file', () => ({
+  useFileWorkspace: (...args: unknown[]) => mockUseFileWorkspace(...args),
+}));
 jest.mock('@/frontend/hooks/mcp/useMcpIcon', () => ({ useMcpIcon: () => undefined }));
+jest.mock('@/frontend/hooks/plugin', () => ({
+  usePluginCatalog: () => mockUsePluginCatalog(),
+  usePluginConnections: () => mockUsePluginConnections(),
+}));
+jest.mock('../../hooks/useChatInputMcpPrompts', () => ({
+  useChatInputMcpPrompts: (...args: unknown[]) => mockUseChatInputMcpPrompts(...args),
+}));
 jest.mock('../ChatInputPluginSheet', () => ({ ChatInputPluginSheet: () => null }));
 jest.mock('../ChatInputPromptSheet', () => ({ ChatInputPromptSheet: () => null }));
 jest.mock('../ChatInputSkillSheet', () => ({
@@ -71,7 +85,14 @@ afterEach(() => act(() => renderer.unmount()));
 async function mount(media: 'all' | 'images' = 'all') {
   await act(async () => {
     renderer = create(
-      <ChatInputMenu agentId="agent-b" enabled media={media} prompts={[]} skillAgentId="agent-b" />,
+      <ChatInputMenu
+        agentId="agent-b"
+        enabled
+        media={media}
+        promptAgentId={media === 'all' ? 'agent-b' : undefined}
+        showPlugins={media === 'all'}
+        skillAgentId="agent-b"
+      />,
     );
   });
 }
@@ -114,13 +135,7 @@ test('closes an active tool panel when disabled and keeps it closed when enabled
   for (const enabled of [false, true]) {
     act(() =>
       renderer.update(
-        <ChatInputMenu
-          agentId="agent-b"
-          enabled={enabled}
-          media="all"
-          prompts={[]}
-          skillAgentId="agent-b"
-        />,
+        <ChatInputMenu agentId="agent-b" enabled={enabled} media="all" skillAgentId="agent-b" />,
       ),
     );
     expect(menu().open).toBe(false);
@@ -132,13 +147,7 @@ test('opens SSH as a child sheet and finishes selection after both sheets close'
   const prepareSsh = jest.fn();
   await act(async () => {
     renderer = create(
-      <ChatInputMenu
-        enabled
-        media="all"
-        onPickSsh={prepareSsh}
-        prompts={[]}
-        sshContextId="draft:ssh-draft"
-      />,
+      <ChatInputMenu enabled media="all" onPickSsh={prepareSsh} sshContextId="draft:ssh-draft" />,
     );
   });
   await act(async () => trigger().onPress());
@@ -191,4 +200,22 @@ test('discards an opening queued before a completed close', async () => {
   expect(mockCamera).toHaveBeenCalledTimes(1);
   act(() => openings[1]());
   expect(menu().open).toBe(false);
+});
+
+test('defers workspace, MCP prompt, and plugin queries until the tools menu and plugin panel open', async () => {
+  await mount();
+  expect(mockUseFileWorkspace).not.toHaveBeenCalled();
+  expect(mockUseChatInputMcpPrompts).not.toHaveBeenCalled();
+  expect(mockUsePluginCatalog).not.toHaveBeenCalled();
+  expect(mockUsePluginConnections).not.toHaveBeenCalled();
+
+  await act(async () => trigger().onPress());
+  expect(mockUseFileWorkspace).toHaveBeenCalledTimes(1);
+  expect(mockUseChatInputMcpPrompts).toHaveBeenCalledWith('agent-b');
+  expect(mockUsePluginCatalog).not.toHaveBeenCalled();
+  expect(mockUsePluginConnections).not.toHaveBeenCalled();
+
+  act(() => renderer.root.findByProps({ testID: 'chat-composer-plugins' }).props.onPress());
+  expect(mockUsePluginCatalog).toHaveBeenCalledTimes(1);
+  expect(mockUsePluginConnections).toHaveBeenCalledTimes(1);
 });

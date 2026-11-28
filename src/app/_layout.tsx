@@ -21,7 +21,12 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { withUniwind } from 'uniwind';
 
-import { AppBootstrapGate, AppBootstrapProvider, useAppBootstrapState } from '@/bootstrap';
+import {
+  AppBootstrapGate,
+  AppBootstrapPostReady,
+  AppBootstrapProvider,
+  useAppBootstrapState,
+} from '@/bootstrap';
 import { AccountSessionGate, OrganizationLockAppearance } from '@/frontend/appShell/account';
 import { AppUpdateProvider } from '@/frontend/appShell/appUpdate';
 import { BackgroundActivityBridge } from '@/frontend/appShell/backgroundActivity';
@@ -41,6 +46,7 @@ import {
   StartupChatInputMeasurement,
   StartupCoordinator,
   StartupRouteReadyReporter,
+  useStartupCoverVisible,
 } from '@/frontend/appShell/startup';
 import { SystemEntryBridge } from '@/frontend/appShell/systemEntry';
 import { UuRemoteCallbackBridge } from '@/frontend/appShell/uuRemote';
@@ -70,7 +76,7 @@ function RootLayout() {
             <Portal.AccessibilityBoundary>
               <Toast.Provider>
                 <QueryProvider>
-                  <AppBootstrapProvider>
+                  <AppBootstrapProvider deferPostReady>
                     <BootstrapStartupCoordinator>
                       <AppBootstrapGate>
                         <StartupRouteReadyReporter>
@@ -147,9 +153,15 @@ function BootstrapStartupCoordinator({ children }: PropsWithChildren) {
 
   return (
     <StartupCoordinator bootstrapReady={bootstrapState.status !== 'loading'}>
+      <DeferredPostReadyTrigger />
       {children}
     </StartupCoordinator>
   );
+}
+
+function DeferredPostReadyTrigger() {
+  const coverVisible = useStartupCoverVisible();
+  return <AppBootstrapPostReady ready={!coverVisible} />;
 }
 
 function RootStack() {

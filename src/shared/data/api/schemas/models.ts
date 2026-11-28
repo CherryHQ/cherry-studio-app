@@ -27,6 +27,7 @@ export { OrderBatchRequestSchema, OrderRequestSchema };
 export const ListModelsQuerySchema = z.object({
   capability: z.enum(objectValues(MODEL_CAPABILITY)).optional(),
   enabled: z.boolean().optional(),
+  id: UniqueModelIdSchema.optional(),
   isSystemSupported: z.boolean().optional(),
   providerId: z.string().optional(),
 });

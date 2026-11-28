@@ -35,7 +35,8 @@ and Turkish.
 [`src/frontend/i18n/locales`](../../src/frontend/i18n/locales) owns application UI translations.
 English (`en-us.json`) is the canonical source; Chinese provides semantic context. Catalogs are
 flat, sorted JSON objects. The whole dotted key is literal: i18next uses `keySeparator: false`.
-The resource registry uses static imports so all languages work offline in Metro.
+The resource registry uses lazy static `require` loaders so all languages work offline in Metro
+while loading only the active and fallback locales at startup.
 
 The initial additional locales combine matching existing desktop translations with Google
 Translate drafts and targeted terminology/plural corrections. Traditional Chinese also uses

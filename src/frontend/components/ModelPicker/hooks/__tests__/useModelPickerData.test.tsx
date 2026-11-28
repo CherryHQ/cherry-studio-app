@@ -32,13 +32,16 @@ jest.mock('@/shared/data/activeProfile', () => ({
 }));
 jest.mock('@/frontend/hooks/useCloud', () => ({ useCloud: () => ({ state: mockCloudState }) }));
 const mockModelQueries: unknown[] = [];
+const mockModelOptions: unknown[] = [];
+const mockProviderOptions: unknown[] = [];
 const mockLoadedQuery = { data: mockEmptyList };
 const mockRefetch = jest.fn();
 let mockProviderQueryError: Error | null = null;
 
 jest.mock('@/frontend/hooks/chat', () => ({
-  useModels: (query: unknown) => {
+  useModels: (query: unknown, options?: unknown) => {
     mockModelQueries.push(query);
+    mockModelOptions.push(options);
     return {
       isLoading: false,
       models: mockModels,
@@ -46,12 +49,15 @@ jest.mock('@/frontend/hooks/chat', () => ({
       refetch: mockRefetch,
     };
   },
-  useProviders: () => ({
-    isLoading: false,
-    providers: mockProviders,
-    providersQuery: { data: mockEmptyList, error: mockProviderQueryError ?? undefined },
-    refetch: mockRefetch,
-  }),
+  useProviders: (_query: unknown, options?: unknown) => {
+    mockProviderOptions.push(options);
+    return {
+      isLoading: false,
+      providers: mockProviders,
+      providersQuery: { data: mockEmptyList, error: mockProviderQueryError ?? undefined },
+      refetch: mockRefetch,
+    };
+  },
 }));
 
 describe('useModelPickerData', () => {
@@ -61,6 +67,8 @@ describe('useModelPickerData', () => {
     mockModels = mockEmptyList;
     mockProviders = mockEmptyList;
     mockModelQueries.length = 0;
+    mockModelOptions.length = 0;
+    mockProviderOptions.length = 0;
     mockProviderQueryError = null;
   });
 
@@ -181,6 +189,20 @@ describe('useModelPickerData', () => {
     expect(result?.modelItems).toHaveLength(0);
     expect(result?.hasLoadedCatalog).toBe(false);
     expect(result?.error).toBe(mockProviderQueryError);
+  });
+
+  test('disables underlying model and provider queries when enabled is false', () => {
+    mockProviders = [cloudProvider];
+    const [result] = renderHookTwice(() =>
+      useModelPickerData({ enabled: false, modelType: 'text' }),
+    );
+
+    expect(mockModelOptions).toContainEqual({ enabled: false });
+    expect(mockProviderOptions).toContainEqual({ enabled: false });
+    expect(result?.groups).toHaveLength(0);
+    expect(result?.modelItems).toHaveLength(0);
+    expect(result?.hasLoadedCatalog).toBe(false);
+    expect(result?.isLoading).toBe(false);
   });
 });
 

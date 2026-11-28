@@ -61,4 +61,21 @@ describe('app translation runtime', () => {
     expect(i18n.resolvedLanguage).toBe('zh-CN');
     expect(i18n.t('common.cancel')).toBe('取消');
   });
+
+  test('loads only the active and fallback locale bundles on init and fetches others on demand', async () => {
+    await jest.isolateModulesAsync(async () => {
+      const runtime = jest.requireActual<typeof import('../i18n')>('../i18n');
+      await runtime.initI18n('zh-CN');
+
+      expect(runtime.default.hasResourceBundle('zh-CN', 'translation')).toBe(true);
+      expect(runtime.default.hasResourceBundle('en-US', 'translation')).toBe(true);
+      expect(runtime.default.hasResourceBundle('de-DE', 'translation')).toBe(false);
+      expect(runtime.default.hasResourceBundle('ru-RU', 'translation')).toBe(false);
+      expect(runtime.default.hasResourceBundle('ja-JP', 'translation')).toBe(false);
+
+      await runtime.initI18n('ru-RU');
+      expect(runtime.default.hasResourceBundle('ru-RU', 'translation')).toBe(true);
+      expect(runtime.default.t('chat.sources.count', { count: 2 })).toBe('2 источника');
+    });
+  });
 });

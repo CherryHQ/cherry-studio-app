@@ -28,6 +28,7 @@ import {
   ModelPickerDrawer,
   type ModelPickerModelItem,
   useModelPickerData,
+  useSelectedModelItem,
 } from '@/frontend/components/ModelPicker';
 import {
   PaintingInput,
@@ -37,7 +38,6 @@ import {
 import { useModelChoice } from '@/frontend/components/Policy';
 import { useBackendModule } from '@/frontend/data';
 import { useAgentApiById, useAgentSession, useAgentSessionMutations } from '@/frontend/hooks/agent';
-import { usePluginCatalog, usePluginConnections } from '@/frontend/hooks/plugin';
 import { sshErrorLabel } from '@/frontend/hooks/ssh';
 import { AgentProtocolError } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -62,7 +62,6 @@ import { ChatInputMenu } from './components/ChatInputMenu';
 import { ChatInputModelPill } from './components/ChatInputModelPill';
 import { ChatInputQueue } from './components/ChatInputQueue';
 import { type ChatEditDraft, useChatEditDraft } from './hooks/useChatEditDraft';
-import { useChatInputMcpPrompts } from './hooks/useChatInputMcpPrompts';
 import { useChatInputModelPicker } from './hooks/useChatInputModelPicker';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
 import { useChatInputReasoningEffortSelection } from './hooks/useChatInputReasoningEffortSelection';
@@ -70,7 +69,6 @@ import { useChatInputSessionModelSelection } from './hooks/useChatInputSessionMo
 import { useChatSelectionHandoff } from './hooks/useChatSelectionHandoff';
 import { useSshTargetRestore } from './hooks/useSshTargetRestore';
 import { toAgentInputParts } from './utils/agentInputParts';
-import { getConnectedChatInputPlugins } from './utils/chatInputPlugins';
 import { getChatInputReasoningEffortSnapshot } from './utils/chatInputReasoning';
 import { deriveContextUsage } from './utils/contextUsage';
 import { buildEditUserMessageInput } from './utils/editSubmission';
@@ -149,7 +147,18 @@ export function ChatInput({
     followsDefault: boolean;
   }>();
   const submittedDraft = useRef<{ agentId: string; selection: typeof draftModel }>(undefined);
-  const modelPickerData = useModelPickerData({ modelType: 'all' });
+  // Parallel replies are a temporary composer choice, scoped to the mounted conversation.
+  const [replySelection, setReplySelection] = useState<{
+    agentId: string | undefined;
+    models: readonly UniqueModelId[];
+  } | null>(null);
+  const needsFullCatalog =
+    Boolean(draftModel && draftModel.agentId === agentId && !draftModel.followsDefault) ||
+    Boolean(replySelection && replySelection.agentId === agentId);
+  const modelPickerData = useModelPickerData({
+    enabled: needsFullCatalog,
+    modelType: 'all',
+  });
   const isModelAvailable = useCallback(
     (modelId: UniqueModelId | undefined) =>
       Boolean(
@@ -238,11 +247,6 @@ export function ChatInput({
       selectSessionModel(draftModel.modelId);
     }
   }, [agentId, draftModel, isModelAvailable, selectSessionModel, sessionId]);
-  // Parallel replies are a temporary composer choice, scoped to the mounted conversation.
-  const [replySelection, setReplySelection] = useState<{
-    agentId: string | undefined;
-    models: readonly UniqueModelId[];
-  } | null>(null);
   const replyModels = useMemo(() => {
     if (!replySelection || replySelection.agentId !== agentId) return null;
     const available = replySelection.models.filter((id) => isModelAvailable(id));
@@ -254,8 +258,17 @@ export function ChatInput({
     },
     [agentId],
   );
-  const selectedModelItem = modelPickerData.getModelItem(replyModels?.[0] ?? selectedModelId);
-  const agentModel = modelPickerData.getModelItem(selectedModelId)?.model;
+  const singleSelectedModel = useSelectedModelItem({
+    enabled: !needsFullCatalog,
+    modelId: selectedModelId,
+    modelType: 'all',
+  });
+  const selectedModelItem = needsFullCatalog
+    ? modelPickerData.getModelItem(replyModels?.[0] ?? selectedModelId)
+    : singleSelectedModel.item;
+  const agentModel = needsFullCatalog
+    ? modelPickerData.getModelItem(selectedModelId)?.model
+    : singleSelectedModel.item?.model;
   // Effort levels differ per model, so several models answer at their own defaults.
   const reasoningEfforts = useChatInputReasoningEfforts(
     replyModels ? undefined : selectedModelItem?.model,
@@ -387,7 +400,6 @@ export function ChatInput({
                 agentId={agentId}
                 enabled={!controls.isApprovalPending}
                 media="images"
-                prompts={[]}
               />
             }
             modelSelection={modelSelection}
@@ -500,13 +512,6 @@ function TextChatInput({
         )
       : undefined;
   const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } = reasoningSelection;
-  const prompts = useChatInputMcpPrompts(mode === 'standard' ? agentId : undefined);
-  const pluginCatalog = usePluginCatalog();
-  const pluginConnections = usePluginConnections();
-  const connectedPlugins =
-    pluginCatalog.isError || pluginConnections.isError
-      ? []
-      : getConnectedChatInputPlugins(pluginCatalog.data, pluginConnections.data);
   function prepareSshPicker() {
     let contextId = sshContextId;
     if (!contextId) {
@@ -766,8 +771,8 @@ function TextChatInput({
                       onPickSsh={isSshAvailable ? prepareSshPicker : undefined}
                       sshContextId={sshPickerContext ?? sshContextId}
                       media={mode === 'minimal' ? 'images' : 'all'}
-                      plugins={mode === 'standard' && !isParallel ? connectedPlugins : undefined}
-                      prompts={prompts}
+                      promptAgentId={mode === 'standard' ? agentId : undefined}
+                      showPlugins={mode === 'standard' && !isParallel}
                       skillAgentId={mode === 'standard' && !isParallel ? agentId : undefined}
                     />
                   )

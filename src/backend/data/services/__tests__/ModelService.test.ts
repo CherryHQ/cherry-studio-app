@@ -3,7 +3,7 @@ import type { DbService } from '@/backend/data/db/DbService';
 import { agentSessionTable, agentTable } from '@/backend/data/db/schemas';
 import { userModelTable, type UserModelRow } from '@/backend/data/db/schemas/userModel';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
-import { REASONING_EFFORT } from '@/shared/data/types/model';
+import { MODEL_CAPABILITY, REASONING_EFFORT } from '@/shared/data/types/model';
 
 import type { PreferenceService } from '../../PreferenceService';
 import { ModelService } from '../ModelService';
@@ -487,6 +487,131 @@ describe('ModelService', () => {
     } as unknown as DbService);
 
     await expect(service.delete('openai::missing')).resolves.toBe(false);
+  });
+
+  test('materializes stored model rows on read before the remote registry installs and supports id filtering', async () => {
+    const row: UserModelRow = {
+      createdAt: 0,
+      updatedAt: 0,
+      orderKey: 'a0',
+      inputModalitiesExplicit: true,
+      id: 'openai::gpt-4o',
+      providerId: 'openai',
+      modelId: 'gpt-4o',
+      presetModelId: 'gpt-4o',
+      name: 'GPT-4o',
+      maxOutputTokens: 16384,
+      contextWindow: 128000,
+      maxInputTokens: null,
+      capabilities: [MODEL_CAPABILITY.IMAGE_RECOGNITION],
+      description: null,
+      endpointTypes: null,
+      group: null,
+      inputModalities: ['text', 'image'],
+      outputModalities: ['text'],
+      parameters: null,
+      pricing: null,
+      reasoning: null,
+      supportsStreaming: true,
+      notes: null,
+      isDeprecated: false,
+      isEnabled: true,
+      isHidden: false,
+    };
+    const whereCalls: unknown[] = [];
+    const db = {
+      select: () => ({
+        from: () => ({
+          where: (condition: unknown) => {
+            whereCalls.push(condition);
+            return {
+              limit: async () => [row],
+              orderBy: async () => [row],
+            };
+          },
+        }),
+      }),
+    };
+    const service = await createService({
+      getDb: () => db,
+      withWriteTx: jest.fn(),
+    } as unknown as DbService);
+    providerRegistryService.clearRemoteSnapshot();
+
+    await expect(service.list({ id: 'openai::gpt-4o', enabled: true })).resolves.toEqual([
+      expect.objectContaining({
+        id: 'openai::gpt-4o',
+        modelId: 'gpt-4o',
+        name: 'GPT-4o',
+        providerId: 'openai',
+        capabilities: [MODEL_CAPABILITY.IMAGE_RECOGNITION],
+        contextWindow: 128000,
+        maxOutputTokens: 16384,
+        supportsStreaming: true,
+      }),
+    ]);
+    await expect(service.getById('openai::gpt-4o')).rejects.toThrow(
+      'Model registry has not been downloaded yet',
+    );
+    await expect(service.getByKey('openai', 'gpt-4o')).rejects.toThrow(
+      'Model registry has not been downloaded yet',
+    );
+    expect(whereCalls).toHaveLength(3);
+  });
+
+  test('waits for ProviderRegistryUpdaterService on getById so execution reads receive preset capabilities', async () => {
+    const row: UserModelRow = {
+      createdAt: 0,
+      updatedAt: 0,
+      orderKey: 'a0',
+      inputModalitiesExplicit: false,
+      id: 'openai::gpt-4o',
+      providerId: 'openai',
+      modelId: 'gpt-4o',
+      presetModelId: 'gpt-4o',
+      name: null,
+      maxOutputTokens: null,
+      contextWindow: null,
+      maxInputTokens: null,
+      capabilities: null,
+      description: null,
+      endpointTypes: null,
+      group: null,
+      inputModalities: null,
+      outputModalities: null,
+      parameters: null,
+      pricing: null,
+      reasoning: null,
+      supportsStreaming: null,
+      notes: null,
+      isDeprecated: false,
+      isEnabled: true,
+      isHidden: false,
+    };
+    const db = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [row],
+            orderBy: async () => [row],
+          }),
+        }),
+      }),
+    };
+    const ensureReady = jest.fn(async () => {
+      installProviderRegistryTestSnapshot();
+    });
+    await installTestHost({
+      DbService: { getDb: () => db, withWriteTx: jest.fn() } as unknown as DbService,
+      PreferenceService: { get: jest.fn(async () => null) } as unknown as PreferenceService,
+      ProviderRegistryUpdaterService: { ensureReady } as never,
+    });
+    const service = new ModelService();
+    providerRegistryService.clearRemoteSnapshot();
+
+    const model = await service.getById('openai::gpt-4o');
+    expect(ensureReady).toHaveBeenCalledTimes(1);
+    expect(model?.capabilities).toContain(MODEL_CAPABILITY.FUNCTION_CALL);
   });
 });
 

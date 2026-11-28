@@ -7,6 +7,7 @@ export { ModelPickerIcon } from './components/ModelPickerIcon';
 export { ModelPickerList } from './components/ModelPickerList';
 export { ModelSearchControls } from './components/ModelSearchControls/ModelSearchControls';
 export { useModelPickerData } from './hooks/useModelPickerData';
+export { useSelectedModelItem } from './hooks/useSelectedModelItem';
 export { useModelSettingSelections } from './hooks/useModelSettingSelections';
 export { type ModelPickerGroup, type ModelPickerModelItem } from './utils/modelPickerData';
 export { buildModelPickerListItems } from './utils/modelPickerListItems';

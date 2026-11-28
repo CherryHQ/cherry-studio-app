@@ -4,8 +4,9 @@ import type { Model, UniqueModelId } from '@/shared/data/types/model';
 
 const EMPTY_MODELS: readonly Model[] = Object.freeze([]);
 
-export function useModels(query: ListModelsQuery = {}) {
+export function useModels(query: ListModelsQuery = {}, options?: { enabled?: boolean }) {
   const modelsQuery = useQuery('/models', {
+    enabled: options?.enabled,
     query,
   });
 

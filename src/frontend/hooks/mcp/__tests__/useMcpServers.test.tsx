@@ -3,11 +3,13 @@ import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { queryKeys } from '@/frontend/data';
+import { BackendProvider } from '@/frontend/data/BackendProvider';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
+import type { Backend, McpPromptEntry } from '@/shared/contracts';
 import type { ApiClient } from '@/shared/data/api/types';
 import type { RemoteMcpServer } from '@/shared/data/types/mcpServer';
 
-import { useMcpServerMutations } from '../useMcpServers';
+import { useCachedMcpPrompts, useMcpServerMutations } from '../useMcpServers';
 
 const mockInvalidateQueries = jest.fn<Promise<void>, [unknown]>(async () => undefined);
 const mockDelete = jest.fn(async (): Promise<void> => undefined);
@@ -160,6 +162,81 @@ describe('useMcpServerMutations', () => {
       items: [server],
       total: 1,
     });
+  });
+});
+
+describe('useCachedMcpPrompts', () => {
+  it('refetches updated cached prompts when remounted after prompt changes occurred while closed', async () => {
+    let cached: Record<string, readonly McpPromptEntry[]> = {};
+    const getCachedPrompts = jest.fn(async () => cached);
+    const unsubscribe = jest.fn();
+    const subscribePromptCatalogs = jest.fn(() => unsubscribe);
+    const backend = {
+      mcp: { getCachedPrompts, subscribePromptCatalogs },
+    } as unknown as Backend;
+    const promptsQueryClient = new QueryClient({
+      defaultOptions: { queries: { gcTime: Infinity, retry: false } },
+    });
+    let latestPrompts: Readonly<Record<string, readonly McpPromptEntry[]>> = {};
+
+    function PromptProbe({ enabled }: { enabled: boolean }) {
+      const prompts = useCachedMcpPrompts({ enabled });
+      useEffect(() => {
+        latestPrompts = prompts;
+      }, [prompts]);
+      return null;
+    }
+
+    let promptRenderer: ReactTestRenderer | undefined;
+    const mountProbe = () => (
+      <QueryClientProvider client={promptsQueryClient}>
+        <BackendProvider backend={backend}>
+          <PromptProbe enabled />
+        </BackendProvider>
+      </QueryClientProvider>
+    );
+    try {
+      await act(async () => {
+        promptRenderer = create(mountProbe());
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(getCachedPrompts).toHaveBeenCalledTimes(1);
+      expect(subscribePromptCatalogs).toHaveBeenCalledTimes(1);
+      expect(latestPrompts).toEqual({});
+
+      await act(async () => {
+        promptRenderer?.unmount();
+        promptRenderer = undefined;
+      });
+      expect(unsubscribe).toHaveBeenCalledTimes(1);
+
+      cached = {
+        'server-1': [
+          {
+            kind: 'prompt',
+            key: 'summarize',
+            title: 'Summarize',
+            description: 'Summarize',
+            arguments: [],
+          },
+        ],
+      };
+
+      await act(async () => {
+        promptRenderer = create(mountProbe());
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      expect(getCachedPrompts).toHaveBeenCalledTimes(2);
+      expect(latestPrompts).toEqual(cached);
+    } finally {
+      await act(async () => promptRenderer?.unmount());
+      promptsQueryClient.clear();
+    }
   });
 });
 

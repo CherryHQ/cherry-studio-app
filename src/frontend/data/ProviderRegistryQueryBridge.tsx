@@ -14,13 +14,23 @@ export function ProviderRegistryQueryBridge() {
       return;
     }
 
-    const unsubscribe = providers.subscribeRegistryUpdates(() => {
+    let active = true;
+    const filters = {
+      predicate: (query: { queryKey: readonly unknown[] }) =>
+        isRegistryProjectionPath(query.queryKey[0]),
+    };
+    const refresh = async () => {
       queryClient.setQueryData(queryKeys.providers.registryReady(), true);
-      void queryClient.invalidateQueries({
-        predicate: (query) => isRegistryProjectionPath(query.queryKey[0]),
-      });
+      // Invalidation alone reuses an in-flight first read, which may predate snapshot activation.
+      await queryClient.cancelQueries(filters);
+      if (!active) return;
+      await queryClient.invalidateQueries(filters);
+    };
+    const unsubscribe = providers.subscribeRegistryUpdates(() => {
+      void refresh();
     });
     return () => {
+      active = false;
       unsubscribe();
       queryClient.removeQueries({ queryKey: queryKeys.providers.registryReady() });
     };

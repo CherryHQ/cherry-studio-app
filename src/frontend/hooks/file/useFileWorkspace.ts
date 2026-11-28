@@ -7,11 +7,15 @@ const emptyFolders: FileFolder[] = [];
 
 export type FileWorkspaceAddress = { sessionId?: string; workspaceDraftId?: string };
 
-export function useFileWorkspace(address: FileWorkspaceAddress) {
+export function useFileWorkspace(
+  address: FileWorkspaceAddress,
+  options?: { loadFolders?: boolean },
+) {
   const [draftFolderId, setDraftFolderId] = useCache(
     `chat.draft_workspace.${address.workspaceDraftId ?? 'none'}`,
   );
-  const folders = useQuery('/files/folders');
+  const loadFolders = options?.loadFolders !== false;
+  const folders = useQuery('/files/folders', { enabled: loadFolders });
   const binding = useQuery('/files/workspace', {
     enabled: Boolean(address.sessionId),
     query: { sessionId: address.sessionId ?? '' },
