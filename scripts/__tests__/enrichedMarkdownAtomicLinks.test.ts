@@ -37,6 +37,19 @@ describe('Enriched Markdown atomic link patch', () => {
     );
   });
 
+  test('bounds the detector scan by the text remaining after an atomic link deletion', () => {
+    const words = readFileSync(
+      'node_modules/react-native-enriched-markdown/ios/input/ENRMWordsUtils.mm',
+      'utf8',
+    );
+    expect(words).toContain('range.location == NSNotFound');
+    expect(words).toContain('NSUInteger start = MIN(range.location, textLength)');
+    expect(words).toMatch(
+      /NSUInteger left = start;\s*if \(left > 0\) \{\s*NSRange searchRange = NSMakeRange\(0, left\);\s*NSRange whitespaceHit = \[text rangeOfCharacterFromSet:whitespace options:NSBackwardsSearch range:searchRange\];/,
+    );
+    expect(words).toContain('NSUInteger right = start + MIN(range.length, textLength - start)');
+  });
+
   test('delivers link-label escaping in both native serializers', () => {
     const android = filePatch(
       'android/src/main/java/com/swmansion/enriched/markdown/input/formatting/MarkdownSerializer.kt',

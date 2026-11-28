@@ -50,7 +50,7 @@ clean install.
 
 ### Enriched Markdown Patch
 
-`patches/react-native-enriched-markdown@1.1.1.patch` is the app's largest dependency patch: 87
+`patches/react-native-enriched-markdown@1.1.1.patch` is the app's largest dependency patch: 88
 files of native code, generated props, and matching JavaScript and TypeScript. An upgrade re-ports
 every native block below and needs a native rebuild with iOS/Android device acceptance of paste,
 undo, selection, and accessibility. Keep this table current when a block is added or retired; a
@@ -66,6 +66,7 @@ block leaves when upstream ships an equivalent.
 | Serial streaming render worker | Bug fix | #1022 | Not upstream | Upstream serializes streaming renders |
 | Signed YAML scanner failure status after grammar restoration | Bug fix | #1586 | Tree-sitter YAML 0.7.1 returns `-1` through plain `char` | Upstream preserves signed failure statuses on unsigned-char targets |
 | Atomic link overlap replacement | Bug fix | #1402 | Not upstream | Upstream replaces overlapping atomic links |
+| iOS word detection after deletion | Bug fix | Sentry CHERRY-STUDIO-APP-5S | 1.1.1 searches using the pre-edit offset | Upstream bounds word searches to the post-edit string |
 | Input link-label bracket and backslash escaping in both native serializers | Bug fix | Inline message quotes | Not fixed in 1.1.1 | Upstream emits escaped Markdown link labels without changing literal prose |
 | iOS nested display math fitted to the column | Bug fix | #1484 | Not fixed in 1.1.1 | Upstream fits nested display math |
 | Android 8.1 table and math accessibility | Bug fix | #1466 | Not fixed in 1.1.1 | Upstream supports API 27 accessibility |
