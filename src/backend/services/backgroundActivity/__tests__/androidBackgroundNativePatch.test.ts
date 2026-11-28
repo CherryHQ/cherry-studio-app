@@ -101,6 +101,16 @@ test('a refused foreground promotion keeps the started service and its task', ()
   expect(promotion).not.toContain('stopSelf');
 });
 
+test('both system timeouts stop every start request on the expired service', () => {
+  const callbacks = service.slice(
+    service.indexOf('public void onTimeout(int startId)'),
+    service.indexOf('private void createNotificationChannel('),
+  );
+  expect(callbacks).toMatch(/detachFinishedResult\(\);\s*} finally \{\s*stopSelf\(\);/);
+  expect(callbacks).toMatch(/onTimeout\(int startId, int fgsType\) \{\s*onTimeout\(startId\);/);
+  expect(callbacks).not.toContain('emitProtection(');
+});
+
 test('the service channel takes a fixed name instead of task content', () => {
   const js = readFileSync(join(root, 'src/index.js'), 'utf8');
   expect(js).toContain('channelName: options.channelName');

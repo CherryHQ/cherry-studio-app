@@ -156,7 +156,7 @@ index 35d8f8769e5ec7e36d25c3836f646889a64010c5..d77edaf538cba25b1fe10dd0e44261e6
          return extras.getString("taskTitle", "");
      }
 diff --git a/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java b/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java
-index 963b7889356454d12c150398631a3d493f53b5b2..01df4522521ebdd92f6ba6ad3c68885d30b0d8dd 100644
+index 963b7889356454d12c150398631a3d493f53b5b2..a3e781c80d1c0ed3325f9fe902040022b05c0603 100644
 --- a/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java
 +++ b/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java
 @@ -10,20 +10,74 @@ import android.content.Intent;
@@ -266,7 +266,7 @@ index 963b7889356454d12c150398631a3d493f53b5b2..01df4522521ebdd92f6ba6ad3c68885d
                  .setColor(color);
  
          final Bundle progressBarBundle = bgOptions.getProgressBar();
-@@ -92,28 +152,104 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
+@@ -92,47 +152,126 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
          if (extras == null) {
              throw new IllegalArgumentException("Extras cannot be null");
          }
@@ -385,13 +385,22 @@ index 963b7889356454d12c150398631a3d493f53b5b2..01df4522521ebdd92f6ba6ad3c68885d
      }
  
      @Override
-@@ -124,15 +260,16 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
+     public void onTimeout(int startId) {
+-        super.onTimeout(startId);
+-        stopSelf(startId);
++        // Android revokes the whole service, including newer start requests on this instance.
++        try {
++            detachFinishedResult();
++        } finally {
++            stopSelf();
++        }
+     }
  
      @Override
      public void onTimeout(int startId, int fgsType) {
-+        emitProtection(false);
-         super.onTimeout(startId, fgsType);
-         stopSelf(startId);
+-        super.onTimeout(startId, fgsType);
+-        stopSelf(startId);
++        onTimeout(startId);
      }
  
 -    private void createNotificationChannel(@NonNull final String taskTitle, @NonNull final String taskDesc) {
