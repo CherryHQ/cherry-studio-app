@@ -10,8 +10,7 @@ The four direct packages (`chord`, `pi-ai`, `pi-codemode`, `pi-durable`) and tra
 `pi-schema` and `pi-telemetry` move from `1.6.1` to `1.7.0`. `@google/genai` stays at `3.6.1` and
 `@anthropic-ai/vertex-sdk` stays at `0.22.0`. Because `1.7.0` was published within the 24-hour
 `minimumReleaseAge` window (`2026-11-27T16:59:43.623Z`), `pnpm-workspace.yaml` temporarily lists the
-six `@earendil-works/*@1.7.0` entries under `minimumReleaseAgeExclude`. `pnpm dedupe` also collapsed
-the pre-existing split `zod` peer resolutions onto `zod@4.6.7`. See the
+six `@earendil-works/*@1.7.0` entries under `minimumReleaseAgeExclude`. See the
 [Durable](https://github.com/earendil-works/pi/blob/v1.7.0/packages/durable/CHANGELOG.md),
 [Pi AI](https://github.com/earendil-works/pi/blob/v1.7.0/packages/ai/CHANGELOG.md) and
 [Chord](https://github.com/earendil-works/pi/blob/v1.7.0/packages/chord/CHANGELOG.md) changelogs.
@@ -819,11 +818,11 @@ read-only patch non-reapplicability check across the four `@earendil-works/*@1.7
 (`4 / 4`), and the targeted `--runInBand` Jest sweep across `src/backend/ai/agent/runtime/pi/__tests__`
 (43 suites, including the new GitHub Copilot `reasoning_opaque` regression),
 `AgentSqlDatabase.test.ts`, `metroResolution.test.ts`, and `architectureBoundaries.test.ts` passed
-**46 / 46 suites (1,583 / 1,583 tests)** (an initial 46-suite run hit a 20 s Jest timeout in one
-`piDurableTools.test.ts` case, which passed 78 / 78 in 4.94 s standalone and passed inside the
-subsequent clean 46 / 46 run in 14.69 s). Dependency installation and deduplication used pnpm 12.2.1
-with lifecycle scripts disabled (`--ignore-scripts`). Native Hermes/device acceptance, production
-provider calls, and reopening an actual on-device working file remain `device-pending`.
+**46 / 46 suites (1,583 / 1,583 tests)** after restoring the shared `zod@4.4.3` lockfile resolution
+(keeping single `@cherrystudio/ai-sdk-provider`, `@openrouter/ai-sdk-provider`, and `expo`
+instances). Dependency installation used pnpm 12.2.1 with lifecycle scripts disabled
+(`--ignore-scripts`). Native Hermes/device acceptance, production provider calls, and reopening an
+actual on-device working file remain `device-pending`.
 
 Following the final runtime and test simplifications, `pnpm typecheck`, `pnpm lint` (0 warnings,
 0 errors across `oxlint`, `expo lint`, and workspace `eslint`), `pnpm format:check` (4,076 files),
