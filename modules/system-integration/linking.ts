@@ -19,7 +19,14 @@ export async function retireNativeUrl(url: string): Promise<void> {
   }
 }
 
-/** A profile reload re-reads native launch data, including previously abandoned deliveries. */
-export async function waitForNativeUrlRetirements(): Promise<void> {
-  while (retirements.size) await Promise.allSettled(retirements);
+/** Discard queued links and finish their native acknowledgements before restarting JavaScript. */
+export async function reloadAfterNativeUrlRetirements(
+  discardQueued: () => void,
+  reload: () => Promise<void>,
+): Promise<void> {
+  for (;;) {
+    discardQueued();
+    if (!retirements.size) return reload();
+    await Promise.allSettled(retirements);
+  }
 }

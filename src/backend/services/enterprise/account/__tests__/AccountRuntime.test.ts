@@ -215,24 +215,41 @@ describe('AccountRuntime', () => {
     expect(options.reload).toHaveBeenCalledTimes(1);
   });
 
-  it('awaits release of the handled launch URL before reloading into the admitted profile', async () => {
+  it('retires the latest route delivery while it waits for a browser result that switches profiles', async () => {
     const { options } = setup(signedIn('enterprise'));
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
-    const retireCallbackUrl = jest.fn(async () => {
+    const complete = options.portal.completeSignIn.getMockImplementation()!;
+    options.portal.completeSignIn.mockImplementationOnce(async (url, completion) => {
       entered.resolve();
       await release.promise;
+      return complete(url, completion);
     });
+    const browserUrl = 'cb://?code=browser';
+    const routeUrl = 'cb://?code=routed';
+    options.openBrowser.mockResolvedValueOnce(browserUrl);
+    const retireCallbackUrl = jest.fn(async (_url: string) => {});
     const runtime = new AccountRuntime({ ...options, retireCallbackUrl });
-    const callback = 'cb://?code=cold';
-    const result = runtime.receiveRedirect(callback);
+    const browser = runtime.signIn();
     await entered.promise;
-    expect(options.portal.completeSignIn).toHaveBeenCalledTimes(1);
-    expect(retireCallbackUrl).toHaveBeenCalledWith(callback);
+    const route = runtime.receiveRedirect(routeUrl);
+    expect(retireCallbackUrl.mock.calls).toEqual([[browserUrl], [routeUrl]]);
     expect(options.reload).not.toHaveBeenCalled();
     release.resolve();
-    await expect(result).resolves.toBe(false);
+    await expect(browser).resolves.toBe(false);
+    await expect(route).resolves.toBe(false);
+    expect(options.portal.completeSignIn).toHaveBeenCalledTimes(1);
     expect(options.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('retires an owned cold URL when no portal registration is available', async () => {
+    const { options } = setup({ _tag: 'signedOut' });
+    const retireCallbackUrl = jest.fn(async (_url: string) => {});
+    const runtime = new AccountRuntime({ ...options, portal: null, retireCallbackUrl });
+    await expect(runtime.receiveRedirect('cb://?code=orphan')).rejects.toMatchObject({
+      code: 'unavailable',
+    });
+    expect(retireCallbackUrl.mock.calls).toEqual([['cb://?code=orphan']]);
   });
 
   it('does not retire another feature’s launch URL returned by the browser', async () => {
@@ -278,8 +295,10 @@ describe('AccountRuntime', () => {
     ]);
   });
 
-  it('waits for the SDK to persist a live registration before inspecting an arriving link', async () => {
-    const { runtime, options } = setup(signedIn('cloud'));
+  it('registers a routed URL for retirement while the SDK is persisting a live registration', async () => {
+    const { options } = setup(signedIn('cloud'));
+    const retireCallbackUrl = jest.fn(async (_url: string) => {});
+    const runtime = new AccountRuntime({ ...options, retireCallbackUrl });
     const registration = Promise.withResolvers<{ url: string; redirectUri: string }>();
     const started = Promise.withResolvers<void>();
     options.portal.beginSignIn.mockImplementationOnce(() => {
@@ -288,6 +307,7 @@ describe('AccountRuntime', () => {
     });
     const login = runtime.signIn();
     const route = runtime.receiveRedirect('cb://?code=1');
+    expect(retireCallbackUrl.mock.calls).toEqual([['cb://?code=1']]);
     await started.promise;
     expect(options.portal.completeSignIn).not.toHaveBeenCalled();
     registration.resolve({ url: 'https://portal/sign-in', redirectUri: 'cb://' });

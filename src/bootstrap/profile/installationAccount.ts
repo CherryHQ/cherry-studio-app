@@ -15,13 +15,14 @@ import {
 } from '@/backend/services/enterprise';
 import { createFetchBridge } from '@/backend/services/http';
 import { nativeCallbackUrl } from '@/backend/utils/oauth';
+import { discardAccountCallback } from '@/frontend/appShell/account/nativeIntent';
 import { AccountError, type AccountSessionContext } from '@/shared/contracts/account';
 import { getActiveProfile } from '@/shared/data/activeProfile';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import {
   retireNativeUrl,
-  waitForNativeUrlRetirements,
+  reloadAfterNativeUrlRetirements,
 } from '../../../modules/system-integration/linking';
 import { setDiagnosticAccountReader } from '../runtime/diagnosticContext';
 import {
@@ -146,10 +147,10 @@ function createAccount(): AccountRuntime {
       return result.type === 'success' ? result.url : null;
     },
     retireCallbackUrl: retireNativeUrl,
-    async reload() {
-      await waitForNativeUrlRetirements();
-      await reloadAppAsync('Switch data profile');
-    },
+    reload: () =>
+      reloadAfterNativeUrlRetirements(discardAccountCallback, () =>
+        reloadAppAsync('Switch data profile'),
+      ),
   });
   setDiagnosticAccountReader(() => {
     const state = runtime.getState();

@@ -236,6 +236,12 @@ export class AccountRuntime implements AccountModule {
 
   private async finishRedirect(attempt: SignInRedirects, url: string): Promise<boolean> {
     const live = Boolean(attempt.browser);
+    // Every owned delivery retires its own URL, even if it ultimately shares another SDK result.
+    if (this.options.retireCallbackUrl && isAccountCallbackUrl(url, this.options.redirectUri)) {
+      void this.options.retireCallbackUrl(url).catch(() => {
+        logger.warn('Could not retire the received account callback URL');
+      });
+    }
     if (attempt.registration) await attempt.registration;
     while (attempt.callback && attempt.callback.url !== url) {
       const previous = attempt.callback;
@@ -267,7 +273,7 @@ export class AccountRuntime implements AccountModule {
     let target: ActiveProfile | undefined;
     let proposed: AuthState | undefined;
     try {
-      const completion = portal.completeSignIn(url, {
+      const session = await portal.completeSignIn(url, {
         validate: async (candidate) => {
           proposed = candidate.state;
           if (!proposed.subject || !proposed.profile?.profileId) throw new AccountError('rejected');
@@ -296,15 +302,6 @@ export class AccountRuntime implements AccountModule {
             address,
           );
         },
-      });
-      const session = await completion.finally(async () => {
-        if (!this.options.retireCallbackUrl || !isAccountCallbackUrl(url, this.options.redirectUri))
-          return;
-        try {
-          await this.options.retireCallbackUrl(url);
-        } catch {
-          logger.warn('Could not retire the handled account callback URL');
-        }
       });
       if (session._tag !== 'signedIn' || !session.profile || !target)
         throw new AccountError('rejected');

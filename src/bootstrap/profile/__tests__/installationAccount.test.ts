@@ -127,6 +127,40 @@ test('a private-profile reload waits for a cold account callback discarded befor
   expect(mockLegacyClear).not.toHaveBeenCalled();
 });
 
+test('a profile switch retires unmounted account routes, including a link arriving during cleanup', async () => {
+  const first = 'cherrystudio-preview://auth/callback?code=first';
+  const second = 'cherrystudio-preview://auth/callback?code=second';
+  const ackFirst = Promise.withResolvers<void>();
+  const ackSecond = Promise.withResolvers<void>();
+  const startedSecond = Promise.withResolvers<void>();
+  mockConsumeUrl.mockReturnValueOnce(ackFirst.promise).mockImplementationOnce(() => {
+    startedSecond.resolve();
+    return ackSecond.promise;
+  });
+  let route!: typeof import('@/frontend/appShell/account/nativeIntent').routeAccountCallback;
+  jest.isolateModules(() => {
+    route = jest.requireActual<typeof import('@/frontend/appShell/account/nativeIntent')>(
+      '@/frontend/appShell/account/nativeIntent',
+    ).routeAccountCallback;
+    const { installationAccount } =
+      jest.requireActual<typeof import('../installationAccount')>('../installationAccount');
+    installationAccount();
+  });
+  route(first, first);
+  expect(mockConsumeUrl).not.toHaveBeenCalled();
+  const account = mockCreateRuntime.mock.lastCall![0] as AccountRuntimeOptions;
+  const reload = account.reload();
+  expect(mockConsumeUrl.mock.calls).toEqual([[first]]);
+  route(second, second);
+  ackFirst.resolve();
+  await startedSecond.promise;
+  expect(mockConsumeUrl.mock.calls).toEqual([[first], [second]]);
+  expect(mockReload).not.toHaveBeenCalled();
+  ackSecond.resolve();
+  await reload;
+  expect(mockReload).toHaveBeenCalledTimes(1);
+});
+
 test('an older native binary never clears the latest URL without comparing it', async () => {
   mockHasConsumption = false;
   const account = launch();
