@@ -655,14 +655,16 @@ export class RemoteAgentScope implements RemoteAgentSource {
     session: DesktopSession,
     method: M,
     params: AgentParams<M>,
-    signal: AbortSignal,
+    signal?: AbortSignal,
   ) {
     this.assertActive();
-    signal.throwIfAborted();
+    signal?.throwIfAborted();
     try {
       const value = await this.track(session.request(method, params as DesktopParams<M>, signal));
-      this.assertActive();
-      signal.throwIfAborted();
+      if (signal) {
+        this.assertActive();
+        signal.throwIfAborted();
+      }
       return value;
     } catch (error) {
       // A lost reply is not a desktop verdict: the command stays uncertain and is recovered by receipt.
@@ -1321,8 +1323,10 @@ export class RemoteAgentScope implements RemoteAgentSource {
         const sync = new SessionSync(
           sessionId,
           {
-            request: (method, params, signal) =>
-              this.call(session, method, params, signal ?? this.lease.signal),
+            request: (method, params, signal) => this.call(session, method, params, signal),
+            // The connection can outlive this scope and still hold its subscriptions.
+            closeSubscription: (subscriptionId) =>
+              session.request('agent.subscriptions.close', { subscriptionId }),
             onNotification: session.onNotification.bind(session),
             readContent: (ref, signal) => this.content(sessionId, ref, signal),
           },

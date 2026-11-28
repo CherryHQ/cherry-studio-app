@@ -69,6 +69,8 @@ function setup(state = projection(), readContent?: () => Promise<Uint8Array>) {
   const sync = new SessionSync(
     's',
     {
+      closeSubscription: (subscriptionId) =>
+        request('agent.subscriptions.close', { subscriptionId }),
       request: request as AgentRequest,
       readContent,
       onNotification: (listener) => {
@@ -119,11 +121,7 @@ function batch(seq = '1', subscriptionId = 'sub-1', streamEpoch = 'epoch') {
 it('installs a desktop checkpoint before activating and applies events before ACK', async () => {
   const test = setup();
   await test.sync.start();
-  expect(test.request).toHaveBeenCalledWith(
-    'agent.sessions.subscribe',
-    { sessionId: 's' },
-    expect.anything(),
-  );
+  expect(test.request).toHaveBeenCalledWith('agent.sessions.subscribe', { sessionId: 's' });
   expect(test.order.indexOf('publish:0:false')).toBeLessThan(
     test.order.indexOf('agent.subscriptions.activate'),
   );
@@ -376,11 +374,7 @@ it('rebuilds after restart from the latest desktop checkpoint including terminal
   expect(restarted.publish).not.toHaveBeenCalled();
   release();
   await starting;
-  expect(restarted.request).toHaveBeenCalledWith(
-    'agent.sessions.subscribe',
-    { sessionId: 's' },
-    expect.anything(),
-  );
+  expect(restarted.request).toHaveBeenCalledWith('agent.sessions.subscribe', { sessionId: 's' });
   expect(restarted.sync.current).toMatchObject({
     cursor: state.cursor,
     session: { title: 'Changed on PC' },
@@ -460,11 +454,7 @@ it('uses the desktop checkpoint cursor and ignores duplicate and retired-subscri
   state.cursor.seq = '1';
   const test = setup(state);
   await test.sync.start();
-  expect(test.request).toHaveBeenCalledWith(
-    'agent.sessions.subscribe',
-    { sessionId: 's' },
-    expect.anything(),
-  );
+  expect(test.request).toHaveBeenCalledWith('agent.sessions.subscribe', { sessionId: 's' });
   test.notify(batch('1'));
   test.notify(batch('2', 'old-subscription'));
   await settle();
@@ -489,11 +479,9 @@ it.each(['gap', 'epoch', 'reset'])('re-prepares without a cursor after %s', asyn
   expect(
     test.request.mock.calls.findLast(([method]) => method === 'agent.sessions.subscribe')?.[1],
   ).toEqual({ sessionId: 's' });
-  expect(test.request).toHaveBeenCalledWith(
-    'agent.subscriptions.close',
-    { subscriptionId: 'sub-1' },
-    expect.anything(),
-  );
+  expect(test.request).toHaveBeenCalledWith('agent.subscriptions.close', {
+    subscriptionId: 'sub-1',
+  });
   expect(test.sync.current?.cursor.seq).toBe('0');
   test.sync.stop();
   await test.sync.drain();
@@ -570,4 +558,31 @@ it('does not install or activate a checkpoint that finishes after suspension', a
   expect(
     test.request.mock.calls.some(([method]) => method === 'agent.subscriptions.activate'),
   ).toBe(false);
+});
+
+it('closes the desktop subscription when its reply arrives after observation stops', async () => {
+  const test = setup();
+  let release!: () => void;
+  const wait = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const request = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method, params, signal?: AbortSignal) => {
+    if (method === 'agent.sessions.subscribe') await wait;
+    signal?.throwIfAborted();
+    return request(method, params);
+  });
+  const started = test.sync.start();
+  await settle();
+  test.sync.stop();
+  release();
+  await expect(started).rejects.toMatchObject({ name: 'AbortError' });
+  await test.sync.drain();
+  expect(test.request.mock.calls.map(([method]) => method)).toEqual([
+    'agent.sessions.subscribe',
+    'agent.subscriptions.close',
+  ]);
+  expect(test.request).toHaveBeenCalledWith('agent.subscriptions.close', {
+    subscriptionId: 'sub-1',
+  });
 });

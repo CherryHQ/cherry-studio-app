@@ -717,6 +717,7 @@ export class AgentSessionChatClient {
         });
         if (terminal) {
           this.options.onSessionChanged?.(entry.state.sessionId);
+          this.reconcileTurnCompletion(entry);
         }
         return;
       }
@@ -799,6 +800,7 @@ export class AgentSessionChatClient {
             : undefined,
         );
         if (transcriptChanged) this.options.onTranscriptChanged?.(entry.state.sessionId);
+        if (event.type === 'message.finalized') this.reconcileTurnCompletion(entry);
         return;
       }
       case 'turn.deleted':
@@ -854,6 +856,29 @@ export class AgentSessionChatClient {
           ),
         });
     }
+  }
+
+  private reconcileTurnCompletion(entry: SessionEntry): void {
+    const turn = entry.state.activeTurn;
+    if (!turn) return;
+    const terminal = TERMINAL_TURN_STATUSES.has(turn.status);
+    const answer = entry.liveMessages.get(turn.assistantMessageId);
+    if (!answer || answer.turnId !== turn.id || isTerminalMessage(answer) === terminal) return;
+
+    // The Host normally delivers both updates together. Reobserve if one still disagrees.
+    const generation = entry.generation;
+    void Promise.resolve(entry.observationPromise)
+      .then(() => {
+        const latest = entry.liveMessages.get(answer.id);
+        if (
+          entry.generation === generation &&
+          entry.state.status === 'ready' &&
+          entry.state.activeTurn === turn &&
+          (!latest || (latest.turnId === turn.id && isTerminalMessage(latest) !== terminal))
+        )
+          return this.refresh(entry.state.sessionId);
+      })
+      .catch(() => undefined);
   }
 
   private cancelLiveMessagesFlush(entry: SessionEntry): void {

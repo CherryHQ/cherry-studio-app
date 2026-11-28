@@ -462,6 +462,67 @@ it('retains an active desktop execution after its screen leaves and releases dem
   await test.source.drain();
 });
 
+it('allows a new observer on the same desktop connection after background completion releases the scope', async () => {
+  const test = backgroundFixture();
+  const idle = { ...test.projection.session, idleRevision: '2' };
+  test.projection.session = {
+    ...test.projection.session,
+    idleRevision: undefined,
+    activeExecutionId: 'e',
+  };
+  test.projection.executions.e = { executionId: 'e', status: 'running', durable: false };
+  let subscribed = false;
+  const request = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.sessions.subscribe') {
+      if (subscribed)
+        throw new RemoteFailureError({ reason: 'CONFLICT', message: 'Subscription already open' });
+      subscribed = true;
+    } else if (method === 'agent.subscriptions.close') {
+      subscribed = false;
+    }
+    return request(method, params);
+  });
+  const unobserve = test.source.observe('s', () => {});
+  await settle();
+  unobserve();
+  test.source.subscribeExecution(() => {
+    if (!test.source.hasPendingExecution()) queueMicrotask(() => test.source.dispose());
+  });
+
+  test.notify({
+    method: 'agent.events',
+    params: {
+      sessionId: 's',
+      subscriptionId: 'sub',
+      streamEpoch: 'epoch',
+      events: [
+        {
+          seq: '1',
+          kind: 'execution.updated',
+          payload: {
+            executionId: 'e',
+            status: 'completed',
+            durable: true,
+            messageId: 'm',
+            history: { historyRevision: '1', messageRevision: '1' },
+          },
+        },
+        { seq: '2', kind: 'session.updated', payload: idle },
+      ],
+    },
+  });
+  await settle();
+  await test.source.drain();
+
+  expect(test.lease.release).toHaveBeenCalledTimes(1);
+  await expect(test.request('agent.sessions.subscribe', { sessionId: 's' })).resolves.toMatchObject(
+    {
+      mode: 'checkpoint',
+    },
+  );
+});
+
 it('revocation of phone protection does not cancel or resubmit the desktop execution', async () => {
   const test = backgroundFixture();
   test.projection.executions.e = { executionId: 'e', status: 'awaiting-approval', durable: false };

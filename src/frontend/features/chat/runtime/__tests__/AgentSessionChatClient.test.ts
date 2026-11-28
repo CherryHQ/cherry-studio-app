@@ -1365,6 +1365,55 @@ describe('AgentSessionChatClient', () => {
     }
   });
 
+  test.each(['message', 'turn', 'both'] as const)(
+    'unlocks the session after receiving terminal state for %s',
+    async (received) => {
+      const assistant = assistantMessage();
+      const activeTurn: AgentTurnView = {
+        assistantMessageId: assistant.id,
+        endedAt: null,
+        error: null,
+        id: 'turn-1',
+        sessionId: assistant.sessionId,
+        startedAt: assistant.createdAt,
+        status: 'running',
+      };
+      let current: AgentSessionSnapshot = {
+        ...snapshot(),
+        activeTurn,
+        streamingMessage: assistant,
+      };
+      let publish!: (event: AgentEvent) => void;
+      const protocol = protocolWithObservation(async (_id, listener) => {
+        publish = listener;
+        return { snapshot: current, unsubscribe() {} };
+      });
+      const client = new AgentSessionChatClient(protocol);
+      const release = client.subscribe(assistant.sessionId, () => {});
+      try {
+        await client.observe(assistant.sessionId);
+        expect(isAgentSessionBusy(client.getState(assistant.sessionId))).toBe(true);
+
+        current = snapshot();
+        if (received !== 'turn')
+          publish({ type: 'message.finalized', message: { ...assistant, status: 'success' } });
+        if (received !== 'message')
+          publish({
+            type: 'turn.updated',
+            turn: { ...activeTurn, status: 'completed', endedAt: '2026-08-25T00:00:01.000Z' },
+          });
+        await Promise.resolve();
+        await client.observe(assistant.sessionId);
+
+        expect(isAgentSessionBusy(client.getState(assistant.sessionId))).toBe(false);
+        expect(protocol.observeSession).toHaveBeenCalledTimes(received === 'both' ? 1 : 2);
+      } finally {
+        release();
+        client.dispose();
+      }
+    },
+  );
+
   test('drops terminal live copies once the durable transcript contains the same versions', async () => {
     let listener: ((event: AgentEvent) => void) | undefined;
     const protocol = protocolWithObservation(async (_sessionId, nextListener) => {
