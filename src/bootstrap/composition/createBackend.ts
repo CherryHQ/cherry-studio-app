@@ -184,7 +184,7 @@ export function createBackend(
   });
   infrastructure.desktopConnections.configure(
     desktopStore,
-    () => infrastructure.providerRegistryUpdater.ensureReady(),
+    (options) => infrastructure.providerRegistryUpdater.ensureReady(options),
     infrastructure.desktopConnectionManager,
   );
   const { filterModelsSupportedBySystem, isModelSupportedBySystem } = createSystemModelSupport(

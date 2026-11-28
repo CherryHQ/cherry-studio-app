@@ -31,11 +31,11 @@ export function useDesktopProviderSync(connectionId?: string) {
   );
   const requested = useRef<string | undefined>(undefined);
   const loadPreview = useCallback(
-    async (connection: DesktopConnection) => {
+    async (connection: DesktopConnection, retryCatalog = Boolean(previewError)) => {
       requested.current = connection.id;
       setPreviewError(undefined);
       try {
-        const next = await preview(connection.id);
+        const next = await preview(connection.id, retryCatalog);
         if (!next) return;
         setLoadedPreview({ connection, preview: next });
         setSelectedProviderIds(
@@ -49,16 +49,16 @@ export function useDesktopProviderSync(connectionId?: string) {
         setPreviewError(failure);
       }
     },
-    [preview],
+    [preview, previewError],
   );
   useEffect(() => {
     const single = availableConnections.length === 1 ? availableConnections[0] : undefined;
     if (!isLoading && single && !loadedPreview && !previewError && requested.current !== single.id)
-      void loadPreview(single);
+      void loadPreview(single, false);
   }, [availableConnections, isLoading, loadedPreview, previewError, loadPreview]);
   const retryPreview = () => {
     const connection = availableConnections.find((item) => item.id === requested.current);
-    if (connection) void loadPreview(connection);
+    if (connection) void loadPreview(connection, true);
     else void refetch();
   };
   const toggleProvider = (id: string) =>

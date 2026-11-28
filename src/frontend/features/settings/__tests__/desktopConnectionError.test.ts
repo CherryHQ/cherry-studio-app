@@ -74,6 +74,13 @@ describe('desktopConnectionErrorMessage', () => {
     );
   });
 
+  it('explains the model catalog download when the desktop snapshot was already received', () => {
+    const error = new DataApiError(ErrorCode.INVALID_OPERATION, 'Catalog unavailable', {
+      reason: 'catalog-unavailable',
+    });
+    expect(desktopConnectionErrorMessage(error, t)).toBe('models.registry.downloadRequired');
+  });
+
   it('falls back to the unknown message for non-DataApiError values', () => {
     expect(desktopConnectionErrorMessage(new Error('boom'), t)).toBe(
       TRANSLATIONS['settings.desktopConnection.error.unknown'],

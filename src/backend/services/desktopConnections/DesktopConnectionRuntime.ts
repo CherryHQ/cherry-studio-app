@@ -14,7 +14,12 @@ import {
   ServicePhase,
 } from '@/backend/core/lifecycle';
 import type { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
-import type { DesktopConnectionsModule, DesktopPairingProgress } from '@/shared/contracts';
+import { isHttpError } from '@/backend/services/http';
+import type {
+  DesktopConnectionsModule,
+  DesktopPairingProgress,
+  ProvidersModule,
+} from '@/shared/contracts';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import {
   type DesktopImportSelectionsDto,
@@ -91,14 +96,14 @@ const sleep = (ms: number, signal: AbortSignal) =>
 export class DesktopConnectionRuntime extends BaseService implements DesktopConnectionsModule {
   private store: ConnectionStore | undefined;
   private connections?: DesktopConnectionManager;
-  private ensureModelRegistryReady: (() => Promise<void>) | undefined;
+  private ensureModelRegistryReady?: ProvidersModule['ensureRegistryReady'];
   private stopped = false;
   private readonly controllers = new Set<AbortController>();
   private tail: Promise<unknown> = Promise.resolve();
 
   configure(
     store: ConnectionStore,
-    ensureModelRegistryReady: () => Promise<void>,
+    ensureModelRegistryReady: ProvidersModule['ensureRegistryReady'],
     connections: DesktopConnectionManager,
   ): void {
     this.connections = connections;
@@ -279,14 +284,21 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
     });
   }
 
-  preview(id: string, signal: AbortSignal) {
+  preview(id: string, signal: AbortSignal, retryCatalog = false) {
     return this.run('preview', signal, async (store, signal) => {
       const snapshot = await this.loadSnapshot(store, id, signal);
       signal.throwIfAborted();
       const preview = await store.preview(snapshot);
       // The sync picker imports models too; prepare its dependency before offering confirmation.
       if (preview.providers.some((provider) => !provider.unavailableReason)) {
-        await this.ensureModelRegistryReady!();
+        try {
+          await this.ensureModelRegistryReady!(retryCatalog ? { force: true } : undefined);
+        } catch (error) {
+          signal.throwIfAborted();
+          if (!isHttpError(error) || error.kind === 'cancelled') throw error;
+          this.reportUnexpected('preview.catalog', error);
+          throw desktopError('catalog-unavailable', 'The model catalog is unavailable');
+        }
       }
       signal.throwIfAborted();
       return preview;

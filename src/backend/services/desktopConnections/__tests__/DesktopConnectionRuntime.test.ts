@@ -3,6 +3,7 @@ import { loggerService } from '@logger';
 import { AppState } from 'react-native';
 
 import type { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
+import { HttpError } from '@/backend/services/http';
 import { DataApiErrorFactory, ErrorCode } from '@/shared/data/api/errors';
 import type { DesktopConnectionFailure } from '@/shared/data/api/schemas/desktopConnections';
 
@@ -945,9 +946,14 @@ describe('DesktopConnectionRuntime', () => {
       providers: [{ action: 'add' as const, id: 'openai', models: [], name: 'OpenAI' }],
     };
     store.preview.mockResolvedValue(preview);
-    ensureModelRegistryReady.mockRejectedValueOnce(new Error('registry unavailable'));
+    ensureModelRegistryReady.mockRejectedValueOnce(
+      new HttpError('catalog timed out', { kind: 'timeout' }),
+    );
 
-    await expect(runtime.preview(id, signal())).rejects.toThrow('registry unavailable');
+    await expect(runtime.preview(id, signal())).rejects.toMatchObject({
+      details: { reason: 'catalog-unavailable' },
+    });
+    expect(ensureModelRegistryReady).toHaveBeenLastCalledWith(undefined);
     expect(store.import).not.toHaveBeenCalled();
 
     const entered = deferred<void>();
@@ -957,12 +963,13 @@ describe('DesktopConnectionRuntime', () => {
       await ready.promise;
     });
     let returned = false;
-    const request = runtime.preview(id, signal()).then((result) => {
+    const request = runtime.preview(id, signal(), true).then((result) => {
       returned = true;
       return result;
     });
     await entered.promise;
     expect(returned).toBe(false);
+    expect(ensureModelRegistryReady).toHaveBeenLastCalledWith({ force: true });
     ready.resolve();
     await expect(request).resolves.toEqual(preview);
   });

@@ -99,7 +99,8 @@ export function useDesktopConnectionActions() {
     [connections, run],
   );
   const preview = useCallback(
-    (id: string) => run('preview', (signal) => connections.preview(id, signal)),
+    (id: string, retryCatalog?: boolean) =>
+      run('preview', (signal) => connections.preview(id, signal, retryCatalog)),
     [connections, run],
   );
   const importSelected = useCallback(
