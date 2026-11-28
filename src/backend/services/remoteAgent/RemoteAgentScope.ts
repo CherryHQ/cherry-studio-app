@@ -1267,13 +1267,18 @@ export class RemoteAgentScope implements RemoteAgentSource {
     this.assertActive();
     return this.track(
       this.withPreparation(async () => {
+        const draftId = input.replaceStartId
+          ? this.actions.getStarts().find((start) => start.id === input.replaceStartId)?.draftId
+          : input.draftId;
+        if (!draftId) throw new RemoteAgentError('CONFLICT');
         const prepared =
           input.attachments?.length && this.state.preupload
             ? await this.attachmentDrafts!.prepare(
-                `draft:${input.draftId}`,
+                `draft:${draftId}`,
                 {
                   agentId: input.agentId,
                   workspace: input.workspace ?? { kind: 'registered', id: input.workspaceId! },
+                  ...(input.model && { model: input.model }),
                 },
                 input.attachments,
               )

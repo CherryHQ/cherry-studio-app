@@ -1,9 +1,14 @@
+import { useLayoutEffect } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { cacheService } from '@/frontend/data/CacheService';
 
-import { readRemoteDraft, useRemoteDraftPersistence } from '../useRemoteDraftPersistence';
+import {
+  readRemoteDraft,
+  useRemoteDraftModel,
+  useRemoteDraftPersistence,
+} from '../useRemoteDraftPersistence';
 
 const appStateListeners = new Set<(state: AppStateStatus) => void>();
 let renderer: ReactTestRenderer | undefined;
@@ -61,4 +66,39 @@ test('saves pending text when the draft closes, changes key, or the app leaves t
   act(() => renderer?.unmount());
   renderer = undefined;
   expect(readRemoteDraft('second')).toBe('three');
+});
+
+test('restores an explicit model only for the same draft and Agent, including text-only legacy drafts', () => {
+  let selection!: ReturnType<typeof useRemoteDraftModel>;
+  function Model({ draft, agent }: { draft: string; agent: string }) {
+    const current = useRemoteDraftModel(draft, agent);
+    useLayoutEffect(() => {
+      selection = current;
+    }, [current]);
+    return null;
+  }
+  cacheService.setPersist('remote_agent.drafts', { first: 'unsent text' });
+  act(() => {
+    renderer = create(<Model draft="first" agent="a" />);
+  });
+  expect(selection.model).toBeUndefined();
+  const model = {
+    providerId: 'provider',
+    modelId: 'm',
+    name: 'My Model',
+    providerName: 'Provider',
+  };
+  act(() => selection.setModel(model));
+  act(() => renderer!.unmount());
+  act(() => {
+    renderer = create(<Model draft="first" agent="b" />);
+  });
+  expect(selection.model).toBeUndefined();
+  act(() => renderer!.update(<Model draft="second" agent="a" />));
+  expect(selection.model).toBeUndefined();
+  act(() => renderer!.update(<Model draft="first" agent="a" />));
+  expect(selection.model).toEqual(model);
+  act(() => selection.setModel());
+  expect(selection.model).toBeUndefined();
+  expect(readRemoteDraft('first')).toBe('unsent text');
 });

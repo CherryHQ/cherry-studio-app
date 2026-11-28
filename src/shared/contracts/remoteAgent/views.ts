@@ -9,10 +9,12 @@ export type RemoteWorkspaceSelection = { kind: 'registered'; id: string } | { ki
 export type RemoteAttachment = { fileEntryId: FileEntryId; name: string; mediaType: string };
 export type RemoteAttachmentDraftTarget =
   | { sessionId: string }
-  | { agentId: string; workspace: RemoteWorkspaceSelection };
+  | { agentId: string; workspace: RemoteWorkspaceSelection; model?: RemoteModelSelection };
 export type RemoteAttachmentDraftView = {
   key: string;
   id: string;
+  draftTarget?: Extract<RemoteAttachmentDraftTarget, { agentId: string }>;
+  canReviseModel?: boolean;
   sessionId?: string;
   busy?: boolean;
   items: (RemoteAttachment & {
@@ -27,6 +29,8 @@ export type RemoteModelSelection = Pick<RemoteModelSummary, 'modelId' | 'provide
 export type RemoteModelOption = RemoteModelSummary & { providerName: string };
 export type RemoteStartInput = {
   draftId: string;
+  /** Atomically retire this rejected start when its replacement is admitted. */
+  replaceStartId?: string;
   agentId: string;
   model?: RemoteModelSelection;
   text: string;

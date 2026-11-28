@@ -3,6 +3,7 @@ import type {
   RemoteSessionSnapshot,
   RemoteSourceState,
 } from '@/shared/contracts/remoteAgent';
+import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import { createConversationReferences } from '../../conversationState';
 import { remoteInput } from '../createRemoteConversationSession';
@@ -403,6 +404,79 @@ it('binds workspaces to the selected Agent and never invents a default workspace
   test.source.dispose();
 });
 
+it('stages the selected model and submits to the target retained by preupload after reopening', async () => {
+  const test = fixture();
+  test.remote.stageAttachments = jest.fn();
+  const capabilities = {
+    status: 'ready' as const,
+    sessionModelSelection: true,
+    preupload: true,
+    attachments: true,
+  };
+  test.setState(capabilities);
+  const { catalog } = test.source;
+  const agent = (await catalog.listAgents(undefined, signal())).items[0].ref;
+  const workspace = (await catalog.listWorkspaces!(agent, undefined, signal())).items[0].ref;
+  const model = {
+    providerId: 'provider',
+    modelId: 'chosen',
+    name: 'Display',
+    providerName: 'Provider',
+  };
+  const id = 'draft' as DraftId;
+  const draft = await catalog.prepareDraft({ agent, workspace, draftId: id, model }, signal());
+  const target = {
+    agentId: 'a',
+    workspace: { kind: 'registered' as const, id: 'w' },
+    model: { providerId: 'provider', modelId: 'chosen' },
+  };
+  const file = {
+    fileEntryId: FileEntryIdSchema.parse('12345678-1234-4234-8234-123456789abc'),
+    name: 'image.png',
+    mediaType: 'image/png',
+  };
+  draft.state.getSnapshot().attachmentPreparation!.stage([file]);
+  expect(test.remote.stageAttachments).toHaveBeenCalledWith('draft:draft', target, [file]);
+  test.setState({ ...capabilities, sessionModelSelection: false });
+  expect(draft.state.getSnapshot().start.availability).toEqual({
+    state: 'disabled',
+    reason: 'model-unavailable',
+  });
+  expect(draft.state.getSnapshot().attachmentPreparation).toBeUndefined();
+  draft.dispose();
+  test.setState({
+    ...capabilities,
+    attachmentDrafts: [
+      {
+        key: 'draft:draft',
+        id: 'selection',
+        draftTarget: target,
+        sessionId: 'precreated',
+        items: [{ ...file, attachmentId: 'f', sent: 1, total: 1, state: 'ready' }],
+      },
+    ],
+  });
+  const reopened = await catalog.prepareDraft({ agent, draftId: id }, signal());
+  await reopened.state.getSnapshot().start.execute({
+    parts: [
+      { type: 'text', text: 'first' },
+      {
+        type: 'file',
+        fileEntryId: file.fileEntryId,
+        filename: file.name,
+        mediaType: file.mediaType,
+      },
+    ],
+  });
+  expect(test.remote.start).toHaveBeenCalledWith({
+    ...target,
+    draftId: id,
+    text: 'first',
+    attachments: [file],
+  });
+  test.source.dispose();
+});
+
 it('keeps a submitted draft busy and hands a created Session to its route', async () => {
   const test = fixture();
   const agent = (await test.source.catalog.listAgents(undefined, signal())).items[0].ref;
@@ -444,46 +518,66 @@ it('keeps a submitted draft busy and hands a created Session to its route', asyn
   test.source.dispose();
 });
 
-it('surfaces a start that failed after its draft closed on the next draft, and resends it there', async () => {
-  const test = fixture('read-generation');
-  const orphan = {
-    id: 'orphan',
-    draftId: 'old-draft',
-    agentId: 'other-agent',
-    workspaceId: 'other-workspace',
-    text: 'Retained input',
-    status: 'rejected' as const,
-    error: 'TARGET_UNAVAILABLE',
-  };
-  test.remote.getStarts = () => [orphan];
-  const source = createRemoteConversationSource('desktop', test.remote);
-  expect(source.draftScope).toBe('binding');
-  expect(source.scope).toBe('read-generation');
-  const agent = (await source.catalog.listAgents(undefined, signal())).items[0].ref;
-  const workspace = (await source.catalog.listWorkspaces!(agent, undefined, signal())).items[0].ref;
-  const draft = await source.catalog.prepareDraft(
-    { agent, workspace, draftId: 'new-draft' as DraftId },
-    signal(),
-  );
-  const undelivered = draft.state.getSnapshot().undelivered!;
-  expect(undelivered).toMatchObject({
-    state: 'rejected',
-    failure: { code: 'target-unavailable' },
-    input: { parts: [{ type: 'text', text: 'Retained input' }] },
-  });
-  await expect(undelivered.resend.execute(undefined)).resolves.toMatchObject({ state: 'pending' });
-  // It resends to the Agent and workspace it was written for, not the draft's current selection.
-  expect(test.remote.start).toHaveBeenCalledWith({
-    draftId: 'new-draft',
-    agentId: 'other-agent',
-    workspace: { kind: 'registered', id: 'other-workspace' },
-    text: 'Retained input',
-  });
-  expect(test.remote.discard).toHaveBeenCalledWith('orphan');
-  draft.dispose();
-  source.dispose();
-  test.source.dispose();
-});
+it.each(['TARGET_UNAVAILABLE', 'MODEL_UNAVAILABLE'])(
+  'resends an adopted %s failure to the original target',
+  async (error) => {
+    const test = fixture('read-generation');
+    const orphan = {
+      id: 'orphan',
+      draftId: 'old-draft',
+      agentId: 'other-agent',
+      workspaceId: 'other-workspace',
+      text: 'Retained input',
+      status: 'rejected' as const,
+      error,
+    };
+    test.remote.getStarts = () => [orphan];
+    const source = createRemoteConversationSource('desktop', test.remote);
+    expect(source.draftScope).toBe('binding');
+    expect(source.scope).toBe('read-generation');
+    const agent = (await source.catalog.listAgents(undefined, signal())).items[0].ref;
+    const workspace = (await source.catalog.listWorkspaces!(agent, undefined, signal())).items[0]
+      .ref;
+    const draft = await source.catalog.prepareDraft(
+      { agent, workspace, draftId: 'new-draft' as DraftId },
+      signal(),
+    );
+    const undelivered = draft.state.getSnapshot().undelivered!;
+    expect(undelivered).toMatchObject({
+      state: 'rejected',
+      input: { parts: [{ type: 'text', text: 'Retained input' }] },
+    });
+    const replacement = { providerId: 'provider', modelId: 'replacement' };
+    if (error === 'MODEL_UNAVAILABLE') {
+      const action = undelivered.resendWithModel!;
+      await source.catalog.listModels(action.agent, '', undefined, signal());
+      expect(test.remote.listModels).toHaveBeenCalledWith(
+        'other-agent',
+        '',
+        undefined,
+        expect.anything(),
+      );
+      await expect(action.execute(replacement)).resolves.toMatchObject({ state: 'pending' });
+    } else {
+      await expect(undelivered.resend.execute(undefined)).resolves.toMatchObject({
+        state: 'pending',
+      });
+    }
+    // It resends to the Agent and workspace it was written for, not the draft's current selection.
+    expect(test.remote.start).toHaveBeenCalledWith({
+      draftId: 'new-draft',
+      replaceStartId: 'orphan',
+      agentId: 'other-agent',
+      workspace: { kind: 'registered', id: 'other-workspace' },
+      text: 'Retained input',
+      ...(error === 'MODEL_UNAVAILABLE' && { model: replacement }),
+    });
+    expect(test.remote.discard).not.toHaveBeenCalled();
+    draft.dispose();
+    source.dispose();
+    test.source.dispose();
+  },
+);
 
 it('announces a Session created by a start to catalog readers', async () => {
   const test = fixture();

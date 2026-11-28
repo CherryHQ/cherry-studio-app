@@ -1,5 +1,6 @@
 import type {
   RemoteAgentSource,
+  RemoteAttachment,
   RemoteModelSelection,
   RemoteStartOperation,
   RemoteWorkspaceSelection,
@@ -39,6 +40,10 @@ import {
 
 const isUndelivered = (start: RemoteStartOperation) =>
   (start.status === 'rejected' || start.status === 'interrupted') && !start.sessionId;
+
+function modelParam(model?: RemoteModelSelection) {
+  return model ? { model: { providerId: model.providerId, modelId: model.modelId } } : {};
+}
 
 export function createRemoteConversationSource(
   connectionId: string,
@@ -271,6 +276,7 @@ export function createRemoteConversationSource(
             model?: RemoteModelSelection;
           },
           value: ConversationInput,
+          replaceStartId?: string,
         ): Promise<OperationOutcome<Submission>> => {
           try {
             assertSource();
@@ -285,11 +291,8 @@ export function createRemoteConversationSource(
                 draftId: input.draftId,
                 agentId: target.agentId,
                 workspace: target.workspace,
-                ...(target.model
-                  ? {
-                      model: { providerId: target.model.providerId, modelId: target.model.modelId },
-                    }
-                  : {}),
+                ...modelParam(target.model),
+                ...(replaceStartId && { replaceStartId }),
                 ...preparedInput,
               }),
             );
@@ -307,9 +310,21 @@ export function createRemoteConversationSource(
           }
         };
         function snapshot(): ReturnType<ConversationDraft['state']['getSnapshot']> {
-          const availability = remoteAvailability(remote.getState(), retired || disposed);
+          const sourceState = remote.getState();
+          const availability = remoteAvailability(sourceState, retired || disposed);
           const starts = remote.getStarts();
           const own = starts.find((start) => start.draftId === input.draftId);
+          const attachmentKey = `draft:${input.draftId}`;
+          const staged = sourceState.attachmentDrafts?.find(
+            (item) => item.key === attachmentKey && item.draftTarget?.agentId === agentId,
+          );
+          const target = staged?.draftTarget ?? {
+            agentId,
+            workspace,
+            model: input.model,
+          };
+          const unsupportedModel =
+            !!target.model && !staged && sourceState.sessionModelSelection === false;
           const ready: ConversationAction<ConversationInput, Submission>['availability'] =
             availability.state === 'disabled'
               ? availability
@@ -318,10 +333,12 @@ export function createRemoteConversationSource(
                 : availability;
           const start: ConversationAction<ConversationInput, Submission> = {
             availability:
-              ready.state === 'enabled' && !workspace
+              ready.state === 'enabled' && !target.workspace
                 ? { state: 'disabled', reason: 'workspace-required' }
-                : ready,
-            execute: (value) => submit({ agentId, workspace, model: input.model }, value),
+                : ready.state === 'enabled' && unsupportedModel
+                  ? { state: 'disabled', reason: 'model-unavailable' }
+                  : ready,
+            execute: (value) => submit(target, value),
           };
           // A start that failed after its route left surfaces on the next draft instead of vanishing.
           const failed =
@@ -333,64 +350,68 @@ export function createRemoteConversationSource(
                     item.draftId !== input.draftId &&
                     ![...drafts].some((draft) => draft.id === item.draftId),
                 );
-          const discard = () => {
-            assertSource();
-            if (failed) remote.discard(failed.id);
-          };
-          const undelivered =
-            failed &&
-            undeliveredMessage(
+          const recoverMessage = (failed: RemoteStartOperation) => {
+            const resend = (value: ConversationInput, model?: RemoteModelSelection) =>
+              submit(
+                {
+                  agentId: failed.agentId,
+                  workspace: failed.workspace ?? { kind: 'registered', id: failed.workspaceId! },
+                  model,
+                },
+                value,
+                failed.id,
+              );
+            const message = undeliveredMessage(
               failed,
               refs.issue<OperationId>('operation', failed.id),
-              {
-                availability: ready,
-                // Resend to the Agent and workspace it was written for, even if this draft has
-                // moved on. The new start replaces this draft's own record and hands off to its
-                // Session; an adopted record is retired once the new start holds the input.
-                execute: async (value) => {
-                  const result = await submit(
-                    {
-                      agentId: failed.agentId,
-                      model: failed.model,
-                      workspace: failed.workspace ?? {
-                        kind: 'registered',
-                        id: failed.workspaceId!,
-                      },
-                    },
-                    value,
-                  );
-                  if (
-                    failed !== own &&
-                    (result.state !== 'rejected' || result.operationId) &&
-                    !retired &&
-                    !disposed &&
-                    remote.getState().status !== 'retired'
-                  )
-                    remote.discard(failed.id);
-                  return result;
-                },
+              { availability: ready, execute: (value) => resend(value, failed.model) },
+              () => {
+                assertSource();
+                remote.discard(failed.id);
               },
-              discard,
             );
-          const upload = remote.getState().upload;
+            if (message?.failure?.code === 'model-unavailable') {
+              message.resendWithModel = {
+                agent: catalogRefs.issue<AgentRef>('agent', failed.agentId),
+                availability: ready,
+                execute: (model) => resend(message.input, model),
+              };
+            }
+            return message;
+          };
+          const undelivered = failed && recoverMessage(failed);
+          const stage = (files: RemoteAttachment[], model?: RemoteModelSelection) =>
+            remote.stageAttachments!(
+              attachmentKey,
+              { agentId, workspace: target.workspace!, ...modelParam(model) },
+              files,
+            );
+          const upload = sourceState.upload;
           return {
             inputPolicy: {
               ...REMOTE_INPUT_POLICY,
-              attachments: remote.getState().attachments === true,
+              attachments: sourceState.attachments === true,
             },
-            sessionModelSelection: remote.getState().sessionModelSelection === true,
+            sessionModelSelection: sourceState.sessionModelSelection === true,
             attachmentPreparation:
-              workspace && remote.getState().preupload && remote.stageAttachments
+              target.workspace &&
+              !unsupportedModel &&
+              sourceState.preupload &&
+              remote.stageAttachments
                 ? {
-                    draft: remote
-                      .getState()
-                      .attachmentDrafts?.find((draft) => draft.key === `draft:${input.draftId}`),
-                    stage: (files) =>
-                      remote.stageAttachments!(
-                        `draft:${input.draftId}`,
-                        { agentId, workspace },
-                        files,
-                      ),
+                    draft: staged,
+                    stage: (files) => stage(files, target.model),
+                    ...(staged?.canReviseModel && {
+                      reviseModel: (model?: RemoteModelSelection) =>
+                        stage(
+                          staged.items.map(({ fileEntryId, name, mediaType }) => ({
+                            fileEntryId,
+                            name,
+                            mediaType,
+                          })),
+                          model,
+                        ),
+                    }),
                   }
                 : undefined,
             upload:

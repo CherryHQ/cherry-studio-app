@@ -192,6 +192,37 @@ const sessionResult = (id: string) => ({
 });
 const startInput = { draftId: 'draft', agentId: 'agent', workspaceId: 'workspace', text: 'hello' };
 
+it('keeps a rejected start until its replacement is durably admitted', async () => {
+  const { storage, port } = journal();
+  const request = jest.fn().mockRejectedValue(new RemoteAgentError('MODEL_UNAVAILABLE'));
+  const actions = new RemoteAgentActions('binding', port, request, () => {});
+  const rejected = await actions.start({
+    ...startInput,
+    model: { providerId: 'p', modelId: 'old' },
+  });
+  const revised = {
+    ...startInput,
+    draftId: 'next',
+    replaceStartId: rejected.id,
+    model: { providerId: 'p', modelId: 'new' },
+  };
+  const saved = storage.read('binding');
+  storage.write.mockImplementationOnce(() => {
+    throw new Error('disk full');
+  });
+  await expect(actions.start(revised)).rejects.toThrow('disk full');
+  expect(storage.read('binding')).toBe(saved);
+  expect(actions.getStarts()).toEqual([rejected]);
+  request.mockRejectedValue(new RemoteAgentError('CONNECTION_LOST', true));
+  const admitted = await actions.start(revised);
+  expect(admitted).toMatchObject({ draftId: 'next', status: 'pending', model: revised.model });
+  expect(actions.getStarts()).toEqual([admitted]);
+  expect(new RemoteAgentActions('binding', port, request, () => {}).getStarts()).toEqual([
+    admitted,
+  ]);
+  await expect(actions.start(revised)).rejects.toThrow('CONFLICT');
+});
+
 it('recovers both fixed start commands after create succeeded and the send response was lost', async () => {
   const { storage, port } = journal();
   const request = jest.fn(async (name: string, body: any) => {

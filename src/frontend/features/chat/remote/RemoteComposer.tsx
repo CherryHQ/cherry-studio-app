@@ -32,7 +32,6 @@ import {
   useComposerActions,
 } from '@/frontend/components/Composer';
 import { useBackendModule } from '@/frontend/data';
-import type { RemoteModelOption } from '@/shared/contracts/remoteAgent';
 
 import { ChatInputAccessories, ChatInputSurface } from '../components/ChatInput';
 import { toAgentInputParts } from '../components/ChatInput/utils/agentInputParts';
@@ -40,7 +39,7 @@ import { ConversationActionError, conversationFailureKey } from '../runtime/conv
 import { RemoteModelPicker } from './RemoteModelPicker';
 import { restoreRemoteInput } from './restoreRemoteInput';
 import { UndeliveredMessageRow } from './UndeliveredMessageRow';
-import { useRemoteDraftPersistence } from './useRemoteDraftPersistence';
+import { useRemoteDraftModel, useRemoteDraftPersistence } from './useRemoteDraftPersistence';
 
 export function RemoteComposer({
   agent,
@@ -65,8 +64,10 @@ export function RemoteComposer({
   const { setDraft, addAttachments, setAttachments, subscribeAttachmentChanges } =
     useComposerActions();
   const { runInputReplacement } = useComposerPresentationActions();
-  const [selection, setSelection] = useState<{ draftKey: string; model: RemoteModelOption }>();
-  const selectedModel = selection?.draftKey === draftKey ? selection.model : undefined;
+  const { model: selectedModel, setModel } = useRemoteDraftModel(
+    draftKey,
+    existing ? undefined : agent?.id,
+  );
   const [choosingModel, setChoosingModel] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceSummary>();
   const [choosingWorkspace, setChoosingWorkspace] = useState(false);
@@ -76,27 +77,21 @@ export function RemoteComposer({
     ? workspaces.items.find((item) => item.kind !== 'system' && item.id === snapshot.workspaceId)
     : (workspaces.items.find((item) => item.ref === workspace?.ref) ??
       (!workspace ? workspaces.items.find((item) => item.kind === 'system') : undefined));
-  useEffect(() => {
-    if (
-      snapshot.workspaceKind !== 'system' &&
-      snapshot.workspaceId &&
-      !selectedWorkspace &&
-      workspaces.hasNextPage &&
-      !workspaces.isFetchingNextPage &&
-      !workspaces.isError
-    )
-      void workspaces.fetchNextPage();
-  }, [snapshot.workspaceId, snapshot.workspaceKind, selectedWorkspace, workspaces]);
   const draft = useConversationDraft(agent?.ref, selectedWorkspace?.ref, draftId, selectedModel);
   const canSelectModel = !existing && draft.state?.sessionModelSelection === true;
   const created = draft.state?.created;
   useEffect(() => {
-    if (!session && created && onSessionCreated(created.conversation)) created.release();
-  }, [created, session, onSessionCreated]);
+    if (!session && created && onSessionCreated(created.conversation)) {
+      created.release();
+      setModel();
+    }
+  }, [created, session, onSessionCreated, setModel]);
 
   const undelivered = existing ? snapshot.undelivered : draft.state?.undelivered;
   const startAvailability = draft.state?.start.availability;
   const starting = startAvailability?.state === 'disabled' && startAvailability.reason === 'busy';
+  const needsDefaultModel =
+    startAvailability?.state === 'disabled' && startAvailability.reason === 'model-unavailable';
   const action = existing ? snapshot.actions.send : draft.state?.start;
   const inputAllowsAttachments =
     (existing ? snapshot.actions.inputPolicy : draft.state?.inputPolicy)?.attachments === true;
@@ -105,6 +100,33 @@ export function RemoteComposer({
     ? snapshot.attachmentPreparation
     : draft.state?.attachmentPreparation;
   const supportsAttachments = inputAllowsAttachments && Boolean(preparation);
+  const boundTarget = preparation?.draft?.draftTarget;
+  const stagedModel = boundTarget?.model;
+  const boundWorkspace = boundTarget?.workspace;
+  const visibleWorkspace =
+    boundWorkspace?.kind === 'registered'
+      ? workspaces.items.find((item) => item.id === boundWorkspace.id)
+      : selectedWorkspace;
+  const workspaceId =
+    boundWorkspace?.kind === 'registered' ? boundWorkspace.id : snapshot.workspaceId;
+  useEffect(() => {
+    if (
+      snapshot.workspaceKind !== 'system' &&
+      workspaceId &&
+      !visibleWorkspace &&
+      workspaces.hasNextPage &&
+      !workspaces.isFetchingNextPage &&
+      !workspaces.isError
+    )
+      void workspaces.fetchNextPage();
+  }, [workspaceId, snapshot.workspaceKind, visibleWorkspace, workspaces]);
+  const modelLocked = !preparation?.reviseModel && (attachments.length > 0 || !!preparation?.draft);
+  const modelName =
+    boundTarget &&
+    (stagedModel?.modelId !== selectedModel?.modelId ||
+      stagedModel?.providerId !== selectedModel?.providerId)
+      ? stagedModel?.modelId
+      : selectedModel?.name;
   const restoreDraft = useEffectEvent(async (isCurrent: () => boolean) => {
     if (attachments.length || !preparation?.draft?.items.length) return;
     const restored = await restoreRemoteInput(
@@ -189,10 +211,6 @@ export function RemoteComposer({
         message={undelivered}
         onEdit={async (input) => {
           const restored = await restoreRemoteInput(input, (id) => files.getUri(id));
-          if (undelivered?.failure?.code === 'model-unavailable') {
-            setSelection(undefined);
-            setChoosingModel(true);
-          }
           addAttachments(restored.attachments);
           setDraft((current) => [restored.text, current].filter(Boolean).join('\n'));
           if (restored.missing.length)
@@ -246,15 +264,17 @@ export function RemoteComposer({
                 label:
                   item?.state === 'failed'
                     ? t(
-                        item.error === 'UPLOAD_SOURCE_CHANGED'
-                          ? 'remoteAgent.uploadSourceChanged'
-                          : item.error === 'CHECKSUM_MISMATCH'
-                            ? 'remoteAgent.uploadChecksumMismatch'
-                            : item.error === 'VERIFICATION_FAILED'
-                              ? 'remoteAgent.uploadVerificationFailed'
-                              : item.error === 'NATIVE_HASH_UNAVAILABLE'
-                                ? 'remoteAgent.uploadNativeUnavailable'
-                                : 'remoteAgent.loadFailed',
+                        item.error === 'MODEL_UNAVAILABLE'
+                          ? 'settings.model.unavailable'
+                          : item.error === 'UPLOAD_SOURCE_CHANGED'
+                            ? 'remoteAgent.uploadSourceChanged'
+                            : item.error === 'CHECKSUM_MISMATCH'
+                              ? 'remoteAgent.uploadChecksumMismatch'
+                              : item.error === 'VERIFICATION_FAILED'
+                                ? 'remoteAgent.uploadVerificationFailed'
+                                : item.error === 'NATIVE_HASH_UNAVAILABLE'
+                                  ? 'remoteAgent.uploadNativeUnavailable'
+                                  : 'remoteAgent.loadFailed',
                       )
                     : item?.state === 'verifying'
                       ? t('remoteAgent.uploadVerifying')
@@ -264,7 +284,15 @@ export function RemoteComposer({
               };
             }}
           />
-          {preparation?.draft?.items.some((item) => item.state === 'failed') ? (
+          {preparation?.reviseModel ? (
+            <Button
+              size="xs"
+              variant="ghost"
+              onPress={() => void runInputReplacement(() => setChoosingModel(true))}
+            >
+              {t('chat.model.select')}
+            </Button>
+          ) : preparation?.draft?.items.some((item) => item.state === 'failed') ? (
             <Button size="xs" variant="ghost" onPress={() => stageAttachments(attachments)}>
               {t('common.retry')}
             </Button>
@@ -292,7 +320,7 @@ export function RemoteComposer({
               {canSelectModel ? (
                 <Composer.Pill
                   accessibilityLabel={t('chat.model.select')}
-                  disabled={starting}
+                  disabled={starting || modelLocked}
                   onPress={() => void runInputReplacement(() => setChoosingModel(true))}
                   testID="remote-composer-model-button"
                 >
@@ -300,13 +328,17 @@ export function RemoteComposer({
                     className="min-w-0 shrink text-sm font-semibold text-foreground"
                     numberOfLines={1}
                   >
-                    {selectedModel?.name ?? agent?.modelName ?? t('remoteAgent.followAgentModel')}
+                    {modelName ?? agent?.modelName ?? t('remoteAgent.followAgentModel')}
                   </Text>
                 </Composer.Pill>
+              ) : needsDefaultModel ? (
+                <Button size="xs" variant="ghost" onPress={() => setModel()}>
+                  {t('remoteAgent.followAgentModel')}
+                </Button>
               ) : null}
               <Composer.Pill
                 accessibilityLabel={t('remoteAgent.workspace')}
-                disabled={existing || starting || attachments.length > 0}
+                disabled={existing || starting || attachments.length > 0 || !!boundTarget}
                 onPress={() => void runInputReplacement(() => setChoosingWorkspace(true))}
                 icon={<FolderIcon className="size-5 text-foreground" />}
                 testID="composer-workspace-button"
@@ -315,9 +347,11 @@ export function RemoteComposer({
                   className="min-w-0 shrink font-semibold text-sm text-foreground"
                   numberOfLines={1}
                 >
-                  {snapshot.workspaceKind === 'system' || selectedWorkspace?.kind === 'system'
+                  {snapshot.workspaceKind === 'system' ||
+                  boundWorkspace?.kind === 'system' ||
+                  visibleWorkspace?.kind === 'system'
                     ? t('remoteAgent.systemWorkspace')
-                    : (selectedWorkspace?.name ?? t('remoteAgent.workspace'))}
+                    : (visibleWorkspace?.name ?? t('remoteAgent.workspace'))}
                 </Text>
               </Composer.Pill>
             </View>
@@ -325,13 +359,19 @@ export function RemoteComposer({
         />
       </ComposerSurface>
       {draft.error ? <ContentState.Error title={t('remoteAgent.loadFailed')} /> : null}
-      {choosingModel && canSelectModel && agent ? (
+      {choosingModel && canSelectModel && !modelLocked && agent ? (
         <RemoteModelPicker
-          agent={agent}
+          agent={agent.ref}
+          defaultModelName={agent.modelName}
           selected={selectedModel}
           onClose={() => setChoosingModel(false)}
           onSelect={(model) => {
-            setSelection(model ? { draftKey, model } : undefined);
+            try {
+              preparation?.reviseModel?.(model);
+              setModel(model);
+            } catch {
+              toast.show({ label: t('remoteAgent.loadFailed'), variant: 'danger' });
+            }
             setChoosingModel(false);
           }}
         />

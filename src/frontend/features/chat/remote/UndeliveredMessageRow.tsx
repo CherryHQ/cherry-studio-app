@@ -13,6 +13,7 @@ import { useComposerPresentationActions } from '@/frontend/components/Composer';
 import { useTransientValue } from '@/frontend/hooks/useTransientValue';
 
 import { conversationFailureKey } from '../runtime/conversationFailure';
+import { RemoteModelPicker } from './RemoteModelPicker';
 
 const DELIVERED_MS = 2000;
 const REASON_KEYS = {
@@ -88,6 +89,7 @@ export function UndeliveredMessageRow({
   const deliveredFeedback = useTransientValue<boolean>(DELIVERED_MS);
   const delivered = deliveredFeedback.value === true;
   const [details, setDetails] = useState(false);
+  const [modelPickerFor, setModelPickerFor] = useState<UndeliveredMessage['id']>();
 
   const shown = resending ?? message;
   if (!shown) {
@@ -101,18 +103,26 @@ export function UndeliveredMessageRow({
     ) : null;
   }
   const { reason, edit } = describe(shown);
+  const modelRecovery = shown.resendWithModel;
+  const editLabel = t(modelRecovery ? 'chat.model.select' : 'common.edit');
+  const editDisabled = !!resending || modelRecovery?.availability.state === 'disabled';
   const summary = t('remoteAgent.undelivered.summary', { reason: t(REASON_KEYS[reason]) });
   const text = messageText(shown);
-  const resend = async () => {
+  const resend = async (execute = () => shown.resend.execute(undefined)) => {
     deliveredFeedback.clear();
     setResending(shown);
-    const result = await shown.resend.execute(undefined).finally(() => setResending(undefined));
+    const result = await execute().finally(() => setResending(undefined));
     if (result.state === 'applied') deliveredFeedback.show(true);
     // Not admitted, so the original stays; a recorded rejection replaces it instead.
     else if (result.state === 'rejected' && !result.operationId)
       toast.show({ label: t(conversationFailureKey(result.failure)), variant: 'danger' });
   };
   const editText = async () => {
+    if (modelRecovery) {
+      setDetails(false);
+      await runInputReplacement(() => setModelPickerFor(shown.id));
+      return;
+    }
     try {
       await onEdit(shown.input);
       shown.discard();
@@ -142,8 +152,8 @@ export function UndeliveredMessageRow({
           </Text>
         </Pressable>
         {edit ? (
-          <Button size="xs" variant="ghost" onPress={editText}>
-            {t('common.edit')}
+          <Button size="xs" variant="ghost" disabled={editDisabled} onPress={editText}>
+            {editLabel}
           </Button>
         ) : (
           <Button
@@ -166,6 +176,17 @@ export function UndeliveredMessageRow({
           onPress={discard}
         />
       </View>
+      {modelPickerFor === shown.id && modelRecovery?.availability.state === 'enabled' && (
+        <RemoteModelPicker
+          agent={modelRecovery.agent}
+          confirmLabel={t('remoteAgent.undelivered.resend')}
+          onClose={() => setModelPickerFor(undefined)}
+          onSelect={(model) => {
+            setModelPickerFor(undefined);
+            void resend(() => modelRecovery.execute(model));
+          }}
+        />
+      )}
       {details ? (
         <BottomSheet
           open
@@ -180,7 +201,9 @@ export function UndeliveredMessageRow({
                 </Button>
               </View>
               <View className="flex-1">
-                <Button onPress={editText}>{t('common.edit')}</Button>
+                <Button disabled={editDisabled} onPress={editText}>
+                  {editLabel}
+                </Button>
               </View>
             </View>
           }

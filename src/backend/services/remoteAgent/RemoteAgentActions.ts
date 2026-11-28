@@ -335,7 +335,7 @@ export class RemoteAgentActions {
     );
   }
   async start(
-    input: RemoteStartInput,
+    { replaceStartId, ...input }: RemoteStartInput,
     prepared?: {
       sessionId: string;
       selectionId: string;
@@ -343,16 +343,17 @@ export class RemoteAgentActions {
     },
   ): Promise<RemoteStartOperation> {
     if (this.stopped) throw new RemoteAgentError('CLOSED');
-    let entry = this.starts.find((item) => item.draftId === input.draftId);
-    // A draft keeps one start: submitting again replaces one that failed before creating a Session.
-    if (
-      entry &&
-      !entry.sessionId &&
-      (entry.status === 'rejected' || entry.status === 'interrupted')
-    ) {
-      this.discard(entry.id);
-      entry = undefined;
-    }
+    const own = this.starts.find((item) => item.draftId === input.draftId);
+    const previous = replaceStartId ? this.starts.find((item) => item.id === replaceStartId) : own;
+    const replaced =
+      previous &&
+      !previous.sessionId &&
+      (previous.status === 'rejected' || previous.status === 'interrupted')
+        ? previous
+        : undefined;
+    if (replaceStartId && (!replaced || (own && own !== replaced)))
+      throw new RemoteAgentError('CONFLICT');
+    let entry = own === replaced ? undefined : own;
     if (
       entry &&
       (entry.agentId !== input.agentId ||
@@ -368,7 +369,7 @@ export class RemoteAgentActions {
     )
       throw new RemoteAgentError('IDEMPOTENCY_CONFLICT');
     if (!entry) {
-      if (this.starts.length >= 200) throw new RemoteAgentError('ACTION_LIMIT');
+      if (!replaced && this.starts.length >= 200) throw new RemoteAgentError('ACTION_LIMIT');
       // Validate text before either command is admitted. Both IDs survive a crash between steps.
       agentMethods['agent.messages.send'].params.parse({
         commandId: 'validation',
@@ -394,7 +395,14 @@ export class RemoteAgentActions {
         sendId: randomUUID(),
         status: 'pending',
       };
-      this.commit(this.records, [...this.starts, entry]);
+      this.commit(
+        replaced
+          ? this.records.filter(
+              ({ action }) => action.id !== replaced.createId && action.id !== replaced.sendId,
+            )
+          : this.records,
+        [...this.starts.filter((start) => start !== replaced), entry],
+      );
     }
     // Observers may dismiss a finished start before this resolves, so return the settled view.
     const settled = await this.advanceStart(entry.id);

@@ -241,9 +241,12 @@ question sheet. Exact response parameters and command IDs survive receipt recove
 
 When the desktop advertises `agentSessionModelSelection`, a new conversation's composer can
 search `agent.models.list` by Agent and provider or model name. An explicit selection accompanies
-`agent.sessions.create` and survives a lost reply through the start journal. Leaving the draft on
-the Agent default omits the model. A rejected model choice can be edited before resubmitting the
-original content. Older desktops keep the existing creation flow.
+`agent.sessions.create`. The phone saves the choice with the unsent draft and retains it in the
+start journal after submission. Adding an attachment creates the desktop Session during preupload
+and binds its model at that point. If creation rejects the model, the user can choose another and
+keep the attachments. Changing the model on an undelivered start uses its original Agent, workspace and input,
+including when the failure appears on another draft. Following the Agent default omits the model.
+Older desktops keep the existing creation flow.
 
 `agent.workspaces.list` advertises `systemWorkspace: true` when supported. Creation accepts
 `workspace: { kind: 'system' }` or `{ kind: 'registered', id }`; only the desktop resolves the

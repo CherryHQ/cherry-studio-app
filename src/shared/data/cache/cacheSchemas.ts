@@ -13,6 +13,7 @@
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 
 import type { DiagnosticFeedbackRecord } from '@/shared/contracts/diagnostics';
+import type { RemoteModelOption } from '@/shared/contracts/remoteAgent';
 import type { MessageTranslations } from '@/shared/data/types/messageTranslation';
 
 // ============================================================================
@@ -98,6 +99,7 @@ export type PersistCacheSchema = {
   'skills.translations': Record<string, string>;
   'diagnostics.feedback_history': DiagnosticFeedbackRecord[];
   'remote_agent.drafts': Record<string, string>;
+  'remote_agent.draft_models': Record<string, { agentId: string; model: RemoteModelOption }>;
   /** Bounded phone-owned remote reading aids, keyed by source/message/revision/content hash. */
   'remote_agent.translations': Record<string, MessageTranslations>;
   // Last local chat Agent; cold starts open its greeting rather than a Session.
@@ -116,6 +118,7 @@ export const DefaultPersistCache: PersistCacheSchema = {
   'skills.translations': {},
   'diagnostics.feedback_history': [],
   'remote_agent.drafts': {},
+  'remote_agent.draft_models': {},
   'remote_agent.translations': {},
   'chat.last_agent_id': null,
   'chat.reasoning_efforts': {},

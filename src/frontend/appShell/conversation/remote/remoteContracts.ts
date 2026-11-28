@@ -47,6 +47,8 @@ export type ConversationInput = Pick<
 export type AttachmentPreparation = {
   draft?: RemoteAttachmentDraftView;
   stage(attachments: RemoteAttachment[]): void;
+  /** A definitive rejection before Session creation leaves the attachments available for revision. */
+  reviseModel?(model?: RemoteModelSelection): void;
 };
 export type InputPolicy = {
   attachments: boolean;
@@ -70,6 +72,9 @@ export type UndeliveredMessage = {
   failure?: ConversationFailure;
   /** Submits the same input through the owner's current send or start, replacing this message. */
   resend: ConversationAction<void, Submission>;
+  resendWithModel?: ConversationAction<RemoteModelSelection | undefined, Submission> & {
+    agent: AgentRef;
+  };
   discard(): void;
 };
 export type RemoteConversationExecution = ConversationExecution & {

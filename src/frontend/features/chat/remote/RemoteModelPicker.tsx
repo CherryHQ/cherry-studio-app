@@ -9,25 +9,31 @@ import { useDeferredValue, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
-import type { AgentSummary } from '@/frontend/appShell/conversation';
+import type { AgentRef } from '@/frontend/appShell/conversation';
 import { useRemoteModels } from '@/frontend/appShell/conversation/remote';
 import type { RemoteModelOption } from '@/shared/contracts/remoteAgent';
 
 export function RemoteModelPicker({
   agent,
+  defaultModelName,
   selected,
+  confirmLabel,
   onSelect,
   onClose,
 }: {
-  agent: AgentSummary;
+  agent: AgentRef;
+  defaultModelName?: string | null;
   selected?: RemoteModelOption;
+  confirmLabel?: string;
   onSelect(model?: RemoteModelOption): void;
   onClose(): void;
 }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
+  const [choice, setChoice] = useState(selected);
+  const choose = confirmLabel ? setChoice : onSelect;
   const query = useDeferredValue(search.trim());
-  const models = useRemoteModels(agent.ref, query);
+  const models = useRemoteModels(agent, query);
   const groups = new Map<string, RemoteModelOption[]>();
   for (const model of models.items) {
     const group = groups.get(model.providerId);
@@ -35,7 +41,14 @@ export function RemoteModelPicker({
     else groups.set(model.providerId, [model]);
   }
   return (
-    <BottomSheet open avoidKeyboard onClose={onClose} title={t('modelPicker.title')} size="large">
+    <BottomSheet
+      open
+      avoidKeyboard
+      onClose={onClose}
+      title={t('modelPicker.title')}
+      size="large"
+      footer={confirmLabel && <Button onPress={() => onSelect(choice)}>{confirmLabel}</Button>}
+    >
       <View className="px-5 pb-2">
         <SearchField
           accessibilityLabel={t('modelPicker.searchPlaceholder')}
@@ -52,9 +65,9 @@ export function RemoteModelPicker({
           <Section>
             <Section.RadioItem
               label={t('remoteAgent.followAgentModel')}
-              description={agent.modelName}
-              selected={!selected}
-              onPress={() => onSelect()}
+              description={defaultModelName}
+              selected={!choice}
+              onPress={() => choose(undefined)}
             />
           </Section>
         )}
@@ -66,9 +79,9 @@ export function RemoteModelPicker({
                 label={model.name}
                 description={model.name === model.modelId ? undefined : model.modelId}
                 selected={
-                  selected?.providerId === model.providerId && selected.modelId === model.modelId
+                  choice?.providerId === model.providerId && choice.modelId === model.modelId
                 }
-                onPress={() => onSelect(model)}
+                onPress={() => choose(model)}
               />
             ))}
           </Section>
