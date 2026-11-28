@@ -3,3 +3,4 @@ export { wrapReportingRoot } from './wrapReportingRoot';
 export { recordSentryBreadcrumb, setSentryConsent } from './configureSentry';
 export { useSentryConsent } from './useSentryConsent';
 export { StartupInteractiveMarker } from './StartupInteractiveMarker';
+export { recordStartupChatInputReady } from './configureObserve';

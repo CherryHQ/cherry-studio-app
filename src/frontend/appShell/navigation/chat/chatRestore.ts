@@ -1,3 +1,5 @@
+import { ErrorCode, isDataApiError } from '@/shared/data/api/errors';
+
 import type { ChatTarget } from './chatRoute';
 
 export type ChatRestoreState =
@@ -12,6 +14,14 @@ type AgentReadState = {
   items: readonly { id: string }[];
 };
 
+export function isMissingChatAgent(error: unknown): boolean {
+  return (
+    isDataApiError(error) &&
+    error.code === ErrorCode.NOT_FOUND &&
+    error.details?.resource === 'Agent'
+  );
+}
+
 export function resolveChatRestoreState({
   agents,
   lastAgent,
@@ -19,7 +29,7 @@ export function resolveChatRestoreState({
   agents: AgentReadState;
   lastAgent?: AgentReadState;
 }): ChatRestoreState {
-  // Only a successful, empty ID lookup allows the fallback list to choose an Agent.
+  // A pending or failed preferred lookup takes precedence over a cached fallback.
   const source =
     lastAgent && (lastAgent.isLoading || lastAgent.error || lastAgent.items.length > 0)
       ? lastAgent

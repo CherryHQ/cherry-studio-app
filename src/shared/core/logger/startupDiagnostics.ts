@@ -18,6 +18,7 @@ type StartupOperation =
   | 'startup.agent'
   | 'startup.skills'
   | 'startup.content.ready'
+  | 'startup.chat_input.ready'
   | 'startup.splash.hidden';
 
 type StartupOutcome = 'started' | 'completed' | 'failed' | 'cancelled';
@@ -41,13 +42,15 @@ export function recordStartupEvent(
   outcome: StartupOutcome,
   facts: StartupFacts = {},
 ) {
+  const elapsedMs = performance.now() - clockStartedAt;
   logger.info('Startup stage', {
     ...facts,
     operation,
     outcome,
     startupStartedAt,
-    elapsedMs: performance.now() - clockStartedAt,
+    elapsedMs,
   });
+  return elapsedMs;
 }
 
 /** Relates every event's `elapsedMs` to React Native's `performance.timeOrigin` milestones. */

@@ -5,8 +5,12 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import { chatRouteParams } from '@/frontend/appShell/navigation/chat';
-import { resolveChatRestoreState } from '@/frontend/appShell/navigation/chat/chatRestore';
+import {
+  isMissingChatAgent,
+  resolveChatRestoreState,
+} from '@/frontend/appShell/navigation/chat/chatRestore';
 import { usePersistCache, useQuery } from '@/frontend/data';
+import { useAgentApiById } from '@/frontend/hooks/agent';
 
 import { ChatEmptyState } from '../ChatWorkspace';
 
@@ -19,13 +23,11 @@ export function ChatRouteResolver() {
     setParams(params: ReturnType<typeof chatRouteParams>): void;
   }>();
   const [lastAgentId] = usePersistCache('chat.last_agent_id');
-  const lastAgent = useQuery('/agents', {
-    enabled: Boolean(lastAgentId),
-    query: { id: lastAgentId ?? undefined, limit: 1 },
+  // Share the detail read with the composer that mounts once the route is resolved.
+  const { query: lastAgent } = useAgentApiById(lastAgentId ?? undefined, {
+    retry: (failures, error) => failures < 1 && !isMissingChatAgent(error),
   });
-  const needsFallback =
-    !lastAgentId ||
-    (!lastAgent.isPending && !lastAgent.error && lastAgent.data?.items.length === 0);
+  const needsFallback = !lastAgentId || isMissingChatAgent(lastAgent.error);
   const agents = useQuery('/agents', {
     enabled: needsFallback,
     query: { limit: 1 },
@@ -36,13 +38,13 @@ export function ChatRouteResolver() {
       isLoading: agents.isPending,
       items: agents.data?.items ?? [],
     },
-    lastAgent: lastAgentId
-      ? {
+    lastAgent: needsFallback
+      ? undefined
+      : {
           error: lastAgent.error,
           isLoading: lastAgent.isPending,
-          items: lastAgent.data?.items ?? [],
-        }
-      : undefined,
+          items: lastAgent.data ? [lastAgent.data] : [],
+        },
   });
 
   useEffect(() => {
