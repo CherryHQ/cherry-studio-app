@@ -190,6 +190,11 @@ export const NON_IMPORT_AI_RUNTIME_RULES: readonly NonImportMappingRule[] = [
 
 export const NON_IMPORT_APP_RULES: readonly NonImportMappingRule[] = [
   {
+    description: 'accounts-portal patch',
+    matches: (filePath) => filePath.startsWith('patches/@cherryinternal__accounts-portal@'),
+    tests: ['scripts/__tests__/accountsPortalIdentityTokens.test.ts'],
+  },
+  {
     description: 'react-native-enriched-markdown patch',
     matches: (filePath) => filePath.startsWith('patches/react-native-enriched-markdown@'),
     tests: [

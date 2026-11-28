@@ -102,3 +102,27 @@ test('sign-out wins over a pending identity-token read', async () => {
   expect(await result).toBe('rejected');
   expect(sdk.getState()._tag).toBe('signedOut');
 });
+
+test('marks only callback rejections that leave the pending transaction intact', async () => {
+  const fetch = jest.fn();
+  const sdk = await portal(fetch);
+  const { url } = await sdk.beginSignIn();
+  const state = new URL(url).searchParams.get('state');
+  for (const callback of [
+    'app://other?state=wrong',
+    'app://callback?iss=other',
+    'app://callback?state=wrong',
+  ]) {
+    await expect(sdk.completeSignIn(callback)).rejects.toMatchObject({ unmatchedCallback: true });
+  }
+  // An identity provider can use the same error code after a matched transaction was consumed.
+  const terminal = sdk.completeSignIn(`app://callback?state=${state}&error=state_mismatch`);
+  await expect(terminal).rejects.toMatchObject({ code: 'state_mismatch' });
+  await expect(terminal).rejects.not.toHaveProperty('unmatchedCallback');
+  await expect(sdk.completeSignIn(`app://callback?state=${state}&code=late`)).rejects.toMatchObject(
+    {
+      code: 'no_pending_sign_in',
+    },
+  );
+  expect(fetch).not.toHaveBeenCalled();
+});

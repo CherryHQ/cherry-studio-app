@@ -6,10 +6,11 @@ import type { PreferenceSchema } from '@/shared/data/preference';
 import { useAccountCallback } from '../useAccountCallback';
 
 let mockUrl: string | null;
+let mockNativeUrl: string | null;
 let mockReturnTo: string | undefined;
 let mockOnboarding: PreferenceSchema['app.onboarding.status'];
 let mockNeedsSignIn = false;
-const mockReceiveRedirect = jest.fn<Promise<boolean>, [string]>();
+const mockReceiveRedirect = jest.fn<Promise<boolean> | null, [string]>();
 const mockReportError = jest.fn();
 const mockRouter = { dismissTo: jest.fn() };
 const mockAccount = {
@@ -19,6 +20,7 @@ const mockAccount = {
 
 jest.mock('expo-linking', () => ({
   clearInitialURL: jest.fn(),
+  getLinkingURL: () => mockNativeUrl,
   useLinkingURL: () => mockUrl,
 }));
 jest.mock('expo-router', () => ({ useRouter: () => mockRouter }));
@@ -43,6 +45,7 @@ function render() {
 beforeEach(() => {
   jest.clearAllMocks();
   mockUrl = 'cherrystudio://auth/callback?code=one-use';
+  mockNativeUrl = mockUrl;
   mockReturnTo = '/settings';
   mockOnboarding = 'completed';
   mockNeedsSignIn = false;
@@ -66,6 +69,23 @@ it('returns to the saved caller after the URL is cleared, exchanging the callbac
   await act(async () => finish(true));
   expect(mockReceiveRedirect).toHaveBeenCalledTimes(1);
   expect(mockRouter.dismissTo.mock.calls).toEqual([['/settings']]);
+});
+
+it('leaves another feature’s callback in the native URL cache', () => {
+  mockUrl = mockNativeUrl = 'cherrystudio://oauth/callback?code=provider';
+  mockReceiveRedirect.mockReturnValueOnce(null);
+  render();
+  expect(clearInitialURL).not.toHaveBeenCalled();
+  expect(mockReportError).not.toHaveBeenCalled();
+  expect(mockRouter.dismissTo).not.toHaveBeenCalled();
+});
+
+it('does not clear a newer native URL while delivering an earlier account link', async () => {
+  mockNativeUrl = 'cherrystudio://oauth/callback?code=provider';
+  mockReceiveRedirect.mockResolvedValueOnce(true);
+  await act(async () => render());
+  expect(clearInitialURL).not.toHaveBeenCalled();
+  expect(mockRouter.dismissTo).toHaveBeenCalledWith('/settings');
 });
 
 it('handles a second link on the mounted route if the first callback is rejected', async () => {

@@ -1,4 +1,4 @@
-import { clearInitialURL, useLinkingURL } from 'expo-linking';
+import { clearInitialURL, getLinkingURL, useLinkingURL } from 'expo-linking';
 import { type Href, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 
@@ -27,10 +27,10 @@ export function useAccountCallback() {
 
   useEffect(() => {
     if (url && completion.current?.url !== url) {
-      // Clearing the initial URL can rerender this route before the exchange finishes.
-      clearInitialURL();
-      const previous = completion.current?.result;
       const delivery = account.receiveRedirect(url);
+      if (!delivery) return;
+      if (getLinkingURL() === url) clearInitialURL();
+      const previous = completion.current?.result;
       // A rejected late link must not replace an earlier successful route completion.
       const result = previous
         ? delivery.catch((error: unknown) =>

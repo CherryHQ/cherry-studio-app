@@ -76,6 +76,7 @@ function createAccount(): AccountRuntime {
       : null;
   const runtime = new AccountRuntime({
     portal,
+    redirectUri,
     async preparePortal() {
       if (!origin || !redirectUri || !bindingKey) throw new AccountError('unavailable');
       const next = await resolveCloudLogin(origin, Platform.OS, redirectUri, expectedIssuer);

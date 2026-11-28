@@ -69,8 +69,8 @@ export interface AccountModule {
   signIn(options?: PrivateSignIn): Promise<boolean>;
   /** Opens the web space chooser using the current browser sign-in. */
   switchSpace(): Promise<boolean>;
-  /** Completes live and cold-start callbacks once, then activates the admitted local profile. */
-  receiveRedirect(url: string): Promise<boolean>;
+  /** Returns null synchronously for another route. Account callbacks settle the current sign-in. */
+  receiveRedirect(url: string): Promise<boolean> | null;
   /** Ends the session. An enterprise or private account returns to the community data. */
   signOut(): Promise<void>;
   /** Continues onboarding without signing in. */

@@ -50,6 +50,7 @@ type Portal = Pick<
 export interface AccountRuntimeOptions {
   /** Restored registration, if this installation has already opened a cloud login. */
   portal: Portal | null;
+  redirectUri: string | undefined;
   preparePortal(): Promise<Portal>;
   /** The SDK integration supplies app-owned context for this exact current or candidate session. */
   resolveSessionContext(session: AuthState): AccountSessionContext | null;
@@ -91,6 +92,18 @@ function isAuthenticationRejection(error: unknown): boolean {
   return false;
 }
 
+type SignInRedirects = {
+  routed: boolean;
+  registration?: ReturnType<Portal['beginSignIn']>;
+  browser?: Promise<boolean | null>;
+  callback?: { url: string; result: Promise<boolean> };
+};
+
+// Accounts Portal sets this marker only before consuming its pending transaction.
+function isUnmatchedCallback(error: unknown): boolean {
+  return error instanceof Error && 'unmatchedCallback' in error && error.unmatchedCallback === true;
+}
+
 /**
  * The installation's cloud or private session. Opening another profile writes the installation
  * registry and reloads; this object never swaps data stores in place.
@@ -104,9 +117,7 @@ export class AccountRuntime implements AccountModule {
   private privateRefresh: Promise<string> | undefined;
   private credentialRevision = 0;
   private isPrivateSessionClosed = false;
-  private signInRedirects: {
-    callback?: { url: string; result: Promise<boolean>; routed: boolean };
-  } = {};
+  private signInRedirects: SignInRedirects = { routed: false };
   private sessionRevision = 0;
   private isCloudSessionClosing = false;
 
@@ -169,7 +180,7 @@ export class AccountRuntime implements AccountModule {
 
   readonly switchSpace = async () => (await this.busy(() => this.openCloudSignIn(false))) ?? false;
 
-  private async openCloudSignIn(changeAccount: boolean): Promise<boolean> {
+  private async beginCloudSignIn(changeAccount: boolean) {
     await this.portal?.ready;
     const session = this.portal?.getState();
     const identity = this.options.active.identity;
@@ -178,33 +189,71 @@ export class AccountRuntime implements AccountModule {
       session?._tag === 'signedIn' || (identity && 'issuer' in identity && this.portal);
     const portal = pinned ? this.requirePortal() : await this.options.preparePortal();
     if (this.portal !== portal) this.observePortal(portal);
-    this.signInRedirects = {};
-    const { url, redirectUri } = await portal.beginSignIn({
+    return portal.beginSignIn({
       forceLogin:
         (changeAccount && portal.getState()._tag === 'signedIn') ||
         this.state.needsSignIn ||
         this.options.browserSession.isStale(),
     });
-    const result = await this.options.openBrowser(url, redirectUri);
-    if (!result) return false;
-    return this.finishRedirect(result, false);
   }
 
-  readonly receiveRedirect = (url: string): Promise<boolean> => this.finishRedirect(url, true);
+  private async openCloudSignIn(changeAccount: boolean): Promise<boolean> {
+    const registration = this.beginCloudSignIn(changeAccount);
+    const attempt: SignInRedirects = { routed: false, registration };
+    this.signInRedirects = attempt;
+    const browser = registration.then(async ({ url, redirectUri }) => {
+      const result = await this.options.openBrowser(url, redirectUri);
+      return result ? this.finishRedirect(attempt, result) : null;
+    });
+    attempt.browser = browser;
+    try {
+      return (await browser) === true && !attempt.routed;
+    } catch (error) {
+      if (attempt.routed) return false;
+      throw error;
+    } finally {
+      delete attempt.registration;
+      delete attempt.browser;
+    }
+  }
 
-  private async finishRedirect(url: string, routed: boolean): Promise<boolean> {
+  readonly receiveRedirect = (url: string): Promise<boolean> | null => {
+    try {
+      const target = new URL(url);
+      target.search = '';
+      target.hash = '';
+      if (target.href !== this.options.redirectUri) return null;
+    } catch {
+      return null;
+    }
     const attempt = this.signInRedirects;
-    // The SDK keeps the pending transaction when it rejects a stale state or issuer.
-    // Give a different delivery its turn once that check settles.
+    const browser = attempt.browser;
+    attempt.routed = true;
+    return this.finishRedirect(attempt, url).catch(async (error: unknown) => {
+      if (browser && isUnmatchedCallback(error)) {
+        // The route is displaying this attempt; let it present the live browser's outcome.
+        const stayed = await browser;
+        if (stayed !== null) return stayed;
+      }
+      throw error;
+    });
+  };
+
+  private async finishRedirect(attempt: SignInRedirects, url: string): Promise<boolean> {
+    const live = Boolean(attempt.browser);
+    if (attempt.registration) await attempt.registration;
     while (attempt.callback && attempt.callback.url !== url) {
       const previous = attempt.callback;
+      let stayed: boolean;
       try {
-        await previous.result;
-      } catch {
+        stayed = await previous.result;
+      } catch (error) {
+        if (!isUnmatchedCallback(error)) throw error;
         if (this.signInRedirects !== attempt) throw new AccountError('rejected');
         if (attempt.callback === previous) delete attempt.callback;
         continue;
       }
+      if (live) return stayed;
       throw new AccountError('rejected');
     }
     if (!attempt.callback) {
@@ -213,12 +262,9 @@ export class AccountRuntime implements AccountModule {
       const result = this.completeCloudSignIn(url).finally(() => {
         if (ownsBusy) this.update({ isBusy: false });
       });
-      attempt.callback = { url, result, routed };
+      attempt.callback = { url, result };
     }
-    const callback = attempt.callback;
-    if (routed) callback.routed = true;
-    const stayed = await callback.result;
-    return stayed && (routed || !callback.routed);
+    return attempt.callback.result;
   }
 
   private async completeCloudSignIn(url: string): Promise<boolean> {
@@ -285,6 +331,7 @@ export class AccountRuntime implements AccountModule {
       if (proposed && this.matchesCloudProfile(proposed) && isAuthenticationRejection(error))
         this.reportRejected();
       // Other candidate failures leave the old session intact and never lift a prior rejection.
+      if (isUnmatchedCallback(error)) throw error;
       if (error instanceof AccountError) throw error;
       if (isAuthenticationRejection(error)) throw new AccountError('rejected', { cause: error });
       if (isConnectionFailure(error)) throw new AccountError('connection', { cause: error });
@@ -293,8 +340,8 @@ export class AccountRuntime implements AccountModule {
   }
 
   readonly signOut = async () => {
-    this.signInRedirects = {};
     await this.busy(async () => {
+      this.signInRedirects = { routed: false };
       this.sessionRevision++;
       if (this.state.privateAddress) {
         // An in-flight rotation must finish before deletion, so it cannot restore signed-out tokens.

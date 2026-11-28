@@ -85,6 +85,7 @@ function setup(
   };
   const options = {
     portal,
+    redirectUri: 'cb://',
     preparePortal: jest.fn(async () => portal),
     resolveSessionContext: jest.fn((state: AuthState) => {
       const context = state as PortalState;
@@ -228,27 +229,83 @@ describe('AccountRuntime', () => {
           started();
         }),
     );
-    let stale!: Promise<void>;
+    let stale!: Promise<boolean> | null;
     options.openBrowser.mockImplementationOnce(async () => {
-      stale = expect(runtime.receiveRedirect('cb://?state=old')).rejects.toThrow('state_mismatch');
+      stale = runtime.receiveRedirect('cb://?state=old');
       return 'cb://?state=current';
     });
     const login = runtime.signIn();
     // The live browser's result is ready while the SDK is reading the stale delivery.
     await validating;
     expect(options.portal.completeSignIn).toHaveBeenCalledTimes(1);
-    rejectStale(new Error('state_mismatch'));
-    await stale;
-    await expect(login).resolves.toBe(true);
+    rejectStale(Object.assign(new Error('state_mismatch'), { unmatchedCallback: true }));
+    await expect(stale).resolves.toBe(true);
+    await expect(login).resolves.toBe(false);
     expect(options.portal.completeSignIn.mock.calls.map(([url]) => url)).toEqual([
       'cb://?state=old',
       'cb://?state=current',
     ]);
   });
 
+  it('waits for the SDK to persist a live registration before inspecting an arriving link', async () => {
+    const { runtime, options } = setup(signedIn('cloud'));
+    const registration = Promise.withResolvers<{ url: string; redirectUri: string }>();
+    const started = Promise.withResolvers<void>();
+    options.portal.beginSignIn.mockImplementationOnce(() => {
+      started.resolve();
+      return registration.promise;
+    });
+    const login = runtime.signIn();
+    const route = runtime.receiveRedirect('cb://?code=1');
+    await started.promise;
+    expect(options.portal.completeSignIn).not.toHaveBeenCalled();
+    registration.resolve({ url: 'https://portal/sign-in', redirectUri: 'cb://' });
+    await expect(route).resolves.toBe(true);
+    await expect(login).resolves.toBe(false);
+    expect(options.portal.completeSignIn).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores foreign links before taking ownership of the live browser result', async () => {
+    const { options, runtime } = setup(signedIn('cloud'));
+    options.openBrowser.mockImplementationOnce(async () => {
+      for (const url of ['cb://oauth/callback?code=other', 'other://?code=other', 'invalid']) {
+        expect(runtime.receiveRedirect(url)).toBeNull();
+      }
+      return 'cb://?code=current';
+    });
+    await expect(runtime.signIn()).resolves.toBe(true);
+    expect(options.portal.completeSignIn).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns a lone routed mismatch when the browser is cancelled', async () => {
+    const { options, runtime } = setup(signedIn('cloud'));
+    const error = Object.assign(new Error('unexpected issuer'), { unmatchedCallback: true });
+    options.portal.completeSignIn.mockRejectedValueOnce(error);
+    let delivery!: Promise<boolean> | null;
+    options.openBrowser.mockImplementationOnce(async () => {
+      delivery = runtime.receiveRedirect('cb://?state=old');
+      return null;
+    });
+    const signIn = runtime.signIn();
+    await expect(signIn).resolves.toBe(false);
+    await expect(delivery).rejects.toBe(error);
+  });
+
+  it('preserves the matched transaction failure when a different callback is waiting', async () => {
+    const { options, runtime } = setup(signedIn('cloud'));
+    const failure = new AccountError('connection');
+    options.portal.completeSignIn.mockRejectedValueOnce(failure);
+    const current = runtime.receiveRedirect('cb://?state=current');
+    const stale = runtime.receiveRedirect('cb://?state=old');
+    await Promise.all([expect(current).rejects.toBe(failure), expect(stale).rejects.toBe(failure)]);
+    expect(options.portal.completeSignIn).toHaveBeenCalledTimes(1);
+  });
+
   it('coalesces duplicate current deliveries behind a rejected cold callback', async () => {
     const { options, runtime } = setup(signedIn('enterprise'));
-    options.portal.completeSignIn.mockRejectedValueOnce(new Error('unexpected issuer'));
+    options.portal.completeSignIn.mockRejectedValueOnce(
+      Object.assign(new Error('unexpected issuer'), { unmatchedCallback: true }),
+    );
     const stale = runtime.receiveRedirect('cb://?state=old');
     const current = runtime.receiveRedirect('cb://?state=current');
     const duplicate = runtime.receiveRedirect('cb://?state=current');
