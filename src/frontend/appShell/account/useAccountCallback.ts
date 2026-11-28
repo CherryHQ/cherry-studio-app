@@ -5,7 +5,11 @@ import { usePreference } from '@/frontend/data';
 
 import { getAccountReturnTo } from './accountNavigation';
 import { accountSignInHref } from './accountRoute';
-import { claimAccountCallback } from './nativeIntent';
+import {
+  claimAccountCallback,
+  hasQueuedAccountCallback,
+  takeAccountCallbackPresentation,
+} from './nativeIntent';
 import { useAccount } from './useAccount';
 import { useAccountErrorReporter } from './useAccountErrorReporter';
 
@@ -31,16 +35,18 @@ export function useAccountCallback() {
       if (result) completion.current = { delivery, result };
     }
     if (!completion.current) {
-      router.dismissTo(returnTo as Href);
+      if (!hasQueuedAccountCallback()) router.dismissTo(returnTo as Href);
       return;
     }
+    const claimed = completion.current;
     let active = true;
-    void completion.current.result.then(
+    void claimed.result.then(
       (stayed) => {
-        if (active && stayed) router.dismissTo(returnTo as Href);
+        if (active && takeAccountCallbackPresentation(claimed.delivery) && stayed)
+          router.dismissTo(returnTo as Href);
       },
       (error: unknown) => {
-        if (!active) return;
+        if (!active || !takeAccountCallbackPresentation(claimed.delivery)) return;
         reportError(error, 'account.callback');
         const state = account.getState();
         router.dismissTo(

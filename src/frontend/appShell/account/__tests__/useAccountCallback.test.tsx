@@ -196,6 +196,21 @@ it.each(['success', 'failure'] as const)(
   },
 );
 
+it('leaves feedback and navigation to a newer delivery before React renders its route', async () => {
+  const old = Promise.withResolvers<boolean>();
+  mockReceiveRedirect.mockReturnValueOnce(old.promise).mockResolvedValueOnce(true);
+  render();
+  route('cherrystudio://auth/callback?code=current');
+
+  await act(async () => old.reject(new Error('stale callback')));
+  expect(mockReportError).not.toHaveBeenCalled();
+  expect(mockRouter.dismissTo).not.toHaveBeenCalled();
+
+  await act(async () => render());
+  expect(mockReceiveRedirect).toHaveBeenCalledTimes(2);
+  expect(mockRouter.dismissTo.mock.calls).toEqual([['/settings']]);
+});
+
 it('handles a second link on the mounted route if the first callback is rejected', async () => {
   let rejectFirst!: (error: Error) => void;
   mockReceiveRedirect.mockReturnValueOnce(

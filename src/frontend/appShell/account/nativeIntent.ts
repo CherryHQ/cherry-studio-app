@@ -51,6 +51,17 @@ export function routeAccountCallback(
   return `/auth/callback?delivery=${staged.id}`;
 }
 
+/** A newer native navigation owns presentation before React commits its route. */
+export function takeAccountCallbackPresentation(id: string | undefined): boolean {
+  if (!staged || staged.id !== id) return false;
+  staged = undefined;
+  return true;
+}
+
+export function hasQueuedAccountCallback(): boolean {
+  return Boolean(staged && staged.result === undefined);
+}
+
 function keepSuccessfulAccountResult(
   previous: Promise<boolean> | null,
   delivery: Promise<boolean>,
@@ -86,7 +97,8 @@ export function claimAccountCallback(
   }
   batch.result =
     result?.finally(() => {
-      if (staged === batch) staged = undefined;
+      // Keep the ticket as the presentation owner, without retaining credentials or the result.
+      batch.result = null;
     }) ?? null;
   return batch.result;
 }
