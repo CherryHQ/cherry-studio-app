@@ -16,6 +16,7 @@ import { decodeContent, integrity, readContent, type AgentRequest } from './remo
 import { isPresentationData } from './remotePresentation';
 
 type Connection = {
+  closeSubscription(subscriptionId: string): Promise<unknown>;
   readContent?: (ref: ContentRef, signal: AbortSignal) => Promise<Uint8Array>;
   request: AgentRequest;
   onNotification(listener: (notification: DesktopNotification) => void): () => void;
@@ -189,21 +190,14 @@ export class SessionSync {
   }
   private async prepare(): Promise<void> {
     if (this.projection) this.publish(this.projection, false);
-    if (this.subscriptionId) {
-      const subscriptionId = this.subscriptionId;
-      this.subscriptionId = undefined;
-      await this.connection.request(
-        'agent.subscriptions.close',
-        { subscriptionId },
-        this.lifetime.signal,
-      );
-    }
-    const prepared = await this.connection.request(
-      'agent.sessions.subscribe',
-      { sessionId: this.sessionId },
-      this.lifetime.signal,
-    );
+    await this.closeSubscription();
+    this.lifetime.signal.throwIfAborted();
+    // Keep the reply after stop so the desktop subscription can still be closed by ID.
+    const prepared = await this.connection.request('agent.sessions.subscribe', {
+      sessionId: this.sessionId,
+    });
     this.subscriptionId = prepared.subscriptionId;
+    this.lifetime.signal.throwIfAborted();
     // There is no retained baseline to replay after a reconnect or reset.
     if (prepared.mode !== 'checkpoint') throw new RemoteAgentError('PROTOCOL_ERROR');
     this.interactionRevision = undefined;
@@ -315,17 +309,16 @@ export class SessionSync {
     }
     return value;
   }
+  private async closeSubscription() {
+    if (!this.subscriptionId) return;
+    await this.connection.closeSubscription(this.subscriptionId);
+    this.subscriptionId = undefined;
+  }
   stop() {
     this.lifetime.abort();
     clearTimeout(this.presentTimer);
     this.unsubscribe?.();
-    const subscriptionId = this.subscriptionId;
-    this.subscriptionId = undefined;
-    if (subscriptionId)
-      this.tail = this.tail
-        .then(() => this.connection.request('agent.subscriptions.close', { subscriptionId }))
-        .then(() => undefined)
-        .catch(() => undefined);
+    this.tail = this.tail.then(() => this.closeSubscription()).catch(() => undefined);
   }
   async drain() {
     await this.tail;
