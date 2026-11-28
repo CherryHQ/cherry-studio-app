@@ -28,18 +28,19 @@ export function useAccountCallback() {
   useEffect(() => {
     if (url && completion.current?.url !== url) {
       const delivery = account.receiveRedirect(url);
-      if (!delivery) return;
-      if (getLinkingURL() === url) clearInitialURL();
-      const previous = completion.current?.result;
-      // A rejected late link must not replace an earlier successful route completion.
-      const result = previous
-        ? delivery.catch((error: unknown) =>
-            previous.catch(() => {
-              throw error;
-            }),
-          )
-        : delivery;
-      completion.current = { url, result };
+      if (delivery) {
+        if (getLinkingURL() === url) clearInitialURL();
+        const previous = completion.current?.result;
+        // A rejected late link must not replace an earlier successful route completion.
+        const result = previous
+          ? delivery.catch((error: unknown) =>
+              previous.catch(() => {
+                throw error;
+              }),
+            )
+          : delivery;
+        completion.current = { url, result };
+      }
     }
     if (!completion.current) return;
     let active = true;

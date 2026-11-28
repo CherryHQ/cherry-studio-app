@@ -80,6 +80,26 @@ it('leaves another feature’s callback in the native URL cache', () => {
   expect(mockRouter.dismissTo).not.toHaveBeenCalled();
 });
 
+it.each(['success', 'failure'] as const)(
+  'presents the pending account %s after an unrelated warm link',
+  async (outcome) => {
+    const account = Promise.withResolvers<boolean>();
+    mockReceiveRedirect.mockReturnValueOnce(account.promise).mockReturnValueOnce(null);
+    render();
+    mockUrl = mockNativeUrl = 'cherrystudio://uu-remote/callback?request=other';
+    render();
+    const failure = new Error('Exchange failed');
+    await act(async () => {
+      if (outcome === 'success') account.resolve(true);
+      else account.reject(failure);
+    });
+    expect(clearInitialURL).toHaveBeenCalledTimes(1);
+    expect(mockRouter.dismissTo.mock.calls).toEqual([['/settings']]);
+    if (outcome === 'success') expect(mockReportError).not.toHaveBeenCalled();
+    else expect(mockReportError).toHaveBeenCalledWith(failure, 'account.callback');
+  },
+);
+
 it('does not clear a newer native URL while delivering an earlier account link', async () => {
   mockNativeUrl = 'cherrystudio://oauth/callback?code=provider';
   mockReceiveRedirect.mockResolvedValueOnce(true);
