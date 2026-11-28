@@ -38,6 +38,18 @@ describe('model picker fast scroll', () => {
     expect(navigation.modelCount).toBe(4);
   });
 
+  test('keeps the inherited default outside the model count and provider index', () => {
+    const pc = provider('pc', 'Desktop');
+    const navigation = buildModelPickerFastScrollNavigation([
+      { type: 'choice', key: 'default', name: 'Follow default' },
+      header(pc),
+      { type: 'choice', key: 'pc/chat', name: 'Chat' },
+    ]);
+    expect(navigation.modelCount).toBe(1);
+    expect(navigation.anchors.map((anchor) => anchor.listIndex)).toEqual([1]);
+    expect(navigation.anchorIndexByListIndex).toEqual([0, 0, 0]);
+  });
+
   test('maps inset rail positions to navigation entries and clamps overflow', () => {
     expect(modelPickerFastScrollIndexAtPosition(8, 116, 5, 8)).toBe(0);
     expect(modelPickerFastScrollIndexAtPosition(47, 116, 5, 8)).toBe(1);

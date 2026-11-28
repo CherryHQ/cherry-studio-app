@@ -9,20 +9,23 @@ import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
 type ModelPickerIconProps = {
-  model: Model;
+  model: Pick<Model, 'modelId' | 'name' | 'providerId'> & { id?: string };
   /** Absent while the model's provider is still loading; the initial stands in. */
-  provider: Provider | undefined;
+  provider?: Pick<Provider, 'id' | 'presetProviderId'>;
+  builtinOnly?: boolean;
   size?: number;
 };
 
-export function ModelPickerIcon({ model, provider, size = 32 }: ModelPickerIconProps) {
+export function ModelPickerIcon({ model, provider, builtinOnly, size = 32 }: ModelPickerIconProps) {
   const { theme } = useUniwind();
   const iconTheme = theme === 'dark' ? 'dark' : 'light';
   const { iconSource, isProviderFallback, modelIconSource } = resolveModelIconSources(
     model.modelId,
-    provider?.presetProviderId ?? provider?.id,
+    provider?.presetProviderId ?? provider?.id ?? (builtinOnly ? model.providerId : undefined),
   );
-  const providerAvatarUri = useProviderAvatar(provider?.id ?? model.providerId);
+  const providerAvatarUri = useProviderAvatar(
+    builtinOnly ? undefined : (provider?.id ?? model.providerId),
+  );
   const imageSize =
     !modelIconSource && iconSource
       ? size * getBrandAvatarIconDisplayConfig(iconSource, 'circle').scale
@@ -56,7 +59,7 @@ export function ModelPickerIcon({ model, provider, size = 32 }: ModelPickerIconP
         <Image
           cachePolicy="memory-disk"
           contentFit="contain"
-          recyclingKey={model.id}
+          recyclingKey={model.id ?? JSON.stringify([model.providerId, model.modelId])}
           source={iconSource[iconTheme]}
           style={{
             height: imageSize,

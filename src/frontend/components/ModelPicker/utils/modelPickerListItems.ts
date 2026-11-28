@@ -21,7 +21,7 @@ export type ModelPickerListItem =
   | {
       isFirstGroup: boolean;
       key: string;
-      provider: ModelPickerGroup['provider'];
+      provider: ModelPickerGroup['provider'] & { builtinOnly?: boolean };
       title: string;
       type: 'groupHeader';
     }
@@ -30,6 +30,19 @@ export type ModelPickerListItem =
       key: string;
       type: 'model';
     };
+
+// A catalog can supply display-only choices without constructing local Model or Provider records.
+export type ModelPickerChoice = {
+  type: 'choice';
+  key: string;
+  name: string;
+  description?: string;
+  model?: { modelId: string; providerId: string; name: string };
+};
+export type ModelPickerChoiceListItem =
+  | Extract<ModelPickerListItem, { type: 'groupHeader' }>
+  | ModelPickerChoice;
+export type ModelPickerDisplayItem = ModelPickerListItem | ModelPickerChoice;
 
 export function buildModelPickerListItems(
   groups: readonly ModelPickerDisplayGroup[],

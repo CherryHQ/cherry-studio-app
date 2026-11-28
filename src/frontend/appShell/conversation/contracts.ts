@@ -244,6 +244,7 @@ export type AgentSummary = {
   name: string;
   configuration: 'available' | 'unavailable' | 'unknown';
   modelName?: string | null;
+  modelIdentity?: { providerId: string; modelId: string };
   emoji?: string;
   avatar?: string | null;
   avatarUri?: string | null;

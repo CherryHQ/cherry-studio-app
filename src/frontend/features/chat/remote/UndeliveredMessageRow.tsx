@@ -176,8 +176,10 @@ export function UndeliveredMessageRow({
           onPress={discard}
         />
       </View>
-      {modelPickerFor === shown.id && modelRecovery?.availability.state === 'enabled' && (
+      {modelRecovery?.availability.state === 'enabled' && (
         <RemoteModelPicker
+          key={shown.id}
+          open={modelPickerFor === shown.id}
           agent={modelRecovery.agent}
           confirmLabel={t('remoteAgent.undelivered.resend')}
           onClose={() => setModelPickerFor(undefined)}

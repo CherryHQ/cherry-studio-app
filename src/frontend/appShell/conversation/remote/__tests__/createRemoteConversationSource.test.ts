@@ -785,7 +785,12 @@ test('shows the current remote agent model and distinguishes missing configurati
   });
   const catalog = await test.source.catalog.listAgents(undefined, signal());
   expect(catalog.items).toMatchObject([
-    { id: 'configured', modelName: 'Current model', configuration: 'available' },
+    {
+      id: 'configured',
+      modelName: 'Current model',
+      modelIdentity: { providerId: 'desktop', modelId: 'model' },
+      configuration: 'available',
+    },
     { id: 'empty', configuration: 'unavailable' },
     { id: 'legacy', configuration: 'unknown' },
   ]);

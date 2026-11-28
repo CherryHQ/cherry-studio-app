@@ -17,6 +17,8 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
+const subscribeNone = () => () => {};
+
 function invalidate(): void {
   resolvedUris.clear();
   for (const listener of listeners) {
@@ -29,9 +31,10 @@ function invalidate(): void {
  * The lookup uses the storage module's shared directory index and is cached per
  * `providerId`, so rendering many rows does not rescan the same directory.
  */
-export function useProviderAvatar(providerId: string): string | undefined {
+export function useProviderAvatar(providerId?: string): string | undefined {
   const providers = useBackendModule('providers');
   const getSnapshot = useCallback(() => {
+    if (!providerId) return undefined;
     if (!resolvedUris.has(providerId)) {
       resolvedUris.set(providerId, providers.resolveAvatar(providerId));
     }
@@ -39,7 +42,7 @@ export function useProviderAvatar(providerId: string): string | undefined {
     return resolvedUris.get(providerId);
   }, [providerId, providers]);
 
-  return useSyncExternalStore(subscribe, getSnapshot);
+  return useSyncExternalStore(providerId ? subscribe : subscribeNone, getSnapshot);
 }
 
 /**

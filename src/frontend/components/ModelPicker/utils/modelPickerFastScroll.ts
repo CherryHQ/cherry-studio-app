@@ -1,4 +1,4 @@
-import type { ModelPickerListItem } from './modelPickerListItems';
+import type { ModelPickerDisplayItem, ModelPickerListItem } from './modelPickerListItems';
 
 // The sheet shows roughly ten model rows at once. Below this point regular
 // scrolling is clearer than adding a second navigation control.
@@ -19,7 +19,7 @@ export type ModelPickerFastScrollNavigation = {
 
 /** Builds one direct LegendList target per provider without changing list order. */
 export function buildModelPickerFastScrollNavigation(
-  listItems: readonly ModelPickerListItem[],
+  listItems: readonly ModelPickerDisplayItem[],
 ): ModelPickerFastScrollNavigation {
   const anchors: ModelPickerFastScrollAnchor[] = [];
   const anchorIndexByListIndex: number[] = [];
@@ -35,11 +35,11 @@ export function buildModelPickerFastScrollNavigation(
         provider: item.provider,
       });
       anchorIndex += 1;
-    } else {
+    } else if (anchorIndex >= 0) {
       modelCount += 1;
     }
 
-    anchorIndexByListIndex.push(anchorIndex);
+    anchorIndexByListIndex.push(Math.max(0, anchorIndex));
   }
 
   return { anchorIndexByListIndex, anchors, modelCount };

@@ -1,16 +1,8 @@
 import EyeIcon from '@cherrystudio/app-icons/icons/eye';
-import {
-  ActionMenu,
-  BottomSheet,
-  type BottomSheetSize,
-  type BottomSheetSizes,
-  Button,
-  ContentState,
-  SearchField,
-} from '@cherrystudio/ui/components';
+import { ActionMenu, Button, ContentState } from '@cherrystudio/ui/components';
 import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, View } from 'react-native';
+import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useCloudModelBrowser, useReturnedCloudModel } from '@/frontend/appShell/cloud';
@@ -40,10 +32,9 @@ import { ModelPickerBadge as ModelBadge } from './ModelPickerBadge';
 import { ModelPickerCherryAiEntry } from './ModelPickerCherryAiEntry';
 import { ModelPickerFilterIcon } from './ModelPickerFilterIcon';
 import { ModelPickerList } from './ModelPickerList';
+import { ModelPickerSearch, ModelPickerSheet } from './ModelPickerSheet';
 
 export type ModelPickerDrawerVariant = 'default' | 'chat' | 'usage';
-
-const modelPickerSizes = ['medium', 'full'] as const satisfies BottomSheetSizes;
 
 type ModelPickerDrawerProps = {
   cloudUse?: CloudModelUse;
@@ -96,44 +87,19 @@ export function ModelPickerDrawer({
 }: ModelPickerDrawerProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const [isMounted, setIsMounted] = useState(open);
-  const [sheetSize, setSheetSize] = useState<BottomSheetSize>('medium');
   const [searchText, setSearchText] = useState('');
   const [selectedBadge, setSelectedBadge] = useState<ModelPickerBadge | null>(null);
   const deferredSearchText = useDeferredValue(searchText);
   // The sheet renders through a portal at the app root, outside the screen's PolicyScope.
   const { allowedModelIds } = useModelChoice();
 
-  if (open && !isMounted) {
-    setIsMounted(true);
-  }
-
-  const resetState = useCallback(() => {
-    setSheetSize('medium');
+  const reset = useCallback(() => {
     setSearchText('');
     setSelectedBadge(null);
   }, []);
-  const handleSearchFocus = useCallback(() => setSheetSize('full'), []);
-  const handleClose = useCallback(() => {
-    resetState();
-    setIsMounted(false);
-    onClose();
-  }, [onClose, resetState]);
-  const handleClosed = useCallback(() => {
-    resetState();
-    if (!open) {
-      setIsMounted(false);
-    }
-  }, [open, resetState]);
-
-  if (!isMounted) {
-    return null;
-  }
 
   return (
-    <BottomSheet
-      avoidKeyboard
-      bodyInset="none"
+    <ModelPickerSheet
       headerAction={
         // A mode entered and left like selecting photos, not a setting the sheet keeps.
         multiSelect ? (
@@ -153,14 +119,9 @@ export function ModelPickerDrawer({
           </Button>
         ) : undefined
       }
-      onClose={handleClose}
-      onClosed={handleClosed}
-      onSizeChange={setSheetSize}
+      onClose={onClose}
+      onReset={reset}
       open={open}
-      presentation="default"
-      size={sheetSize}
-      sizes={modelPickerSizes}
-      testID="model-picker"
       title={
         multiSelect?.enabled
           ? t('modelPicker.multiSelect.title', {
@@ -170,32 +131,34 @@ export function ModelPickerDrawer({
           : (title ?? t('modelPicker.title'))
       }
     >
-      <ModelRegistryGate>
-        <ModelPickerDrawerContent
-          cloudUse={cloudUse}
-          loginReturnTo={loginReturnTo}
-          allowedModelIds={allowedModelIds}
-          bottomInset={insets.bottom}
-          deferredSearchText={deferredSearchText}
-          emptyText={emptyText}
-          isModelVisible={isModelVisible}
-          modelType={modelType}
-          onAddProvider={onAddProvider}
-          onClose={handleClose}
-          onSelect={onSelect}
-          onSearchFocus={handleSearchFocus}
-          onSearchTextChange={setSearchText}
-          open={open}
-          providerId={providerId}
-          searchText={searchText}
-          multiSelect={multiSelect?.enabled ? multiSelect : undefined}
-          selectedModelId={selectedModelId}
-          selectedBadge={selectedBadge}
-          setSelectedBadge={setSelectedBadge}
-          variant={variant}
-        />
-      </ModelRegistryGate>
-    </BottomSheet>
+      {({ close, expand }) => (
+        <ModelRegistryGate>
+          <ModelPickerDrawerContent
+            cloudUse={cloudUse}
+            loginReturnTo={loginReturnTo}
+            allowedModelIds={allowedModelIds}
+            bottomInset={insets.bottom}
+            deferredSearchText={deferredSearchText}
+            emptyText={emptyText}
+            isModelVisible={isModelVisible}
+            modelType={modelType}
+            onAddProvider={onAddProvider}
+            onClose={close}
+            onSelect={onSelect}
+            onSearchFocus={expand}
+            onSearchTextChange={setSearchText}
+            open={open}
+            providerId={providerId}
+            searchText={searchText}
+            multiSelect={multiSelect?.enabled ? multiSelect : undefined}
+            selectedModelId={selectedModelId}
+            selectedBadge={selectedBadge}
+            setSelectedBadge={setSelectedBadge}
+            variant={variant}
+          />
+        </ModelRegistryGate>
+      )}
+    </ModelPickerSheet>
   );
 }
 
@@ -405,21 +368,7 @@ function ModelPickerDrawerContent({
 
   return (
     <View className="min-h-0 flex-1">
-      <View className="flex-row items-center gap-2 px-5 pb-2">
-        <View className="min-w-0 flex-1">
-          <SearchField
-            accessibilityLabel={t('modelPicker.searchPlaceholder')}
-            clearAccessibilityLabel={t('common.clear')}
-            onChangeText={onSearchTextChange}
-            onClear={() => onSearchTextChange('')}
-            onFocus={onSearchFocus}
-            onSubmitEditing={Keyboard.dismiss}
-            placeholder={t('modelPicker.searchPlaceholder')}
-            testID="model-picker-search"
-            value={searchText}
-            variant="subtle"
-          />
-        </View>
+      <ModelPickerSearch value={searchText} onChange={onSearchTextChange} onFocus={onSearchFocus}>
         {showBadges ? (
           <ActionMenu
             items={[
@@ -449,7 +398,7 @@ function ModelPickerDrawerContent({
             />
           </ActionMenu>
         ) : null}
-      </View>
+      </ModelPickerSearch>
       <View className="min-h-0 flex-1">
         {!waitingForCatalog && error && listItems.length === 0 ? (
           <View className="flex-1 justify-center px-6 py-8">

@@ -56,6 +56,10 @@ This module owns the model selection surface, model metadata UI, and model setti
   the shared picker keeps its existing inset by default.
   `density="compact"` pairs 24-point model artwork with compact model text and group labels for
   embedded flows; the standard picker retains its default row size.
+- `ModelPickerSheet` and `ModelPickerSearch` own the shared sheet heights, dismissal and search
+  interaction. Remote chat supplies desktop choices to `ModelPickerList`, including the inherited
+  Agent default and additional pages. Provider and model artwork uses built-in assets for that
+  catalog. Local catalog filters, account offers and custom profile photos stay with the local picker.
 - `ModelPickerIcon` renders model identity used by picker consumers.
 - `ModelSearchControls` composes the shared controlled `InlineSearch`: native in the iOS header and
   embedded in the Android controls frame. The drawer's `chat` and `usage` variants add the two

@@ -8,9 +8,10 @@ import { BrandAvatar, BrandAvatarIcon, BrandAvatarPhoto } from './BrandAvatar';
 type ModelAvatarProps = {
   /** Compact identity rows prefer the maker's mark over model-specific artwork. */
   artwork?: 'model' | 'brand';
-  model: Pick<Model, 'id' | 'modelId' | 'name' | 'providerId'>;
+  model: Pick<Model, 'modelId' | 'name' | 'providerId'> & { id?: string };
   /** Optional provider metadata refines custom-provider icon resolution. */
   provider?: Pick<Provider, 'id' | 'presetProviderId'>;
+  builtinOnly?: boolean;
   size?: number;
 };
 
@@ -22,14 +23,22 @@ type ModelAvatarProps = {
  * appears one at a time rather than in a column; the two shapes coexist rather
  * than becoming one component with a shape switch.
  */
-export function ModelAvatar({ artwork = 'model', model, provider, size }: ModelAvatarProps) {
+export function ModelAvatar({
+  artwork = 'model',
+  model,
+  provider,
+  builtinOnly,
+  size,
+}: ModelAvatarProps) {
   const providerIconId = provider?.presetProviderId ?? provider?.id ?? model.providerId;
   const { iconSource, isProviderFallback, modelIconSource } = resolveModelIconSources(
     model.modelId,
     providerIconId,
     artwork,
   );
-  const providerAvatarUri = useProviderAvatar(provider?.id ?? model.providerId);
+  const providerAvatarUri = useProviderAvatar(
+    builtinOnly ? undefined : (provider?.id ?? model.providerId),
+  );
   const frameProps = { label: model.name, ...(size !== undefined && { size }) };
 
   if (isProviderFallback && providerAvatarUri) {
@@ -48,7 +57,7 @@ export function ModelAvatar({ artwork = 'model', model, provider, size }: ModelA
     <BrandAvatar {...frameProps}>
       <BrandAvatarIcon
         displayContext={modelIconSource ? undefined : 'provider'}
-        recyclingKey={model.id}
+        recyclingKey={model.id ?? JSON.stringify([model.providerId, model.modelId])}
         source={iconSource}
       />
     </BrandAvatar>

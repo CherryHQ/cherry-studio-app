@@ -243,7 +243,9 @@ The mobile adapter materializes the form into the common interaction resource an
 question sheet. Exact response parameters and command IDs survive receipt recovery.
 
 When the desktop advertises `agentSessionModelSelection`, a new conversation's composer can
-search `agent.models.list` by Agent and provider or model name. An explicit selection accompanies
+search `agent.models.list` by Agent and provider or model name. It uses the local chat model button,
+sheet and provider-grouped list. Search expands the sheet, and scrolling loads the next desktop
+page. The inherited Agent default remains selectable. An explicit selection accompanies
 `agent.sessions.create`. The phone saves the choice with the unsent draft and retains it in the
 start journal after submission. Adding an attachment creates the desktop Session during preupload
 and binds its model at that point. If creation rejects the model, the user can choose another and

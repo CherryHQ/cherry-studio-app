@@ -183,6 +183,9 @@ export function createRemoteConversationSource(
               name: agent.name,
               emoji: agent.emoji,
               modelName: agent.model?.name,
+              ...(agent.model && {
+                modelIdentity: { providerId: agent.model.providerId, modelId: agent.model.modelId },
+              }),
               configuration:
                 agent.model === undefined
                   ? ('unknown' as const)

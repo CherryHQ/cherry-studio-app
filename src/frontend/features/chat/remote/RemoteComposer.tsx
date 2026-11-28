@@ -18,11 +18,13 @@ import {
 } from '@/frontend/appShell/conversation/remote';
 import {
   ComposerAttachments,
+  ComposerModelPillButton,
   ComposerSurface,
   useComposerActions,
   useComposerPresentationActions,
   useComposerState,
 } from '@/frontend/components/Composer';
+import { ModelPickerIcon } from '@/frontend/components/ModelPicker';
 import { useBackendModule } from '@/frontend/data';
 
 import { ChatInputAccessories, ChatInputSurface } from '../components/ChatInput';
@@ -113,12 +115,16 @@ export function RemoteComposer({
       void workspaces.fetchNextPage();
   }, [workspaceId, snapshot.workspaceKind, visibleWorkspace, workspaces]);
   const modelLocked = !preparation?.reviseModel && (attachments.length > 0 || !!preparation?.draft);
+  const modelIdentity = (boundTarget ? stagedModel : selectedModel) ?? agent?.modelIdentity;
   const modelName =
-    boundTarget &&
-    (stagedModel?.modelId !== selectedModel?.modelId ||
-      stagedModel?.providerId !== selectedModel?.providerId)
-      ? stagedModel?.modelId
-      : selectedModel?.name;
+    boundTarget && stagedModel
+      ? stagedModel.modelId === selectedModel?.modelId &&
+        stagedModel.providerId === selectedModel?.providerId
+        ? selectedModel.name
+        : stagedModel.modelId
+      : boundTarget
+        ? agent?.modelName
+        : (selectedModel?.name ?? agent?.modelName);
   const canChangeWorkspace = !existing && !starting && attachments.length === 0 && !boundTarget;
   if (choosingWorkspace && !canChangeWorkspace) {
     setChoosingWorkspace(false);
@@ -361,19 +367,21 @@ export function RemoteComposer({
             canSelectModel || needsDefaultModel || isWorkspaceRequired ? (
               <View className="min-w-0 shrink flex-row items-center gap-1">
                 {canSelectModel ? (
-                  <Composer.Pill
-                    accessibilityLabel={t('chat.model.select')}
+                  <ComposerModelPillButton
                     disabled={starting || modelLocked}
-                    onPress={() => void runInputReplacement(() => setChoosingModel(true))}
+                    icon={
+                      modelIdentity && modelName ? (
+                        <ModelPickerIcon
+                          builtinOnly
+                          model={{ ...modelIdentity, name: modelName }}
+                          size={20}
+                        />
+                      ) : undefined
+                    }
+                    label={modelName ?? undefined}
+                    onPress={() => setChoosingModel(true)}
                     testID="remote-composer-model-button"
-                  >
-                    <Text
-                      className="min-w-0 shrink text-sm font-semibold text-foreground"
-                      numberOfLines={1}
-                    >
-                      {modelName ?? agent?.modelName ?? t('remoteAgent.followAgentModel')}
-                    </Text>
-                  </Composer.Pill>
+                  />
                 ) : needsDefaultModel ? (
                   <Button size="xs" variant="ghost" onPress={() => setModel()}>
                     {t('remoteAgent.followAgentModel')}
@@ -400,11 +408,13 @@ export function RemoteComposer({
           }
         />
       </ComposerSurface>
-      {choosingModel && canSelectModel && !modelLocked && agent ? (
+      {canSelectModel && agent ? (
         <RemoteModelPicker
           agent={agent.ref}
+          open={choosingModel && !modelLocked}
+          defaultModelIdentity={agent.modelIdentity}
           defaultModelName={agent.modelName}
-          selected={selectedModel}
+          selected={boundTarget ? stagedModel : selectedModel}
           onClose={() => setChoosingModel(false)}
           onSelect={(model) => {
             try {

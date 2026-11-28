@@ -1,111 +1,174 @@
-import {
-  BottomSheet,
-  Button,
-  ContentState,
-  SearchField,
-  Section,
-} from '@cherrystudio/ui/components';
-import { useDeferredValue, useState } from 'react';
+import { Button, ContentState } from '@cherrystudio/ui/components';
+import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
+import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { AgentRef } from '@/frontend/appShell/conversation';
 import { useRemoteModels } from '@/frontend/appShell/conversation/remote';
-import type { RemoteModelOption } from '@/shared/contracts/remoteAgent';
+import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
+import {
+  ModelPickerList,
+  ModelPickerSearch,
+  ModelPickerSheet,
+  type ModelPickerChoiceListItem,
+} from '@/frontend/components/ModelPicker';
+import type { RemoteModelOption, RemoteModelSelection } from '@/shared/contracts/remoteAgent';
+
+const FOLLOW_DEFAULT_KEY = 'default';
+const choiceKey = ({ providerId, modelId }: RemoteModelSelection) =>
+  JSON.stringify([providerId, modelId]);
 
 export function RemoteModelPicker({
   agent,
+  open,
   defaultModelName,
+  defaultModelIdentity,
   selected,
   confirmLabel,
   onSelect,
   onClose,
 }: {
   agent: AgentRef;
+  open: boolean;
   defaultModelName?: string | null;
-  selected?: RemoteModelOption;
+  defaultModelIdentity?: RemoteModelSelection;
+  selected?: RemoteModelSelection;
   confirmLabel?: string;
   onSelect(model?: RemoteModelOption): void;
   onClose(): void;
 }) {
   const { t } = useTranslation();
+  const { bottom } = useSafeAreaInsets();
   const [search, setSearch] = useState('');
-  const [choice, setChoice] = useState(selected);
-  const choose = confirmLabel ? setChoice : onSelect;
+  const [replacement, setReplacement] = useState<RemoteModelOption>();
   const query = useDeferredValue(search.trim());
-  const models = useRemoteModels(agent, query);
-  const groups = new Map<string, RemoteModelOption[]>();
-  for (const model of models.items) {
-    const group = groups.get(model.providerId);
-    if (group) group.push(model);
-    else groups.set(model.providerId, [model]);
-  }
+  const models = useRemoteModels(agent, query, open);
+  const pages = models.data?.pages;
+  const { options, rows } = useMemo(() => {
+    const options = new Map<string, RemoteModelOption>();
+    const groups = new Map<string, RemoteModelOption[]>();
+    for (const page of pages ?? []) {
+      for (const option of page.items) {
+        const key = choiceKey(option);
+        if (options.has(key)) continue;
+        options.set(key, option);
+        const group = groups.get(option.providerId);
+        if (group) group.push(option);
+        else groups.set(option.providerId, [option]);
+      }
+    }
+    const rows: ModelPickerChoiceListItem[] = [];
+    if (!query)
+      rows.push({
+        type: 'choice',
+        key: FOLLOW_DEFAULT_KEY,
+        name: t('remoteAgent.followAgentModel'),
+        description: defaultModelName ?? undefined,
+        model:
+          defaultModelIdentity && defaultModelName
+            ? { ...defaultModelIdentity, name: defaultModelName }
+            : undefined,
+      });
+    for (const [providerId, items] of groups) {
+      const title = items[0]!.providerName;
+      rows.push({
+        type: 'groupHeader',
+        key: 'header:' + providerId,
+        title,
+        isFirstGroup: rows.length === 0,
+        provider: { id: providerId, name: title, builtinOnly: true },
+      });
+      for (const model of items)
+        rows.push({
+          type: 'choice',
+          key: choiceKey(model),
+          name: model.name,
+          description: model.name === model.modelId ? undefined : model.modelId,
+          model,
+        });
+    }
+    return { options, rows };
+  }, [defaultModelIdentity, defaultModelName, pages, query, t]);
+  const choice = confirmLabel ? replacement : selected;
+  const choose = (key: string) => {
+    const option = options.get(key);
+    if (!option && key !== FOLLOW_DEFAULT_KEY) return;
+    if (confirmLabel) setReplacement(option);
+    else onSelect(option);
+  };
+  const reset = useCallback(() => {
+    setSearch('');
+    setReplacement(undefined);
+  }, []);
+  const retry = models.isFetchNextPageError ? models.fetchNextPage : models.refetch;
+  const error = models.isError ? (
+    <ContentState.Error
+      title={t('remoteAgent.loadFailed')}
+      primaryAction={{ children: t('common.retry'), onPress: () => void retry() }}
+    />
+  ) : null;
+  const loadingText = t('settings.provider.models.loading');
+  const emptyText = query ? t('settings.provider.models.search.empty') : t('modelPicker.empty');
+  const emptyIcon = <EmptyIllustration scene={query ? 'search' : 'connection'} size="panel" />;
+  const loadMore = () => {
+    if (open && models.isEnabled && models.hasNextPage && !models.isFetching && !models.isError)
+      void models.fetchNextPage({ cancelRefetch: false });
+  };
   return (
-    <BottomSheet
-      open
-      avoidKeyboard
+    <ModelPickerSheet
+      open={open}
       onClose={onClose}
+      onReset={reset}
       title={t('modelPicker.title')}
-      size="large"
-      footer={confirmLabel && <Button onPress={() => onSelect(choice)}>{confirmLabel}</Button>}
+      footer={
+        confirmLabel ? (
+          <Button onPress={() => onSelect(replacement)}>{confirmLabel}</Button>
+        ) : undefined
+      }
     >
-      <View className="px-5 pb-2">
-        <SearchField
-          accessibilityLabel={t('modelPicker.searchPlaceholder')}
-          clearAccessibilityLabel={t('common.clear')}
-          onChangeText={(value) => setSearch(value.slice(0, 256))}
-          onClear={() => setSearch('')}
-          placeholder={t('modelPicker.searchPlaceholder')}
-          value={search}
-          variant="subtle"
-        />
-      </View>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerClassName="gap-3 px-4 pb-4">
-        {!query && (
-          <Section>
-            <Section.RadioItem
-              label={t('remoteAgent.followAgentModel')}
-              description={defaultModelName}
-              selected={!choice}
-              onPress={() => choose(undefined)}
-            />
-          </Section>
-        )}
-        {Array.from(groups, ([providerId, items]) => (
-          <Section key={providerId} title={items[0]?.providerName}>
-            {items.map((model) => (
-              <Section.RadioItem
-                key={model.modelId}
-                label={model.name}
-                description={model.name === model.modelId ? undefined : model.modelId}
-                selected={
-                  choice?.providerId === model.providerId && choice.modelId === model.modelId
-                }
-                onPress={() => choose(model)}
-              />
-            ))}
-          </Section>
-        ))}
-        {models.isLoading && <ContentState.Loading />}
-        {models.isSuccess && !models.items.length && (
-          <ContentState.Empty title={t('modelPicker.empty')} />
-        )}
-        {models.isError && (
-          <ContentState.Error
-            title={t('remoteAgent.loadFailed')}
-            primaryAction={{ children: t('common.retry'), onPress: () => void models.refetch() }}
+      {({ expand }) => (
+        <View className="min-h-0 flex-1">
+          <ModelPickerSearch
+            value={search}
+            onChange={(value) => setSearch(value.slice(0, 256))}
+            onFocus={expand}
           />
-        )}
-        {models.hasNextPage && (
-          <Button
-            variant="ghost"
-            loading={models.isFetchingNextPage}
-            onPress={() => void models.fetchNextPage()}
-          >
-            {t('remoteAgent.loadMore')}
-          </Button>
-        )}
-      </ScrollView>
-    </BottomSheet>
+          {error && !rows.length ? (
+            <View className="flex-1 justify-center px-6 py-8">{error}</View>
+          ) : (
+            <ModelPickerList
+              listItems={rows}
+              selectedModelId={choice ? choiceKey(choice) : FOLLOW_DEFAULT_KEY}
+              onChoose={choose}
+              onEndReached={loadMore}
+              bottomInset={bottom}
+              isOpen={open}
+              isLoading={models.isLoading}
+              loadingText={loadingText}
+              emptyText={emptyText}
+              emptyIcon={emptyIcon}
+              emptyAction={
+                query
+                  ? {
+                      label: t('modelPicker.clearConditions'),
+                      onPress: () => setSearch(''),
+                      variant: 'text',
+                    }
+                  : undefined
+              }
+              footer={
+                error ??
+                (models.isLoading || models.isFetchingNextPage ? (
+                  <ContentState.Loading />
+                ) : models.isSuccess && !options.size && !query ? (
+                  <ContentState.Empty title={emptyText} icon={emptyIcon} />
+                ) : undefined)
+              }
+            />
+          )}
+        </View>
+      )}
+    </ModelPickerSheet>
   );
 }
