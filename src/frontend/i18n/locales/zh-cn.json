@@ -2767,7 +2767,6 @@
   "settings.websearch.source.fallback": "优先用插件页选定的工具",
   "settings.websearch.source.label": "联网工具来源",
   "settings.websearch.source.preferred": "优先用模型自带的工具（默认）",
-  "sharing.clipboardWriteFailed": "复制失败。请重试或缩短选区。",
   "sharing.imageExcerpt": "后续内容已省略",
   "sharing.imageGroup": "分享本组图片",
   "sharing.messageCount_other": "{{count}} 条消息",

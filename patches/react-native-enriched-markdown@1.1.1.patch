@@ -112,14 +112,10 @@ index 06fa054e9..65a7504ec 100644
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/view/SelectionActionMode.kt b/android/src/main/java/com/swmansion/enriched/markdown/utils/text/view/SelectionActionMode.kt
 --- a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/view/SelectionActionMode.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/utils/text/view/SelectionActionMode.kt
-@@ -3,12 +3,18 @@
+@@ -3,12 +3,14 @@
  import android.content.ClipData
  import android.content.ClipboardManager
  import android.content.Context
-+import android.os.Build
-+import android.os.DeadObjectException
-+import android.os.Parcel
-+import android.os.Parcelable
 +import android.os.TransactionTooLargeException
  import android.text.Spannable
  import android.view.ActionMode
@@ -131,101 +127,23 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/vi
  import com.swmansion.enriched.markdown.EnrichedMarkdown
  import com.swmansion.enriched.markdown.EnrichedMarkdownText
  import com.swmansion.enriched.markdown.spans.ImageSpan
-@@ -127,24 +133,19 @@
-     ): Boolean {
-       val itemId = item?.itemId ?: return false
+@@ -129,8 +131,11 @@
  
--      when (itemId) {
--        android.R.id.copy -> {
+       when (itemId) {
+         android.R.id.copy -> {
 -          textView.copyWithHTML()
-+      val copied = when (itemId) {
-+        android.R.id.copy -> textView.copyWithHTML()
-+        MENU_ITEM_COPY_MARKDOWN -> textView.copyMarkdownToClipboard()
-+        MENU_ITEM_COPY_IMAGE_URL -> textView.copyImageUrlsToClipboard()
-+        else -> null
-+      }
-+      if (copied != null) {
-+        if (copied) {
-           mode?.finish()
--          return true
-+        } else {
-+          UIManagerHelper.getReactContext(textView).emitDeviceEvent("enrichedMarkdownClipboardWriteFailed")
+-          mode?.finish()
++          if (textView.copyWithHTML()) {
++            mode?.finish()
++          } else {
++            UIManagerHelper.getReactContext(textView).emitDeviceEvent("enrichedMarkdownClipboardWriteFailed")
++          }
+           return true
          }
--
--        MENU_ITEM_COPY_MARKDOWN -> {
--          textView.copyMarkdownToClipboard()
--          mode?.finish()
--          return true
--        }
--
--        MENU_ITEM_COPY_IMAGE_URL -> {
--          textView.copyImageUrlsToClipboard()
--          mode?.finish()
--          return true
--        }
-+        return true
-       }
  
-       val customItems = getCustomItemTexts()
-@@ -164,43 +165,88 @@
-     override fun onDestroyActionMode(mode: ActionMode?) {}
+@@ -165,12 +170,12 @@
    }
  
-+// Binder shares a 1 MiB transaction buffer across requests. A smaller clip can still
-+// fail under contention, so the actual clipboard write handles that case too.
-+private const val MAX_CLIP_BYTES = 1024 * 1024
-+
-+internal fun Throwable.isClipboardTransferFailure(): Boolean =
-+  generateSequence(this) { it.cause }.any { it is TransactionTooLargeException || it is DeadObjectException }
-+
-+private fun ClipData.fitsClipboardParcel(): Boolean {
-+  val parcel = Parcel.obtain()
-+  try {
-+    // Android 10 can create a temporary descriptor for HTML during serialization.
-+    writeToParcel(parcel, Parcelable.PARCELABLE_WRITE_RETURN_VALUE)
-+    return parcel.dataSize() < MAX_CLIP_BYTES
-+  } finally {
-+    parcel.recycle()
-+  }
-+}
-+
-+private fun ClipboardManager.trySetClip(clip: ClipData): Boolean {
-+  try {
-+    if (!clip.fitsClipboardParcel()) return false
-+    setPrimaryClip(clip)
-+    return true
-+  } catch (error: Exception) {
-+    // Android 10 embeds the shared-memory IOException in its message and discards the cause.
-+    val htmlAllocationFailed =
-+      Build.VERSION.SDK_INT == Build.VERSION_CODES.Q && clip.getItemAt(0).htmlText != null &&
-+        error is IllegalStateException && error.message?.startsWith("Error creating the shared memory area: ") == true
-+    if (!htmlAllocationFailed && !error.isClipboardTransferFailure()) throw error
-+    return false
-+  }
-+}
-+
-+internal fun TextView.copySelection(
-+  label: String,
-+  plainText: String,
-+  html: (() -> String)? = null,
-+): Boolean {
-+  // Every UTF-16 code unit uses at least one byte in either Android String parcel encoding.
-+  if (plainText.length < MAX_CLIP_BYTES) {
-+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-+    val formatted = html?.invoke()
-+    if (
-+      formatted != null &&
-+      // Android 10 can send large HTML via shared memory. Its parcel contains only a descriptor.
-+      (Build.VERSION.SDK_INT == Build.VERSION_CODES.Q || formatted.length < MAX_CLIP_BYTES - plainText.length) &&
-+      clipboard.trySetClip(ClipData.newHtmlText(label, plainText, formatted))
-+    ) {
-+      return true
-+    }
-+    if (clipboard.trySetClip(ClipData.newPlainText(label, plainText))) return true
-+  }
-+  return false
-+}
-+
  /** Copies selection as both plain text and HTML with inline styles. */
 -private fun TextView.copyWithHTML() {
 +private fun TextView.copyWithHTML(): Boolean {
@@ -239,20 +157,16 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/vi
 +  val spannable = text as? Spannable ?: return true
    val selectedText = spannable.subSequence(start, end)
    val plainText = selectedText.toString()
--
--  val styleConfig =
--    (this as? EnrichedMarkdownText)?.markdownStyle
--      ?: findParentMarkdownStyle()
--  val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
--
+ 
+@@ -179,22 +184,34 @@
+       ?: findParentMarkdownStyle()
+   val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+ 
 -  if (styleConfig != null && selectedText is Spannable) {
--    // Density values convert device pixels back to CSS pixels
-+  val styleConfig = (this as? EnrichedMarkdownText)?.markdownStyle ?: findParentMarkdownStyle()
-+  if (styleConfig == null || selectedText !is Spannable) return copySelection("Text", plainText)
-+
-+  return copySelection("EnrichedMarkdown", plainText) {
++  val html = if (styleConfig != null && selectedText is Spannable) {
+     // Density values convert device pixels back to CSS pixels
      val displayMetrics = context.resources.displayMetrics
--    val isRTL = context.resources.isLayoutRTL()
+     val isRTL = context.resources.isLayoutRTL()
 -    val html =
 -      HTMLGenerator.generateHTML(
 -        selectedText,
@@ -264,176 +178,63 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/vi
 -    clipboard.setPrimaryClip(ClipData.newHtmlText("EnrichedMarkdown", plainText, html))
 -  } else {
 -    clipboard.setPrimaryClip(ClipData.newPlainText("Text", plainText))
--  }
--}
--
--private fun TextView.copyMarkdownToClipboard() {
--  val markdown = MarkdownExtractor.getMarkdownForSelection(this) ?: return
--  val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
--  clipboard.setPrimaryClip(ClipData.newPlainText("Markdown", markdown))
 +    HTMLGenerator.generateHTML(
 +      selectedText,
 +      styleConfig,
 +      displayMetrics.scaledDensity,
 +      displayMetrics.density,
-+      context.resources.isLayoutRTL(),
++      isRTL,
 +    )
-+  }
++  } else null
++  return copySelection(plainText, html, clipboard::setPrimaryClip)
 +}
 +
-+private fun TextView.copyMarkdownToClipboard(): Boolean {
-+  val markdown = MarkdownExtractor.getMarkdownForSelection(this) ?: return true
-+  return copySelection("Markdown", markdown)
++internal fun copySelection(text: String, html: String?, write: (ClipData) -> Unit): Boolean {
++  fun tryWrite(clip: ClipData): Boolean {
++    try {
++      write(clip)
++      return true
++    } catch (error: Exception) {
++      if (generateSequence<Throwable>(error) { it.cause }.none { it is TransactionTooLargeException }) throw error
++      return false
++    }
+   }
++
++  if (html != null && tryWrite(ClipData.newHtmlText("EnrichedMarkdown", text, html))) return true
++  return tryWrite(ClipData.newPlainText("Text", text))
  }
  
- /** Returns remote image URLs (http/https only) from the current selection. */
-@@ -216,12 +262,10 @@
-     .filter { it.startsWith("http://") || it.startsWith("https://") }
- }
- 
--private fun TextView.copyImageUrlsToClipboard() {
-+private fun TextView.copyImageUrlsToClipboard(): Boolean {
-   val urls = getImageUrlsInSelection()
--  if (urls.isEmpty()) return
--
--  val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
--  clipboard.setPrimaryClip(ClipData.newPlainText("Image URLs", urls.joinToString("\n")))
-+  if (urls.isEmpty()) return true
-+  return copySelection("Image URLs", urls.joinToString("\n"))
- }
- 
- private fun TextView.findParentMarkdownStyle(): StyleConfig? {
+ private fun TextView.copyMarkdownToClipboard() {
 diff --git a/android/src/test/java/com/swmansion/enriched/markdown/utils/text/view/ClipboardSelectionTest.kt b/android/src/test/java/com/swmansion/enriched/markdown/utils/text/view/ClipboardSelectionTest.kt
 new file mode 100644
 --- /dev/null
 +++ b/android/src/test/java/com/swmansion/enriched/markdown/utils/text/view/ClipboardSelectionTest.kt
-@@ -0,0 +1,128 @@
+@@ -0,0 +1,27 @@
 +package com.swmansion.enriched.markdown.utils.text.view
 +
-+import android.content.ClipData
-+import android.content.ClipboardManager
-+import android.content.Context
-+import android.os.DeadObjectException
 +import android.os.TransactionTooLargeException
-+import android.system.ErrnoException
-+import android.system.OsConstants
-+import android.widget.TextView
 +import org.junit.Assert.*
 +import org.junit.Test
 +import org.junit.runner.RunWith
 +import org.robolectric.RobolectricTestRunner
-+import org.robolectric.RuntimeEnvironment
 +import org.robolectric.annotation.Config
-+import org.robolectric.annotation.Implementation
-+import org.robolectric.annotation.Implements
-+import org.robolectric.shadow.api.Shadow
-+import org.robolectric.shadows.ShadowClipboardManager
-+import org.robolectric.shadows.ShadowSharedMemory
 +
 +@RunWith(RobolectricTestRunner::class)
 +@Config(sdk = [35])
 +class ClipboardSelectionTest {
-+  private val context: Context = RuntimeEnvironment.getApplication()
-+  private val view = TextView(context)
-+  private val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-+
-+  @Test fun recognizesBothBinderFailuresWithoutSwallowingUnrelatedErrors() {
-+    assertTrue(RuntimeException(DeadObjectException()).isClipboardTransferFailure())
-+    assertTrue(RuntimeException(TransactionTooLargeException()).isClipboardTransferFailure())
-+    assertFalse(SecurityException().isClipboardTransferFailure())
++  @Test fun retriesRejectedHtmlWithTheFullPlainText() {
++    val formats = mutableListOf<String?>()
++    assertTrue(copySelection("full selection", "<b>full selection</b>") { clip ->
++      val item = clip.getItemAt(0)
++      assertEquals("full selection", item.text.toString())
++      formats.add(item.htmlText)
++      if (item.htmlText != null) throw RuntimeException(TransactionTooLargeException())
++    })
++    assertEquals(listOf("<b>full selection</b>", null), formats)
 +  }
 +
-+  @Implements(ClipboardManager::class)
-+  class RejectingClipboard : ShadowClipboardManager() {
-+    var beforeWrite: (ClipData) -> Unit = {}
-+
-+    @Implementation
-+    override fun setPrimaryClip(clip: ClipData) {
-+      beforeWrite(clip)
-+      super.setPrimaryClip(clip)
-+    }
-+  }
-+
-+  @Test
-+  @Config(sdk = [29])
-+  fun copiesPlainTextWhenSharedMemoryCannotBeAllocatedWhileMeasuringHtml() {
-+    ShadowSharedMemory.setCreateShouldThrow(ErrnoException("ashmem_create_region", OsConstants.ENOMEM))
-+    try {
-+      assertTrue(view.copySelection("Text", "hello") { "x".repeat(500_000) })
-+      val item = clipboard.primaryClip!!.getItemAt(0)
-+      assertEquals("hello", item.text)
-+      assertNull(item.htmlText)
-+    } finally {
-+      ShadowSharedMemory.setCreateShouldThrow(null)
-+    }
-+  }
-+
-+  @Test
-+  @Config(sdk = [29], shadows = [RejectingClipboard::class])
-+  fun copiesPlainTextWhenSharedMemoryCannotBeAllocatedDuringTheWrite() {
-+    val shadow = Shadow.extract<RejectingClipboard>(clipboard)
-+    shadow.beforeWrite = { clip ->
-+      if (clip.getItemAt(0).htmlText != null) {
-+        throw IllegalStateException("Error creating the shared memory area: java.io.IOException")
-+      }
-+    }
-+    assertTrue(view.copySelection("Text", "hello") { "x".repeat(500_000) })
-+    val item = clipboard.primaryClip!!.getItemAt(0)
-+    assertEquals("hello", item.text)
-+    assertNull(item.htmlText)
-+
-+    shadow.beforeWrite = { throw IllegalStateException("unrelated clipboard failure") }
-+    assertThrows(IllegalStateException::class.java) {
-+      view.copySelection("Text", "hello") { "<b>hello</b>" }
-+    }
-+  }
-+
-+  @Test
-+  @Config(shadows = [RejectingClipboard::class])
-+  fun preservesTheClipboardWhenATinyWriteLosesTheService() {
-+    clipboard.setPrimaryClip(ClipData.newPlainText("Text", "previous"))
-+    Shadow.extract<RejectingClipboard>(clipboard).beforeWrite = { throw RuntimeException(DeadObjectException()) }
-+    assertFalse(view.copySelection("Text", "x"))
-+    assertEquals("previous", clipboard.primaryClip!!.getItemAt(0).text)
-+  }
-+
-+  @Test fun copiesBothRepresentationsWhenTheyFit() {
-+    assertTrue(view.copySelection("Text", "hello") { "<b>hello</b>" })
-+    val item = clipboard.primaryClip!!.getItemAt(0)
-+    assertEquals("hello", item.text)
-+    assertEquals("<b>hello</b>", item.htmlText)
-+  }
-+
-+  @Test fun keepsAllPlainTextWhenHtmlDoesNotFit() {
-+    val text = "plain text".repeat(10_000)
-+    // Fits the character-count guard, but its serialized representation exceeds 1 MiB.
-+    assertTrue(view.copySelection("Text", text) { "界".repeat(600_000) })
-+    val item = clipboard.primaryClip!!.getItemAt(0)
-+    assertEquals(text, item.text)
-+    assertNull(item.htmlText)
-+  }
-+
-+  @Test
-+  @Config(sdk = [29])
-+  fun preservesLargeHtmlCarriedBySharedMemoryOnAndroid10() {
-+    val text = "&".repeat(200_000)
-+    val html = "<b>" + "&amp;".repeat(200_000) + "</b>"
-+    assertTrue(view.copySelection("Text", text) { html })
-+    val item = clipboard.primaryClip!!.getItemAt(0)
-+    assertEquals(text, item.text)
-+    assertEquals(html, item.htmlText)
-+  }
-+
-+  @Test fun keepsPreviousClipWhenPlainTextExceedsTheSerializedSizeLimit() {
-+    clipboard.setPrimaryClip(ClipData.newPlainText("Text", "previous"))
-+    assertFalse(view.copySelection("Text", "界".repeat(600_000)))
-+    assertEquals("previous", clipboard.primaryClip!!.getItemAt(0).text)
-+  }
-+
-+  @Test fun keepsPreviousClipAndSkipsFormattingAnOversizedSelection() {
-+    clipboard.setPrimaryClip(ClipData.newPlainText("Text", "previous"))
-+    assertFalse(view.copySelection("Text", "x".repeat(1024 * 1024)) { error("unexpected formatting") })
-+    assertEquals("previous", clipboard.primaryClip!!.getItemAt(0).text)
++  @Test fun reportsFailureWhenNeitherRepresentationFits() {
++    assertFalse(copySelection("text", "<b>text</b>") { throw TransactionTooLargeException() })
 +  }
 +}
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt

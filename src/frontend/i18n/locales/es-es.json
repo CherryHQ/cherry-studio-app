@@ -2809,7 +2809,6 @@
   "settings.websearch.source.fallback": "Priorizar las herramientas elegidas en Complementos",
   "settings.websearch.source.label": "Origen de las herramientas web",
   "settings.websearch.source.preferred": "Priorizar las herramientas del modelo (predeterminado)",
-  "sharing.clipboardWriteFailed": "No se pudo copiar la selección. Inténtalo de nuevo o selecciona menos texto.",
   "sharing.imageExcerpt": "Se ha omitido el contenido restante",
   "sharing.imageGroup": "Compartir grupo de imágenes",
   "sharing.messageCount_many": "{{count}} mensajes",

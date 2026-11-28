@@ -58,7 +58,7 @@ block leaves when upstream ships an equivalent.
 
 | Block | Kind | Source | Upstream | Remove when |
 | --- | --- | --- | --- | --- |
-| Android selected-text clipboard size | Bug fix | 0.6.2 selected-text copy transaction failure | 1.1.1 sends styled text and HTML together without checking the IPC size | Upstream bounds clipboard transactions and reports a selection that cannot fit |
+| Android selected-text clipboard size | Bug fix | 0.6.2 selected-text copy transaction failure | 1.1.1 sends the full selection and its HTML in one clipboard transaction | Upstream retries an oversized rich copy as plain text and keeps the selection on failure |
 | Android input null and long-press guards | Bug fix | #973, #1015 | 1.1.1 guards only `Editor.performLongClick`; touch and drag paths are not upstream | Upstream guards the same Sentry crashes |
 | Android input height invalidation and scroll clamp | Bug fix | #1028 | Not upstream | Upstream re-measures after insertion |
 | Android measurement snapshot on the UI thread | Bug fix | #973, #1028 | Not upstream | Upstream measures on the UI thread |

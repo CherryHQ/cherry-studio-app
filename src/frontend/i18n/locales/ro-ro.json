@@ -2809,7 +2809,6 @@
   "settings.websearch.source.fallback": "Preferă instrumentele alese în „Module suplimentare”",
   "settings.websearch.source.label": "Sursa instrumentelor web",
   "settings.websearch.source.preferred": "Preferă instrumentele integrate în model (implicit)",
-  "sharing.clipboardWriteFailed": "Selecția nu a putut fi copiată. Încearcă din nou sau selectează mai puțin text.",
   "sharing.imageExcerpt": "Restul conținutului a fost omis",
   "sharing.imageGroup": "Partajează grupul de imagini",
   "sharing.messageCount_few": "{{count}} mesaje",

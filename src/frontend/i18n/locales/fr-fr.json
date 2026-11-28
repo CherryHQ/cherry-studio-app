@@ -2809,7 +2809,6 @@
   "settings.websearch.source.fallback": "Privilégier les outils choisis dans Greffons",
   "settings.websearch.source.label": "Source des outils web",
   "settings.websearch.source.preferred": "Privilégier les outils intégrés au modèle (par défaut)",
-  "sharing.clipboardWriteFailed": "Impossible de copier la sélection. Réessayez ou sélectionnez moins de texte.",
   "sharing.imageExcerpt": "La suite du contenu est omise",
   "sharing.imageGroup": "Partager ce groupe d’images",
   "sharing.messageCount_many": "{{count}} messages",

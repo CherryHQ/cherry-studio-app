@@ -2788,7 +2788,6 @@
   "settings.websearch.source.fallback": "Προτίμηση στα εργαλεία που επέλεξες στα «Πρόσθετα»",
   "settings.websearch.source.label": "Πηγή εργαλείων ιστού",
   "settings.websearch.source.preferred": "Προτίμηση στα εργαλεία του μοντέλου (προεπιλογή)",
-  "sharing.clipboardWriteFailed": "Η αντιγραφή της επιλογής απέτυχε. Δοκιμάστε ξανά ή επιλέξτε λιγότερο κείμενο.",
   "sharing.imageExcerpt": "Το υπόλοιπο περιεχόμενο έχει παραλειφθεί",
   "sharing.imageGroup": "Κοινοποίηση ομάδας εικόνων",
   "sharing.messageCount_one": "{{count}} μήνυμα",

@@ -2767,7 +2767,6 @@
   "settings.websearch.source.fallback": "Ưu tiên công cụ đã chọn trong mục Plugin",
   "settings.websearch.source.label": "Nguồn công cụ web",
   "settings.websearch.source.preferred": "Ưu tiên công cụ có sẵn của mô hình (mặc định)",
-  "sharing.clipboardWriteFailed": "Không thể sao chép phần đã chọn. Hãy thử lại hoặc chọn ít văn bản hơn.",
   "sharing.imageExcerpt": "Nội dung tiếp theo đã được lược bớt",
   "sharing.imageGroup": "Chia sẻ nhóm ảnh",
   "sharing.messageCount_other": "{{count}} tin nhắn",

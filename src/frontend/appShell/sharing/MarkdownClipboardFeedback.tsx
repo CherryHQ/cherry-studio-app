@@ -12,7 +12,7 @@ export function MarkdownClipboardFeedback() {
     const subscription = DeviceEventEmitter.addListener(
       'enrichedMarkdownClipboardWriteFailed',
       () => {
-        toast.show({ label: t('sharing.clipboardWriteFailed'), variant: 'danger' });
+        toast.show({ label: t('chat.tool.copyFailed'), variant: 'danger' });
       },
     );
     return () => subscription.remove();
