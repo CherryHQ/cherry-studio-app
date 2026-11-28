@@ -171,7 +171,11 @@ function ProfileButtonContent({
         >
           {({ pressed }) => (
             <View
-              className={cn('flex-row items-center gap-3 px-2 py-1', pressed && 'opacity-60')}
+              className={cn(
+                'flex-row items-center gap-3 px-2 py-1',
+                selected && 'bg-secondary/70',
+                pressed && 'opacity-60',
+              )}
               style={{ minHeight: appSidebar.dockHeight }}
             >
               {planName ? (
@@ -210,15 +214,8 @@ function ProfileButtonContent({
                   </View>
                 ) : null}
               </View>
-              <View
-                className={cn(
-                  'size-10 shrink-0 items-center justify-center rounded-full',
-                  selected && 'bg-sidebar-foreground',
-                )}
-              >
-                <SettingsIcon
-                  className={cn('size-5', selected ? 'text-background' : 'text-sidebar-foreground')}
-                />
+              <View className="size-10 shrink-0 items-center justify-center">
+                <SettingsIcon className="size-5 text-sidebar-foreground" />
               </View>
             </View>
           )}
