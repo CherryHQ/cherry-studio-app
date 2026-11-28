@@ -203,3 +203,139 @@ index 1fc5812..7c47622 100644
 +}
 +
  } // namespace facebook::react
+diff --git a/React/Fabric/RCTScheduler.h b/React/Fabric/RCTScheduler.h
+--- a/React/Fabric/RCTScheduler.h
++++ b/React/Fabric/RCTScheduler.h
+@@ -65,6 +65,9 @@
+ 
+ - (void)setupAnimationDriver:(const facebook::react::SurfaceHandler &)surfaceHandler;
+ 
++// Permanently removes the layout-animation observer. Call on the main queue.
++- (void)stopObservingLayoutAnimations;
++
+ - (void)onAnimationStarted;
+ 
+ - (void)onAllAnimationsComplete;
+diff --git a/React/Fabric/RCTScheduler.mm b/React/Fabric/RCTScheduler.mm
+--- a/React/Fabric/RCTScheduler.mm
++++ b/React/Fabric/RCTScheduler.mm
+@@ -8,6 +8,7 @@
+ #import "RCTScheduler.h"
+ 
+ #import <QuartzCore/CADisplayLink.h>
++#import <React/RCTAssert.h>
+ #import <cxxreact/TraceSection.h>
+ #import <react/featureflags/ReactNativeFeatureFlags.h>
+ #import <react/renderer/animations/LayoutAnimationDriver.h>
+@@ -258,6 +259,12 @@
+   surfaceHandler.getMountingCoordinator()->setMountingOverrideDelegate(_animationDriver);
+ }
+ 
++- (void)stopObservingLayoutAnimations
++{
++  RCTAssertMainQueue();
++  _uiRunLoopObserver.reset();
++}
++
+ - (void)onAnimationStarted
+ {
+   if (_uiRunLoopObserver) {
+diff --git a/React/Fabric/RCTSurfacePresenter.mm b/React/Fabric/RCTSurfacePresenter.mm
+--- a/React/Fabric/RCTSurfacePresenter.mm
++++ b/React/Fabric/RCTSurfacePresenter.mm
+@@ -234,6 +234,7 @@
+   }
+ 
+   [self _stopAllSurfacesWithScheduler:scheduler];
++  scheduler.delegate = nil;
+ 
+   return YES;
+ }
+diff --git a/ReactCommon/react/runtime/platform/ios/React-RuntimeApple.podspec b/ReactCommon/react/runtime/platform/ios/React-RuntimeApple.podspec
+--- a/ReactCommon/react/runtime/platform/ios/React-RuntimeApple.podspec
++++ b/ReactCommon/react/runtime/platform/ios/React-RuntimeApple.podspec
+@@ -18,6 +18,7 @@
+ 
+ header_search_paths = [
+   "$(PODS_ROOT)/Headers/Private/React-Core",
++  "$(PODS_ROOT)/Headers/Private/Yoga",
+   "$(PODS_TARGET_SRCROOT)/../../../..",
+   "$(PODS_TARGET_SRCROOT)/../../../../..",
+ ]
+@@ -50,6 +51,7 @@
+   s.dependency "React-CoreModules"
+   s.dependency "React-NativeModulesApple"
+   s.dependency "React-RCTFabric"
++  s.dependency "Yoga"
+   s.dependency "React-RuntimeCore"
+   s.dependency "React-Mapbuffer"
+   s.dependency "React-jserrorhandler"
+diff --git a/ReactCommon/react/runtime/platform/ios/ReactCommon/RCTInstance.mm b/ReactCommon/react/runtime/platform/ios/ReactCommon/RCTInstance.mm
+--- a/ReactCommon/react/runtime/platform/ios/ReactCommon/RCTInstance.mm
++++ b/ReactCommon/react/runtime/platform/ios/ReactCommon/RCTInstance.mm
+@@ -32,6 +32,7 @@
+ #import <React/RCTModuleData.h>
+ #import <React/RCTPerformanceLogger.h>
+ #import <React/RCTRedBox.h>
++#import <React/RCTScheduler.h>
+ #import <React/RCTSurfacePresenter.h>
+ #import <ReactCommon/RCTTurboModule.h>
+ #import <ReactCommon/RCTTurboModuleManager.h>
+@@ -226,28 +227,36 @@
+   if (_reactInstance) {
+     _reactInstance->unregisterFromInspector();
+   }
++  // Queued rendering updates capture the scheduler's delegate by raw pointer.
++  // Stop its run-loop observer on main, but keep it alive until queued JS work
++  // has drained. Release it before the runtime so its queued JSI handles remain valid.
++  __block RCTScheduler *scheduler = _surfacePresenter.scheduler;
+   [_surfacePresenter suspend];
+-  [_jsThreadManager dispatchToJSThread:^{
+-    /**
+-     * Every TurboModule is invalidated on its own method queue.
+-     * TurboModuleManager invalidate blocks the calling thread until all TurboModules are invalidated.
+-     */
+-    [self->_turboModuleManager invalidate];
+-
+-    // Clean up all the Resources
+-    self->_reactInstance = nullptr;
+-    self->_jsRuntimeFactory = nullptr;
+-    self->_appTMMDelegate = nil;
+-    self->_delegate = nil;
+-    [self->_displayLink invalidate];
+-    self->_displayLink = nil;
+-
+-    self->_turboModuleManager = nil;
+-    self->_performanceLogger = nil;
+-
+-    // Terminate the JavaScript thread, so that no other work executes after this block.
+-    self->_jsThreadManager = nil;
+-  }];
++  RCTExecuteOnMainQueue(^{
++    [scheduler stopObservingLayoutAnimations];
++    [self->_jsThreadManager dispatchToJSThread:^{
++      /**
++       * Every TurboModule is invalidated on its own method queue.
++       * TurboModuleManager invalidate blocks the calling thread until all TurboModules are invalidated.
++       */
++      [self->_turboModuleManager invalidate];
++
++      // Clean up all the Resources
++      scheduler = nil;
++      self->_reactInstance = nullptr;
++      self->_jsRuntimeFactory = nullptr;
++      self->_appTMMDelegate = nil;
++      self->_delegate = nil;
++      [self->_displayLink invalidate];
++      self->_displayLink = nil;
++
++      self->_turboModuleManager = nil;
++      self->_performanceLogger = nil;
++
++      // Terminate the JavaScript thread, so that no other work executes after this block.
++      self->_jsThreadManager = nil;
++    }];
++  });
+ }
+ 
+ - (void)registerSegmentWithId:(NSNumber *)segmentId path:(NSString *)path

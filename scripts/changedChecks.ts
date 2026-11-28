@@ -220,6 +220,7 @@ export const NON_IMPORT_APP_RULES: readonly NonImportMappingRule[] = [
     description: 'react-native patch',
     matches: (filePath) => filePath.startsWith('patches/react-native@'),
     tests: [
+      'scripts/__tests__/reactNativeRendererShutdown.test.ts',
       'scripts/__tests__/reactNativeTextCache.test.ts',
       'src/bootstrap/preboot/__tests__/abortSignal.test.ts',
     ],
