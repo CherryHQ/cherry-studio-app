@@ -709,7 +709,7 @@ index f3c451c413904575a25a8302f2f361782d0690f5..d85480e08f4fdabc42250580070eb6cd
    }
  }
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/segments/TableContainerView.kt b/android/src/main/java/com/swmansion/enriched/markdown/segments/TableContainerView.kt
-index 1100ee40de4f7ba9d9e8fe48c4d468a4d875d3d9..577f1a218d27c876eddea46a465d8b95e9c49533 100644
+index 1100ee40de4f7ba9d9e8fe48c4d468a4d875d3d9..44b986d49b083fcc6a4ef50d0319cee92bb07b5a 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/segments/TableContainerView.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/segments/TableContainerView.kt
 @@ -70,6 +70,7 @@ class TableContainerView(
@@ -729,6 +729,23 @@ index 1100ee40de4f7ba9d9e8fe48c4d468a4d875d3d9..577f1a218d27c876eddea46a465d8b95
          importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
          contentDescription = description
          if (isHeaderRow) ViewCompat.setAccessibilityHeading(this, true)
+@@ -566,6 +567,16 @@ class TableContainerView(
+       paint.strokeWidth = style.borderWidth
+     }
+ 
++    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
++      if (event.actionMasked == MotionEvent.ACTION_DOWN) {
++        // The drawer's pending pan is cancelled by the native intercept request.
++        // Release the lock before child dispatch so vertical drags can scroll the message list.
++        parent?.requestDisallowInterceptTouchEvent(true)
++        parent?.requestDisallowInterceptTouchEvent(false)
++      }
++      return super.dispatchTouchEvent(event)
++    }
++
+     override fun dispatchDraw(canvas: Canvas) {
+       rect.set(0f, 0f, width.toFloat(), height.toFloat())
+       if (radius > 0f) {
 diff --git a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h b/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
 index 06fa054e9..65a7504ec 100644
 --- a/ios/generated/ReactCodegen/EnrichedMarkdownTextSpec/Props.h
