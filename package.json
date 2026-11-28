@@ -98,7 +98,7 @@
     "lint:fix": "oxlint --fix && expo lint --fix && eslint --no-inline-config --quiet --config eslint.todo.config.js packages scripts",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
-    "prepare": "prek install"
+    "prepare": "node scripts/installGitHooks.ts"
   },
   "dependencies": {
     "@ai-sdk/amazon-bedrock": "^4.0.96",

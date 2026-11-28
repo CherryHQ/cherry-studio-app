@@ -19,6 +19,11 @@ cd cherry-studio-app
 pnpm install
 ```
 
+The install stores a native copy of `prek` in Git's common directory. All worktrees share it, so
+removing the worktree that installed the hooks leaves them usable. An older branch can still
+overwrite the hooks with its original installer. Run `pnpm run prepare` in an updated checkout
+with dependencies installed to restore them.
+
 ## Dependencies
 
 Installs never write patched or built package output back into the shared pnpm store
