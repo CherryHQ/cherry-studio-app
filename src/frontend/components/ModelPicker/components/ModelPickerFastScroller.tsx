@@ -362,6 +362,7 @@ function ModelPickerFastScrollAnchorIcon({
     >
       <View className="size-5 overflow-hidden rounded-sm">
         <ProviderAvatar
+          builtinOnly={anchor.provider.builtinOnly}
           presetProviderId={anchor.provider.presetProviderId}
           providerId={anchor.provider.id}
           providerName={anchor.provider.name}

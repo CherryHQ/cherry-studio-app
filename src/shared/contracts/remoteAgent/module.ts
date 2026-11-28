@@ -6,6 +6,7 @@ import type {
   RemoteCommand,
   RemoteDispatchReceipt,
   RemoteModelSummary,
+  RemoteModelOption,
   RemoteStartInput,
   RemoteMessageView,
   RemotePage,
@@ -38,6 +39,12 @@ export interface RemoteAgentSource {
   ): Promise<
     RemotePage<{ id: string; name: string; emoji?: string; model?: RemoteModelSummary | null }>
   >;
+  listModels(
+    agentId: string,
+    search: string,
+    cursor: string | undefined,
+    signal: AbortSignal,
+  ): Promise<RemotePage<RemoteModelOption>>;
   listWorkspaces(
     agentId: string,
     cursor: string | undefined,

@@ -224,14 +224,148 @@ it('closing one consumer does not cancel a shared download, while closing all re
   rmSync(path.dirname(uri), { recursive: true, force: true });
 });
 
+it.each(['applied', 'absent', 'remove', 'unknown'] as const)(
+  'reconciles an explicit preupload create after downgrade: %s',
+  async (outcome) => {
+    const target = {
+      agentId: 'agent',
+      workspace: { kind: 'system' as const },
+      model: { providerId: 'p', modelId: 'm' },
+    };
+    const applied = {
+      status: 'applied',
+      sessionId: 'original-session',
+      method: 'agent.sessions.create',
+    };
+    let downgraded = false;
+    const request = jest.fn(
+      async (method: string, params: { commandId: string; model?: unknown }) => {
+        if (method === 'agent.sessions.create') {
+          if (!downgraded) throw new RemoteAgentError('CONNECTION_LOST', true);
+          if (params.model) throw new RemoteAgentError('UPGRADE_REQUIRED');
+          return { ...applied, commandId: params.commandId, sessionId: 'default-session' };
+        }
+        if (method === 'agent.commands.get') {
+          if (outcome === 'unknown') throw new RemoteAgentError('CONNECTION_LOST', true);
+          if (outcome === 'absent' || outcome === 'remove') throw new RemoteAgentError('NOT_FOUND');
+          return { ...applied, commandId: params.commandId };
+        }
+        throw new Error(method);
+      },
+    );
+    let saved: string | undefined;
+    const journal = {
+      read: () => saved,
+      write: (_key: string, value: string) => {
+        saved = value;
+      },
+    } as unknown as RemoteAgentCommandJournal;
+    const open = () =>
+      new RemoteAttachmentDrafts(
+        'binding',
+        journal,
+        { resolve: async () => undefined } as unknown as RemoteUploadFiles,
+        request as unknown as AgentRequest,
+        new AbortController().signal,
+        () => {},
+        async () => ({ write: jest.fn() }),
+      );
+    let tasks = open();
+    tasks.stage('draft:a', target, [attachment]);
+    await tasks.drain();
+    const createId = request.mock.calls[0][1].commandId;
+    tasks.stop();
+    downgraded = true;
+    if (outcome === 'remove') {
+      // An older installation had already persisted the local capability failure.
+      const rows = JSON.parse(saved!);
+      rows[0].blocked = true;
+      rows[0].error = 'UPGRADE_REQUIRED';
+      saved = JSON.stringify(rows);
+    }
+    tasks = open();
+    tasks.recover();
+    await tasks.drain();
+    expect(request).toHaveBeenCalledWith(
+      'agent.commands.get',
+      { commandId: createId },
+      expect.anything(),
+    );
+    const row = tasks.get()[0];
+    expect(row.canReviseModel).toBe(outcome === 'absent' || outcome === 'remove');
+    if (outcome === 'applied') expect(row.sessionId).toBe('original-session');
+    if (outcome === 'remove') {
+      const count = request.mock.calls.length;
+      tasks.stage('draft:a', target, []);
+      await tasks.drain();
+      expect(tasks.get()).toEqual([]);
+      expect(request).toHaveBeenCalledTimes(count);
+    } else if (outcome === 'absent') {
+      tasks.stage('draft:a', { agentId: 'agent', workspace: target.workspace }, [attachment]);
+      await tasks.drain();
+      expect(tasks.get()[0]).toMatchObject({
+        sessionId: 'default-session',
+        items: [{ fileEntryId: attachment.fileEntryId }],
+      });
+      const replacement = request.mock.calls.findLast(
+        ([method]) => method === 'agent.sessions.create',
+      )![1];
+      expect(replacement.commandId).not.toBe(createId);
+      expect(replacement).not.toHaveProperty('model');
+    } else {
+      expect(() =>
+        tasks.stage('draft:a', { agentId: 'agent', workspace: target.workspace }, [attachment]),
+      ).toThrow('CONFLICT');
+    }
+    tasks.stop();
+  },
+);
+
+it('changes the create command only after a definitive model rejection and keeps the selected files', async () => {
+  const create = jest
+    .fn()
+    .mockRejectedValueOnce(new RemoteAgentError('CONNECTION_LOST', true))
+    .mockResolvedValueOnce({ status: 'rejected', error: { reason: 'MODEL_UNAVAILABLE' } })
+    .mockRejectedValueOnce(new RemoteAgentError('CONNECTION_LOST', true));
+  const tasks = new RemoteAttachmentDrafts(
+    'binding',
+    { read: () => undefined, write: jest.fn() } as unknown as RemoteAgentCommandJournal,
+    {} as RemoteUploadFiles,
+    create,
+    new AbortController().signal,
+    () => {},
+    async () => ({ write: jest.fn() }),
+  );
+  const target = {
+    agentId: 'a',
+    workspace: { kind: 'system' as const },
+    model: { providerId: 'p', modelId: 'gone' },
+  };
+  const followDefault = { agentId: 'a', workspace: target.workspace };
+  tasks.stage('draft:d', target, [attachment]);
+  await tasks.drain();
+  expect(() => tasks.stage('draft:d', followDefault, [attachment])).toThrow('CONFLICT');
+  tasks.recover();
+  await tasks.drain();
+  expect(create.mock.calls[1][1]).toEqual(create.mock.calls[0][1]);
+  expect(tasks.get()[0].items[0].error).toBe('MODEL_UNAVAILABLE');
+  tasks.stage('draft:d', followDefault, [attachment]);
+  await tasks.drain();
+  expect(create.mock.calls[2][1]).toEqual({ ...followDefault, commandId: expect.any(String) });
+  expect(create.mock.calls[2][1].commandId).not.toBe(create.mock.calls[0][1].commandId);
+  expect(tasks.get()[0].items[0].fileEntryId).toBe(attachment.fileEntryId);
+  tasks.stop();
+});
+
 it.each([
-  { checksumAlgorithm: 'sha256' as const, reorder: false },
-  { checksumAlgorithm: 'sha256' as const, reorder: true },
-  { checksumAlgorithm: undefined, reorder: false },
-  { checksumAlgorithm: undefined, reorder: true },
+  { checksumAlgorithm: 'sha256' as const, reorder: false, newSession: false },
+  { checksumAlgorithm: 'sha256' as const, reorder: true, newSession: false },
+  { checksumAlgorithm: undefined, reorder: false, newSession: false },
+  { checksumAlgorithm: undefined, reorder: true, newSession: false },
+  { checksumAlgorithm: 'sha256' as const, reorder: true, newSession: true },
 ])(
-  'uploads selected bytes and restores readiness with checksum $checksumAlgorithm and reordered fields $reorder',
-  async ({ checksumAlgorithm: initialChecksumAlgorithm, reorder }) => {
+  'uploads selected bytes and restores readiness %# with checksum $checksumAlgorithm and reordered fields $reorder',
+  async ({ checksumAlgorithm: initialChecksumAlgorithm, reorder, newSession }) => {
     let checksumAlgorithm = initialChecksumAlgorithm;
     const uri = path.join(root, 'selected.zip');
     const bytes = Buffer.from('selected before Send');
@@ -249,8 +383,18 @@ it.each([
     let upload: AgentUploadState | undefined;
     const received: Buffer[] = [];
     const cancelled: string[] = [];
+    const createParams: { commandId: string; model?: unknown }[] = [];
+    const target = {
+      agentId: 'agent',
+      workspace: { kind: 'system' as const },
+      model: { providerId: 'provider', modelId: 'chosen' },
+    };
     const request = (async (method: string, params: any) => {
       params = JSON.parse(JSON.stringify(params));
+      if (method === 'agent.sessions.create') {
+        createParams.push(params);
+        return { status: 'applied', sessionId: 'session' };
+      }
       if (method === 'agent.attachments.present') {
         draft = params;
         return { accepted: true };
@@ -311,12 +455,14 @@ it.each([
       () => {},
       transport,
     );
-    tasks.stage('session:session', { sessionId: 'session' }, [attachment]);
+    const key = newSession ? 'draft:new' : 'session:session';
+    const destination = newSession ? target : { sessionId: 'session' };
+    tasks.stage(key, destination, [attachment]);
     expect(tasks.get()[0].items[0].state).toBe('uploading');
-    expect(() => tasks.ready('session:session', [attachment])).toThrow();
+    expect(() => tasks.ready(key, [attachment])).toThrow();
     await tasks.drain();
     expect(Buffer.concat(received).equals(bytes)).toBe(true);
-    const ready = tasks.ready('session:session', [attachment]);
+    const ready = tasks.ready(key, [attachment]);
     tasks.stop();
     tasks = new RemoteAttachmentDrafts(
       'phone:grant:attachments',
@@ -329,7 +475,16 @@ it.each([
     );
     tasks.recover();
     await tasks.drain();
-    expect(tasks.ready('session:session', [attachment])).toEqual(ready);
+    tasks.stage(key, destination, [attachment]);
+    expect(tasks.ready(key, [attachment])).toEqual(ready);
+    if (newSession) {
+      expect(createParams).toEqual([{ ...target, commandId: expect.any(String) }]);
+      expect(() =>
+        tasks.stage(key, { ...target, model: { providerId: 'provider', modelId: 'other' } }, [
+          attachment,
+        ]),
+      ).toThrow('CONFLICT');
+    }
     expect(Buffer.concat(received).equals(bytes)).toBe(true);
     expect(jest.mocked(files.hashFile)).toHaveBeenCalledTimes(checksumAlgorithm ? 2 : 0);
     tasks.stop();
@@ -345,7 +500,7 @@ it.each([
     );
     tasks.recover();
     await tasks.drain();
-    const migrated = tasks.ready('session:session', [attachment]);
+    const migrated = tasks.ready(key, [attachment]);
     expect(migrated.selectionId).toBe(ready.selectionId);
     expect(migrated.uploaded[0].uploadId).not.toBe(ready.uploaded[0].uploadId);
     expect(cancelled).toEqual([ready.uploaded[0].uploadId]);

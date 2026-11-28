@@ -1839,6 +1839,7 @@
   "remoteAgent.downloading": "Скачивание {{progress}}%",
   "remoteAgent.expand": "Показать полный текст и подробности",
   "remoteAgent.finalizing": "PC сохраняет результат…",
+  "remoteAgent.followAgentModel": "Использовать модель агента по умолчанию",
   "remoteAgent.identityChanged": "Идентификатор PC изменился. Повторно отсканируйте QR-код.",
   "remoteAgent.idle": "Нет активного выполнения на переднем плане",
   "remoteAgent.input": "Входные данные",

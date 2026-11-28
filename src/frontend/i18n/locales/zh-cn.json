@@ -1785,6 +1785,7 @@
   "remoteAgent.downloading": "正在下载 {{progress}}%",
   "remoteAgent.expand": "展开完整内容与详情",
   "remoteAgent.finalizing": "PC 正在保存结果…",
+  "remoteAgent.followAgentModel": "跟随智能体默认模型",
   "remoteAgent.identityChanged": "PC 身份已变化，请重新扫码确认。",
   "remoteAgent.idle": "当前没有前台执行",
   "remoteAgent.input": "输入",

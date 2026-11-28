@@ -23,3 +23,5 @@ export {
   MODEL_TYPE_FILTERS,
   type ModelTypeFilter,
 } from './utils/modelTypeFilter';
+export { ModelPickerSheet, ModelPickerSearch } from './components/ModelPickerSheet';
+export type { ModelPickerChoiceListItem } from './utils/modelPickerListItems';

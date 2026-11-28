@@ -9,6 +9,8 @@ export class ConversationActionError extends Error {
 
 export function conversationFailureKey(failure: ConversationFailure) {
   switch (failure.code) {
+    case 'model-unavailable':
+      return 'settings.model.unavailable';
     case 'target-unavailable':
       return 'remoteAgent.targetUnavailable';
     case 'conflict':

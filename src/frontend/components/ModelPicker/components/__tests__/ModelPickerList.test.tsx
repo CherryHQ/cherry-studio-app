@@ -16,6 +16,7 @@ jest.mock('@cherrystudio/ui/components', () => {
         <MockText>{children}</MockText>
       </MockPressable>
     ),
+    SelectionIndicator: () => null,
     ContentState: {
       Empty: ({ description, title }: { description?: string; title?: string }) => (
         <MockText>{title ?? description}</MockText>
@@ -104,6 +105,28 @@ describe('ModelPickerList', () => {
       );
     });
     expect(mockLegendListProps?.contentContainerStyle?.paddingBottom).toBe(58);
+  });
+
+  test('marks the selected desktop choice and returns the pressed identity for identically named rows', () => {
+    const onChoose = jest.fn();
+    act(() => {
+      renderer = create(
+        <ModelPickerList
+          listItems={[
+            { type: 'choice', key: 'a/chat', name: 'Chat' },
+            { type: 'choice', key: 'b/chat', name: 'Chat' },
+          ]}
+          onChoose={onChoose}
+          selectedModelId="b/chat"
+        />,
+      );
+    });
+    const rows = renderer!.root
+      .findAllByProps({ accessibilityLabel: 'Chat' })
+      .filter((node) => typeof node.props.onPress === 'function');
+    expect(rows.some((row) => row.props.accessibilityState.selected)).toBe(true);
+    act(() => rows.find((row) => !row.props.accessibilityState.selected)!.props.onPress());
+    expect(onChoose).toHaveBeenCalledWith('a/chat');
   });
 
   test('offers provider setup only after loading finishes', () => {

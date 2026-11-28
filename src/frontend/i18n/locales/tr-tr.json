@@ -1803,6 +1803,7 @@
   "remoteAgent.downloading": "İndiriliyor %{{progress}}",
   "remoteAgent.expand": "Tam içeriği ve ayrıntıları aç",
   "remoteAgent.finalizing": "PC sonucu kaydediyor…",
+  "remoteAgent.followAgentModel": "Ajanın varsayılan modelini kullan",
   "remoteAgent.identityChanged": "PC kimliği değişti. Doğrulamak için QR kodunu yeniden tarayın.",
   "remoteAgent.idle": "Ön planda etkin yürütme yok",
   "remoteAgent.input": "Girdi",

@@ -13,7 +13,7 @@ export { ComposerDock } from './components/ComposerDock';
 export { ComposerEditor, ComposerEditorAccessories } from './components/ComposerEditor';
 export { ComposerField } from './components/ComposerField';
 export { ComposerMenu } from './components/ComposerMenu';
-export { ComposerModelPill } from './components/ComposerModelPill';
+export { ComposerModelPill, ComposerModelPillButton } from './components/ComposerModelPill';
 export { ComposerSessionProvider } from './components/ComposerSessionProvider';
 export {
   ComposerSurface,

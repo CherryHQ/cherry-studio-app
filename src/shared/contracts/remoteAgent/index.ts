@@ -7,6 +7,8 @@ export type {
   RemoteAttachmentDraftView,
   RemoteWorkspaceSelection,
   RemoteStartInput,
+  RemoteModelOption,
+  RemoteModelSelection,
   RemoteSourceState,
   RemoteSessionLivePreview,
   RemoteSessionView,

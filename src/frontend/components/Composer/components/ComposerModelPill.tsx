@@ -18,11 +18,32 @@ type ComposerModelPillProps = PropsWithChildren<{
  * The model button. `children` trail the label inside the pill, for whatever
  * the caller wants said about the model — chat puts its reasoning effort there.
  */
-export function ComposerModelPill({ children, icon, label, onPress }: ComposerModelPillProps) {
+export function ComposerModelPill(props: ComposerModelPillProps) {
+  const { isLocked } = useModelChoice();
+  const pill = (
+    <ComposerModelPillButton {...props} disabled={isLocked}>
+      {props.children}
+      {isLocked && props.label ? <LockedMark className="size-3.5" /> : null}
+    </ComposerModelPillButton>
+  );
+  return isLocked && props.label ? (
+    <LockedTrigger accessibilityLabel={props.label}>{pill}</LockedTrigger>
+  ) : (
+    pill
+  );
+}
+
+/** A model trigger whose availability comes from the owning catalog. */
+export function ComposerModelPillButton({
+  children,
+  disabled,
+  icon,
+  label,
+  onPress,
+  testID = 'composer-model-button',
+}: ComposerModelPillProps & { disabled?: boolean; testID?: string }) {
   const { t } = useTranslation();
   const { runInputReplacement } = useComposerPresentationActions();
-  // A scope with one allowed model leaves the pill showing it, with nothing to open.
-  const { isLocked } = useModelChoice();
 
   const handlePress = useCallback(() => {
     void runInputReplacement(onPress);
@@ -32,8 +53,9 @@ export function ComposerModelPill({ children, icon, label, onPress }: ComposerMo
     return (
       <Composer.Pill
         accessibilityLabel={t('chat.model.select')}
-        disabled={isLocked}
+        disabled={disabled}
         onPress={handlePress}
+        testID={testID}
       >
         <Text className="min-w-0 shrink font-semibold text-foreground text-sm" numberOfLines={1}>
           {t('chat.model.select')}
@@ -42,10 +64,10 @@ export function ComposerModelPill({ children, icon, label, onPress }: ComposerMo
     );
   }
 
-  const pill = (
+  return (
     <Composer.Pill
       accessibilityLabel={label}
-      disabled={isLocked}
+      disabled={disabled}
       icon={
         icon ?? (
           <Text className="font-semibold text-foreground text-sm">
@@ -54,15 +76,12 @@ export function ComposerModelPill({ children, icon, label, onPress }: ComposerMo
         )
       }
       onPress={handlePress}
-      testID="composer-model-button"
+      testID={testID}
     >
       <Text className="min-w-0 shrink font-semibold text-foreground text-sm" numberOfLines={1}>
         {label}
       </Text>
       {children}
-      {isLocked ? <LockedMark className="size-3.5" /> : null}
     </Composer.Pill>
   );
-  // The organization chose the only model: pressing explains that instead of opening a picker.
-  return isLocked ? <LockedTrigger accessibilityLabel={label}>{pill}</LockedTrigger> : pill;
 }

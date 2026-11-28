@@ -83,6 +83,7 @@ export class DesktopSession {
   agentUploadsVersion?: number;
   agentUploadChecksum?: 'sha256';
   agentAttachmentSelections?: boolean;
+  agentSessionModelSelection?: boolean;
   agentMessageSummariesVersion?: number;
   connectionEndpointsVersion?: number;
   static async connect(options: DesktopSessionOptions): Promise<DesktopSession> {
@@ -105,6 +106,7 @@ export class DesktopSession {
         options.signal,
       );
       session.agentFailureVersion = hello.agentFailureVersion;
+      session.agentSessionModelSelection = hello.agentSessionModelSelection;
       session.agentUploadsVersion = hello.agentUploadsVersion;
       session.agentUploadChecksum = hello.agentUploadChecksum;
       session.agentAttachmentSelections = hello.agentAttachmentSelections;
@@ -219,6 +221,15 @@ export class DesktopSession {
       throw new RemoteFailureError({
         reason: 'UPGRADE_REQUIRED',
         message: 'Desktop does not support attachment drafts',
+      });
+    if (
+      (method === 'agent.models.list' ||
+        (method === 'agent.sessions.create' && 'model' in params)) &&
+      !this.agentSessionModelSelection
+    )
+      throw new RemoteFailureError({
+        reason: 'UPGRADE_REQUIRED',
+        message: 'Desktop does not support session model selection',
       });
     if (method.startsWith('agent.uploads.') && this.agentUploadsVersion !== 1)
       throw new RemoteFailureError({

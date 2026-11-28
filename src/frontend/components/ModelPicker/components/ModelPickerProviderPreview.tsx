@@ -24,6 +24,7 @@ export function ModelPickerProviderPreview({
       <View className="min-h-36 items-center justify-center gap-3 px-4 py-5">
         <View className="size-12 overflow-hidden rounded-xl border-continuous">
           <ProviderAvatar
+            builtinOnly={anchor.provider.builtinOnly}
             presetProviderId={anchor.provider.presetProviderId}
             providerId={anchor.provider.id}
             providerName={anchor.provider.name}

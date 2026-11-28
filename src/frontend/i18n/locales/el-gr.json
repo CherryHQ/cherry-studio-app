@@ -1803,6 +1803,7 @@
   "remoteAgent.downloading": "Λήψη {{progress}}%",
   "remoteAgent.expand": "Ανάπτυξη πλήρους περιεχομένου και λεπτομερειών",
   "remoteAgent.finalizing": "Ο PC αποθηκεύει το αποτέλεσμα…",
+  "remoteAgent.followAgentModel": "Χρήση προεπιλεγμένου μοντέλου του πράκτορα",
   "remoteAgent.identityChanged": "Η ταυτότητα του PC άλλαξε. Σαρώστε ξανά τον κωδικό QR.",
   "remoteAgent.idle": "Δεν υπάρχει ενεργή εκτέλεση στο προσκήνιο",
   "remoteAgent.input": "Είσοδος",

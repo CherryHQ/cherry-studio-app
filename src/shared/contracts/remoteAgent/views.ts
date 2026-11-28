@@ -9,10 +9,12 @@ export type RemoteWorkspaceSelection = { kind: 'registered'; id: string } | { ki
 export type RemoteAttachment = { fileEntryId: FileEntryId; name: string; mediaType: string };
 export type RemoteAttachmentDraftTarget =
   | { sessionId: string }
-  | { agentId: string; workspace: RemoteWorkspaceSelection };
+  | { agentId: string; workspace: RemoteWorkspaceSelection; model?: RemoteModelSelection };
 export type RemoteAttachmentDraftView = {
   key: string;
   id: string;
+  draftTarget?: Extract<RemoteAttachmentDraftTarget, { agentId: string }>;
+  canReviseModel?: boolean;
   sessionId?: string;
   busy?: boolean;
   items: (RemoteAttachment & {
@@ -23,10 +25,15 @@ export type RemoteAttachmentDraftView = {
     error?: string;
   })[];
 };
+export type RemoteModelSelection = Pick<RemoteModelSummary, 'modelId' | 'providerId'>;
+export type RemoteModelOption = RemoteModelSummary & { providerName: string };
 export type RemoteStartInput = {
   draftId: string;
-  dispatch?: true;
+  /** Atomically retire this rejected start when its replacement is admitted. */
+  replaceStartId?: string;
   agentId: string;
+  model?: RemoteModelSelection;
+  dispatch?: true;
   title?: string;
   text: string;
   attachments?: RemoteAttachment[];
@@ -54,7 +61,10 @@ export type RemoteCommand = Readonly<{
 export type RemoteStartOperation = Readonly<{
   id: string;
   draftId: string;
+  /** Owner of the consumed input. Older journal records may only identify the route. */
+  inputDraftId?: string;
   agentId: string;
+  model?: RemoteModelSelection;
   workspaceId?: string;
   workspace?: RemoteWorkspaceSelection;
   title?: string;
@@ -76,6 +86,7 @@ export type RemoteSourceState = Readonly<{
   reason?: string;
   attachments?: boolean;
   preupload?: boolean;
+  sessionModelSelection?: boolean;
   attachmentDrafts?: readonly RemoteAttachmentDraftView[];
   upload?: { id: string; sent: number; total: number; sessionId?: string; draftId?: string };
 }>;

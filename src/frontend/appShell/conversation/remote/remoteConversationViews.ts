@@ -42,6 +42,8 @@ function classifyRemoteFailure(error: unknown): ConversationFailure {
       return { code: 'cancelled', retry: 'none' };
     case 'TARGET_UNAVAILABLE':
       return { code: 'target-unavailable', retry: 'revise-input' };
+    case 'MODEL_UNAVAILABLE':
+      return { code: 'model-unavailable', retry: 'revise-input' };
     case 'UPGRADE_REQUIRED':
       return { code: 'upgrade-required', retry: 'none' };
     case 'CLOSED':

@@ -14,7 +14,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   type AgentRef,
   type AgentSummary,
-  type ConversationRef,
   type WorkspaceSummary,
   type useConversationAgents,
   useConversationSourceState,
@@ -22,6 +21,7 @@ import {
 } from '@/frontend/appShell/conversation';
 import {
   type DraftId,
+  type RemoteDraftHandoff,
   type RemoteConversationSource,
   type useConversation,
   useConversationDraft,
@@ -54,7 +54,7 @@ import { ConversationPresenter } from './ConversationPresenter';
 import { remoteChatShareTarget } from './remoteChatShareTarget';
 import { RemoteComposer } from './RemoteComposer';
 import { useRemoteChatTurns } from './useRemoteChatTurns';
-import { readRemoteDraft } from './useRemoteDraftPersistence';
+import { readRemoteDraft, useRemoteDraftModel } from './useRemoteDraftPersistence';
 
 const PREVIEW_CONTENT_BOTTOM_INSET = 12;
 
@@ -114,7 +114,7 @@ export function RemoteConversationBody({
     draftId?: DraftId;
     draftKey: string;
     identity: string;
-    onSessionCreated?(ref: ConversationRef): boolean;
+    onSessionCreated?(created: RemoteDraftHandoff): boolean;
     agents: ReturnType<typeof useConversationAgents>;
     surface?: 'default' | 'sheet';
   }) {
@@ -160,7 +160,13 @@ export function RemoteConversationBody({
     (workspace: WorkspaceSummary) => setWorkspaceSelection({ agentRef: agent?.ref, workspace }),
     [agent?.ref],
   );
-  const draft = useConversationDraft(agent?.ref, selectedWorkspace?.ref, activeDraftId);
+  const modelSelection = useRemoteDraftModel(draftKey, activeDraftId ? agent?.id : undefined);
+  const draft = useConversationDraft(
+    agent?.ref,
+    selectedWorkspace?.ref,
+    activeDraftId,
+    modelSelection.model,
+  );
   const preparation = existing
     ? snapshot.attachmentPreparation
     : draft.state?.attachmentPreparation;
@@ -292,6 +298,8 @@ export function RemoteConversationBody({
                       snapshot={snapshot}
                       draftId={activeDraftId}
                       draftKey={draftKey}
+                      agent={agent}
+                      modelSelection={modelSelection}
                       draft={draft}
                       workspaces={workspaces}
                       selectedWorkspace={selectedWorkspace}

@@ -13,11 +13,13 @@ import { useComposerPresentationActions } from '@/frontend/components/Composer';
 import { useTransientValue } from '@/frontend/hooks/useTransientValue';
 
 import { conversationFailureKey } from '../runtime/conversationFailure';
+import { RemoteModelPicker } from './RemoteModelPicker';
 
 const DELIVERED_MS = 2000;
 const REASON_KEYS = {
   changed: 'remoteAgent.undelivered.reason.changed',
   agentUnavailable: 'remoteAgent.undelivered.reason.agentUnavailable',
+  modelUnavailable: 'settings.model.unavailable',
   interrupted: 'remoteAgent.undelivered.reason.interrupted',
   connection: 'remoteAgent.undelivered.reason.connection',
   invalid: 'remoteAgent.undelivered.reason.invalid',
@@ -35,6 +37,8 @@ function describe(message: UndeliveredMessage): {
     case 'conflict':
     case 'version-expired':
       return { reason: 'changed', edit: false };
+    case 'model-unavailable':
+      return { reason: 'modelUnavailable', edit: true };
     case 'target-unavailable':
       return { reason: 'agentUnavailable', edit: false };
     case 'offline':
@@ -85,6 +89,7 @@ export function UndeliveredMessageRow({
   const deliveredFeedback = useTransientValue<boolean>(DELIVERED_MS);
   const delivered = deliveredFeedback.value === true;
   const [details, setDetails] = useState(false);
+  const [modelPickerFor, setModelPickerFor] = useState<UndeliveredMessage['id']>();
 
   const shown = resending ?? message;
   if (!shown) {
@@ -98,18 +103,36 @@ export function UndeliveredMessageRow({
     ) : null;
   }
   const { reason, edit } = describe(shown);
+  const modelRecovery = shown.resendWithModel;
+  const editLabel = t(
+    modelRecovery?.defaultOnly
+      ? 'remoteAgent.followAgentModel'
+      : modelRecovery
+        ? 'chat.model.select'
+        : 'common.edit',
+  );
+  const editDisabled = !!resending || modelRecovery?.availability.state === 'disabled';
   const summary = t('remoteAgent.undelivered.summary', { reason: t(REASON_KEYS[reason]) });
   const text = messageText(shown);
-  const resend = async () => {
+  const resend = async (execute = () => shown.resend.execute(undefined)) => {
     deliveredFeedback.clear();
     setResending(shown);
-    const result = await shown.resend.execute(undefined).finally(() => setResending(undefined));
+    const result = await execute().finally(() => setResending(undefined));
     if (result.state === 'applied') deliveredFeedback.show(true);
     // Not admitted, so the original stays; a recorded rejection replaces it instead.
     else if (result.state === 'rejected' && !result.operationId)
       toast.show({ label: t(conversationFailureKey(result.failure)), variant: 'danger' });
   };
   const editText = async () => {
+    if (modelRecovery?.defaultOnly) {
+      await runInputReplacement(() => setDetails(true));
+      return;
+    }
+    if (modelRecovery) {
+      setDetails(false);
+      await runInputReplacement(() => setModelPickerFor(shown.id));
+      return;
+    }
     try {
       await onEdit(shown.input);
       shown.discard();
@@ -138,9 +161,9 @@ export function UndeliveredMessageRow({
             {summary}
           </Text>
         </Pressable>
-        {edit ? (
-          <Button size="xs" variant="ghost" onPress={editText}>
-            {t('common.edit')}
+        {edit || modelRecovery ? (
+          <Button size="xs" variant="ghost" disabled={editDisabled} onPress={editText}>
+            {editLabel}
           </Button>
         ) : (
           <Button
@@ -163,11 +186,24 @@ export function UndeliveredMessageRow({
           onPress={discard}
         />
       </View>
+      {!modelRecovery?.defaultOnly && modelRecovery?.availability.state === 'enabled' && (
+        <RemoteModelPicker
+          key={shown.id}
+          open={modelPickerFor === shown.id}
+          agent={modelRecovery.agent}
+          confirmLabel={t('remoteAgent.undelivered.resend')}
+          onClose={() => setModelPickerFor(undefined)}
+          onSelect={(model) => {
+            setModelPickerFor(undefined);
+            void resend(() => modelRecovery.execute(model));
+          }}
+        />
+      )}
       {details ? (
         <BottomSheet
           open
           onClose={() => setDetails(false)}
-          title={t('remoteAgent.undelivered.title')}
+          title={modelRecovery?.defaultOnly ? editLabel : t('remoteAgent.undelivered.title')}
           size="medium"
           footer={
             <View className="flex-row gap-3">
@@ -177,7 +213,21 @@ export function UndeliveredMessageRow({
                 </Button>
               </View>
               <View className="flex-1">
-                <Button onPress={editText}>{t('common.edit')}</Button>
+                {modelRecovery?.defaultOnly ? (
+                  <Button
+                    disabled={editDisabled}
+                    onPress={() => {
+                      setDetails(false);
+                      void resend(() => modelRecovery.execute(undefined));
+                    }}
+                  >
+                    {t('remoteAgent.undelivered.resend')}
+                  </Button>
+                ) : (
+                  <Button disabled={editDisabled} onPress={editText}>
+                    {editLabel}
+                  </Button>
+                )}
               </View>
             </View>
           }

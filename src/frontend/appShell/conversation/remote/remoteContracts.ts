@@ -3,10 +3,14 @@ import type {
   RemoteAgentSource,
   RemoteAttachment,
   RemoteAttachmentDraftView,
+  RemoteModelOption,
+  RemoteModelSelection,
 } from '@/shared/contracts/remoteAgent';
 
 import type {
   AgentRef,
+  CatalogCursor,
+  CatalogPage,
   ConversationAction,
   ConversationCatalog,
   ConversationCitationReader,
@@ -44,6 +48,8 @@ export type ConversationInput = Pick<
 export type AttachmentPreparation = {
   draft?: RemoteAttachmentDraftView;
   stage(attachments: RemoteAttachment[]): void;
+  /** A definitive rejection before Session creation leaves the attachments available for revision. */
+  reviseModel?(model?: RemoteModelSelection): void;
 };
 export type InputPolicy = {
   attachments: boolean;
@@ -67,6 +73,10 @@ export type UndeliveredMessage = {
   failure?: ConversationFailure;
   /** Submits the same input through the owner's current send or start, replacing this message. */
   resend: ConversationAction<void, Submission>;
+  resendWithModel?: ConversationAction<RemoteModelSelection | undefined, Submission> & {
+    agent: AgentRef;
+    defaultOnly: boolean;
+  };
   discard(): void;
 };
 export type RemoteConversationExecution = ConversationExecution & {
@@ -139,13 +149,20 @@ export interface RemoteConversationSession {
   refresh(signal: AbortSignal): Promise<void>;
   dispose(): void;
 }
+export type RemoteDraftHandoff = {
+  conversation: ConversationRef;
+  inputDraftId?: string;
+  agentId: string;
+};
 export interface ConversationDraft {
   readonly id: DraftId;
   readonly state: Readable<{
     inputPolicy: InputPolicy;
+    /** Whether the desktop accepts a model chosen for the Session this draft creates. */
+    sessionModelSelection: boolean;
     start: ConversationAction<ConversationInput, Submission>;
     /** The Session this draft's start created; the route hands off to it, then releases the start. */
-    created?: { conversation: ConversationRef; release(): void };
+    created?: RemoteDraftHandoff & { release(): void };
     attachmentPreparation?: AttachmentPreparation;
     upload?: { sent: number; total: number; cancel(): void };
     undelivered?: UndeliveredMessage;
@@ -153,12 +170,25 @@ export interface ConversationDraft {
   dispose(): void;
 }
 export interface RemoteConversationCatalog extends ConversationCatalog {
+  /** Models the desktop lets this Agent's new Sessions select. */
+  listModels(
+    agent: AgentRef,
+    search: string,
+    cursor: CatalogCursor | undefined,
+    signal: AbortSignal,
+  ): Promise<CatalogPage<RemoteModelOption>>;
   prepareDraft(
-    input: { agent: AgentRef; workspace?: WorkspaceRef; draftId: DraftId },
+    input: {
+      agent: AgentRef;
+      workspace?: WorkspaceRef;
+      model?: RemoteModelSelection;
+      draftId: DraftId;
+    },
     signal: AbortSignal,
   ): Promise<ConversationDraft>;
 }
 export interface RemoteConversationSource extends ConversationSource {
+  readonly ref: Extract<ConversationSource['ref'], { kind: 'desktop' }>;
   /** Stable identity/grant binding for unsent drafts; independent of Query lifetime. */
   readonly draftScope: string;
   readonly catalog: RemoteConversationCatalog;

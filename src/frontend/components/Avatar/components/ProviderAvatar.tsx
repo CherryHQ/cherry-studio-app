@@ -9,6 +9,7 @@ type ProviderAvatarProps = {
   providerName: string;
   /** Passed straight to {@link BrandAvatar}; lists keep the brand default. */
   shape?: 'circle' | 'rounded';
+  builtinOnly?: boolean;
   size?: number;
 };
 
@@ -23,8 +24,9 @@ export function ProviderAvatar({
   providerName,
   shape,
   size,
+  builtinOnly,
 }: ProviderAvatarProps) {
-  const avatarUri = useProviderAvatar(providerId);
+  const avatarUri = useProviderAvatar(builtinOnly ? undefined : providerId);
 
   if (avatarUri) {
     return (

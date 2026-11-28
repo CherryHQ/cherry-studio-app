@@ -1803,6 +1803,7 @@
   "remoteAgent.downloading": "Downloading {{progress}}%",
   "remoteAgent.expand": "Expand full content and details",
   "remoteAgent.finalizing": "PC is saving the result…",
+  "remoteAgent.followAgentModel": "Follow Agent default",
   "remoteAgent.identityChanged": "PC identity changed. Scan its QR code to confirm it again.",
   "remoteAgent.idle": "No active foreground execution",
   "remoteAgent.input": "Input",

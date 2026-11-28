@@ -638,8 +638,13 @@ export class RemoteAgentScope implements RemoteAgentSource {
       const session = await this.ready(signal);
       const preupload = session.agentAttachmentSelections === true;
       const attachments = preupload && session.agentUploadsVersion === 1;
-      if (this.state.attachments !== attachments || this.state.preupload !== preupload) {
-        this.state = { ...this.state, attachments, preupload };
+      const sessionModelSelection = session.agentSessionModelSelection === true;
+      if (
+        this.state.attachments !== attachments ||
+        this.state.preupload !== preupload ||
+        this.state.sessionModelSelection !== sessionModelSelection
+      ) {
+        this.state = { ...this.state, attachments, preupload, sessionModelSelection };
         for (const listener of this.stateListeners) listener();
       }
       const negotiatedParams =
@@ -676,7 +681,12 @@ export class RemoteAgentScope implements RemoteAgentSource {
           typeof params.sessionId === 'string'
         )
           this.readCache.remove(this.cacheEntry(params.sessionId));
-        if (error.reason === 'UPGRADE_REQUIRED' && method !== 'agent.tasks.list') {
+        if (
+          error.reason === 'UPGRADE_REQUIRED' &&
+          method !== 'agent.tasks.list' &&
+          method !== 'agent.models.list' &&
+          !(method === 'agent.sessions.create' && 'model' in params)
+        ) {
           this.state = { ...this.state, reason: 'upgrade-required' };
           for (const listener of this.stateListeners) listener();
         }
@@ -696,6 +706,15 @@ export class RemoteAgentScope implements RemoteAgentSource {
   async listAgents(cursor: string | undefined, signal: AbortSignal) {
     const page = await this.request('agent.agents.list', { cursor }, signal);
     return projectAgentPage(page);
+  }
+  async listModels(
+    agentId: string,
+    search: string,
+    cursor: string | undefined,
+    signal: AbortSignal,
+  ) {
+    const page = await this.request('agent.models.list', { agentId, search, cursor }, signal);
+    return { items: page.items, next: page.nextCursor ?? undefined };
   }
   async listWorkspaces(agentId: string, cursor: string | undefined, signal: AbortSignal) {
     const page = await this.request('agent.workspaces.list', { agentId, cursor }, signal);
@@ -1416,14 +1435,23 @@ export class RemoteAgentScope implements RemoteAgentSource {
     this.assertActive();
     return this.track(
       this.withPreparation(async () => {
+        const previous = input.replaceStartId
+          ? this.actions.getStarts().find((start) => start.id === input.replaceStartId)
+          : undefined;
+        if (input.replaceStartId && !previous) throw new RemoteAgentError('CONFLICT');
+        const attachmentKey =
+          previous && !previous.inputDraftId
+            ? `retry:${previous.id}`
+            : `draft:${previous?.inputDraftId ?? input.draftId}`;
         // Titled handoffs create the session through the journal together with the first send.
         const prepared =
           !input.dispatch && !input.title && input.attachments?.length && this.state.preupload
             ? await this.attachmentDrafts!.prepare(
-                `draft:${input.draftId}`,
+                attachmentKey,
                 {
                   agentId: input.agentId,
                   workspace: input.workspace ?? { kind: 'registered', id: input.workspaceId! },
+                  ...(input.model && { model: input.model }),
                 },
                 input.attachments,
               )

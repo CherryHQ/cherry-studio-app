@@ -1,10 +1,41 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 
+import type { RemoteConversationSource } from '@/frontend/appShell/conversation/remote';
+import { usePersistCache } from '@/frontend/data';
 import { cacheService } from '@/frontend/data/CacheService';
 import { createDebouncedAction } from '@/frontend/utils/scheduling';
+import type { RemoteModelOption } from '@/shared/contracts/remoteAgent';
 
 const DRAFT_PERSIST_DELAY_MS = 500;
+
+export function remoteDraftKey(
+  source: Pick<RemoteConversationSource, 'draftScope' | 'ref'>,
+  identity: string,
+) {
+  return `${source.draftScope}:${source.ref.connectionId}:${identity}`;
+}
+
+export function writeRemoteDraftModel(key: string, agentId: string, model?: RemoteModelOption) {
+  const current = cacheService.getPersist('remote_agent.draft_models');
+  if (!model && current[key]?.agentId !== agentId) return;
+  const next = { ...current };
+  if (model) next[key] = { agentId, model };
+  else delete next[key];
+  cacheService.setPersist('remote_agent.draft_models', next);
+}
+
+export function useRemoteDraftModel(key: string, agentId?: string) {
+  const [selections] = usePersistCache('remote_agent.draft_models');
+  const saved = selections[key];
+  const setModel = useCallback(
+    (model?: RemoteModelOption) => {
+      if (agentId) writeRemoteDraftModel(key, agentId, model);
+    },
+    [key, agentId],
+  );
+  return { model: saved && saved.agentId === agentId ? saved.model : undefined, setModel };
+}
 
 /** Reads a saved draft without subscribing, so typing does not re-render the chat screen. */
 export function readRemoteDraft(key: string): string {

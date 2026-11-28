@@ -1821,6 +1821,7 @@
   "remoteAgent.downloading": "A transferir {{progress}}%",
   "remoteAgent.expand": "Ver conteúdo completo e detalhes",
   "remoteAgent.finalizing": "O PC está a guardar o resultado…",
+  "remoteAgent.followAgentModel": "Usar o modelo predefinido do agente",
   "remoteAgent.identityChanged": "A identidade do PC mudou. Leia novamente o código QR.",
   "remoteAgent.idle": "Sem execução ativa em primeiro plano",
   "remoteAgent.input": "Entrada",

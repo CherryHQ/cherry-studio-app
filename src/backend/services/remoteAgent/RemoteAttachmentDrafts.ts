@@ -1,6 +1,8 @@
 import {
   attachmentDraftManifestSchema,
   agentUploadLimits,
+  modelSelectionSchema,
+  workspaceSelectionSchema,
 } from '@cherrystudio/remote-protocol/agent';
 import { randomUUID } from 'expo-crypto';
 import { File } from 'expo-file-system';
@@ -13,6 +15,7 @@ import type {
   RemoteAttachmentDraftView,
 } from '@/shared/contracts/remoteAgent';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
+import { deepEqual } from '@/shared/utils/deepEqual';
 
 import { RemoteAgentError } from './RemoteAgentError';
 import type { AgentRequest } from './remoteContent';
@@ -41,10 +44,8 @@ const recordSchema = z.object({
     z.object({ sessionId: z.string() }),
     z.object({
       agentId: z.string(),
-      workspace: z.union([
-        z.object({ kind: z.literal('system') }),
-        z.object({ kind: z.literal('registered'), id: z.string() }),
-      ]),
+      workspace: workspaceSelectionSchema,
+      model: modelSelectionSchema.optional(),
     }),
   ]),
   sessionId: z.string().optional(),
@@ -59,6 +60,10 @@ const recordSchema = z.object({
   cancelled: z.boolean().optional(),
 });
 type RecordEntry = z.infer<typeof recordSchema>;
+
+function modelWasRejected(row: RecordEntry) {
+  return row.blocked && !row.sessionId && row.error === 'MODEL_UNAVAILABLE';
+}
 
 /** Owns pre-send uploads independently of composer mounts and durable send commands. */
 export class RemoteAttachmentDrafts {
@@ -89,7 +94,17 @@ export class RemoteAttachmentDrafts {
       value = [];
     }
     this.records = z.array(recordSchema).safeParse(value).data ?? [];
-    for (const row of this.records) for (const file of row.files) file.ready = false;
+    for (const row of this.records) {
+      // Older journals could have stopped at the capability gate before looking up createId.
+      if (
+        !row.sessionId &&
+        'model' in row.target &&
+        row.target.model &&
+        row.error === 'UPGRADE_REQUIRED'
+      )
+        row.blocked = false;
+      for (const file of row.files) file.ready = false;
+    }
     this.publish(false);
   }
   get = () => this.views;
@@ -112,6 +127,8 @@ export class RemoteAttachmentDrafts {
       .map((row) => ({
         key: row.key,
         id: row.id,
+        draftTarget: 'agentId' in row.target ? row.target : undefined,
+        canReviseModel: modelWasRejected(row) && !this.running.has(row.id),
         sessionId: row.sessionId,
         busy: this.running.has(row.id),
         items: row.files.map((file) => ({
@@ -136,8 +153,25 @@ export class RemoteAttachmentDrafts {
     if (attachments.length > agentUploadLimits.files)
       throw new RemoteAgentError('ATTACHMENT_LIMIT');
     let row = this.records.find((item) => item.key === key && !item.submitted && !item.cancelled);
-    if (row && JSON.stringify(row.target) !== JSON.stringify(target))
-      throw new RemoteAgentError('CONFLICT');
+    // The desktop definitively rejected creation. A retry needs a new command identity.
+    if (
+      row &&
+      modelWasRejected(row) &&
+      'agentId' in row.target &&
+      'agentId' in target &&
+      row.target.agentId === target.agentId &&
+      deepEqual(row.target.workspace, target.workspace)
+    ) {
+      if (!attachments.length) {
+        row.cancelled = true;
+        this.persist();
+        return;
+      }
+      row.target = target;
+      row.createId = randomUUID();
+      row.removed = [];
+    }
+    if (row && !deepEqual(row.target, target)) throw new RemoteAgentError('CONFLICT');
     if (!row) {
       if (!attachments.length) return;
       if (this.records.length >= 32) throw new RemoteAgentError('ACTION_LIMIT');
@@ -230,6 +264,7 @@ export class RemoteAttachmentDrafts {
         if (!signal.aborted) {
           row.blocked = !(error instanceof RemoteAgentError && error.retryable);
           row.error = error instanceof RemoteAgentError ? error.code : 'RESOURCE_UNAVAILABLE';
+          if (!row.files.length && modelWasRejected(row)) row.cancelled = true;
           for (const file of row.files) file.ready = false;
           this.persist();
         }
@@ -252,6 +287,41 @@ export class RemoteAttachmentDrafts {
     this.publish();
     return work;
   }
+  private async createSession(
+    target: Extract<RemoteAttachmentDraftTarget, { agentId: string }>,
+    commandId: string,
+    signal: AbortSignal,
+  ) {
+    let receipt;
+    try {
+      receipt = await this.request('agent.sessions.create', { commandId, ...target }, signal);
+    } catch (error) {
+      if (
+        !target.model ||
+        !(error instanceof RemoteAgentError) ||
+        error.code !== 'UPGRADE_REQUIRED'
+      )
+        throw error;
+      // This connection cannot send the original model. An earlier connection may already have created the Session.
+      try {
+        receipt = await this.request('agent.commands.get', { commandId }, signal);
+      } catch (lookup) {
+        if (lookup instanceof RemoteAgentError && lookup.code === 'NOT_FOUND')
+          throw new RemoteAgentError('MODEL_UNAVAILABLE');
+        throw lookup;
+      }
+      if (receipt.method !== 'agent.sessions.create' || receipt.commandId !== commandId)
+        throw new RemoteAgentError('PROTOCOL_ERROR');
+      if (!receipt.sessionId && (receipt.status === 'rejected' || receipt.status === 'interrupted'))
+        throw new RemoteAgentError('MODEL_UNAVAILABLE');
+    }
+    if (receipt.status !== 'applied' || !receipt.sessionId)
+      throw new RemoteAgentError(
+        receipt.error?.reason ?? 'CONFLICT',
+        receipt.status === 'accepted',
+      );
+    return receipt.sessionId;
+  }
   private async advance(row: RecordEntry, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted();
     const checksumAlgorithm = row.files.length
@@ -259,24 +329,10 @@ export class RemoteAttachmentDrafts {
       : undefined;
     signal.throwIfAborted();
     if (!row.sessionId) {
-      if ('sessionId' in row.target) row.sessionId = row.target.sessionId;
-      else {
-        const receipt = await this.request(
-          'agent.sessions.create',
-          {
-            commandId: row.createId,
-            agentId: row.target.agentId,
-            workspace:
-              row.target.workspace.kind === 'system'
-                ? { kind: 'system' }
-                : { kind: 'registered', id: row.target.workspace.id },
-          },
-          signal,
-        );
-        if (receipt.status !== 'applied' || !receipt.sessionId)
-          throw new RemoteAgentError('CONFLICT');
-        row.sessionId = receipt.sessionId;
-      }
+      row.sessionId =
+        'sessionId' in row.target
+          ? row.target.sessionId
+          : await this.createSession(row.target, row.createId, signal);
       this.persist();
     }
     for (const file of row.files)

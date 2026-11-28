@@ -2,6 +2,7 @@ import {
   agentMethods,
   commandReceiptSchema,
   workspaceSelectionSchema,
+  modelSelectionSchema,
   uploadReferencesSchema,
   attachmentDraftSubmissionSchema,
   type AgentUploadReference,
@@ -52,10 +53,12 @@ const StartSchema = z
   .object({
     id: z.string(),
     draftId: z.string(),
+    inputDraftId: z.string().optional(),
     dispatch: z.literal(true).optional(),
     agentId: z.string(),
     workspaceId: z.string().optional(),
     workspace: workspaceSelectionSchema.optional(),
+    model: modelSelectionSchema.optional(),
     title: z.string().max(4096).optional(),
     text: z.string(),
     attachments: z.array(AttachmentSchema).optional(),
@@ -401,7 +404,7 @@ export class RemoteAgentActions {
     );
   }
   async start(
-    input: RemoteStartInput,
+    { replaceStartId, ...input }: RemoteStartInput,
     prepared?: {
       sessionId: string;
       selectionId: string;
@@ -411,23 +414,25 @@ export class RemoteAgentActions {
     if (this.stopped) throw new RemoteAgentError('CLOSED');
     if (input.dispatch && Object.hasOwn(this.dispatches, input.draftId))
       return { ...input, ...this.dispatches[input.draftId]! };
-    let entry = this.starts.find((item) => item.draftId === input.draftId);
-    if (entry && entry.dispatch !== input.dispatch)
-      throw new RemoteAgentError('IDEMPOTENCY_CONFLICT');
-    // A draft keeps one start: submitting again replaces one that failed before creating a Session.
-    if (
-      entry &&
-      !entry.dispatch &&
-      !entry.sessionId &&
-      (entry.status === 'rejected' || entry.status === 'interrupted')
-    ) {
-      this.discard(entry.id);
-      entry = undefined;
-    }
+    const own = this.starts.find((item) => item.draftId === input.draftId);
+    if (own && own.dispatch !== input.dispatch) throw new RemoteAgentError('IDEMPOTENCY_CONFLICT');
+    const previous = replaceStartId ? this.starts.find((item) => item.id === replaceStartId) : own;
+    const replaced =
+      previous &&
+      !previous.dispatch &&
+      !previous.sessionId &&
+      (previous.status === 'rejected' || previous.status === 'interrupted')
+        ? previous
+        : undefined;
+    if (replaceStartId && (input.dispatch || !replaced || (own && own !== replaced)))
+      throw new RemoteAgentError('CONFLICT');
+    let entry = own === replaced ? undefined : own;
     if (
       entry &&
       !entry.dispatch &&
       (entry.agentId !== input.agentId ||
+        entry.model?.providerId !== input.model?.providerId ||
+        entry.model?.modelId !== input.model?.modelId ||
         entry.workspaceId !== input.workspaceId ||
         entry.workspace?.kind !== input.workspace?.kind ||
         (entry.workspace?.kind === 'registered' &&
@@ -439,7 +444,7 @@ export class RemoteAgentActions {
     )
       throw new RemoteAgentError('IDEMPOTENCY_CONFLICT');
     if (!entry) {
-      if (this.starts.length >= 200) throw new RemoteAgentError('ACTION_LIMIT');
+      if (!replaced && this.starts.length >= 200) throw new RemoteAgentError('ACTION_LIMIT');
       // Validate text before either command is admitted. Both IDs survive a crash between steps.
       agentMethods['agent.messages.send'].params.parse({
         commandId: 'validation',
@@ -459,13 +464,21 @@ export class RemoteAgentActions {
       });
       entry = {
         ...input,
+        inputDraftId: replaceStartId ? replaced?.inputDraftId : input.draftId,
         ...prepared,
         id: randomUUID(),
         createId: randomUUID(),
         sendId: randomUUID(),
         status: 'pending',
       };
-      this.commit(this.records, [...this.starts, entry]);
+      this.commit(
+        replaced
+          ? this.records.filter(
+              ({ action }) => action.id !== replaced.createId && action.id !== replaced.sendId,
+            )
+          : this.records,
+        [...this.starts.filter((start) => start !== replaced), entry],
+      );
     }
     // Observers may dismiss a finished start before this resolves, so return the settled view.
     const settled = await this.advanceStart(entry.id);
@@ -543,6 +556,7 @@ export class RemoteAgentActions {
       if (!entry.sessionId) {
         const created = await this.startCommand(entry.createId, 'create', 'agent.sessions.create', {
           agentId: entry.agentId,
+          ...(entry.model ? { model: entry.model } : {}),
           ...(entry.title ? { title: entry.title } : {}),
           ...(entry.workspace?.kind === 'system'
             ? { workspace: entry.workspace }
@@ -671,7 +685,11 @@ export class RemoteAgentActions {
         try {
           receipt = await this.request('agent.commands.get', { commandId: entry.action.id });
         } catch (error) {
-          if (!(error instanceof RemoteAgentError) || error.code !== 'NOT_FOUND') throw error;
+          if (!(error instanceof RemoteAgentError) || error.code !== 'NOT_FOUND') {
+            // A failed receipt lookup cannot settle a previously sent model-bearing create.
+            if (entry.method === 'agent.sessions.create' && entry.params.model) return;
+            throw error;
+          }
         }
       }
       if (receipt === undefined) {

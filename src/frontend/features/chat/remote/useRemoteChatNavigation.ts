@@ -2,14 +2,19 @@ import { useIsFocused, useRouter } from 'expo-router';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { v7 as uuidv7 } from 'uuid';
 
-import type { ConversationRef } from '@/frontend/appShell/conversation';
-import type { DraftId, RemoteConversationSource } from '@/frontend/appShell/conversation/remote';
+import type {
+  DraftId,
+  RemoteConversationSource,
+  RemoteDraftHandoff,
+} from '@/frontend/appShell/conversation/remote';
 import { useChatSource, type RemoteChatTarget } from '@/frontend/appShell/navigation/chat';
+
+import { remoteDraftKey, writeRemoteDraftModel } from './useRemoteDraftPersistence';
 
 /** Draft identity owns input; Agent selection only changes the destination until submission. */
 export function useRemoteChatNavigation(
   target: RemoteChatTarget,
-  source: Pick<RemoteConversationSource, 'hasSubmission'>,
+  source: Pick<RemoteConversationSource, 'hasSubmission' | 'draftScope' | 'ref'>,
 ) {
   const router = useRouter();
   const isFocused = useIsFocused();
@@ -52,11 +57,20 @@ export function useRemoteChatNavigation(
       origin.current = undefined;
       openRemote({ connectionId: target.connectionId, agentId, draftId: uuidv7() });
     },
-    onSessionCreated: (ref: ConversationRef) => {
+    onSessionCreated: ({ conversation: ref, inputDraftId, agentId }: RemoteDraftHandoff) => {
       if (origin.current !== identity) return false;
-      setHandoff({ sessionId: ref.sessionId, key: identity });
+      const sameComposer =
+        inputDraftId === draftId && (!target.agentId || target.agentId === agentId);
+      setHandoff(sameComposer ? { sessionId: ref.sessionId, key: identity } : undefined);
+      // Old records identify the receiving route only. Its unsent input may belong to another draft.
+      if (inputDraftId)
+        writeRemoteDraftModel(remoteDraftKey(source, `draft:${inputDraftId}`), agentId);
       // Same route: replacing would remount the whole screen and flash it.
-      router.setParams({ sessionId: ref.sessionId, draftId: undefined });
+      router.setParams({
+        sessionId: ref.sessionId,
+        draftId: undefined,
+        ...(!sameComposer && { agentId }),
+      });
       return true;
     },
   };

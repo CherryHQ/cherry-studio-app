@@ -6,7 +6,16 @@ import {
   type LegendListRenderItemProps,
 } from '@legendapp/list/react-native';
 import { BlurTargetView } from 'expo-blur';
-import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  memo,
+  type ReactElement,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View, type ViewInstance } from 'react-native';
 
@@ -23,7 +32,13 @@ import {
   buildModelPickerFastScrollNavigation,
   MIN_MODEL_PICKER_FAST_SCROLL_MODEL_COUNT,
 } from '../utils/modelPickerFastScroll';
-import type { ModelPickerListItem, ModelPickerRowItem } from '../utils/modelPickerListItems';
+import type {
+  ModelPickerListItem,
+  ModelPickerChoice,
+  ModelPickerChoiceListItem,
+  ModelPickerDisplayItem,
+  ModelPickerRowItem,
+} from '../utils/modelPickerListItems';
 import { ModelPickerBadge } from './ModelPickerBadge';
 import {
   MODEL_PICKER_FAST_SCROLLER_WIDTH,
@@ -46,17 +61,28 @@ type ModelPickerListProps = {
   isLoading?: boolean;
   /** Whether the picker is on screen; it scrolls to the selection once per showing. */
   isOpen?: boolean;
-  listItems: readonly ModelPickerListItem[];
   loadingText?: string;
   onCloudOffer?: (modelId: string) => void;
-  onSelect: (item: ModelPickerModelItem) => void;
   selectedModelId: string | null;
   /** Present in multi-select mode: every chosen model shows a selection mark. */
   selectedModelIds?: readonly string[];
   /** Unchosen rows are disabled once this many models are chosen. */
   maxSelectedCount?: number;
   showBadges?: boolean;
-};
+  footer?: ReactElement;
+  onEndReached?: () => void;
+} & (
+  | {
+      listItems: readonly ModelPickerListItem[];
+      onSelect(item: ModelPickerModelItem): void;
+      onChoose?: never;
+    }
+  | {
+      listItems: readonly ModelPickerChoiceListItem[];
+      onChoose(key: string): void;
+      onSelect?: never;
+    }
+);
 
 type ModelPickerListExtraData = {
   cherryAiEntry?: ReactNode;
@@ -84,6 +110,9 @@ export function ModelPickerList({
   listItems,
   loadingText,
   onCloudOffer,
+  onChoose,
+  footer,
+  onEndReached,
   onSelect,
   selectedModelId,
   selectedModelIds,
@@ -112,8 +141,10 @@ export function ModelPickerList({
       return -1;
     }
 
-    return listItems.findIndex(
-      (item) => item.type === 'model' && item.item.modelId === selectedModelId,
+    return listItems.findIndex((item) =>
+      item.type === 'choice'
+        ? item.key === selectedModelId
+        : item.type === 'model' && item.item.modelId === selectedModelId,
     );
   }, [listItems, selectedModelId]);
   // Scroll to the selected model once per open. Guarding on a ref (rather than
@@ -171,7 +202,7 @@ export function ModelPickerList({
     ],
   );
   const renderItem = useCallback(
-    ({ extraData, item }: LegendListRenderItemProps<ModelPickerListItem>) => {
+    ({ extraData, item }: LegendListRenderItemProps<ModelPickerDisplayItem>) => {
       if (item.type === 'groupHeader') {
         return (
           <ModelPickerGroupHeader
@@ -185,13 +216,14 @@ export function ModelPickerList({
         );
       }
 
-      const row = item.item;
+      const row = item.type === 'choice' ? item : item.item;
+      const id = 'type' in row ? row.key : row.modelId;
       const isOffer = 'offer' in row;
       const isSelected =
         !isOffer &&
         (extraData.selectedModelIds
-          ? extraData.selectedModelIds.includes(row.modelId)
-          : row.modelId === extraData.selectedModelId);
+          ? extraData.selectedModelIds.includes(id)
+          : id === extraData.selectedModelId);
       return (
         <ModelPickerRow
           contentInset={extraData.contentInset}
@@ -202,24 +234,25 @@ export function ModelPickerList({
               ? !onCloudOffer ||
                 row.offer.reason === 'unavailable' ||
                 row.offer.reason === 'not_entitled'
-              : Boolean(row.cloudUnavailable) ||
+              : ('cloudUnavailable' in row && Boolean(row.cloudUnavailable)) ||
                 (Boolean(extraData.selectedModelIds) && extraData.isFull && !isSelected))
           }
           isSelected={isSelected}
           item={row}
           multiple={!isOffer && Boolean(extraData.selectedModelIds)}
           onCloudOffer={onCloudOffer}
+          onChoose={onChoose}
           onSelect={onSelect}
           showBadges={showBadges}
           trailingInset={extraData.trailingInset}
         />
       );
     },
-    [onCloudOffer, onSelect, showBadges],
+    [onChoose, onCloudOffer, onSelect, showBadges],
   );
-  const keyExtractor = useCallback((item: ModelPickerListItem) => item.key, []);
+  const keyExtractor = useCallback((item: ModelPickerDisplayItem) => item.key, []);
   const getItemType = useCallback(
-    (item: ModelPickerListItem) =>
+    (item: ModelPickerDisplayItem) =>
       item.type === 'groupHeader' && item.provider.id === CLOUD_PROVIDER_ID
         ? 'cloudGroupHeader'
         : item.type,
@@ -306,7 +339,7 @@ export function ModelPickerList({
   return (
     <View style={styles.list} testID="model-picker-list">
       <BlurTargetView ref={blurTarget} style={styles.list}>
-        <LegendList
+        <LegendList<ModelPickerDisplayItem>
           ref={listRef}
           contentContainerStyle={listContentContainerStyle}
           data={listItems}
@@ -317,10 +350,12 @@ export function ModelPickerList({
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
           keyExtractor={keyExtractor}
+          onEndReached={onEndReached}
           ListFooterComponent={
-            cherryAiEntry && modelCount === 0 && emptyButton ? (
+            footer ??
+            (cherryAiEntry && modelCount === 0 && emptyButton ? (
               <View className="items-center px-5 py-4">{emptyButton}</View>
-            ) : undefined
+            ) : undefined)
           }
           maintainVisibleContentPosition={false}
           nestedScrollEnabled
@@ -382,6 +417,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
   item,
   multiple,
   onCloudOffer,
+  onChoose,
   onSelect,
   showBadges,
   trailingInset,
@@ -390,25 +426,30 @@ const ModelPickerRow = memo(function ModelPickerRow({
   density: ModelPickerDensity;
   isDisabled: boolean;
   isSelected: boolean;
-  item: ModelPickerRowItem;
+  item: ModelPickerRowItem | ModelPickerChoice;
   multiple: boolean;
   onCloudOffer?: (modelId: string) => void;
-  onSelect: (item: ModelPickerModelItem) => void;
+  onChoose?: (key: string) => void;
+  onSelect?: (item: ModelPickerModelItem) => void;
   showBadges: boolean;
   /** The list owns clearance for its floating navigation. */
   trailingInset: number | undefined;
 }) {
   const { t } = useTranslation();
   const isOffer = 'offer' in item;
+  const isChoice = 'type' in item;
+  const name = isChoice ? item.name : item.model.name;
   const handlePress = useCallback(() => {
     if (isOffer) onCloudOffer?.(item.model.modelId);
-    else onSelect(item);
-  }, [item, isOffer, onCloudOffer, onSelect]);
-  const badges = showBadges ? getModelPickerBadges(item.model, item.isCloudFree) : [];
+    else if (isChoice) onChoose?.(item.key);
+    else onSelect?.(item);
+  }, [item, isChoice, isOffer, onChoose, onCloudOffer, onSelect]);
+  const badges = showBadges && !isChoice ? getModelPickerBadges(item.model, item.isCloudFree) : [];
   const lockLabelKey = isOffer ? getCloudModelLockLabelKey(item.offer) : undefined;
   const lockLabel = lockLabelKey ? t(lockLabelKey) : undefined;
   const accessibilityLabel = [
-    item.model.name,
+    name,
+    isChoice ? item.description : undefined,
     ...badges.map((badge) => t(modelPickerBadgeLabelKeys[badge])),
     lockLabel,
   ]
@@ -435,12 +476,15 @@ const ModelPickerRow = memo(function ModelPickerRow({
       style={trailingInset === undefined ? undefined : { paddingRight: trailingInset }}
     >
       <View className={cn('h-6 justify-center', density === 'compact' ? 'w-6' : 'w-7')}>
-        <ModelAvatar
-          artwork={density === 'compact' ? 'brand' : 'model'}
-          model={item.model}
-          provider={item.provider}
-          size={density === 'compact' ? 24 : 28}
-        />
+        {item.model ? (
+          <ModelAvatar
+            builtinOnly={isChoice}
+            artwork={density === 'compact' ? 'brand' : 'model'}
+            model={item.model}
+            provider={isChoice ? undefined : item.provider}
+            size={density === 'compact' ? 24 : 28}
+          />
+        ) : null}
       </View>
       <View className="min-w-0 flex-1 gap-0.5">
         <Text
@@ -452,12 +496,17 @@ const ModelPickerRow = memo(function ModelPickerRow({
           ellipsizeMode="middle"
           numberOfLines={1}
         >
-          {item.model.name}
+          {name}
         </Text>
+        {isChoice && item.description ? (
+          <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+            {item.description}
+          </Text>
+        ) : null}
         {badges.length > 0 ? (
           <View className="flex-row items-center gap-1">
             {badges.map((badge) => (
-              <ModelPickerBadge badge={badge} key={`${item.model.id}:${badge}`} variant="icon" />
+              <ModelPickerBadge badge={badge} key={badge} variant="icon" />
             ))}
           </View>
         ) : null}
