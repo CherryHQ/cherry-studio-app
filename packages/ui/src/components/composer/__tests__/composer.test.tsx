@@ -276,7 +276,11 @@ describe('Composer', () => {
     expect(tree.root.findByType(EnrichedMarkdownTextInput).props.defaultValue).toBe(defaultValue);
   });
 
-  it('keeps placeholder padding outside the compact native field and restores it when editing', () => {
+  it.each([
+    { value: '', restingCap: 32 },
+    { value: 'An automatically wrapping draft. '.repeat(12), restingCap: 132 },
+    { value: '第一行\n第二行', restingCap: 132 },
+  ])('uses a resting height cap of $restingCap for the current draft', ({ value, restingCap }) => {
     const editor = (active: boolean) => (
       <Composer.Editor
         active={active}
@@ -284,14 +288,14 @@ describe('Composer', () => {
         field={<Composer.Input placeholder="Write a message" />}
       />
     );
-    const tree = render({ children: editor(false) });
+    const tree = render({ value, children: editor(false) });
     const nativeStyle = () => StyleSheet.flatten(tree.root.findByType(TextInput).props.style);
 
-    expect(nativeStyle()).toMatchObject({ maxHeight: 32, paddingVertical: 0 });
+    expect(nativeStyle()).toMatchObject({ maxHeight: restingCap, paddingVertical: 0 });
 
     act(() => {
       tree.update(
-        <Composer onChangeText={jest.fn()} onSend={jest.fn()} value="">
+        <Composer onChangeText={jest.fn()} onSend={jest.fn()} value={value}>
           {editor(true)}
         </Composer>,
       );

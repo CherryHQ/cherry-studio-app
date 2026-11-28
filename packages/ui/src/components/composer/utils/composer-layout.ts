@@ -71,12 +71,11 @@ export const textInputBoxStyle = {
   maxHeight: COMPOSER_MAX_TEXT_HEIGHT,
   paddingVertical: textPaddingVertical,
 } as const;
-// The resting field gets the full composerActionSize row height with
-// paddingVertical: 0 to fit taller glyphs, CJK fallback metrics, and scaled
-// fonts. The resting frame bounds the field to a single row.
-export const compactTextInputBoxStyle = {
+export const compactTextInputBoxStyle = { ...textInputBoxStyle, paddingVertical: 0 } as const;
+// A wrapping placeholder alone should not grow the resting composer.
+export const compactPlaceholderBoxStyle = {
+  ...compactTextInputBoxStyle,
   maxHeight: composerActionSize,
-  paddingVertical: 0,
 } as const;
 // The paste wrapper shrink-wraps its child by default, which would pull the
 // field in from the surface's right edge and leave the caret short of it.

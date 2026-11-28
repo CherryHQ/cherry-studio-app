@@ -2,8 +2,8 @@
 
 > Status: scoped interaction contract; native acceptance pending
 
-Keep the existing composer design and motion: the one-row/two-row transition, text growth,
-toolbar reveal, add menu, and reasoning panel animations belong to their current components.
+The existing components own text growth, the toolbar reveal, and the animations for
+the add menu and reasoning panel.
 A keyboard-stability fix preserves these visuals and changes only the conflicting event path.
 
 ## Keyboard And Selection Rules
@@ -16,8 +16,9 @@ A keyboard-stability fix preserves these visuals and changes only the conflictin
   A parent `onTouchEnd` must not turn all of them into an input-dismiss action. A completed,
   unhandled tap on the chat background explicitly blurs the input and ends composer editing.
   The list lets that press reach the background owner; scrolling can cancel the press.
-- The ordinary chat field expands when its own software keyboard starts opening and returns to
-  one row when it starts closing, including with an unsent draft or attachments. The dock
+- The ordinary chat field uses the full width when its software keyboard starts opening. When
+  it closes, the primary actions sit beside the field. An empty or single-line draft takes one
+  row. Wrapped text and explicit newlines grow the field up to its usual scrolling height. The dock
   follows the close to its final frame. Hardware focus and keyboards belonging to a sheet leave
   the chat field compact. Keyboard notifications never issue a second blur.
 - The local tools sheet waits for keyboard dismissal. Selecting a plugin inserts its reference
@@ -87,7 +88,7 @@ or selection conformance. With explicit device-verification authorization, check
   attachments, a hardware keyboard, and a picker search field.
 - Tap the empty chat, the unused message-list area, or message text to blur the input and dismiss
   its keyboard. Tapping a message control performs only that control's action.
-  The composer returns to one row with its existing draft; dragging or child actions do not
+  The field fits the existing draft at its resting width. Dragging and child actions do not
   count as background presses.
 - Drag away and back to the starting point, hold without moving, use multiple fingers, and tap
   to stop momentum. None dismiss the composer. A subsequent background tap does.

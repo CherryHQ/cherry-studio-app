@@ -45,7 +45,7 @@ export function ComposerInput({
 }: ComposerInputProps) {
   const { value } = useComposerState('Composer.Input');
   const { changeText } = useComposerActions('Composer.Input');
-  const editorInput = useComposerEditorInput();
+  const editorInput = useComposerEditorInput(value.length > 0);
   const inputLayout = layout ?? editorInput?.layout ?? 'content';
   const editorInset = editorInput?.style;
   const fieldStyle = editorInput && inputLayout === 'fill' ? undefined : style;
