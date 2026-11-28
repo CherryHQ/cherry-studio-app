@@ -31,13 +31,16 @@ Otherwise, keep both changes in the same PR. See [UI Development](./ui-developme
 
 ## Pull Request Lifecycle
 
-1. Run the local gates in [Testing And CI](./testing-and-ci.md).
+1. Run targeted local tests (`pnpm test:changed` or explicit test paths) plus the change-aware
+   static gate (`pnpm check:changed`) in [Testing And CI](./testing-and-ci.md).
 2. Create a normal PR as a draft. For a user-requested stack, submit all layers with
    `gh stack submit --auto`.
 3. After successful PR or stack creation, close device sessions, stop this workspace's Metro, and
    delete its temporary device using [Parallel Device Testing](./parallel-device-testing.md#cleanup).
-4. Rerun local gates after later draft changes, then mark the final head ready for review.
-5. Treat remote CI as the PR-suite gate, with local-only exceptions in [Testing And CI](./testing-and-ci.md).
+4. Rerun targeted tests and `pnpm check:changed` after later draft changes, then mark the final
+   head ready for review.
+5. Treat remote PR CI (incremental static checks with `--no-tests`) plus nightly and release full
+   runs as the remote gate in [Testing And CI](./testing-and-ci.md).
 
 For a stack, release resources once after all layers have been submitted, not after each layer.
 

@@ -1,0 +1,19 @@
+name: Nightly Full CI
+
+permissions:
+  contents: read
+
+on:
+  schedule:
+    - cron: '17 18 * * *' # 02:17 Beijing time
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-ci
+  cancel-in-progress: false
+
+jobs:
+  full-ci:
+    uses: ./.github/workflows/pr-ci.yml
+    with:
+      mode: full
