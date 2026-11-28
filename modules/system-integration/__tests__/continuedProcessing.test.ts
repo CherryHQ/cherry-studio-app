@@ -19,3 +19,10 @@ test('leaves the expiration handler installed while the system completion is pen
   expect(source).toContain('continuedTask.expirationHandler = {');
   expect(source).not.toMatch(/expirationHandler\s*=\s*nil/);
 });
+
+test('acknowledges end after system completion and request cancellation on the worker', () => {
+  const end = source.split('  func end(id:')[1].split('  func dispose()')[0];
+  expect(end).toMatch(
+    /Self\.completionQueue\.async\s*\{\s*task\?\.setTaskCompleted\(success: completed\)\s*BGTaskScheduler\.shared\.cancel\(taskRequestWithIdentifier: identifier\)\s*completion\(\)\s*\}/,
+  );
+});
