@@ -1,3 +1,17 @@
+diff --git a/build/module.js b/build/module.js
+--- a/build/module.js
++++ b/build/module.js
+@@ -1,4 +1,8 @@
+ import { requireNativeModule } from 'expo';
+-export default requireNativeModule('ExpoAppMetrics');
++const AppMetrics = requireNativeModule('ExpoAppMetrics');
++let mainSession;
++const getMainSession = AppMetrics.getMainSession.bind(AppMetrics);
++AppMetrics.getMainSession = () => (mainSession ??= getMainSession());
++
++export default AppMetrics;
+-
+ //# sourceMappingURL=module.js.map
 diff --git a/src/module.ts b/src/module.ts
 index 9f994b2..378dfa4 100644
 --- a/src/module.ts
