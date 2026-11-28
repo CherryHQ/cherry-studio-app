@@ -1,10 +1,14 @@
-import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 
 type ObserveAdapter = typeof import('../configureObserve');
 const mockConfigure = jest.fn();
 const mockNativeModule = jest.fn();
 const mockSdkLoaded = jest.fn();
-jest.mock('expo', () => ({ requireOptionalNativeModule: mockNativeModule }));
+const mockGetMainSession = jest.fn(() => ({}));
+jest.mock('expo', () => ({
+  requireOptionalNativeModule: mockNativeModule,
+  requireNativeModule: () => ({ getMainSession: mockGetMainSession }),
+}));
 jest.mock('expo-observe', () => {
   mockSdkLoaded();
   return { Observe: { configure: mockConfigure } };
@@ -37,14 +41,16 @@ test.each([false, true])('optional Observe SDK (linked: %s)', (isLinked) => {
   });
 });
 
-// The Expo Router integration fetches the main session on every page focus.
-describe('expo-app-metrics main session patch', () => {
-  test('keeps one main session wrapper alive for the whole process', () => {
-    const patch = readFileSync(`${process.cwd()}/patches/expo-app-metrics@58.0.14.patch`, 'utf8');
+test('repeated page focus reuses the first native main session in the published entry', () => {
+  const fromObserve = createRequire(require.resolve('expo-observe/package.json'));
+  const entry = fromObserve.resolve('expo-app-metrics');
+  const nativeAdapter = createRequire(entry).resolve('./module');
+  const { default: metrics } = jest.requireActual<{ default: { getMainSession(): unknown } }>(
+    nativeAdapter,
+  );
 
-    expect(patch).toContain('+let mainSession: Session | undefined;');
-    expect(patch).toContain(
-      '+AppMetrics.getMainSession = () => (mainSession ??= getMainSession());',
-    );
-  });
+  expect(mockGetMainSession).not.toHaveBeenCalled();
+  const session = metrics.getMainSession();
+  expect(metrics.getMainSession()).toBe(session);
+  expect(mockGetMainSession).toHaveBeenCalledTimes(1);
 });
