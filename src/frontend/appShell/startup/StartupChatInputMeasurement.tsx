@@ -1,12 +1,18 @@
 import { useGlobalSearchParams, usePathname } from 'expo-router';
-import { type PropsWithChildren, useCallback, useEffect, useRef, useState } from 'react';
+import { type PropsWithChildren, use, useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { useAccount } from '@/frontend/appShell/account';
+import { RequiredUpdateContext } from '@/frontend/appShell/appUpdate/requiredUpdate';
 import type { ChatRouteParamsInput } from '@/frontend/appShell/navigation/chat';
 import { recordStartupChatInputReady } from '@/frontend/appShell/observability';
 import { usePrivacyConsentPending } from '@/frontend/appShell/privacy';
+import {
+  useSystemEntryReceiving,
+  useSystemShareDestination,
+} from '@/frontend/appShell/systemEntry';
 import { ComposerFieldReadyContext } from '@/frontend/components/Composer/fieldReadiness';
+import { wasStartupInterrupted } from '@/shared/core/logger/startupDiagnostics';
 
 import { useStartupCoverVisible } from './StartupReadinessContext';
 
@@ -46,30 +52,41 @@ function MeasureInput({ fieldReady, finish }: { fieldReady: boolean; finish: () 
     messageRequestId,
   );
   const [enteredWithAgent] = useState(() => Boolean(agentId));
-  const abandoned = enteredWithAgent || specialEntry || (pathname !== '' && pathname !== '/');
-  const ready = pathname === '/' && Boolean(agentId) && fieldReady && !covered;
   const { state } = useAccount();
   const privacyPending = usePrivacyConsentPending();
+  const requiredUpdate = use(RequiredUpdateContext);
+  const { startupShareCheck } = useSystemShareDestination();
+  const receivingShare = useSystemEntryReceiving();
+  const excluded =
+    enteredWithAgent ||
+    specialEntry ||
+    (pathname !== '' && pathname !== '/') ||
+    privacyPending ||
+    requiredUpdate ||
+    receivingShare ||
+    startupShareCheck === 'excluded' ||
+    (state.isEnterprise && state.needsSignIn);
+  const ready =
+    pathname === '/' && Boolean(agentId) && fieldReady && !covered && !state.isRestoringSession;
   const settled = useRef(false);
+  const readyAt = useRef<number | null>(null);
   useEffect(() => {
-    function cancel() {
-      settled.current = true;
-      finish();
-    }
-    if (
-      abandoned ||
-      privacyPending ||
-      (state.isEnterprise && state.needsSignIn) ||
-      AppState.currentState === 'background'
-    ) {
-      cancel();
-      return;
-    }
     function check(appState: typeof AppState.currentState) {
-      if (appState === 'background') cancel();
-      else if (!settled.current && appState === 'active' && ready && !state.isRestoringSession) {
+      if (settled.current) return;
+      if (excluded || appState === 'background' || wasStartupInterrupted()) {
         settled.current = true;
-        recordStartupChatInputReady();
+        finish();
+        return;
+      }
+      if (appState !== 'active' || !ready) {
+        readyAt.current = null;
+        return;
+      }
+      // Classification can finish later than layout. Preserve the instant typing became possible.
+      readyAt.current ??= performance.now();
+      if (startupShareCheck === 'clear') {
+        settled.current = true;
+        recordStartupChatInputReady(readyAt.current);
         finish();
       }
     }
@@ -77,14 +94,6 @@ function MeasureInput({ fieldReady, finish }: { fieldReady: boolean; finish: () 
     if (settled.current) return;
     const subscription = AppState.addEventListener('change', check);
     return () => subscription.remove();
-  }, [
-    abandoned,
-    finish,
-    privacyPending,
-    ready,
-    state.isEnterprise,
-    state.isRestoringSession,
-    state.needsSignIn,
-  ]);
+  }, [excluded, finish, ready, startupShareCheck]);
   return null;
 }

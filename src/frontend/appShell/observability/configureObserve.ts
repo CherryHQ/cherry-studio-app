@@ -27,8 +27,8 @@ export function configureObserve() {
   });
 }
 
-export function recordStartupChatInputReady() {
-  const elapsedMs = recordStartupEvent('startup.chat_input.ready', 'completed');
+export function recordStartupChatInputReady(readyAt: number) {
+  const elapsedMs = recordStartupEvent('startup.chat_input.ready', 'completed', {}, readyAt);
   if (!observe || !getReportingPolicy('observe').enabled) return;
   try {
     observe.Observe.logEvent('startup.chat_input.ready', { attributes: { elapsedMs } });

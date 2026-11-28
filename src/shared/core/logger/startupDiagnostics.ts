@@ -36,13 +36,23 @@ const logger = loggerService.withContext('Startup');
 // JS-entry identity only: neither a device identifier nor a native process-start measurement.
 const startupStartedAt = Date.now();
 const clockStartedAt = performance.now();
+let startupInterrupted = false;
+
+export function markStartupInterrupted() {
+  startupInterrupted = true;
+}
+
+export function wasStartupInterrupted() {
+  return startupInterrupted;
+}
 
 export function recordStartupEvent(
   operation: StartupOperation,
   outcome: StartupOutcome,
   facts: StartupFacts = {},
+  at = performance.now(),
 ) {
-  const elapsedMs = performance.now() - clockStartedAt;
+  const elapsedMs = at - clockStartedAt;
   logger.info('Startup stage', {
     ...facts,
     operation,

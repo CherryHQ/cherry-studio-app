@@ -1,3 +1,4 @@
+import { useLayoutEffect } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -28,9 +29,13 @@ const module: SystemEntryModule = {
 const share = (text: string): SystemAction => ({ files: [], kind: 'share.receive', text });
 
 let renderer: ReactTestRenderer | undefined;
+let startupShareCheck: ReturnType<typeof useSystemEntryClaims>;
 
 function Probe(props: Props) {
-  useSystemEntryClaims(props);
+  const check = useSystemEntryClaims(props);
+  useLayoutEffect(() => {
+    startupShareCheck = check;
+  }, [check]);
   return null;
 }
 
@@ -47,6 +52,20 @@ async function settle(index: number, action: SystemAction | null) {
     claims[index].resolve(action);
   });
 }
+
+it('waits for a queued recheck before confirming that the launch has no share', async () => {
+  render({ deliver: jest.fn(() => true) });
+  expect(startupShareCheck).toBe('checking');
+  act(() => pendingListeners.forEach((listener) => listener()));
+  await settle(0, null);
+  expect(startupShareCheck).toBe('checking');
+  await settle(1, null);
+  expect(startupShareCheck).toBe('clear');
+  act(() => pendingListeners.forEach((listener) => listener()));
+  expect(startupShareCheck).toBe('checking');
+  await settle(2, share('incoming'));
+  expect(startupShareCheck).toBe('excluded');
+});
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -107,6 +126,7 @@ it('holds a claimed share while the shell cannot open it, then delivers it when 
   render({ deliver, isReady: false });
 
   await settle(0, share('waiting'));
+  expect(startupShareCheck).toBe('excluded');
   expect(deliver).not.toHaveBeenCalled();
 
   render({ deliver, isReady: true });
@@ -147,7 +167,10 @@ it('reports a failed import and claims again only when asked', async () => {
   });
 
   expect(onFailure).toHaveBeenCalledTimes(1);
+  expect(startupShareCheck).toBe('excluded');
   expect(claimNext).toHaveBeenCalledTimes(1);
   act(() => appStateListeners.forEach((listener) => listener('active')));
   expect(claimNext).toHaveBeenCalledTimes(2);
+  await settle(1, null);
+  expect(startupShareCheck).toBe('excluded');
 });

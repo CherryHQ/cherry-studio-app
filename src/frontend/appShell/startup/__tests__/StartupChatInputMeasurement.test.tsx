@@ -1,6 +1,7 @@
 import { use, useLayoutEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { RequiredUpdateContext } from '@/frontend/appShell/appUpdate/requiredUpdate';
 import { ComposerFieldReadyContext } from '@/frontend/components/Composer/fieldReadiness';
 
 import { StartupChatInputMeasurement } from '../StartupChatInputMeasurement';
@@ -8,6 +9,10 @@ import { StartupChatInputMeasurement } from '../StartupChatInputMeasurement';
 let mockCovered = true;
 let mockPathname = '/';
 let mockAgentId: string | undefined;
+let requiredUpdate = false;
+let mockStartupInterrupted = false;
+let mockReceivingShare = false;
+let mockShareCheck: 'checking' | 'clear' | 'excluded' = 'clear';
 const mockRecord = jest.fn();
 
 jest.mock('expo-router', () => ({
@@ -20,8 +25,15 @@ jest.mock('react-native', () => ({
 jest.mock('../StartupReadinessContext', () => ({ useStartupCoverVisible: () => mockCovered }));
 jest.mock('@/frontend/appShell/account', () => ({ useAccount: () => ({ state: {} }) }));
 jest.mock('@/frontend/appShell/privacy', () => ({ usePrivacyConsentPending: () => false }));
+jest.mock('@/shared/core/logger/startupDiagnostics', () => ({
+  wasStartupInterrupted: () => mockStartupInterrupted,
+}));
+jest.mock('@/frontend/appShell/systemEntry', () => ({
+  useSystemEntryReceiving: () => mockReceivingShare,
+  useSystemShareDestination: () => ({ startupShareCheck: mockShareCheck }),
+}));
 jest.mock('@/frontend/appShell/observability', () => ({
-  recordStartupChatInputReady: () => mockRecord(),
+  recordStartupChatInputReady: (at: number) => mockRecord(at),
 }));
 
 function Field({ laidOut }: { laidOut: boolean }) {
@@ -33,9 +45,11 @@ function Field({ laidOut }: { laidOut: boolean }) {
 let renderer: ReactTestRenderer | undefined;
 function render(laidOut: boolean) {
   const element = (
-    <StartupChatInputMeasurement>
-      <Field laidOut={laidOut} />
-    </StartupChatInputMeasurement>
+    <RequiredUpdateContext value={requiredUpdate}>
+      <StartupChatInputMeasurement>
+        <Field laidOut={laidOut} />
+      </StartupChatInputMeasurement>
+    </RequiredUpdateContext>
   );
   act(() => {
     if (renderer) renderer.update(element);
@@ -47,6 +61,10 @@ beforeEach(() => {
   mockCovered = true;
   mockPathname = '/';
   mockAgentId = undefined;
+  requiredUpdate = false;
+  mockStartupInterrupted = false;
+  mockReceivingShare = false;
+  mockShareCheck = 'clear';
   mockRecord.mockClear();
 });
 
@@ -78,6 +96,58 @@ test('leaving the launch route disqualifies a later return to chat', () => {
   mockPathname = '/';
   mockCovered = false;
   mockAgentId = 'remembered';
+  render(true);
+  expect(mockRecord).not.toHaveBeenCalled();
+});
+
+test('a background transition before the navigator mounted disqualifies an active launch', () => {
+  mockStartupInterrupted = true;
+  render(false);
+  mockCovered = false;
+  mockAgentId = 'remembered';
+  render(true);
+  expect(mockRecord).not.toHaveBeenCalled();
+});
+
+test('a mandatory update that opens before field layout disqualifies the launch', () => {
+  render(false);
+  mockCovered = false;
+  mockAgentId = 'remembered';
+  requiredUpdate = true;
+  render(true);
+  requiredUpdate = false;
+  render(true);
+  expect(mockRecord).not.toHaveBeenCalled();
+});
+
+test('an empty share check confirms the original input-ready time', () => {
+  jest.useFakeTimers();
+  try {
+    mockShareCheck = 'checking';
+    render(false);
+    mockCovered = false;
+    mockAgentId = 'remembered';
+    const readyAt = performance.now();
+    render(true);
+    expect(mockRecord).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(250);
+    mockShareCheck = 'clear';
+    render(true);
+    expect(mockRecord.mock.calls).toEqual([[readyAt]]);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test('a staged share importing underneath the home route disqualifies its ready field', () => {
+  mockShareCheck = 'checking';
+  render(false);
+  mockCovered = false;
+  mockAgentId = 'remembered';
+  mockReceivingShare = true;
+  render(true);
+  mockReceivingShare = false;
+  mockShareCheck = 'excluded';
   render(true);
   expect(mockRecord).not.toHaveBeenCalled();
 });
