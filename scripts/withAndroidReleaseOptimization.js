@@ -42,6 +42,10 @@ module.exports = (config) =>
           .collect { it.absolutePath }`,
         );
       }
+      const hermesSymbols = 'apply from: "$rootDir/../scripts/androidHermesSymbols.gradle"';
+      if (!mod.modResults.contents.includes(hermesSymbols)) {
+        mod.modResults.contents += `\n${hermesSymbols}\n`;
+      }
     }
     return mod;
   });

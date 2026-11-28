@@ -303,6 +303,14 @@ plugin uploads each build's `mapping.txt`, JVM source bundle (including local Ex
 available native debug symbols/sources. Its embedded debug identifiers associate reports with
 that build's artifacts; JavaScript source maps continue through the existing Sentry Metro/Gradle
 integration. Keep the SDK's native release/dist values instead of overriding them in JavaScript.
+For Android Hermes, the production upload task also scans debug information staged from the
+release runtime classpath's resolved Hermes AAR. Its Prefab copy of `libhermesvm.so` has the
+same ELF build ID as the stripped JNI copy in the APK or AAB. The staging task selects the
+build's React Native architectures and writes beside the native merge task's output, outside
+the packaged libraries. Check for debug information under that build ID when investigating
+Hermes frames that stop at a React Native caller. The existing native-symbol upload retry
+command above includes this staging step.
+
 The same configuration plugin applies Sentry immediately after `com.android.application` in the
 generated app module; Sentry's Expo plugin otherwise prepends it before the application exists.
 Do not edit generated Gradle files to maintain this ordering.
