@@ -3830,3 +3830,33 @@ diff --git a/cpp/md4c/md4c.c b/cpp/md4c/md4c.c
      if(ctx->parser.flags & MD_FLAG_HIGHLIGHT)
          emph_mark_types[n_emph_mark_types++] = _T('=');
      if(ctx->parser.flags & MD_FLAG_INSERT)
+diff --git a/ios/input/ENRMWordsUtils.mm b/ios/input/ENRMWordsUtils.mm
+--- a/ios/input/ENRMWordsUtils.mm
++++ b/ios/input/ENRMWordsUtils.mm
+@@ -31,21 +31,23 @@
+ + (NSArray<ENRMWordResult *> *)getAffectedWordsFromText:(NSString *)text modificationRange:(NSRange)range
+ {
+   NSUInteger textLength = text.length;
+-  if (textLength == 0) {
++  if (textLength == 0 || range.location == NSNotFound) {
+     return @[];
+   }
+ 
+   NSCharacterSet *whitespace = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+   NSCharacterSet *nonWhitespace = [whitespace invertedSet];
+ 
+-  NSUInteger left = range.location;
++  // A replacement offset can belong to the pre-edit string. Detect words in the current text.
++  NSUInteger start = MIN(range.location, textLength);
++  NSUInteger left = start;
+   if (left > 0) {
+     NSRange searchRange = NSMakeRange(0, left);
+     NSRange whitespaceHit = [text rangeOfCharacterFromSet:whitespace options:NSBackwardsSearch range:searchRange];
+     left = (whitespaceHit.location != NSNotFound) ? NSMaxRange(whitespaceHit) : 0;
+   }
+ 
+-  NSUInteger right = MIN(range.location + range.length, textLength);
++  NSUInteger right = start + MIN(range.length, textLength - start);
+   if (right < textLength) {
+     NSRange searchRange = NSMakeRange(right, textLength - right);
+     NSRange whitespaceHit = [text rangeOfCharacterFromSet:whitespace options:0 range:searchRange];
