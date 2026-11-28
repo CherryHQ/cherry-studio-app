@@ -1,5 +1,7 @@
 import * as z from 'zod';
 
+import { readProviderErrorDiagnostics } from '@/shared/utils/providerDiagnostics';
+
 const gatewayCodeSchema = z.enum([
   'ACCOUNT_DISABLED',
   'ENTITLEMENT_INACTIVE',
@@ -29,6 +31,7 @@ export function readCloudGatewayCode(body: unknown) {
 }
 
 const DEFAULT_RATE_LIMIT_COOLDOWN_MS = 30_000;
+export const MAX_RATE_LIMIT_COOLDOWN_MS = 15 * 60_000;
 
 export function cloudRetryDeadline(retryAfter: string | null | undefined, now: number): number {
   const fallback = now + DEFAULT_RATE_LIMIT_COOLDOWN_MS;
@@ -38,7 +41,21 @@ export function cloudRetryDeadline(retryAfter: string | null | undefined, now: n
   // Date.parse also accepts malformed delta-seconds such as "-1" as calendar dates.
   if (!isSeconds && Number.isFinite(Number(value))) return fallback;
   const deadline = isSeconds ? now + Number(value) * 1000 : Date.parse(value);
-  return Number.isFinite(deadline) ? Math.max(deadline, now) : fallback;
+  return Number.isFinite(deadline)
+    ? Math.min(Math.max(deadline, now), now + MAX_RATE_LIMIT_COOLDOWN_MS)
+    : fallback;
+}
+
+export function readCloudUpstreamErrorBody(body: unknown): string | undefined {
+  const { providerCode, providerType, parameter } = readProviderErrorDiagnostics(body);
+  if (!providerCode && !providerType && !parameter) return undefined;
+  return JSON.stringify({
+    error: {
+      ...(providerCode ? { code: providerCode } : {}),
+      ...(providerType ? { type: providerType } : {}),
+      ...(parameter ? { param: parameter } : {}),
+    },
+  });
 }
 
 export class CloudGatewayRequestError extends Error {
@@ -47,6 +64,8 @@ export class CloudGatewayRequestError extends Error {
   constructor(
     readonly statusCode: number,
     readonly code: string,
+    readonly gatewayRequestId?: string,
+    readonly body?: string,
   ) {
     super(`Cloud request failed (${statusCode}) ${code}`);
     this.name = 'CloudGatewayRequestError';

@@ -115,6 +115,8 @@ export function createRemoteConversationSource(
     ref,
     scope,
     state,
+    getDispatch: (...args) => (disposed ? undefined : remote.getDispatch(...args)),
+    subscribeDispatches: remote.subscribeOperations,
     hasSubmission: (draftId) =>
       remote.getStarts().some((start) => start.draftId === draftId && !isUndelivered(start)),
     tasks: {
@@ -480,6 +482,8 @@ export function createRemoteConversationSource(
         if (address.source.kind !== 'desktop' || address.source.connectionId !== connectionId)
           throw new ConversationReadError({ code: 'invalid-input', retry: 'none' });
         const initial = await remote.tasks.readSession(taskId, address.sessionId, signal);
+        assertSource();
+        signal.throwIfAborted();
         const session = createRemoteConversationSession(
           remote,
           address,
@@ -487,7 +491,6 @@ export function createRemoteConversationSource(
           assertSource,
           () => sessions.delete(session),
           true,
-          'read-only',
         );
         sessions.add(session);
         return session;

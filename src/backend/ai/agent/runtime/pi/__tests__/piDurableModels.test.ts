@@ -1,11 +1,16 @@
+import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { Api, AssistantMessage, Message, Model, Models } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
 import { createTraceRecorder } from '../../../../observability/__tests__/_traceRecorder';
+import { toAgentErrorView } from '../../../host/runtimeProjection';
 import type { RuntimeModelPreflight, RuntimeOptions } from '../../types';
+import { bindPiStream, resolvePiApiAdapter } from '../piApiAdapters';
 import { summarizePiCompaction } from '../piCompaction';
 import { createPiDurableModels } from '../piDurableModels';
+import { readPiTerminalError } from '../piModelError';
 import type { PiModelResolution } from '../piModelTypes';
+import { PiNonStreamingUnsupportedError } from '../piNonStreamingFetch';
 import { emptyAssistantMessage } from '../piStreamEvents';
 
 const preflight: RuntimeModelPreflight = {
@@ -78,6 +83,96 @@ function setup(
 }
 
 describe('Pi durable model bridge', () => {
+  test.each(['event', 'throw'] as const)(
+    'preserves a textless stream-stage 429 from a provider %s',
+    async (kind) => {
+      const bridge = setup();
+      const message = emptyAssistantMessage(wire);
+      const source = new AssistantMessageEventStream();
+      if (kind === 'event') {
+        source.push({
+          type: 'error',
+          reason: 'error',
+          error: {
+            ...message,
+            stopReason: 'error',
+            errorMessage: 'Too many requests',
+            diagnostics: [
+              {
+                type: 'provider_response_failure',
+                timestamp: 1,
+                error: { code: 'rate_limit_exceeded', message: 'Too many requests' },
+                details: { status: 429 },
+              },
+            ],
+          },
+        });
+      } else {
+        source[Symbol.asyncIterator] = async function* () {
+          yield { type: 'start', partial: message };
+          throw Object.assign(new Error('Too many requests'), {
+            code: 'rate_limit_exceeded',
+            status: 429,
+          });
+        };
+      }
+      bridge.streamFn.mockReturnValueOnce(source);
+      await bridge.registerModel(reference);
+      const result = await bridge.models.completeSimple(bridge.getModel(reference)!, {
+        messages: [],
+      });
+      expect(result).toMatchObject({ stopReason: 'error', content: [] });
+      expect(toAgentErrorView(readPiTerminalError(result)!)).toMatchObject({
+        retryable: true,
+        failure: { reasonCode: 'rate_limit', context: { statusCode: 429 } },
+      });
+    },
+  );
+
+  test.each([
+    ['openai-completions', { type: 'function', function: { name: 'read_file', parameters: {} } }],
+    ['openai-responses', { type: 'function', name: 'read_file', parameters: {} }],
+    ['anthropic-messages', { name: 'read_file', input_schema: { type: 'object' } }],
+  ] as const)(
+    'guards DeepSeek safety checks against outgoing client tools on %s',
+    async (api, clientTool) => {
+      const model = { ...wire, api, id: 'deepseek-flash' };
+      const nativeTools = [{ type: 'deepseek_web_search' }, { type: 'deepseek_read_url' }];
+      for (const tools of [
+        undefined,
+        [],
+        nativeTools,
+        [clientTool],
+        [...nativeTools, clientTool],
+      ]) {
+        const bridge = setup(undefined, preflight, model);
+        const resolved = await bridge.resolveModel();
+        const body = { model: model.id, ...(tools === undefined ? {} : { tools }) };
+        let sent: unknown;
+        bridge.resolveModel.mockResolvedValueOnce({
+          ...resolved,
+          deepseekSafetyCheck: true,
+          async streamFn(wire, _context, options) {
+            sent = await options?.onPayload?.({ model: wire.id }, wire);
+            return bridge.streamFn();
+          },
+        });
+        await bridge.registerModel(reference);
+        await bridge.models.completeSimple(
+          bridge.getModel(reference)!,
+          { messages: [] },
+          {
+            onPayload: () => body,
+          },
+        );
+        expect(sent).toEqual({
+          ...body,
+          ...(tools?.includes(clientTool) ? {} : { safety_check: { level: 'high' } }),
+        });
+      }
+    },
+  );
+
   test.each(['done', 'error'] as const)(
     'clears DeepSeek refusal content before persisting a %s event',
     async (terminal) => {
@@ -164,6 +259,89 @@ describe('Pi durable model bridge', () => {
       );
     },
   );
+
+  test('finite compaction uses the bound transport and records terminal usage once', async () => {
+    const bridge = setup();
+    const resolved = await bridge.resolveModel();
+    const model = { ...wire, compat: { supportsFinishReason: false } };
+    const fetch = jest.fn(
+      async (_input: unknown, _init?: RequestInit) =>
+        new Response(
+          JSON.stringify({
+            choices: [
+              { message: { role: 'assistant', content: '<summary>Finite summary</summary>' } },
+            ],
+            usage: { prompt_tokens: 20, completion_tokens: 5, total_tokens: 25 },
+          }),
+          { headers: { 'content-type': 'application/json' } },
+        ),
+    );
+    const streamFn = await bindPiStream(
+      {
+        ...resolvePiApiAdapter(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS),
+        loadStreamSimple: async () =>
+          jest.requireActual('@earendil-works/pi-ai/api/openai-completions').streamSimple,
+      },
+      {
+        shouldStream: false,
+        apiKey: 'key',
+        fetch,
+        headers: {},
+        maxRetries: 0,
+        maxTokens: 512,
+      },
+    );
+    const onUsage = jest.fn(async () => undefined);
+    const durable = createPiDurableModels(
+      {
+        preflightModel: async () => preflight,
+        resolveModel: async () => ({ ...resolved, model, streamFn }),
+      },
+      async () => ({}),
+      async () => onUsage,
+    );
+    await durable.registerModel(reference);
+    const registered = durable.getModel(reference)!;
+    await expect(
+      summarizePiCompaction(
+        [{ role: 'user', content: 'Remember the important facts.', timestamp: 1 }],
+        durable.models,
+        registered,
+        {
+          limits: { contextWindow: 32768, maxInputTokens: 28672, maxOutputTokens: 512 },
+          sessionId: 'session',
+          signal: new AbortController().signal,
+        },
+      ),
+    ).resolves.toBe('Finite summary');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toMatchObject({ stream: false });
+    expect(onUsage).toHaveBeenCalledTimes(1);
+    expect(onUsage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        usage: expect.objectContaining({ inputTokens: 20, outputTokens: 5, totalTokens: 25 }),
+      }),
+    );
+  });
+
+  test('projects unsupported finite Codex mode to a clear non-retryable chat error', async () => {
+    const bridge = setup();
+    bridge.resolveModel.mockRejectedValueOnce(
+      new PiNonStreamingUnsupportedError('openai-codex-responses'),
+    );
+    await bridge.registerModel(reference);
+    const result = await bridge.models.completeSimple(bridge.getModel(reference)!, {
+      messages: [],
+    });
+    expect(result.stopReason).toBe('error');
+    expect(toAgentErrorView(readPiTerminalError(result)!)).toMatchObject({
+      code: 'EXECUTION_FAILED',
+      retryable: false,
+      message: 'This transport requires streaming. Turn on streaming for this model.',
+    });
+    expect(bridge.resolveModel).toHaveBeenCalledTimes(1);
+    expect(bridge.streamFn).not.toHaveBeenCalled();
+  });
 
   test('fits compaction into small input windows and keeps image requests exempt', async () => {
     for (const contextWindow of [512, 8_192, 131_072]) {

@@ -306,3 +306,71 @@ test('rejects empty and unfinished transcripts instead of silently exporting a p
     ),
   ).toThrow('unsettled');
 });
+
+test('exports kb_search and kb_read citations across messages without broken source links', () => {
+  const markdown = conversationToMarkdown(
+    {
+      messages: [
+        message('kb-tools', [
+          {
+            id: 'kb-search',
+            type: 'dynamic-tool',
+            toolCallId: 'call-1',
+            toolRef: { source: 'builtin', capabilityId: 'kb_search' },
+            toolName: 'kb_search',
+            title: 'Search knowledge base',
+            state: 'output-available',
+            input: { query: 'architecture' },
+            output: {
+              value: {
+                details: {
+                  results: [
+                    { id: 'kb-1', title: 'Local KB Note', content: 'private chunk' },
+                    { id: 'kb-2', title: 'KB Guide', url: 'https://kb.example/guide' },
+                  ],
+                },
+              },
+              artifacts: [],
+            },
+          },
+          {
+            id: 'kb-read',
+            type: 'dynamic-tool',
+            toolCallId: 'call-2',
+            toolRef: { source: 'builtin', capabilityId: 'kb_read' },
+            toolName: 'kb_read',
+            title: 'Read knowledge base entry',
+            state: 'output-available',
+            input: { id: 'kb-3' },
+            output: {
+              value: { id: 'kb-3', title: 'KB Entry', content: 'private entry' },
+              artifacts: [],
+            },
+          },
+          {
+            id: 'text-1',
+            type: 'text',
+            text: 'Local [cite:kb-1] and web [cite:kb-2].',
+            state: 'done',
+          },
+        ]),
+        message('follow-up', [
+          {
+            id: 'text-2',
+            type: 'text',
+            text: 'Follow-up citekb-3 and `[cite:kb-2]`.',
+            state: 'done',
+          },
+        ]),
+      ],
+    },
+    labels,
+  );
+
+  expect(markdown).toContain('Local ❷ and web [1](<https://kb.example/guide>).');
+  expect(markdown).toContain('Follow-up ❶ and `[cite:kb-2]`.');
+  expect(markdown).toContain('1. [KB Guide](<https://kb.example/guide>)');
+  expect(markdown).not.toContain('undefined');
+  expect(markdown).not.toContain('[cite:kb-1]');
+  expect(markdown).not.toContain('citekb-3');
+});

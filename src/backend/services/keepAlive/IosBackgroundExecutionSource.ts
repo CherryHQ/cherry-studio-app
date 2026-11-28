@@ -6,6 +6,7 @@ import {
   BaseService,
   DependsOn,
   Emitter,
+  ErrorHandling,
   Injectable,
   Phase,
   ServicePhase,
@@ -41,7 +42,8 @@ let nextTaskId = 0;
 
 /** Foreground user tasks prefer continued processing; consented audio is fallback only. */
 @Injectable('IosBackgroundExecutionSource')
-@ServicePhase(Phase.PostReady)
+@ServicePhase(Phase.Gate)
+@ErrorHandling('graceful')
 @DependsOn(['PreferenceService'])
 @AppStatePolicy('background-presentation')
 export class IosBackgroundExecutionSource extends BaseService implements KeepAliveSource {
@@ -107,11 +109,17 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
           return;
         continued.state = event.state;
         this.activityChanges.fire(continued.deepLinkUrl);
-        if (event.state === 'expired')
+        if (event.state === 'expired') {
+          logger.info('Continued processing expired', {
+            operation: 'background.continued_processing',
+            reasonCode: 'continued-processing-expired',
+            appState: AppState.currentState,
+          });
           this.interruptHolder(
             continued.holder,
             new KeepAliveInterruptionError('continued-processing-expired'),
           );
+        }
         // A failed request can use fallback. A revoked running task cannot.
         this.publishStatus();
         this.enqueueReconcile();
@@ -304,7 +312,7 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
     const audioAllowed =
       this.preference.readCached('app.background_audio.consent') === true &&
       ![...this.continuedTasks.values()].some(
-        // Revoked work retains this fence until its owner has settled cancellation and released.
+        // Revoked work retains this fence until its owner has settled interruption and released.
         (continued) => continued.state !== 'unavailable',
       );
     if (!audioAllowed || this.audioBlocked) await this.endAudio();
@@ -360,7 +368,7 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
 
   private interruptIfUnprotected(): void {
     if (!this.hasActiveHolders() || !this.isUnprotected()) return;
-    // The revoked owner is already cancelling. Let it release before evaluating fallback demand.
+    // The revoked owner is already settling interruption. Let it release before fallback demand.
     if ([...this.continuedTasks.values()].some((continued) => continued.state === 'expired'))
       return;
     // An exhausted finite window and lost audio cannot restart work in this background stay.

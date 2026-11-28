@@ -2,7 +2,7 @@ import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 
 import { AiContentLabelSchema, type AiContentLabel } from '@/shared/data/types/aiContent';
 
-export const AI_CONTENT_XMP_NAMESPACE = 'http://www.tc260.org.cn/ns/AIGC/1.0/';
+export const AI_CONTENT_XMP_NAMESPACE = 'http://www.tc260.org.cn/ns/AIGC/1.0/'; // NOSONAR XML namespace identifier, not a network request
 export const MAX_AI_METADATA_BYTES = 256 * 1024;
 const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
 const XMLNS = 'http://www.w3.org/2000/xmlns/';

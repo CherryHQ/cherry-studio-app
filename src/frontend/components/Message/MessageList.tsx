@@ -32,6 +32,7 @@ const FULL_WIDTH = { width: '100%' } as const;
 
 export function MessageList({
   bottomAccessoryHeight,
+  visualBottomAccessoryHeight,
   contentBottomInset,
   contentTopInset,
   dataKey,
@@ -68,6 +69,7 @@ export function MessageList({
     handleScrollToEnd,
     handleTouchStart,
     isFollowing,
+    isKeyboardTransitioning,
     scrollToMessage,
   } = useMessageListScrollController({
     contentTopInset,
@@ -83,11 +85,16 @@ export function MessageList({
     onReturnToLatest,
   });
   const { height: keyboardHeight, progress: keyboardProgress } = useReanimatedKeyboardAnimation();
+  const freezeKeyboardLayout = useSharedValue(true);
   const keyboardLift = useDerivedValue(() =>
-    Math.max(0, -keyboardHeight.get() - keyboardProgress.get() * keyboardOffset),
+    keyboardOffset === undefined
+      ? 0
+      : Math.max(0, -keyboardHeight.get() - keyboardProgress.get() * keyboardOffset),
   );
   const scrollButtonBottom = useDerivedValue(
-    () => (bottomAccessoryHeight?.get() ?? 0) + keyboardLift.get(),
+    () =>
+      visualBottomAccessoryHeight?.get() ??
+      (bottomAccessoryHeight?.get() ?? 0) + keyboardLift.get(),
   );
   const contentHeight = useSharedValue({ dataKey, height: 0 });
   const viewportHeight = useSharedValue(0);
@@ -145,6 +152,7 @@ export function MessageList({
 
   useAnimatedReaction(
     () => {
+      if (isKeyboardTransitioning.get()) return null;
       const content = contentHeight.get();
       const viewport = viewportHeight.get();
       // Match the keyboard adapter's capped inset, including short conversations
@@ -159,6 +167,7 @@ export function MessageList({
       };
     },
     (current, previous) => {
+      if (!current) return;
       if (
         previous === null ||
         current.dataKey !== previous.dataKey ||
@@ -171,6 +180,7 @@ export function MessageList({
 
   useAnimatedReaction(
     () => {
+      if (isKeyboardTransitioning.get()) return null;
       const content = contentHeight.get();
       const viewport = viewportHeight.get();
       if (content.dataKey !== dataKey || viewport <= 0) {
@@ -189,6 +199,7 @@ export function MessageList({
       };
     },
     (current, previous) => {
+      if (!current) return;
       isLiveTailInView.set(current.isInView);
       if (
         previous === null ||
@@ -292,6 +303,7 @@ export function MessageList({
                 estimatedItemSize={300}
                 estimatedHeaderSize={contentTopInset}
                 extraData={listExtraData}
+                freeze={keyboardOffset === undefined ? freezeKeyboardLayout : undefined}
                 getItemType={getMessageRowType}
                 keyExtractor={messageKeyExtractor}
                 keyboardDismissMode="none"

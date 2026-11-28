@@ -64,6 +64,17 @@ type ActiveSession = {
   windowAnchor: MenuAnchor;
 };
 
+type PendingCommit = {
+  expectedIndex: number;
+  fallbackFrame?: number;
+  fallbackTimer?: ReturnType<typeof setTimeout>;
+  groupCommitted: boolean;
+  groupId: string;
+  id: string;
+  previousIds: readonly string[];
+  session: ActiveSession;
+};
+
 type FloatingOverlayState = {
   height: number;
   left: number;
@@ -83,12 +94,7 @@ function measureViewInWindow(
       }
     )?.measureInWindow;
 
-    const isUnimplementedMock =
-      typeof measure === 'function' &&
-      '_isMockFunction' in measure &&
-      !(measure as { getMockImplementation?: () => unknown }).getMockImplementation?.();
-
-    if (typeof measure !== 'function' || isUnimplementedMock) {
+    if (typeof measure !== 'function') {
       resolve({ height: fallback.height, pageX: 0, pageY: 0, width: fallback.width });
       return;
     }
@@ -143,10 +149,12 @@ export function SortableRoot({
   const groupsRef = useRef(new Map<string, SortableGroupRegistration>());
   const heightsRef = useRef(new Map<string, number>());
   const activeSessionRef = useRef<ActiveSession | null>(null);
+  const pendingCommitRef = useRef<PendingCommit | null>(null);
   const activationTokenRef = useRef(0);
   const autoScrollFrameRef = useRef<number | undefined>(undefined);
   const lastFrameTimeRef = useRef<number | undefined>(undefined);
   const isMountedRef = useRef(true);
+  const isDraggingRef = useRef(false);
 
   const [isDragging, setIsDragging] = useState(false);
   const [floatingOverlay, setFloatingOverlay] = useState<FloatingOverlayState | null>(null);
@@ -160,6 +168,7 @@ export function SortableRoot({
   const hoverIndexSV = useSharedValue(-1);
   const activeHeightSV = useSharedValue(0);
   const dragOffsetYSV = useSharedValue(0);
+  const lastSettledIdSV = useSharedValue<string | null>(null);
   const liftProgressSV = useSharedValue(0);
 
   const scrollControllerRef = useRef(scrollController);
@@ -179,11 +188,22 @@ export function SortableRoot({
     lastFrameTimeRef.current = undefined;
   }, []);
 
+  const clearPendingCommit = useCallback(() => {
+    const pending = pendingCommitRef.current;
+    if (!pending) return;
+    if (pending.fallbackTimer !== undefined) clearTimeout(pending.fallbackTimer);
+    if (pending.fallbackFrame !== undefined) cancelAnimationFrame(pending.fallbackFrame);
+    pendingCommitRef.current = null;
+  }, []);
+
   const clearSpotlightState = useCallback(() => {
+    const previousActiveId = activeSessionRef.current?.id ?? activeIdSV.value;
+    clearPendingCommit();
     stopAutoScroll();
     cancelAnimation(dragOffsetYSV);
     cancelAnimation(liftProgressSV);
     activeSessionRef.current = null;
+    lastSettledIdSV.value = previousActiveId;
     activeIdSV.value = null;
     activeGroupIdSV.value = null;
     activeIndexSV.value = -1;
@@ -193,15 +213,21 @@ export function SortableRoot({
     liftProgressSV.value = 0;
     if (isMountedRef.current) {
       setFloatingOverlay(null);
+    }
+    if (isDraggingRef.current) {
+      isDraggingRef.current = false;
       setIsDragging(false);
+      onDraggingChangeRef.current?.(false);
     }
   }, [
     activeGroupIdSV,
     activeHeightSV,
     activeIdSV,
     activeIndexSV,
+    clearPendingCommit,
     dragOffsetYSV,
     hoverIndexSV,
+    lastSettledIdSV,
     liftProgressSV,
     stopAutoScroll,
   ]);
@@ -217,15 +243,45 @@ export function SortableRoot({
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      activeSessionRef.current = null;
+      clearPendingCommit();
       stopAutoScroll();
       cancelAnimation(dragOffsetYSV);
       cancelAnimation(liftProgressSV);
     };
-  }, [dragOffsetYSV, liftProgressSV, stopAutoScroll]);
+  }, [clearPendingCommit, dragOffsetYSV, liftProgressSV, stopAutoScroll]);
 
-  const registerGroup = useCallback((registration: SortableGroupRegistration) => {
-    groupsRef.current.set(registration.groupId, registration);
-  }, []);
+  const notifyItemCommitted = useCallback(
+    (groupId: string, id: string, index: number) => {
+      const pending = pendingCommitRef.current;
+      if (pending?.groupId === groupId && pending.id === id && pending.expectedIndex === index) {
+        clearSessionState();
+      }
+    },
+    [clearSessionState],
+  );
+
+  const registerGroup = useCallback(
+    (registration: SortableGroupRegistration) => {
+      groupsRef.current.set(registration.groupId, registration);
+      const pending = pendingCommitRef.current;
+      if (!pending || pending.groupId !== registration.groupId || pending.groupCommitted) return;
+
+      const { itemIds } = registration;
+      if (
+        itemIds[pending.expectedIndex] === pending.id ||
+        itemIds.length !== pending.previousIds.length ||
+        itemIds.some((id, index) => id !== pending.previousIds[index])
+      ) {
+        pending.groupCommitted = true;
+        // The moved row may be outside the virtualized window and never report its commit.
+        pending.fallbackFrame = requestAnimationFrame(() => {
+          if (pendingCommitRef.current?.session === pending.session) clearSessionState();
+        });
+      }
+    },
+    [clearSessionState],
+  );
 
   const unregisterGroup = useCallback((groupId: string, token: symbol) => {
     const existing = groupsRef.current.get(groupId);
@@ -319,7 +375,10 @@ export function SortableRoot({
 
   const activateLongPress = useCallback(
     (payload: SortableActivatePayload) => {
+      // A settling drag owns the spotlight until the reordered list takes over.
       if (activeSessionRef.current) return;
+      clearPendingCommit();
+      lastSettledIdSV.value = null;
 
       const group = groupsRef.current.get(payload.groupId);
       const estimatedItemHeight =
@@ -411,8 +470,10 @@ export function SortableRoot({
       activeHeightSV,
       activeIdSV,
       activeIndexSV,
+      clearPendingCommit,
       dragOffsetYSV,
       hoverIndexSV,
+      lastSettledIdSV,
       liftProgressSV,
     ],
   );
@@ -431,6 +492,7 @@ export function SortableRoot({
         session.hasMovedPastSlop = true;
         if (session.movable) {
           session.phase = 'dragging';
+          isDraggingRef.current = true;
           setIsDragging(true);
           onDraggingChangeRef.current?.(true);
           startAutoScrollLoop();
@@ -448,13 +510,8 @@ export function SortableRoot({
 
   const settleDropAndCommit = useCallback(
     (session: ActiveSession, commitReorder: boolean) => {
-      const wasDragging = session.phase === 'dragging';
       session.isSettling = true;
       stopAutoScroll();
-      if (wasDragging) {
-        setIsDragging(false);
-        onDraggingChangeRef.current?.(false);
-      }
 
       const finalHover = commitReorder ? session.hoverIndex : session.activeIndex;
       const scrollDelta =
@@ -471,30 +528,42 @@ export function SortableRoot({
       const finalize = () => {
         if (activeSessionRef.current !== session) return;
         const group = groupsRef.current.get(session.groupId);
-        clearSessionState();
-        if (didReorder && group) {
-          group.onReorder({
-            fromIndex: session.activeIndex,
-            groupId: session.groupId,
-            id: session.id,
-            toIndex: finalHover,
-          });
+        if (!didReorder || !group) {
+          clearSessionState();
+          return;
         }
+
+        pendingCommitRef.current = {
+          expectedIndex: finalHover,
+          fallbackTimer: setTimeout(() => {
+            if (pendingCommitRef.current?.session === session) clearSessionState();
+          }, 400),
+          groupCommitted: false,
+          groupId: session.groupId,
+          id: session.id,
+          previousIds: [...group.itemIds],
+          session,
+        };
+        group.onReorder({
+          fromIndex: session.activeIndex,
+          groupId: session.groupId,
+          id: session.id,
+          toIndex: finalHover,
+        });
       };
 
       if (reducedMotionRef.current) {
+        dragOffsetYSV.value = targetVisualDelta;
+        liftProgressSV.value = 0;
         finalize();
         return;
       }
 
-      dragOffsetYSV.value = withSpring(targetVisualDelta, spring.settle);
-      liftProgressSV.value = withTiming(
-        0,
-        { duration: duration.instant, easing: easing.settle },
-        () => {
-          runOnJS(finalize)();
-        },
-      );
+      const dropTiming = { duration: duration.instant, easing: easing.settle };
+      dragOffsetYSV.value = withTiming(targetVisualDelta, dropTiming);
+      liftProgressSV.value = withTiming(0, dropTiming, (finished) => {
+        if (finished) runOnJS(finalize)();
+      });
     },
     [clearSessionState, dragOffsetYSV, liftProgressSV, stopAutoScroll],
   );
@@ -570,7 +639,9 @@ export function SortableRoot({
       finishGesture,
       getGroupItemCount,
       hoverIndexSV,
+      lastSettledIdSV,
       liftProgressSV,
+      notifyItemCommitted,
       registerGroup,
       reportItemHeight,
       unregisterGroup,
@@ -587,7 +658,9 @@ export function SortableRoot({
       finishGesture,
       getGroupItemCount,
       hoverIndexSV,
+      lastSettledIdSV,
       liftProgressSV,
+      notifyItemCommitted,
       registerGroup,
       reportItemHeight,
       unregisterGroup,

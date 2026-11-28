@@ -1,7 +1,7 @@
 import type { PreferenceKeyType } from '@/shared/data/preference';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
-export const MODEL_SETTING_KINDS = ['default', 'fast', 'translate', 'painting', 'naming'] as const;
+export const MODEL_SETTING_KINDS = ['default', 'translate', 'painting', 'naming'] as const;
 
 export type ModelSettingKind = (typeof MODEL_SETTING_KINDS)[number];
 
@@ -9,7 +9,6 @@ export type ModelSettingSelectionState = Record<ModelSettingKind, UniqueModelId 
 
 export const MODEL_SETTING_PREFERENCE_KEYS = {
   default: 'agent.default_model_id',
-  fast: 'feature.quick_assistant.model_id',
   naming: 'agent.session_naming.model_id',
   painting: 'feature.paintings.default_model_id',
   translate: 'feature.translate.model_id',
@@ -17,7 +16,6 @@ export const MODEL_SETTING_PREFERENCE_KEYS = {
 
 export const MODEL_SETTING_KIND_TITLE_KEYS: Record<ModelSettingKind, string> = {
   default: 'settings.model.default.title',
-  fast: 'settings.model.fast.title',
   naming: 'settings.model.naming.title',
   painting: 'settings.model.painting.title',
   translate: 'settings.model.translate.title',

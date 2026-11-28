@@ -225,6 +225,7 @@ describe('Pi provider stream errors', () => {
         .spyOn(adapter, 'loadStreamSimple')
         .mockResolvedValue(streamSimple as unknown as StreamFn);
       const stream = await bindPiStream(adapter, {
+        shouldStream: true,
         apiKey: adapter.api === 'openai-codex-responses' ? CODEX_API_KEY : 'test-key',
         // The native layer reports the drop as an OS-localized message without status or code.
         fetch: async () =>
@@ -295,6 +296,7 @@ describe('Pi provider stream errors', () => {
         .spyOn(adapter, 'loadStreamSimple')
         .mockResolvedValue(streamSimple as unknown as StreamFn);
       const stream = await bindPiStream(adapter, {
+        shouldStream: true,
         apiKey: adapter.api === 'openai-codex-responses' ? CODEX_API_KEY : 'test-key',
         // The native layer rejects with an OS-localized message without status or code.
         fetch: async () => {
@@ -331,6 +333,7 @@ describe('Pi provider stream errors', () => {
       .mockResolvedValue(streamSimpleCodex as unknown as StreamFn);
     const controller = new AbortController();
     const stream = await bindPiStream(adapter, {
+      shouldStream: true,
       apiKey: CODEX_API_KEY,
       fetch: async () => {
         controller.abort();
@@ -481,6 +484,7 @@ describe('Gemini injected transport', () => {
         loadStreamSimple: async () => streamSimpleGoogle as unknown as StreamFn,
       },
       {
+        shouldStream: true,
         apiKey: 'test-key',
         fetch,
         headers: {},
@@ -572,6 +576,77 @@ describe('Gemini injected transport', () => {
       });
     },
   );
+
+  test('extracts rejected parameter from plain-text OpenAI Responses HTTP 400 errors', async () => {
+    const responsesModel = { ...model('openai-responses'), provider: 'openai' };
+    const source = streamSimpleResponses(
+      responsesModel as Model<'openai-responses'>,
+      normalizeContext({ messages: [{ role: 'user', content: 'Hello', timestamp: 1 }] }),
+      {
+        apiKey: 'test-key',
+        maxRetries: 0,
+        fetch: async () =>
+          new Response("Unsupported parameter: 'max_output_tokens' is not supported", {
+            status: 400,
+            headers: { 'content-type': 'text/plain' },
+          }),
+      },
+    );
+    const result = await source.result();
+    expect(result.stopReason).toBe('error');
+    expect(piModelTerminalErrorAttributes(result)).toMatchObject({
+      'http.status_code': 400,
+      'error.provider.param': 'max_output_tokens',
+      'error.category': 'invalid_input',
+    });
+  });
+
+  test('extracts structured Gemini error metadata from message-only JSON errors', async () => {
+    const rejectedStream = await bind(
+      async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 400,
+              message: "Unsupported parameter: 'maxOutputTokens'",
+              status: 'INVALID_ARGUMENT',
+            },
+          }),
+          { status: 400, headers: { 'content-type': 'application/json' } },
+        ),
+    );
+    const rejected = await (await rejectedStream(googleModel, context, {})).result();
+    expect(rejected.stopReason).toBe('error');
+    expect(piModelTerminalErrorAttributes(rejected)).toMatchObject({
+      'http.status_code': 400,
+      'error.provider.code': '400',
+      'error.provider.type': 'INVALID_ARGUMENT',
+      'error.provider.param': 'maxOutputTokens',
+      'error.category': 'invalid_input',
+    });
+
+    const privateStream = await bind(
+      async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 400,
+              message: 'private prompt violation',
+              status: 'INVALID_ARGUMENT',
+            },
+          }),
+          { status: 400, headers: { 'content-type': 'application/json' } },
+        ),
+    );
+    const withPrivateText = await (await privateStream(googleModel, context, {})).result();
+    const attributes = piModelTerminalErrorAttributes(withPrivateText);
+    expect(attributes).toMatchObject({
+      'http.status_code': 400,
+      'error.provider.code': '400',
+      'error.provider.type': 'INVALID_ARGUMENT',
+    });
+    expect(JSON.stringify(attributes)).not.toMatch(/private|prompt/);
+  });
 
   test('keeps an early end without a finish reason distinct from a provider rejection', async () => {
     const stream = await bind(

@@ -49,6 +49,7 @@ export function createGenerateImageTool(
     description: buildGenerateImageToolDescription(strategy),
     inputSchema: toRuntimeInputSchema(inputSchema),
     deferred: true,
+    ...(configuredModel ? { executionSettingsKey: configuredModel.uniqueModelId } : {}),
     // Generation spends provider quota, so the catalog preserves explicit consent.
     approval: 'ask',
     async execute({ input, signal }) {

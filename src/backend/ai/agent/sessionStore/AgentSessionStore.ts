@@ -7,6 +7,7 @@ import type {
   AgentMessageView,
   AgentSessionView,
 } from '@/shared/contracts/agent';
+import type { DesktopDispatchSessionRef } from '@/shared/data/types/desktopDispatchTool';
 import type {
   MessageRuntimeStatsInput,
   MessageRuntimeTiming,
@@ -317,6 +318,10 @@ export interface AgentSessionStore {
 
   /** Workflow ids from successful load receipts across the history, oldest first. */
   loadWorkflowLoads(sessionId: string, through?: string | null): Promise<string[]>;
+  loadDispatchedDesktopSessions(
+    sessionId: string,
+    through?: string | null,
+  ): Promise<DesktopDispatchSessionRef[]>;
 
   /**
    * Returns the newest assistant row of the history carrying an opaque

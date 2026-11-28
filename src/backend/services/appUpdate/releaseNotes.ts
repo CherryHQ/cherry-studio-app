@@ -4,11 +4,15 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 
 const logger = loggerService.withContext('AppUpdateReleaseNotes');
 const github = createHttpClient({
+  serviceName: 'AppUpdate',
+  operation: 'release.notes',
   baseUrl: 'https://api.github.com',
   headers: { Accept: 'application/vnd.github+json' },
   timeoutMs: 10_000,
 });
 const gitcode = createHttpClient({
+  serviceName: 'AppUpdate',
+  operation: 'release.notes',
   baseUrl: 'https://api.gitcode.com/api/v5',
   headers: { Accept: 'application/json' },
   timeoutMs: 10_000,

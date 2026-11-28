@@ -104,7 +104,7 @@ jest.mock('@cherrystudio/ui/components', () => {
 const defaultModelSetup: ChatDraftModelSetup = {
   modelId: null,
   modelType: 'all',
-  returnTo: '/(drawer)/(main)/chat',
+  returnTo: '/?agentId=assistant-1',
 };
 
 describe('ChatDraftState', () => {
@@ -163,6 +163,18 @@ describe('ChatDraftState', () => {
     expect(collectText(renderer!.root)).toBe('What should we create together today?');
     expect(renderer!.root.findAllByProps({ testID: 'chat-draft-add-provider' })).toHaveLength(0);
     expect(renderer!.root.findAllByProps({ testID: 'chat-draft-desktop-sync' })).toHaveLength(0);
+  });
+
+  test('opens provider setup only after a pending empty catalog settles', async () => {
+    mockModelPickerData.hasLoadedCatalog = false;
+    await renderDraftState({ modelSetup: defaultModelSetup });
+    expect(collectText(renderer!.root)).toBe('What should we create together today?');
+    expect(renderer!.root.findAllByProps({ testID: 'chat-draft-avatar' })).toHaveLength(1);
+
+    mockModelPickerData.hasLoadedCatalog = true;
+    await renderDraftState({ modelSetup: defaultModelSetup });
+    expect(collectText(renderer!.root)).toContain('Connect a provider');
+    expect(renderer!.root.findAllByProps({ testID: 'chat-draft-avatar' })).toHaveLength(0);
   });
 
   test('shows only avatar and greeting for a managed Agent with organization model choices', async () => {

@@ -4,6 +4,7 @@ import type {
   DiagnosticFeedbackFeature,
 } from '@/shared/contracts/diagnostics';
 import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
+import { readProviderErrorDiagnostics } from '@/shared/utils/providerDiagnostics';
 
 export type FeedbackContextInput = Omit<DiagnosticFeedbackContext, 'entry' | 'capturedAt'>;
 
@@ -43,6 +44,7 @@ export function feedbackFeatureForRoute(pathname: string): DiagnosticFeedbackFea
 /** Project failure facts only, even when the caller holds a complete provider error. */
 export function feedbackFailureContext(data: {
   code?: unknown;
+  message?: unknown;
   reasonCode?: unknown;
   context?: unknown;
   source?: unknown;
@@ -57,6 +59,10 @@ export function feedbackFailureContext(data: {
     error: {
       code: diagnosticIdentifier(data.code),
       sourceCode: diagnosticIdentifier(source?.code),
+      ...readProviderErrorDiagnostics(
+        context?.responseBody,
+        source?.layer === 'provider' ? data.message : undefined,
+      ),
       reason: reason.success ? reason.data : undefined,
       statusCode:
         typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599

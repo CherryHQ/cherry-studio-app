@@ -71,6 +71,8 @@ export type MessageListProps = {
   rowInsets?: { horizontal: number; user: number; assistant: number };
   /** Floating content reserved through the keyboard adapter without resizing the viewport. */
   bottomAccessoryHeight?: SharedValue<number>;
+  /** Live visual position for floating controls when it differs from the scroll inset. */
+  visualBottomAccessoryHeight?: SharedValue<number>;
   contentBottomInset: number;
   contentTopInset: number;
   dataKey?: string;
@@ -81,7 +83,8 @@ export type MessageListProps = {
   initialScrollTarget?: 'end' | { messageId: string };
   /** The loaded window ends before the current conversation's live edge. */
   hasNewerMessages?: boolean;
-  keyboardOffset: number;
+  /** Omit when the parent resizes the viewport to avoid the keyboard. */
+  keyboardOffset?: number;
   /** Use 'always' when an outer press target owns background dismissal. */
   keyboardShouldPersistTaps?: ScrollViewProps['keyboardShouldPersistTaps'];
   messages: readonly MessageListItem[];

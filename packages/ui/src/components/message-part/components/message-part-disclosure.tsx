@@ -1,15 +1,9 @@
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
-import Animated, {
-  ReduceMotion,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
 
-import { duration, easing } from '../../../motion';
 import { BottomSheet } from '../../bottom-sheet';
+import { DisclosureChevron } from '../../disclosure';
 import { Image } from '../../image';
 import { ShimmerText } from '../../shimmer-text';
 import type {
@@ -26,12 +20,6 @@ import { MessagePartStatus, MessagePartStatusDensityScope } from './message-part
 
 const SOURCE_LIST_DETAIL_SIZES = ['large'] as const;
 const TOOL_DETAIL_SIZES = ['compact', 'large'] as const;
-const disclosureIconMotion = {
-  duration: duration.fast,
-  easing: easing.settle,
-  reduceMotion: ReduceMotion.System,
-} as const;
-
 const toneClassName = {
   danger: 'text-error',
   default: 'text-foreground-tertiary',
@@ -76,7 +64,10 @@ export function MessagePartProcess({
               </Text>
             )}
           </View>
-          <MessagePartDisclosureIcon isOpen={isOpen} />
+          <DisclosureChevron
+            expanded={isOpen}
+            className="size-3 shrink-0 text-foreground-tertiary"
+          />
         </View>
         {statusText ? (
           <Text className={`ml-auto max-w-[50%] shrink-0 text-xs ${colorClassName}`}>
@@ -136,6 +127,9 @@ export function MessagePartToolGroup({
   const isRunning = state === 'running';
   const isOpen = expanded ?? localOpen;
   const colorClassName = toneClassName[statusTone];
+  const statusAccessibilityText = typeof statusText === 'string' ? statusText : undefined;
+  const hasStatusText =
+    statusText !== undefined && statusText !== null && statusText !== false && statusText !== '';
   const toggle = () => {
     onDisclosureToggle?.();
     if (expanded === undefined) setLocalOpen(!isOpen);
@@ -145,7 +139,9 @@ export function MessagePartToolGroup({
   return (
     <View className="gap-1.5">
       <MessagePartStatus
-        accessibilityLabel={statusText ? `${title}, ${statusText}` : title}
+        accessibilityLabel={
+          statusAccessibilityText ? `${title}, ${statusAccessibilityText}` : title
+        }
         expanded={isOpen}
         onPress={toggle}
         testID={`${testID}-trigger`}
@@ -161,34 +157,21 @@ export function MessagePartToolGroup({
             </Text>
           )}
         </View>
-        <MessagePartDisclosureIcon isOpen={isOpen} />
+        <DisclosureChevron expanded={isOpen} className="size-3 shrink-0 text-foreground-tertiary" />
         <View className="flex-1" />
-        {statusText ? (
-          <Text className={`max-w-[50%] shrink-0 text-xs ${colorClassName}`}>{statusText}</Text>
+        {hasStatusText ? (
+          <Text
+            className={`max-w-[50%] shrink-0 text-xs tabular-nums ${colorClassName}`}
+            numberOfLines={1}
+          >
+            {statusText}
+          </Text>
         ) : null}
       </MessagePartStatus>
       <MessagePartCollapsible className="gap-1" isOpen={isOpen} testID={`${testID}-steps`}>
         {children}
       </MessagePartCollapsible>
     </View>
-  );
-}
-
-function MessagePartDisclosureIcon({ isOpen }: { isOpen: boolean }) {
-  const rotation = useSharedValue(isOpen ? 90 : 0);
-
-  useEffect(() => {
-    rotation.set(withTiming(isOpen ? 90 : 0, disclosureIconMotion));
-  }, [isOpen, rotation]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.get()}deg` }],
-  }));
-
-  return (
-    <Animated.View pointerEvents="none" style={animatedStyle}>
-      <ChevronRightIcon className="size-3 shrink-0 text-foreground-tertiary" />
-    </Animated.View>
   );
 }
 

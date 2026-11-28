@@ -37,7 +37,11 @@ type ComposerExpansionContextValue = {
   meta: {
     progress: SharedValue<number>;
     extraHeight: SharedValue<number>;
+    /** Live height with the dock compact, including the editor morph. */
     compactDockHeight: SharedValue<number>;
+    /** Upward translation of the dock from its resting position. */
+    dockLift: SharedValue<number>;
+    editorMorphing: SharedValue<boolean>;
     /** Space reserved for the compact dock, held steady during manual expansion. */
     contentInset: SharedValue<number>;
     keyboardTrackingEnabled: SharedValue<boolean>;
@@ -54,6 +58,8 @@ export function ComposerExpansion({ children }: PropsWithChildren) {
   const viewportHeight = useSharedValue(0);
   const compactDockHeight = useSharedValue(0);
   const contentInset = useSharedValue(0);
+  const dockLift = useSharedValue(0);
+  const editorMorphing = useSharedValue(false);
   const keyboardTrackingEnabled = useSharedValue(false);
   const progress = useSharedValue(0);
   const { height: keyboardHeight, progress: keyboardProgress } = useReanimatedKeyboardAnimation();
@@ -116,7 +122,15 @@ export function ComposerExpansion({ children }: PropsWithChildren) {
     () => ({
       state: { isExpanded, isPresented },
       actions: { expand, collapse, resizeContent },
-      meta: { progress, extraHeight, compactDockHeight, contentInset, keyboardTrackingEnabled },
+      meta: {
+        progress,
+        extraHeight,
+        compactDockHeight,
+        contentInset,
+        dockLift,
+        editorMorphing,
+        keyboardTrackingEnabled,
+      },
     }),
     [
       isExpanded,
@@ -128,6 +142,8 @@ export function ComposerExpansion({ children }: PropsWithChildren) {
       extraHeight,
       compactDockHeight,
       contentInset,
+      dockLift,
+      editorMorphing,
       keyboardTrackingEnabled,
     ],
   );

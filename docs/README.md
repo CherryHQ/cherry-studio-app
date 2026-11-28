@@ -14,7 +14,7 @@ Guides are task-oriented procedures for changing or extending the application.
 | [Internationalization](./guides/internationalization.md) | Supported languages, shared resolution, translation resources, and PR checks |
 | [GitHub Plugin Authorization](./guides/github-plugin-authorization.md) | Publisher OAuth App configuration, in-app browser authorization, token renewal, and acceptance prerequisites |
 | [Local EAS Builds](./guides/local-builds.md) | Local installation packages, Sentry environment variables, and build profiles |
-| [Cloud Releases](./guides/cloud-releases.md) | EAS release workflows, release preparation, channel delivery, retries, and status |
+| [Native Releases](./guides/cloud-releases.md) | Workstation preparation, Mac Studio delivery, store submission and release completion |
 | [Application Updates](./guides/app-updates.md) | EAS incremental code/asset updates, distribution channels, staged rollout, and rollback |
 | [Parallel Device Testing](./guides/parallel-device-testing.md) | Agent self-test preparation design, shared resident and temporary devices, development-client reuse, and cleanup |
 | [Feature Map](./features/README.md) | User-perspective verification sitemap with verified `testID` controls, drivers, acceptance criteria, and pitfalls |
@@ -39,7 +39,7 @@ They are the source of truth for how the repository works today.
 | [Universal Package](./references/universal-package.md) | `@cherrystudio/universal` scope, admission criteria, and aliasing |
 | [Navigation And Insets](./references/navigation-and-insets.md) | Router structure, native gestures, sheets, safe areas, and edge-to-edge layout |
 | [Interaction And Gesture Arbitration](./references/interaction-and-gesture-arbitration.md) | Target contract for tap, long press, scroll, app-defined pan, and native text selection (`Status: design`) |
-| [Splash Screen And Startup Animation](./references/splash-screen-and-startup-animation.md) | Native launch constraints, animated handoff, and onboarding boundaries |
+| [Splash Screen And Startup Animation](./references/splash-screen-and-startup-animation.md) | Native launch surface, readiness gate, and onboarding boundaries |
 | [UI Components](./references/ui-components.md) | Interaction component ownership and platform enhancement rules |
 | [Expo UI Bottom Sheet Navigation](./references/expo-ui-bottom-sheet-navigation.md) | Sheet page transitions, physical stacking, and platform constraints |
 | [Design Spec](../DESIGN.md) | Visual and motion decisions: token sourcing, contrast, type scale, hierarchy, interaction motion, and literal-colour exemptions |

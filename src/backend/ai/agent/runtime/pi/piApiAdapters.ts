@@ -1,15 +1,33 @@
 import { formatApiHost, withoutTrailingApiVersion } from '@cherrystudio/ai-runtime/provider';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import type { CacheRetention, FetchFunction, ProviderHeaders } from '@earendil-works/pi-ai';
+import type {
+  AssistantMessageEvent,
+  CacheRetention,
+  FetchFunction,
+  ProviderHeaders,
+} from '@earendil-works/pi-ai';
+import { lazyStream } from '@earendil-works/pi-ai/api/lazy';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
+
+import type { TraceSpan } from '@/backend/utils/diagnosticTrace';
+import {
+  diagnosticGatewayRequestId,
+  readGatewayRequestId,
+} from '@/shared/utils/providerDiagnostics';
 
 import { piModelPayloadAttributes } from './piModelDiagnostics';
 import type { PiStreamFn } from './piModelTypes';
+import {
+  assertPiNonStreamingSupported,
+  createPiNonStreamingFetch,
+  PiNonStreamingUnsupportedError,
+} from './piNonStreamingFetch';
 import {
   applyPiRequestCompatibility,
   applyPiRequestParameters,
   type PiRequestParameters,
 } from './piRequestParameters';
+import { providerErrorEvent } from './piStreamEvents';
 import type { VertexAnthropicOptions } from './piVertexAnthropic';
 
 export type SupportedPiApi =
@@ -133,6 +151,8 @@ export function resolvePiApiAdapter(
 }
 
 type PiStreamBinding = {
+  shouldStream: boolean;
+  isCloudGateway?: boolean;
   accessToken?: string;
   vertex?: VertexAnthropicOptions['vertex'];
   apiKey?: string;
@@ -163,6 +183,7 @@ function withTransportCode(error: unknown, init: RequestInit | undefined, code: 
 function withRetryableBodyFailure(
   fetch: FetchFunction,
   reportFetchFailure: ((error: unknown) => void) | undefined,
+  gatewayTrace?: TraceSpan,
 ): FetchFunction {
   return async (input, init) => {
     reportFetchFailure?.(undefined);
@@ -170,9 +191,19 @@ function withRetryableBodyFailure(
     try {
       response = await fetch(input, init);
     } catch (error) {
+      gatewayTrace?.setAttributes({
+        'cherry.gateway.request_id': diagnosticGatewayRequestId(
+          error instanceof Error && 'gatewayRequestId' in error
+            ? error.gatewayRequestId
+            : undefined,
+        ),
+      });
       reportFetchFailure?.(error);
       throw withTransportCode(error, init, 'no_response');
     }
+    gatewayTrace?.setAttributes({
+      'cherry.gateway.request_id': readGatewayRequestId(response.headers),
+    });
     const source = response.ok ? response.body : null;
     if (!source) return response;
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
@@ -201,17 +232,59 @@ function withRetryableBodyFailure(
   };
 }
 
+async function* classifyFiniteRejections(
+  source: AsyncIterable<AssistantMessageEvent>,
+  api: SupportedPiApi,
+) {
+  for await (const event of source) {
+    if (event.type === 'error' && event.reason === 'error') {
+      const failure = event.error.diagnostics?.findLast(
+        (entry) => entry.type === 'provider_response_failure',
+      );
+      const status = failure?.details?.statusCode ?? failure?.details?.status;
+      const message = failure?.error?.message ?? '';
+      // Only explicit mode rejections qualify. Preserve normal API error handling otherwise.
+      if (
+        (status === 400 || status === 422) &&
+        (failure?.error?.code === 'streaming_required' ||
+          /\bdoes not support (?:non[- ]streaming\b|["']?stream\s*=\s*false\b)/i.test(message) ||
+          /\b(?:only supports streaming|(?<!non[- ])streaming is required|(?:model|endpoint|operation) requires streaming|stream["']? must be (?:set to )?true)(?=\s*(?:[.!?"']|$)|\s+for\b)/i.test(
+            message,
+          ))
+      ) {
+        const error = Object.assign(new PiNonStreamingUnsupportedError(api), {
+          status,
+          body: failure?.details?.body,
+        });
+        yield providerErrorEvent(event.error, error);
+        return;
+      }
+    }
+    yield event;
+  }
+}
+
 export async function bindPiStream(
   adapter: PiApiAdapter,
   binding: PiStreamBinding,
 ): Promise<PiStreamFn> {
+  if (!binding.shouldStream)
+    assertPiNonStreamingSupported(adapter.api, adapter.supportsCustomFetch);
   const streamSimple = await adapter.loadStreamSimple();
 
   return (model, context, options) => {
     const { reportFetchFailure, trace, ...providerOptions } = options ?? {};
-    const fetch = adapter.supportsCustomFetch
-      ? withRetryableBodyFailure(binding.fetch, reportFetchFailure)
+    const transportFetch = adapter.supportsCustomFetch
+      ? withRetryableBodyFailure(
+          binding.fetch,
+          reportFetchFailure,
+          binding.isCloudGateway ? trace : undefined,
+        )
       : undefined;
+    const fetch =
+      transportFetch && !binding.shouldStream
+        ? createPiNonStreamingFetch(adapter.api, transportFetch)
+        : transportFetch;
     const maxTokens = options?.maxTokens ?? binding.maxTokens;
     const temperature = options?.temperature ?? binding.temperature;
     const headers: ProviderHeaders = { ...options?.headers, ...binding.headers };
@@ -263,6 +336,8 @@ export async function bindPiStream(
       signal: options?.signal,
       temperature,
     } as Parameters<PiStreamFn>[2];
-    return streamSimple(model, normalizeContext(context), streamOptions);
+    const stream = streamSimple(model, normalizeContext(context), streamOptions);
+    if (binding.shouldStream) return stream;
+    return lazyStream(model, async () => classifyFiniteRejections(await stream, adapter.api));
   };
 }

@@ -1,0 +1,94 @@
+name: Branch Build
+run-name: ${{ inputs.target }} from ${{ inputs.branch }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Repository branch to build (e.g. feature/chat)
+        required: true
+        type: string
+      target:
+        description: Package to build
+        required: true
+        default: android-dev
+        type: choice
+        options:
+          - android-dev
+          - ios-dev
+          - android-production
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.repository == 'CherryHQ/cherry-studio-app' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: [self-hosted, macOS, ARM64, release]
+    timeout-minutes: 180
+    defaults:
+      run:
+        working-directory: branch-source
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v5
+        env:
+          # Dependency installs can leave local development hooks in a reused checkout.
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.hooksPath
+          GIT_CONFIG_VALUE_0: /dev/null
+        with:
+          ref: refs/heads/${{ inputs.branch }}
+          path: branch-source
+          persist-credentials: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build package
+        id: build
+        env:
+          BUILD_TARGET: ${{ inputs.target }}
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          SENTRY_DISABLE_AUTO_UPLOAD: 'true'
+          SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD: 'true'
+        run: |
+          case "$BUILD_TARGET" in
+            android-dev)
+              platform=android
+              profile=development
+              extension=apk
+              ;;
+            ios-dev)
+              platform=ios
+              profile=development
+              extension=ipa
+              ;;
+            android-production)
+              platform=android
+              profile=production
+              extension=apk
+              ;;
+            *)
+              echo '::error::Unknown package target.'
+              exit 1
+              ;;
+          esac
+
+          commit="$(git rev-parse --short HEAD)"
+          name="cherry-studio-$BUILD_TARGET-$commit"
+          if [[ "${GITHUB_RUN_ATTEMPT:-1}" != '1' ]]; then
+            name="$name-$GITHUB_RUN_ATTEMPT"
+          fi
+          output_dir="$(mktemp -d "$RUNNER_TEMP/branch-build.XXXXXX")"
+          output="$output_dir/$name.$extension"
+          pnpm build:local --platform "$platform" --profile "$profile" --non-interactive --output "$output"
+          printf 'path=%s\n' "$output" >> "$GITHUB_OUTPUT"
+
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ steps.build.outputs.path }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 7

@@ -79,14 +79,23 @@ class ChatComposer {
 
 /** Drop empty, unobserved buffers on navigation, including sends that settled off screen. */
 export class ChatComposers extends Map<string, ChatComposer> {
-  open(sessionId: string | undefined, seed: ComposerSeed) {
-    for (const [id, composer] of this) {
-      if (id !== sessionId && composer.canRelease) this.delete(id);
+  peek(sessionId: string | undefined): ChatComposer | undefined {
+    return sessionId ? this.get(sessionId) : undefined;
+  }
+
+  create(seed: ComposerSeed): ChatComposer {
+    return new ChatComposer(seed);
+  }
+
+  attach(sessionId: string | undefined, composer: ChatComposer): () => void {
+    if (sessionId && !this.has(sessionId)) this.set(sessionId, composer);
+    for (const [id, entry] of this) {
+      if (id !== sessionId && entry.canRelease) this.delete(id);
     }
-    const existing = sessionId ? this.get(sessionId) : undefined;
-    if (existing) return existing;
-    const composer = new ChatComposer(seed);
-    if (sessionId) this.set(sessionId, composer);
-    return composer;
+    return () => {
+      if (sessionId && this.get(sessionId) === composer && composer.canRelease) {
+        this.delete(sessionId);
+      }
+    };
   }
 }

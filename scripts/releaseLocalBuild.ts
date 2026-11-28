@@ -1,11 +1,10 @@
 import { spawn, type StdioOptions } from 'node:child_process';
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import {
   appendFileSync,
   chmodSync,
   copyFileSync,
   cpSync,
-  createReadStream,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -23,8 +22,27 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { parseArgs } from 'node:util';
 
-import { sanitizeDiagnostic } from './uploadIosSymbols';
+import { requireCliPath, requireSafeId, validateCliPath } from './cliInput';
+import {
+  SHA_RE,
+  TAG_RE,
+  assertNoSecretLeak,
+  fileEvidence,
+  parseReleaseTag,
+  redactSecretsInStream,
+  sanitizeDiagnostic,
+  sanitizeReleaseResult,
+  sanitizeSecrets,
+} from './release/shared';
 import { verifyIosSymbolPackage } from './verifyIosSymbolPackage';
+
+export {
+  assertNoSecretLeak,
+  fileEvidence,
+  parseReleaseTag,
+  redactSecretsInStream,
+  sanitizeSecrets,
+} from './release/shared';
 
 export type ReleaseTargetId =
   | 'android-public'
@@ -104,8 +122,6 @@ export const DEFAULT_ANDROID_GRADLE_OPTS =
 export const DEFAULT_PNPM_VIRTUAL_STORE_MAX_LENGTH = '40';
 
 const INSTALL_PERMISSION = 'android.permission.REQUEST_INSTALL_PACKAGES';
-const TAG_RE = /^v([0-9]+\.[0-9]+\.[0-9]+)(?:-([0-9A-Za-z.-]+))?$/;
-const SHA_RE = /^[a-f0-9]{40}$/i;
 
 export interface LocalCommandResult {
   stdout: string;
@@ -115,43 +131,6 @@ export interface LocalCommandResult {
 
 const MAX_CAPTURE_BYTES = 64 * 1024 * 1024;
 const MAX_STREAM_TAIL_CHARS = 256 * 1024;
-
-export function redactSecretsInStream(
-  text: string,
-  secrets: Iterable<string> = [],
-  env: NodeJS.ProcessEnv = process.env,
-): string {
-  const candidates = new Set<string>();
-  const addSecret = (value: string | undefined) => {
-    if (!value || value.length < 4) return;
-    candidates.add(value);
-    try {
-      const parsed = new URL(value);
-      for (const cred of [parsed.username, parsed.password]) {
-        for (const part of [cred, decodeURIComponent(cred)]) {
-          if (part && part.length >= 4) candidates.add(part);
-        }
-      }
-    } catch {
-      // Non-URL secret value.
-    }
-  };
-  for (const value of secrets) addSecret(value);
-  for (const [key, value] of Object.entries(env)) {
-    if (value && /token|secret|password|dsn/i.test(key)) {
-      addSecret(value);
-    }
-  }
-  let redacted = text;
-  // Mask longest values first so full URLs/DSNs redact before component secrets.
-  for (const value of [...candidates].sort((a, b) => b.length - a.length)) {
-    redacted = redacted.split(value).join('[redacted]');
-  }
-  return redacted
-    .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
-    .replace(/\b(key|token|sig|signature|X-Amz-[a-z0-9-]+)=([^\s&#"']*)/gi, '$1=[redacted]')
-    .replace(/(?:sntrys_|sntryu_)[a-zA-Z0-9_]+/g, '[redacted]');
-}
 
 export type RunLocalCommand = (
   command: string,
@@ -334,28 +313,6 @@ export function resolveRepoReleasesDir(
   return join(releaseRoot, repoNamespace);
 }
 
-export function assertNoSecretLeak(text: string, secrets: Iterable<string>) {
-  for (const secret of secrets) {
-    if (secret && secret.length >= 4 && text.includes(secret)) {
-      throw new Error('Refusing to persist manifest containing secret material.');
-    }
-  }
-}
-
-export function sanitizeSecrets(
-  text: string,
-  secrets: Iterable<string> = [],
-  env: NodeJS.ProcessEnv = process.env,
-): string {
-  let redacted = text;
-  for (const value of secrets) {
-    if (value && value.length >= 4) {
-      redacted = redacted.split(value).join('[redacted]');
-    }
-  }
-  return sanitizeDiagnostic(redacted, env);
-}
-
 /**
  * Validates that all required release secrets and build configuration variables are present
  * in the process environment without echoing secret values.
@@ -377,24 +334,6 @@ export function assertReleaseEnv(
     throw new Error(`Missing required release environment variables: ${missing.join(', ')}`);
   }
   return resolved;
-}
-
-export function parseReleaseTag(tag: string): {
-  tag: string;
-  releaseVersion: string;
-  baseVersion: string;
-  isPrerelease: boolean;
-} {
-  const match = TAG_RE.exec(tag);
-  if (!match) {
-    throw new Error(`Invalid release tag: ${tag}. Expected v<major>.<minor>.<patch>[-prerelease].`);
-  }
-  return {
-    tag,
-    releaseVersion: tag.slice(1),
-    baseVersion: match[1]!,
-    isPrerelease: Boolean(match[2]),
-  };
 }
 
 export function assertDiskSpace(
@@ -419,14 +358,6 @@ export function assertDiskSpace(
     );
   }
   return { availableBytes, requiredBytes };
-}
-
-export async function fileEvidence(filePath: string): Promise<{ size: number; sha256: string }> {
-  const hash = createHash('sha256');
-  for await (const chunk of createReadStream(filePath)) {
-    hash.update(chunk);
-  }
-  return { size: statSync(filePath).size, sha256: hash.digest('hex') };
 }
 
 function readAppIdentifiers(projectDir: string) {
@@ -1988,7 +1919,7 @@ function formatBatchSummary(
       '### Google Play AAB',
       '',
       `\`submit-google-play\` uploads the archived AAB to Google Play as a production draft. Signed AAB and \`SHA256SUMS\` remain archived at: \`${playOutcome.archiveDir}\``,
-      'Verify with `shasum -a 256 -c SHA256SUMS` if manually recovering or uploading `.aab` in Google Play Console.',
+      'On the maintainer workstation, use the matching version code in Play Console to complete the draft and send it for review.',
     );
   }
 
@@ -1997,6 +1928,10 @@ function formatBatchSummary(
   }
 
   return `${lines.join('\n')}\n`;
+}
+
+function optionalCliPath(value: string | undefined, label: string): string | undefined {
+  return value === undefined ? undefined : requireCliPath(value, label);
 }
 
 async function main() {
@@ -2016,6 +1951,12 @@ async function main() {
       },
       strict: true,
     });
+    const outputPath =
+      values['github-output'] === undefined
+        ? undefined
+        : requireCliPath(values['github-output'], '--github-output');
+    const summaryPath =
+      values.summary === undefined ? undefined : requireCliPath(values.summary, '--summary');
     if (!values.target || !values.tag || !values.commit) {
       throw new Error('Missing required flags: --target, --tag, --commit.');
     }
@@ -2023,12 +1964,12 @@ async function main() {
       target: resolveTargetConfig(values.target).id,
       tag: values.tag,
       commitSha: values.commit,
-      runId: values['run-id'] ?? 'manual',
-      attempt: values.attempt ?? '1',
-      releaseRoot: values.root,
+      runId: requireSafeId(values['run-id'] ?? 'manual', '--run-id'),
+      attempt: requireSafeId(values.attempt ?? '1', '--attempt'),
+      releaseRoot: values.root === undefined ? undefined : validateCliPath(values.root, '--root'),
     });
-    if (values['github-output']) {
-      writeGitHubOutputs(values['github-output'], {
+    if (outputPath) {
+      writeGitHubOutputs(outputPath, {
         build_id: result.buildId,
         archive_dir: result.archiveDir,
         artifact_name: result.artifactName,
@@ -2037,9 +1978,9 @@ async function main() {
         native_build_version: result.nativeBuildVersion,
       });
     }
-    if (values.summary) {
+    if (summaryPath) {
       appendFileSync(
-        values.summary,
+        summaryPath,
         `- \`${result.target}\` build \`${result.buildId}\` (native \`${result.nativeBuildVersion}\`) archived to \`${result.archiveDir}\`\n`,
       );
     }
@@ -2064,6 +2005,12 @@ async function main() {
       },
       strict: true,
     });
+    const outputPath =
+      values['github-output'] === undefined
+        ? undefined
+        : requireCliPath(values['github-output'], '--github-output');
+    const summaryPath =
+      values.summary === undefined ? undefined : requireCliPath(values.summary, '--summary');
     if (!values.tag || !values.commit) {
       throw new Error('Missing required flags: --tag, --commit.');
     }
@@ -2074,20 +2021,17 @@ async function main() {
     const result = await runLocalReleaseBatch({
       tag: values.tag,
       commitSha: values.commit,
-      runId: values['run-id'] ?? 'manual',
-      attempt: values.attempt ?? '1',
-      releaseRoot: values.root,
+      runId: requireSafeId(values['run-id'] ?? 'manual', '--run-id'),
+      attempt: requireSafeId(values.attempt ?? '1', '--attempt'),
+      releaseRoot: values.root === undefined ? undefined : validateCliPath(values.root, '--root'),
       includeGooglePlay: googlePlayMode === 'auto' ? undefined : googlePlayMode === 'true',
       reuseExisting: !values['no-reuse'],
     });
-    if (values['github-output']) {
-      writeGitHubOutputs(
-        values['github-output'],
-        formatBatchOutputs(result.overallOk, result.targets),
-      );
+    if (outputPath) {
+      writeGitHubOutputs(outputPath, formatBatchOutputs(result.overallOk, result.targets));
     }
-    if (values.summary) {
-      appendFileSync(values.summary, formatBatchSummary(result.tag, result.targets));
+    if (summaryPath) {
+      appendFileSync(summaryPath, formatBatchSummary(result.tag, result.targets));
     }
     console.log(JSON.stringify(result, null, 2));
     if (!result.overallOk && !values['allow-partial-failure']) {
@@ -2108,19 +2052,26 @@ async function main() {
       },
       strict: true,
     });
+    const outputPath =
+      values['github-output'] === undefined
+        ? undefined
+        : requireCliPath(values['github-output'], '--github-output');
     if (!values.target || !values.tag || !values.commit) {
       throw new Error('Missing required flags: --target, --tag, --commit.');
     }
-    const releaseRoot = resolveReleaseRoot(process.env, values.root);
+    const releaseRoot = resolveReleaseRoot(
+      process.env,
+      values.root === undefined ? undefined : validateCliPath(values.root, '--root'),
+    );
     const result = await findCompleteBuild({
       target: resolveTargetConfig(values.target).id,
       tag: values.tag,
       commitSha: values.commit,
       releaseRoot,
     });
-    if (values['github-output']) {
+    if (outputPath) {
       writeGitHubOutputs(
-        values['github-output'],
+        outputPath,
         result.found
           ? {
               found: 'true',
@@ -2149,19 +2100,23 @@ async function main() {
       },
       strict: true,
     });
+    const outputPath =
+      values['github-output'] === undefined
+        ? undefined
+        : requireCliPath(values['github-output'], '--github-output');
     if (!values['build-dir']) {
       throw new Error('Usage: check-submit --build-dir <dir> [--build-id <id>]');
     }
-    const receipt = readSubmitReceipt(resolve(values['build-dir']));
+    const receipt = readSubmitReceipt(requireCliPath(values['build-dir'], '--build-dir'));
     const alreadySubmitted =
       receipt?.status === 'succeeded' &&
       (!values['build-id'] || receipt.buildId === values['build-id']);
-    if (values['github-output']) {
-      writeGitHubOutputs(values['github-output'], {
+    if (outputPath) {
+      writeGitHubOutputs(outputPath, {
         already_submitted: alreadySubmitted ? 'true' : 'false',
       });
     }
-    console.log(JSON.stringify({ alreadySubmitted, receipt }, null, 2));
+    console.log(JSON.stringify(sanitizeReleaseResult({ alreadySubmitted, receipt }), null, 2));
     return;
   }
 
@@ -2180,8 +2135,11 @@ async function main() {
       throw new Error('Usage: record-submit --build-dir <dir> --status <succeeded|failed>');
     }
     const receipt = recordSubmitReceipt({
-      buildDir: resolve(values['build-dir']),
-      buildId: values['build-id'],
+      buildDir: requireCliPath(values['build-dir'], '--build-dir'),
+      buildId:
+        values['build-id'] === undefined
+          ? undefined
+          : requireSafeId(values['build-id'], '--build-id'),
       status: values.status,
       message: values.message,
     });
@@ -2205,9 +2163,9 @@ async function main() {
       );
     }
     const verified = await verifyArchivedIpa({
-      ipaPath: values['ipa-path'],
+      ipaPath: requireCliPath(values['ipa-path'], '--ipa-path'),
       expectedSha256: values['expected-sha256'],
-      symbolsDir: values['symbols-dir'],
+      symbolsDir: optionalCliPath(values['symbols-dir'], '--symbols-dir'),
     });
     console.log(JSON.stringify(verified, null, 2));
     return;
@@ -2225,9 +2183,9 @@ async function main() {
       throw new Error('Usage: recover-ios --pending-dir <dir>');
     }
     const recovered = await recoverPendingIosBuild({
-      pendingDir: values['pending-dir'],
+      pendingDir: requireCliPath(values['pending-dir'], '--pending-dir'),
     });
-    console.log(JSON.stringify(recovered, null, 2));
+    console.log(JSON.stringify(sanitizeReleaseResult(recovered), null, 2));
     return;
   }
 
@@ -2253,7 +2211,10 @@ async function main() {
       throw new Error('--keep-prerelease must be a non-negative integer.');
     }
     const result = pruneReleases({
-      releaseRoot: resolveReleaseRoot(process.env, values.root),
+      releaseRoot: resolveReleaseRoot(
+        process.env,
+        values.root === undefined ? undefined : validateCliPath(values.root, '--root'),
+      ),
       keepStable,
       keepPrerelease,
       dryRun: values['dry-run'],

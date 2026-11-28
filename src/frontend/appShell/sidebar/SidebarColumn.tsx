@@ -1,3 +1,4 @@
+import { usePathname } from 'expo-router';
 import { createContext, type PropsWithChildren, use, useCallback, useMemo, useState } from 'react';
 import { useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -63,11 +64,13 @@ export function useSidebarColumn() {
   if (!state) throw new Error('useSidebarColumn requires SidebarColumnProvider');
   const canDock = useCanDockSidebar();
   const { isChatFocused } = useChatSource();
+  const pathname = usePathname();
   const shell = useOptionalNavigationShell();
   const fold = useWindowFoldRegion();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const railOffset = shell?.shellMode === 'wide-rail' ? WIDE_RAIL_WIDTH : 0;
+  const isOnSettings = pathname === '/settings' || pathname.startsWith('/settings/');
   const canOpenCompactDrawer = shell
     ? (shell.activeDestination === 'chat' && shell.isAtRoot) ||
       (shell.isAtRoot &&
@@ -79,12 +82,12 @@ export function useSidebarColumn() {
   const adjustedFold =
     fold && railOffset > 0 ? { ...fold, x: Math.max(0, fold.x - railOffset) } : fold;
   const column = resolveSidebarColumn({
-    canOpenCompactDrawer,
+    canOpenCompactDrawer: canOpenCompactDrawer || isOnSettings || pathname === '/search',
     content: state.content,
     fold: adjustedFold,
     insetLeft: insets.left,
     insetRight: insets.right,
-    isChatFocused,
+    isChatFocused: isChatFocused || isOnSettings,
     isCollapsed: state.isCollapsed,
     isPaneInColumn: false,
     isWide: canDock,

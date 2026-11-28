@@ -14,10 +14,11 @@ import { useNavigationShell } from './state';
 export function WideNavRail() {
   const { t } = useTranslation();
   const outerInsets = useSafeAreaInsets();
-  const { activeDestination, navigateToDestination, shellMode } = useNavigationShell();
+  const { activeDestination, isOnboardingBlocking, navigateToDestination, shellMode } =
+    useNavigationShell();
   const [foregroundColor, mutedForegroundColor] = useThemeColor(['foreground', 'muted-foreground']);
 
-  if (shellMode !== 'wide-rail') {
+  if (isOnboardingBlocking || shellMode !== 'wide-rail') {
     return null;
   }
 

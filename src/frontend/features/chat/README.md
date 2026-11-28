@@ -11,8 +11,8 @@ message list keeps its geometry and selection does not subscribe into the chat r
 ## Public Interface
 
 - `ChatScreen` is exported from `index.ts`.
-- `RemoteChatScreen` and `ReadOnlyTaskSessionScreen` are the desktop chat and scheduled-result
-  transcript route entries.
+- `RemoteChatScreen` and `RemoteTaskSessionScreen` are the desktop chat and scheduled-task
+  conversation route entries.
 
 ## Organization
 
@@ -102,10 +102,9 @@ are submitted as file parts and stay separate from the text draft; text controls
 
 ## Local and remote presentation
 
-`remote/ReadOnlyTaskSessionScreen` verifies membership in the selected scheduled task before
-opening the transcript. `ReadOnlyRemoteChat` shares message/history rendering and read actions,
-but has no composer, Agent picker or conversation-creation action. Its Session exposes no send,
-cancel, approval, upload or undelivered-message capability. The task list belongs to `remoteTask/`.
+`remote/RemoteTaskSessionScreen` verifies membership in the selected scheduled task before
+mounting the shared remote chat with its existing Session. Its composer sends follow-ups to that
+Session and its header keeps the Agent fixed. The task list belongs to `remoteTask/`.
 
 `remote/RemoteChatScreen` keeps the `/remote` route, page frame, header and composer layout. It
 retains a desktop ConversationSource, opens a route Session through the remote-only hooks in
@@ -114,7 +113,11 @@ in `remote/ConversationPresenter`, and feeds the shared snapshot and rows into C
 sidebar uses the same catalog boundary. Runtime wire state and command recovery stay behind
 Backend.remoteAgent; no Controller provider or Controller query keys remain.
 
-`RemoteComposer` owns text editing and registered/system workspace selection. New conversations call the
+`RemoteComposer` owns text editing, attachment staging, and registered/system workspace selection
+through `RemoteComposerMenu` (reusing the shared `ChatToolsMenu` shell, `FilePickerBottomSheet`
+without folder creation and capped at 8 attachments, and an overlay PC workspace picker; the
+secondary toolbar shows a guidance pill only when a draft requires choosing a workspace). New
+conversations call the
 bound Draft start action, existing conversations call Session send, and stop targets a selected
 execution. Backend journals own create/send IDs and recover pending commands silently; navigation
 does not resend them. A Session or Draft holds at most one undelivered message, the latest input
@@ -140,11 +143,11 @@ or refreshing source leaves recovery controls reachable. Known local tools use t
 Skill creation and installation show readable operation-specific content, with raw arguments behind
 an explicit details action.
 
-The matching desktop protocol supports question answers and system-workspace creation. Question
-forms consume a bound resource; responses carry complete answers rather than a boolean approval.
-The default workspace is offered only when advertised; older desktops still require a registered
-workspace. Denial reasons are supported by the protocol but have no editor in the current sheet.
-The plus-menu remains disabled and local model/attachment controls remain local.
+The matching desktop protocol supports question answers, attachments, and system-workspace creation.
+Question forms consume a bound resource; responses carry complete answers rather than a boolean
+approval. The default workspace is offered only when advertised; older desktops still require a
+registered workspace. Denial reasons are supported by the protocol but have no editor in the current
+sheet. Local model, plugin, skill, and SSH controls remain local.
 
 Both sources share selection preparation and export UI through a small share target (address plus
 selection read). See [Service Dependencies And Ownership](../../../../docs/references/remote-access/service-ownership.md)

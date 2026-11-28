@@ -1593,3 +1593,22 @@ if [[ "$SCENARIO" == submit-failed ]]; then exit 1; fi
     },
   );
 });
+
+it('rejects malformed output paths before build or archive work starts', () => {
+  for (const command of ['build', 'build-all']) {
+    for (const flag of ['--github-output', '--summary']) {
+      const result = spawnSync(
+        process.execPath,
+        ['--import', 'tsx', 'scripts/releaseLocalBuild.ts', command, flag, 'bad\npath'],
+        { cwd: process.cwd(), encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '' } },
+      );
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain('Invalid ' + flag);
+      expect(result.stderr).not.toContain('Missing required');
+    }
+  }
+});
+
+it('validates raw roots while preserving historical root trimming', () => {
+  expect(resolveReleaseRoot({}, ' /srv/releases ')).toBe('/srv/releases');
+});

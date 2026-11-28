@@ -760,17 +760,15 @@ function AgentEditForm({
           </View>
         ) : null}
       </KeyboardAvoidingView>
-      {isModelPickerOpen ? (
-        <ModelPickerDrawer
-          modelType={form.mode === 'minimal' ? 'text' : 'all'}
-          open
-          onAddProvider={handleAddProvider}
-          onClose={closeModelPicker}
-          onSelect={handleModelSelect}
-          selectedModelId={form.model}
-          title={t('agent.form.modelSelect')}
-        />
-      ) : null}
+      <ModelPickerDrawer
+        modelType={form.mode === 'minimal' ? 'text' : 'all'}
+        open={isModelPickerOpen}
+        onAddProvider={handleAddProvider}
+        onClose={closeModelPicker}
+        onSelect={handleModelSelect}
+        selectedModelId={form.model}
+        title={t('agent.form.modelSelect')}
+      />
       <OptionPickerBottomSheet
         onClose={closeModePicker}
         onValueChange={handleModeSelect}

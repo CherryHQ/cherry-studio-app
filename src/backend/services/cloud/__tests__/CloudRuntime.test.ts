@@ -1115,6 +1115,49 @@ test('surfaces the server quota refusal even when the local snapshot already sho
   await runtime._doStop();
 });
 
+test('retains allowlisted upstream details on 429 while honoring cooldown and omitting private text', async () => {
+  jest.setSystemTime(Date.parse('2026-01-01T00:00:00Z'));
+  mockInference
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 'insufficient_quota',
+            type: 'rate_limit_error',
+            message: 'private customer quota text',
+          },
+        }),
+        { status: 429, headers: { 'retry-after': '60' } },
+      ),
+    )
+    .mockResolvedValue(new Response(null, { status: 200 }));
+  const { runtime } = await setup();
+  try {
+    await runtime.refresh();
+    const send = () =>
+      runtime.createModelFetch('cloud-model', 'agent')('https://cloud.example/v1/messages', {
+        method: 'POST',
+        body: JSON.stringify({ model: 'cloud-model' }),
+      });
+    const rejected = await send().catch((error: unknown) => error);
+    expect(rejected).toMatchObject({
+      statusCode: 429,
+      code: 'RATE_LIMITED',
+      retryable: false,
+      body: JSON.stringify({ error: { code: 'insufficient_quota', type: 'rate_limit_error' } }),
+    });
+    expect(JSON.stringify(rejected)).not.toContain('private');
+    await jest.advanceTimersByTimeAsync(59_999);
+    await expect(send()).rejects.toMatchObject({ statusCode: 429, retryable: false });
+    expect(mockInference).toHaveBeenCalledTimes(1);
+    await jest.advanceTimersByTimeAsync(1);
+    await expect(send()).resolves.toMatchObject({ status: 200 });
+    expect(mockInference).toHaveBeenCalledTimes(2);
+  } finally {
+    await runtime._doStop();
+  }
+});
+
 test('uses the AMD catalog activation flag instead of a paid entitlement and preserves the key on replay', async () => {
   const model: CloudModel = {
     ...cloudSnapshot().models[0],

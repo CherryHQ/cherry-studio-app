@@ -29,7 +29,7 @@ export function CloudProviderDetail() {
     press,
     refresh,
     signInAgain,
-  } = useCloudModelBrowser(!isEnterpriseProfile());
+  } = useCloudModelBrowser(!isEnterpriseProfile(), undefined, { autoRefresh: false });
   useFocusEffect(
     useCallback(() => {
       refresh();

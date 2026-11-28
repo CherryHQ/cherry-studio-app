@@ -908,8 +908,8 @@ who contributed a button to it.
 keyboard shows Send and a native submit event supplies the current Markdown without inserting a
 newline or blurring the field. The caller connects that snapshot to its normal guarded submission
 path. IME composition, paste and `inputRef.current.insertText('\n')` stay on the native editing
-path; they never infer submission from text changes. With the preference off, Return keeps its
-ordinary newline and list-editing behavior. Hardware keyboard Return remains an editing action.
+path. On iOS and iPadOS, hardware Return follows the same preference, and Shift+Return inserts
+a newline. With the preference off, Return keeps its ordinary newline and list-editing behavior.
 While Return submits, the native text menu offers an action labelled by `insertNewlineLabel`.
 It inserts at the caret or after selected text without replacing that text or submitting.
 The native menu retains the system editing actions and works without a nonempty selection.
@@ -939,8 +939,9 @@ Chat uses `layoutMode="expandable-overlay"` instead: there is no flow placeholde
 list's `contentInsetEndAdjustment`. Keyboard motion and editor growth then share one inset owner
 without resizing the list viewport or rerendering the screen for every height sample. The inset
 stays fixed through manual expansion and clears when the dock unmounts. Pass the page color as
-`backgroundClassName` so the compact dock, including its gutters and bottom padding, hides the
-transcript beneath it; it fades out as manual expansion presents.
+`backgroundClassName` so the compact dock paints a solid floor below the composer with a short soft
+fade into its bottom edge (keeping the composer's sides and glass body translucent over the
+transcript while hiding messages beneath the dock); it fades out as manual expansion presents.
 `useComposerExpansion()` exposes separate state/actions/meta for the header and feature controls,
 returning `null` outside that screen-local boundary. The dock follows live keyboard geometry,
 or only while an optional `keyboardTracking` shared value is true. The dock reads it on the UI

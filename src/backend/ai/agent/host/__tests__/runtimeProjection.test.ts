@@ -159,7 +159,18 @@ describe('Runtime output projection', () => {
       toolRef: { source: 'builtin', capabilityId: 'web_fetch' },
       type: 'tool',
       error,
-      output: { value: details, artifacts: [], failure: { scope: 'tool', error } },
+      output: {
+        value: details,
+        artifacts: [
+          {
+            ref: { kind: 'managed-file', fileEntryId: 'partial-file' },
+            mediaType: 'text/plain',
+            name: 'partial.txt',
+            kind: 'created',
+          },
+        ],
+        failure: { scope: 'tool', error },
+      },
     });
     const output = { value: { status: 'error', error, details }, artifacts: [] };
     expect(part).toMatchObject({ state: 'error', output });

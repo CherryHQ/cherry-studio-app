@@ -1,6 +1,6 @@
 import { Composer, type ComposerInputProps } from '@cherrystudio/ui/components';
 import type { PasteEventPayload } from 'expo-paste-input';
-import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
+import { use, useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { findNodeHandle } from 'react-native';
 import { useUniwind } from 'uniwind';
@@ -15,6 +15,7 @@ import {
   useComposerMeta,
   useComposerPresentationActions,
 } from '../context/ComposerProvider';
+import { ComposerFieldReadyContext } from '../fieldReadiness';
 import { createPastedImageAttachmentDraft } from '../utils/composerAttachments';
 
 /**
@@ -53,6 +54,7 @@ export function ComposerField({
   const { addAttachments } = useComposerActions();
   const { inputRef } = useComposerMeta();
   const nativeTag = useRef<number | null>(null);
+  const reportFieldReady = use(ComposerFieldReadyContext);
   const { registerInputTag, setFocusedInput } = useComposerPresentationActions();
   const linkColor = useThemeColor('link');
   const { theme } = useUniwind();
@@ -104,6 +106,8 @@ export function ComposerField({
     [registerInputTag, setFocusedInput],
   );
 
+  useLayoutEffect(() => () => reportFieldReady?.(false), [reportFieldReady]);
+
   const handleLayout = useCallback<NonNullable<ComposerInputProps['onLayout']>>(
     (event) => {
       // The keyboard reports its focused field by native tag; this is the field's.
@@ -113,8 +117,9 @@ export function ComposerField({
         registerInputTag(tag);
       }
       onLayout?.(event);
+      reportFieldReady?.(event.nativeEvent.layout.width > 0 && event.nativeEvent.layout.height > 0);
     },
-    [onLayout, registerInputTag],
+    [onLayout, registerInputTag, reportFieldReady],
   );
 
   return (

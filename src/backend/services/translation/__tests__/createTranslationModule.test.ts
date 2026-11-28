@@ -230,6 +230,20 @@ test('rejects empty and failed generations with a localized error code', async (
   await expect(translator.translate(input)).rejects.toMatchObject({ code: 'failed' });
 });
 
+test.each([
+  ['non_streaming_mode_unsupported', 'non_streaming_mode_unsupported'],
+  ['non_streaming_response_invalid', 'failed'],
+])('projects translation generation failure %s as %s', async (code, expected) => {
+  const { ai, translator } = setup();
+  ai.generateText.mockRejectedValue(
+    new Error('Provider diagnostic', { cause: { code, retryable: false } }),
+  );
+  await expect(translator.translate(input)).rejects.toMatchObject({
+    name: 'TranslationError',
+    code: expected,
+  });
+});
+
 test.each(['length', 'content-filter', 'error', 'toolUse', 'deferred', 'unknown'])(
   'rejects nonempty %s output, including after streamed text was published',
   async (finishReason) => {

@@ -1,19 +1,43 @@
 import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
 import {
+  isSameSpeechSource,
   VOICE_ENGINE_PREFERENCE,
   VOICE_ENGINES,
   VoiceError,
+  type SpeakSystemLabels,
+  type SpeechPhase,
+  type SpeechProgress,
   type VoiceActivity,
   type VoiceCapability,
   type VoiceEngineId,
   type VoiceModule,
-  type SpeakOptions,
   type VoiceRequestOptions,
 } from '@/shared/contracts/voice';
 import type { AppLanguage } from '@/shared/utils/languages';
+import { speakableText } from '@/shared/utils/speechText';
 
-import type { DictationEngine, SpeechEngine, TranscriptionEngine, VoiceEngines } from './engines';
-import { speakableText } from './speechText';
+import type {
+  DictationEngine,
+  SpeechEngine,
+  SpeechPlaybackControls,
+  TranscriptionEngine,
+  VoiceEngines,
+} from './engines';
+
+export type BackgroundPlaybackHandlers = {
+  onPause(): void;
+  onResume(): void;
+  onInterrupt(): void;
+  onInterruptionEnded(): void;
+  onStop(): void;
+};
+
+export type BackgroundPlaybackSession = {
+  readonly admitted: Promise<boolean>;
+  requestResume?(): Promise<boolean>;
+  updateState(phase: SpeechPhase): Promise<void>;
+  end(): Promise<void>;
+};
 
 export type VoiceRuntimeDependencies = {
   engines: VoiceEngines;
@@ -25,17 +49,30 @@ export type VoiceRuntimeDependencies = {
   dictationLanguage(): AppLanguage;
   /** Subscribes to the app entering the background. */
   onBackground(listener: () => void): () => void;
+  isBackgrounded?(): boolean;
   canSpeakInBackground?(): boolean;
   beginBackgroundPlayback?(
-    labels: NonNullable<SpeakOptions['playbackLabels']>,
-    stop: () => void,
-  ): Promise<() => Promise<void>> | undefined;
+    labels: SpeakSystemLabels,
+    handlers: BackgroundPlaybackHandlers,
+  ): BackgroundPlaybackSession | undefined;
 };
+
+type SpeakingActivity = Extract<VoiceActivity, { kind: 'speaking' }>;
+type PauseReason = 'none' | 'user' | 'interruption';
 
 type Activity = {
   activity: VoiceActivity;
   controller: AbortController;
   backgroundPlayback?: boolean;
+  admissionSettled?: boolean;
+  backgroundedDuringAdmission?: boolean;
+  backgroundRevoked?: boolean;
+  controls?: SpeechPlaybackControls | null;
+  pauseReason?: PauseReason;
+  resumeToken?: number;
+  playbackSession?: BackgroundPlaybackSession;
+  playbackSessionEnd?: Promise<void>;
+  isAborted?: () => boolean;
   settled: Promise<void>;
 };
 
@@ -51,10 +88,12 @@ export function createVoiceRuntime({
   language,
   dictationLanguage,
   onBackground,
+  isBackgrounded = () => false,
   canSpeakInBackground = () => false,
   beginBackgroundPlayback,
 }: VoiceRuntimeDependencies): {
   module: Omit<VoiceModule, 'localModel'>;
+  revokeBackgroundPlayback(): void;
   dispose(): Promise<void>;
 } {
   const lifetime = new AbortController();
@@ -84,7 +123,12 @@ export function createVoiceRuntime({
     const settled = new Promise<void>((resolve) => {
       finish = resolve;
     });
-    const owner: Activity = { activity, controller, settled };
+    const owner: Activity = {
+      activity,
+      controller,
+      isAborted: () => linked.signal.aborted,
+      settled,
+    };
     current = owner;
     listeners.forEach((listener) => listener());
     return {
@@ -105,6 +149,87 @@ export function createVoiceRuntime({
         listeners.forEach((listener) => listener());
       },
     };
+  }
+
+  function endPlaybackSession(owner: Activity) {
+    if (!owner.playbackSession) return Promise.resolve();
+    owner.playbackSessionEnd ??= owner.playbackSession.end().catch(() => {});
+    return owner.playbackSessionEnd;
+  }
+
+  function syncSpeakingState(
+    owner: Activity,
+    patch: Partial<Pick<SpeakingActivity, 'phase' | 'progress'>>,
+  ) {
+    if (current !== owner || owner.isAborted?.() || owner.activity.kind !== 'speaking') return;
+    const previousPhase = owner.activity.phase;
+    const phaseChanged = patch.phase !== undefined && patch.phase !== previousPhase;
+    const progressChanged =
+      patch.progress !== undefined &&
+      (patch.progress.completedChunks !== owner.activity.progress?.completedChunks ||
+        patch.progress.totalChunks !== owner.activity.progress?.totalChunks);
+    if (!phaseChanged && !progressChanged) return;
+    owner.activity = {
+      ...owner.activity,
+      ...patch,
+    };
+    listeners.forEach((listener) => listener());
+    if (phaseChanged && patch.phase && owner.playbackSession && !owner.backgroundRevoked) {
+      void owner.playbackSession.updateState(patch.phase).catch(() => {});
+    }
+  }
+
+  function pauseOwner(owner: Activity | null, reason: Exclude<PauseReason, 'none'>) {
+    if (!owner || current !== owner || owner.isAborted?.() || owner.activity.kind !== 'speaking') {
+      return;
+    }
+    owner.resumeToken = (owner.resumeToken ?? 0) + 1;
+    if (owner.activity.phase === 'paused') {
+      if (reason === 'user') owner.pauseReason = 'user';
+      return;
+    }
+    owner.pauseReason = reason;
+    syncSpeakingState(owner, { phase: 'paused' });
+    owner.controls?.pause();
+  }
+
+  function applyResume(owner: Activity) {
+    if (!owner || current !== owner || owner.isAborted?.() || owner.activity.kind !== 'speaking') {
+      return;
+    }
+    if (owner.activity.phase !== 'paused') return;
+    owner.pauseReason = 'none';
+    if (owner.controls) {
+      const nextPhase = owner.controls.resume() ?? 'playing';
+      syncSpeakingState(owner, { phase: nextPhase });
+    } else {
+      syncSpeakingState(owner, { phase: 'preparing' });
+    }
+  }
+
+  function resumeOwner(owner: Activity | null, trigger: Exclude<PauseReason, 'none'>) {
+    if (!owner || current !== owner || owner.isAborted?.() || owner.activity.kind !== 'speaking') {
+      return;
+    }
+    if (owner.activity.phase !== 'paused') return;
+    if (trigger === 'interruption' && owner.pauseReason !== 'interruption') return;
+
+    const session = owner.backgroundPlayback ? owner.playbackSession : undefined;
+    if (session?.requestResume) {
+      const token = (owner.resumeToken = (owner.resumeToken ?? 0) + 1);
+      void track(
+        session
+          .requestResume()
+          .catch(() => false)
+          .then((granted) => {
+            if (!granted || owner.resumeToken !== token) return;
+            if (trigger === 'interruption' && owner.pauseReason !== 'interruption') return;
+            applyResume(owner);
+          }),
+      );
+      return;
+    }
+    applyResume(owner);
   }
 
   function registry(capability: VoiceCapability) {
@@ -179,11 +304,14 @@ export function createVoiceRuntime({
   }
 
   const unsubscribeBackground = onBackground(() => {
-    if (
-      current?.activity.kind === 'speaking' &&
-      (current.backgroundPlayback || canSpeakInBackground())
-    )
-      return;
+    if (current?.activity.kind === 'speaking') {
+      if (current.backgroundPlayback) return;
+      if (current.playbackSession && !current.admissionSettled && !current.backgroundRevoked) {
+        current.backgroundedDuringAdmission = true;
+        return;
+      }
+      if (!current.playbackSession && canSpeakInBackground()) return;
+    }
     // File work has no capture/playback session. Its caller owns cancellation; an Agent turn
     // can keep working under the Host's existing background execution lease.
     if (current?.activity.kind !== 'transcribing') current?.controller.abort();
@@ -271,26 +399,60 @@ export function createVoiceRuntime({
     },
 
     async speak(text, options) {
+      const prose = options?.inputFormat === 'plainText' ? text.trim() : speakableText(text);
+      if (!prose) return;
       if (current && current.activity.kind !== 'speaking')
         throw new VoiceError('busy', 'Reading aloud cannot start during recognition.');
-      const prose = speakableText(text);
-      if (!prose) return;
-      const activity = claim({ kind: 'speaking', key: options?.key ?? null }, options?.signal);
-      let endPlayback: (() => Promise<void>) | undefined;
+      const activity = claim(
+        {
+          kind: 'speaking',
+          key: options?.key ?? null,
+          phase: 'preparing',
+          ...(options?.metadata ? { metadata: options.metadata } : {}),
+        },
+        options?.signal,
+      );
       try {
         await activity.ready;
         activity.signal.throwIfAborted();
-        if (beginBackgroundPlayback && options?.playbackLabels) {
-          const admission = beginBackgroundPlayback(options.playbackLabels, () =>
-            activity.owner.controller.abort(),
-          );
-          if (admission) {
-            // A foreground request may be admitted as the user locks the screen.
-            // Audio starts only after the native service acknowledges promotion.
-            activity.owner.backgroundPlayback = true;
-            endPlayback = await track(admission);
+        if (beginBackgroundPlayback && options?.systemLabels) {
+          const session = beginBackgroundPlayback(options.systemLabels, {
+            onPause: () => pauseOwner(activity.owner, 'user'),
+            onResume: () => resumeOwner(activity.owner, 'user'),
+            onInterrupt: () => pauseOwner(activity.owner, 'interruption'),
+            onInterruptionEnded: () => resumeOwner(activity.owner, 'interruption'),
+            onStop: () => activity.owner.controller.abort(),
+          });
+          if (session) {
+            activity.owner.playbackSession = session;
+            const cancelPendingAdmission = () => {
+              void endPlaybackSession(activity.owner);
+            };
+            activity.signal.addEventListener('abort', cancelPendingAdmission, { once: true });
+            try {
+              const admitted = (await track(session.admitted)) && !activity.owner.backgroundRevoked;
+              activity.owner.admissionSettled = true;
+              activity.owner.backgroundPlayback = admitted;
+              if (
+                !admitted &&
+                activity.owner.backgroundedDuringAdmission &&
+                !canSpeakInBackground()
+              ) {
+                activity.owner.controller.abort();
+              }
+            } finally {
+              activity.signal.removeEventListener('abort', cancelPendingAdmission);
+            }
+            activity.signal.throwIfAborted();
+            if (
+              current === activity.owner &&
+              activity.owner.backgroundPlayback &&
+              activity.owner.activity.kind === 'speaking' &&
+              activity.owner.activity.phase !== 'preparing'
+            ) {
+              void session.updateState(activity.owner.activity.phase).catch(() => {});
+            }
           }
-          activity.signal.throwIfAborted();
         }
         const engine = await track(resolve<SpeechEngine>('speech', activity.signal));
         await track(
@@ -298,23 +460,74 @@ export function createVoiceRuntime({
             text: prose,
             language: language(),
             signal: activity.signal,
-            backgroundPlayback: Boolean(endPlayback),
+            backgroundPlayback: () =>
+              Boolean(activity.owner.backgroundPlayback && !activity.owner.backgroundRevoked),
+            playback: {
+              onPhase(phase) {
+                // Late native startup callbacks must not override an active user/interruption pause.
+                if (
+                  phase !== 'paused' &&
+                  activity.owner.pauseReason &&
+                  activity.owner.pauseReason !== 'none'
+                ) {
+                  return;
+                }
+                syncSpeakingState(activity.owner, { phase });
+              },
+              onProgress(progress: SpeechProgress) {
+                syncSpeakingState(activity.owner, { progress });
+              },
+              onControls(controls) {
+                if (current !== activity.owner || activity.signal.aborted) return;
+                activity.owner.controls = controls;
+                if (
+                  controls &&
+                  activity.owner.activity.kind === 'speaking' &&
+                  activity.owner.activity.phase === 'paused'
+                ) {
+                  controls.pause();
+                }
+              },
+              onInterrupted() {
+                pauseOwner(activity.owner, 'interruption');
+              },
+            },
           }),
         );
       } catch (error) {
         // Stopping, replacement and caller cancellation all end reading normally.
         if (!activity.signal.aborted) throw error;
       } finally {
+        activity.owner.controls = null;
         try {
-          await endPlayback?.();
+          await endPlaybackSession(activity.owner);
         } finally {
           activity.release();
         }
       }
     },
 
-    stopSpeaking() {
-      if (current?.activity.kind === 'speaking') current.controller.abort();
+    pauseSpeaking() {
+      pauseOwner(current, 'user');
+    },
+    resumeSpeaking() {
+      resumeOwner(current, 'user');
+    },
+    togglePauseSpeaking() {
+      if (current?.activity.kind !== 'speaking') return;
+      if (current.activity.phase === 'paused') resumeOwner(current, 'user');
+      else if (current.activity.phase === 'playing') pauseOwner(current, 'user');
+    },
+    stopSpeaking(match) {
+      if (current?.activity.kind !== 'speaking') return;
+      if (match?.key !== undefined && current.activity.key !== match.key) return;
+      if (
+        match?.source !== undefined &&
+        !isSameSpeechSource(current.activity.metadata?.source, match.source)
+      ) {
+        return;
+      }
+      current.controller.abort();
     },
     getActivity: () => current?.activity ?? IDLE,
     subscribeActivity(listener) {
@@ -323,8 +536,21 @@ export function createVoiceRuntime({
     },
   };
 
+  function revokeBackgroundPlayback() {
+    const owner = current;
+    if (!owner || owner.activity.kind !== 'speaking') return;
+    if (!owner.backgroundPlayback && !owner.playbackSession) return;
+    owner.backgroundRevoked = true;
+    owner.backgroundPlayback = false;
+    void endPlaybackSession(owner);
+    if (isBackgrounded()) {
+      owner.controller.abort();
+    }
+  }
+
   return {
     module,
+    revokeBackgroundPlayback,
     dispose() {
       disposal ??= (async () => {
         unsubscribeBackground();

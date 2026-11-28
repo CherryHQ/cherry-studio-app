@@ -410,7 +410,8 @@ type RuntimeMessage = {
 }
 
 type RuntimeMessagePart =
-  | { type: 'text' | 'reasoning'; text: string }
+  | { type: 'text'; text: string }
+  | { type: 'reasoning'; text: string; sourceModelId?: UniqueModelId }
   | {
       type: 'text-attachment'
       mediaType: string
@@ -443,10 +444,13 @@ type RuntimeContextCheckpoint = {
 ```
 
 The Host converts persisted Cherry messages into normalized history grouped by their durable Turn.
-Stored parts carry no provider signature, so the adapter omits historical `reasoning` parts instead
-of resending them as plain text; text, tool calls and tool results are paired as model messages.
-There is no stored model replay: the Pi working copy keeps signed content between launches, and
-normalized history is used only when that copy has to be rebuilt.
+Text, tool calls and tool results are paired as model messages. The Pi working copy keeps signed
+content between launches. When it must be rebuilt, the Host attaches the originating model ID to
+each saved reasoning part. A shared rebuild keeps CherryAI reasoning with its source model
+outside the common message content. For a tool-enabled DeepSeek Chat Completions request,
+the resolved model's compatibility settings select the matching text for `reasoning_content`
+before request estimation and serialization. Other destinations receive the common history.
+The model resolver and Pi own the empty-field fallback.
 
 Current compaction/reset context is exported to a bounded Cherry checkpoint at a completed-turn
 anchor; a missing working copy imports that context and the following normalized tail without a

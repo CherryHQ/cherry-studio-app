@@ -2,6 +2,10 @@ import { z } from 'zod';
 
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
+import {
+  diagnosticProviderCode,
+  diagnosticRequestParameter,
+} from '@/shared/utils/providerDiagnostics';
 
 import { AiFailureReasonSchema } from './aiFailure';
 import type { DiagnosticFeedbackContext } from './diagnostics';
@@ -10,10 +14,19 @@ import { ProviderConfigurationIssueSchema, type ProviderConfigurationIssue } fro
 const DiagnosticIdentifierSchema = z
   .string()
   .refine((value) => diagnosticIdentifier(value) === value);
+const DiagnosticProviderCodeSchema = z
+  .string()
+  .refine((value) => diagnosticProviderCode(value) === value);
 
 export const DiagnosticFailureSchema = z.strictObject({
   code: DiagnosticIdentifierSchema.optional(),
   sourceCode: DiagnosticIdentifierSchema.optional(),
+  providerCode: DiagnosticProviderCodeSchema.optional(),
+  providerType: DiagnosticProviderCodeSchema.optional(),
+  parameter: z
+    .string()
+    .refine((value) => diagnosticRequestParameter(value) === value)
+    .optional(),
   reason: AiFailureReasonSchema.optional(),
   statusCode: z.number().int().min(100).max(599).optional(),
 });

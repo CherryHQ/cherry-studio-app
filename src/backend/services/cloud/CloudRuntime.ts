@@ -33,6 +33,7 @@ import {
   type CloudState,
 } from '@/shared/contracts/cloud';
 import { isEnterpriseProfile } from '@/shared/data/activeProfile';
+import { readGatewayRequestId } from '@/shared/utils/providerDiagnostics';
 
 import { cloudActivationPath, CLOUD_AMD_STATUS_PATH, readCloudActivationEntry } from './cloudAmd';
 import { cloudClientSignatureHeaders } from './cloudClientSignature';
@@ -42,6 +43,7 @@ import {
   cloudRetryDeadline,
   cloudSessionIssue,
   readCloudGatewayCode,
+  readCloudUpstreamErrorBody,
 } from './cloudGatewayError';
 import { CloudSession, type CloudIdentitySource } from './CloudSession';
 import { projectCloudModels } from './projectCloudModels';
@@ -200,7 +202,12 @@ export class CloudRuntime extends BaseService implements CloudModule {
       const headers = await cloudClientSignatureHeaders('GET', path, '');
       signal.throwIfAborted();
       if (!headers['X-Signature']) throw new CloudAccessError('unavailable');
-      const http = createHttpClient({ baseUrl: origin, timeoutMs: 20_000 });
+      const http = createHttpClient({
+        serviceName: 'CloudRuntime',
+        operation: 'cloud.guestCatalog',
+        baseUrl: origin,
+        timeoutMs: 20_000,
+      });
       const { data } = await http.request({
         method: 'GET',
         path,
@@ -636,12 +643,11 @@ export class CloudRuntime extends BaseService implements CloudModule {
       signal.throwIfAborted();
       if (response.ok) return response;
       // Preserve the original error response for the protocol SDK when the gateway forwards an upstream error.
-      const code = readCloudGatewayCode(
-        await response
-          .clone()
-          .json()
-          .catch(() => undefined),
-      );
+      const payload = await response
+        .clone()
+        .json()
+        .catch(() => undefined);
+      const code = readCloudGatewayCode(payload);
       signal.throwIfAborted();
       if (attempt === 0 && session?.recoverRequest(response.status, code, authorization)) {
         await response.body?.cancel().catch(() => {});
@@ -675,7 +681,12 @@ export class CloudRuntime extends BaseService implements CloudModule {
       await response.body?.cancel().catch(() => {});
       const failureCode =
         !session && status === 401 ? 'cloud_unavailable' : (code ?? 'RATE_LIMITED');
-      throw new CloudGatewayRequestError(status, failureCode);
+      throw new CloudGatewayRequestError(
+        status,
+        failureCode,
+        readGatewayRequestId(response.headers),
+        !code && status === 429 ? readCloudUpstreamErrorBody(payload) : undefined,
+      );
     }
   }
 

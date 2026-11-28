@@ -1041,5 +1041,8 @@ The answer contains `selectedOptionIds`, `text`, and `skipped`; selection member
 nonempty responses, and skip exclusivity are validated before consuming the waiter. Duplicate,
 stale, or cross-turn responses cannot execute the continuation again. `question.updated` carries
 an `AgentPendingQuestion` or `null`; observation snapshots include the pending question so returning
-to a live conversation can reopen its sheet. The question belongs to the current Host generation,
-not a durable queue. After process restart, ordinary interrupted-tool reconciliation applies.
+to a live conversation can reopen its sheet. `ask_user_question` parks durably on Pi's native task
+signal (`ToolPark` / `UserQuestionAnswerSignal`) across process restarts until answered or cancelled,
+while in-turn confirmation flows such as `adapt_skill` use Host memory-only waiters (resetting under
+ordinary interrupted-tool reconciliation after restart); both paths enforce the same single-pending-
+question limit across the conversation.

@@ -3,8 +3,12 @@ import * as z from 'zod';
 
 import { application } from '@/backend/core/application/Application';
 import type { Database, DbService } from '@/backend/data/db/DbService';
-import { type FileEntryRow, fileEntryTable, libraryFileTable } from '@/backend/data/db/schemas';
-import { monotonicUpdateTimestamp } from '@/backend/data/db/schemas/_columnHelpers';
+import {
+  type FileEntryRow,
+  fileEntryTable,
+  libraryFileTable,
+  monotonicUpdateTimestamp,
+} from '@/backend/data/db/schemas';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 import {

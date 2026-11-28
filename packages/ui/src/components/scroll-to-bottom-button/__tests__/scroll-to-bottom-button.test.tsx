@@ -91,12 +91,12 @@ describe('ScrollToBottomButton', () => {
 
     const animatedViews = renderer!.root.findAllByType('AnimatedView');
     expect(animatedViews[0].props.style).toEqual([
-      { alignItems: 'center', left: 0, position: 'absolute', right: 0 },
-      { bottom: 80 },
+      { alignItems: 'center', bottom: 0, left: 0, position: 'absolute', right: 0 },
+      { transform: [{ translateY: -80 }] },
     ]);
     expect(animatedViews[1].props).toMatchObject({
       pointerEvents: 'auto',
-      style: [{ transform: [{ scale: 1 }] }, { opacity: 1 }],
+      style: { opacity: 1, transform: [{ scale: 1 }] },
     });
 
     const button = renderer!.root.findByType('View');
@@ -124,8 +124,9 @@ describe('ScrollToBottomButton', () => {
     });
 
     expect(renderer!.root.findAllByType('AnimatedView')[1].props).toMatchObject({
+      accessibilityElementsHidden: true,
       pointerEvents: 'none',
-      style: [{ transform: [{ scale: 0.8 }] }, { opacity: 0 }],
+      style: { opacity: 0, transform: [{ scale: 0.9 }] },
     });
   });
 
@@ -142,8 +143,8 @@ describe('ScrollToBottomButton', () => {
     });
 
     expect(renderer!.root.findAllByType('AnimatedView')[0].props.style).toEqual([
-      { alignItems: 'center', left: 0, position: 'absolute', right: 0 },
-      { bottom: 5 },
+      { alignItems: 'center', bottom: 0, left: 0, position: 'absolute', right: 0 },
+      { transform: [{ translateY: -5 }] },
     ]);
   });
 });

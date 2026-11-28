@@ -26,6 +26,14 @@ Observe timings. Production retains first-render timing, Router navigation metri
 marked inside entry screens. `configureObserve` also applies the shared JS policy through
 `dispatchingEnabled`, with debug dispatch disabled.
 
+For an ordinary local chat launch, `startup.chat_input.ready` records when the native editor
+has positive layout dimensions, the startup screen has released touch, and the account session
+is ready. Backgrounding since JavaScript entry, a confirmed mandatory update, or an incoming share
+excludes the sample. The existing native share check must confirm an empty queue before emission.
+Its duration does not extend the captured input-ready time. The minimum-version request runs independently.
+The event's `elapsedMs` starts at JavaScript entry. Join this event to the same Observe session's
+`cold_launch` event when comparing cold starts. The device startup log uses the same name and clock.
+
 Observe retains its default JS exception capture, including its overlap with Sentry. Sentry's
 privacy switch and payload filters do not control Observe. Local AI diagnostic traces are unchanged.
 

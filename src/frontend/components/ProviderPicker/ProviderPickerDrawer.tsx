@@ -1,11 +1,19 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
-import { BottomSheet, SearchField } from '@cherrystudio/ui/components';
-import { type ReactNode, useState } from 'react';
+import {
+  BottomSheet,
+  type BottomSheetSize,
+  type BottomSheetSizes,
+  SearchField,
+} from '@cherrystudio/ui/components';
+import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Keyboard, Pressable, ScrollView, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ProviderAvatar } from '@/frontend/components/Avatar';
 import type { Provider } from '@/shared/data/types/provider';
+
+const providerPickerSizes = ['medium', 'full'] as const satisfies BottomSheetSizes;
 
 export type ProviderPickerItem = {
   key: string;
@@ -45,18 +53,33 @@ export function ProviderPickerDrawer({
   title,
 }: ProviderPickerDrawerProps) {
   const { t } = useTranslation();
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const closePicker = () => {
-    setIsSearchFocused(false);
+  const insets = useSafeAreaInsets();
+  const [sheetSize, setSheetSize] = useState<BottomSheetSize>('medium');
+  const contentContainerStyle = useMemo(
+    () => ({ paddingBottom: 24 + insets.bottom }),
+    [insets.bottom],
+  );
+  const handleSearchFocus = useCallback(() => setSheetSize('full'), []);
+  const resetPicker = useCallback(() => {
+    setSheetSize('medium');
     onSearchTextChange('');
+  }, [onSearchTextChange]);
+  const closePicker = useCallback(() => {
+    resetPicker();
     onClose();
-  };
+  }, [onClose, resetPicker]);
 
   return (
     <BottomSheet
+      avoidKeyboard
+      bodyInset="none"
       onClose={closePicker}
+      onClosed={resetPicker}
+      onSizeChange={setSheetSize}
       open={open}
-      size={isSearchFocused || searchText.trim().length > 0 ? 'full' : 'large'}
+      presentation="default"
+      size={sheetSize}
+      sizes={providerPickerSizes}
       testID="provider-picker"
       title={title}
     >
@@ -66,18 +89,20 @@ export function ProviderPickerDrawer({
             <SearchField
               accessibilityLabel={searchPlaceholder}
               clearAccessibilityLabel={t('common.clear')}
-              onBlur={() => setIsSearchFocused(false)}
               onChangeText={onSearchTextChange}
               onClear={() => onSearchTextChange('')}
-              onFocus={() => setIsSearchFocused(true)}
+              onFocus={handleSearchFocus}
+              onSubmitEditing={Keyboard.dismiss}
               placeholder={searchPlaceholder}
               testID="provider-picker-search"
               value={searchText}
+              variant="subtle"
             />
           </View>
         </View>
         <ScrollView
-          contentContainerClassName="gap-1 pb-6"
+          contentContainerClassName="gap-1"
+          contentContainerStyle={contentContainerStyle}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}

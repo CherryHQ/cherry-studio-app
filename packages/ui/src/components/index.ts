@@ -11,6 +11,7 @@ export * from './content-state';
 export * from './date-range-picker';
 export * from './dialog';
 export * from './file-browser-row';
+export * from './disclosure';
 export * from './file-preview';
 export * from './image';
 export * from './image-editor';

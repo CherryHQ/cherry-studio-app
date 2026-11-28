@@ -37,9 +37,18 @@ finishes dictation with a check mark and shows progress while waiting for the fi
 While dictating, cancel replaces the leading attachment action and discards the dictation,
 including while the final result is pending. Until text arrives, the placeholder shows listening
 with elapsed time, then transcription progress. Adding to a typed draft by voice goes through the
-keyboard's own voice input. Reading aloud sits beside copy on a settled assistant reply's toolbar
-and turns into stop while that reply is read. Switching, closing or navigating away from the
-conversation ends reading, including when another route covers a still-mounted chat screen.
+keyboard's own voice input. Read Aloud is available in the toolbar of a settled assistant reply
+with speakable text, showing preparing, active, and paused states, and turns into stop while that
+reply is active. Chat uses the same final answer body as the message renderer, after removing
+duplicate generated-image references, and uses sources recorded across the message and its
+attached citation metadata to remove confirmed citation marks before sending `inputFormat: 'plainText'`.
+The toolbar shows a cancellable progress indicator until native playback starts, then a stop button.
+An app-wide floating reading capsule (`src/frontend/appShell/speechPlayback`) appears below the top
+header bar whenever speech is active, displaying status, agent/conversation title, chunk progress,
+pause/resume, stop, and a tap-to-return link when browsing away from the source conversation.
+Without background-reading opt-in, switching, closing, or navigating away from the conversation
+ends reading; once opted in under **Settings → Voice → Read aloud**, reading continues across
+in-app navigation and when backgrounded or locked.
 
 ## Module Boundaries
 
@@ -61,23 +70,31 @@ or model catalogs.
   dictation stops reading, reading replaces
   reading, and reading cannot start during dictation or file transcription. Replacement waits for
   the previous native operation to settle before configuring another audio use. Backgrounding aborts
-  capture. iOS reading can continue after background-audio consent; Android users can opt in under Settings → Voice → Read aloud.
+  capture. Both iOS and Android users can opt into background reading via the dedicated `feature.voice.background_reading` preference under **Settings → Voice → Read aloud** (migrated once on upgrade from legacy `app.background_audio.consent` via `PreferenceSeeder` without runtime coupling to iOS silent audio keep-alive). The runtime is the single authority for playback phase, user intent, and interruption vs. user pause reason across the native media card and speech engines, awaiting full native slot release before admitting a replacement reading.
   File transcription follows its caller’s cancellation signal so Agent work can
   use the existing turn execution lease. Host disposal aborts every activity. A permission dialog opened through the system prompt queue does not count as leaving
   the app, even when Android reports `background` behind it. Disposal waits for pending work.
-- `speechText.ts` turns Markdown into prose and splits speech into utterances within the system's
-  input limit, preserving sentence boundaries where possible.
+- `src/shared/utils/speechText.ts` converts Markdown to speech-ready prose for chat and
+  `VoiceRuntime`. It skips code blocks, images, HTTP(S) auto-links and bare addresses,
+  and paired display or explicit TeX formulas. Inline code, link labels, escaped citation
+  examples and single-dollar amounts stay readable. Chat sends the result with
+  `inputFormat: 'plainText'`; other callers can pass Markdown by default.
+- The backend's `speechText.ts` splits prose into utterances within each engine's UTF-16 input
+  limits, preferring sentence boundaries and keeping surrogate pairs together. The runtime
+  publishes the caller key and `preparing` phase on claim, then publishes `playing` once
+  the engine reports the first native playback start.
 - `systemDictation.ts` owns `expo-speech-recognition`, permissions, native listeners and cleanup.
-  `systemSpeech.ts` owns `expo-speech`, installed voice selection and speech cancellation.
+  `systemSpeech.ts` owns `expo-speech`, installed voice selection, sentence-level pause/resume, and speech cancellation.
   `audioSession.ts` configures the shared audio session through `expo-audio` so reading aloud plays
   with the iOS ring switch silenced. Token-owned capture suspends the silent background loop until
   cleanup; speech owns its audio profile while the loop covers utterance gaps. Only the backend iOS execution source can
   start that loop after consent, only as fallback when official continued processing is unavailable.
   Actual background reading does not require a silent loop while official processing protects tasks.
-  On Android, a user-started reading requests a dedicated media-playback foreground service before audio
-  starts. The service holds audio focus and a wake lock between utterances, publishes a media session
-  with a stop action, and releases its resources when speech ends, is interrupted or is replaced.
-  The notification uses localized controls and does not include the message text.
+  On Android, an opted-in user-started reading requests a dedicated media-playback foreground service before audio
+  starts, renders the brand notification icon (`notification_icon` with `#C74444` accent), silent notification channel, and vector play/pause/stop actions,
+  publishes a `MediaSession` with play/pause and Android 13+ custom stop controls, keeps foreground service promotion across pause/resume while releasing wake locks when paused,
+  coordinates transient and permanent audio-focus transitions, and deep-links back to the active conversation using privacy-safe generic labels (never exposing conversation titles or message text).
+  On iOS, opted-in reading publishes privacy-safe `MPNowPlayingInfoCenter` metadata on the main queue with single-owner clearing, and wires `MPRemoteCommandCenter` play, pause, toggle, and stop controls along with `AVAudioSession` interruption begin/end handling.
 - `recordedDictation.ts` owns WAV recording and cleanup for SenseVoice and DeepSeek.
   `senseVoiceRecognition.ts` shares lazy
   native inference and model-use leases with `senseVoiceTranscription.ts`, which decodes and
@@ -85,10 +102,14 @@ or model catalogs.
 the generated text through the existing file commit boundary.
   `voiceModel.ts` owns the optional model's download, integrity and deletion through `localModel`.
 - `deepseekRecognition.ts` consumes recorded/decoded WAV windows through ASR.
-  `deepseekSpeech.ts` synthesizes bounded utterances, plays temporary WAV files through the shared
-  audio session, and releases player/files on completion, error or cancellation. Missing cloud
-  configuration reports `needs-service` and links to the DeepSeek model Provider's settings. Voice
-  engine and voice selection stay in Settings → Voice. See
+  `deepseekSpeech.ts` synthesizes up to 140 UTF-16 units for the first utterance and 400 for
+  subsequent utterances. It keeps at most one next validated WAV in memory during playback. On
+  interruption or failure it calls `player.release()` for the current player before deleting the
+  temporary WAV. On Android, Expo Audio dispatches native player release asynchronously to the main
+  thread. After deleting the WAV, `deepseekSpeech.ts` cancels and awaits the pending synthesis, then
+  releases the audio session. The runtime then ends the Android playback service if it was admitted.
+  Missing cloud configuration reports `needs-service` and links to the DeepSeek model Provider's
+  settings. Voice engine and voice selection stay in Settings → Voice. See
   [DeepSeek Services](./deepseek-services.md) for batch recognition and settled-answer boundaries.
 - `createVoice.ts` assembles the engines, model owner and background listener for the host. Adding a
   future engine requires an adapter, a `VOICE_ENGINES` entry and registration here.
@@ -134,8 +155,9 @@ resolves an installed voice for the app language: the default prefers an exact l
 another voice in that language. A saved selection must still be installed and match the app
 language; otherwise reading reports an invalid voice so the user can select another. Passing the
 resolved ID also avoids `expo-speech` 58's Android language-tag parsing fallback to the device
-language. A speech error or an unexpected stop, such as an audio interruption, fails reading.
-Cancellation also settles when native stop completes, even if no utterance callback arrives.
+language. A speech error fails reading, whereas an unexpected system stop (such as an audio interruption)
+pauses reading via the runtime interruption handler so playback can resume when the interruption
+ends. Cancellation also settles when native stop completes, even if no utterance callback arrives.
 
 Settings offers system and DeepSeek speech engines, then the selected engine's voice choices.
 System voices are filtered by the app language and deduplicated by their native selection ID.

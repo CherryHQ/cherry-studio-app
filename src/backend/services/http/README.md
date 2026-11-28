@@ -173,7 +173,10 @@ public error. `HttpError` safely expresses `kind`, `status`, `code`, `requestId`
 The public error stays stable while the real failure stays diagnosable: the transport logs the
 underlying transport code, message, method, URL, and HTTP status through `loggerService` under the
 `HttpTransport` context. Headers, bodies, and query values are never logged, and cancellation is
-not logged.
+not logged. Clients and requests may supply static `serviceName` and `operation` identifiers;
+request tags override client defaults. These tags stay out of HTTP headers and pass through the
+existing diagnostic identifier allowlist, so diagnostics can attribute failures without retaining
+URLs, queries, headers, tokens, or user text.
 
 ## Boundaries
 

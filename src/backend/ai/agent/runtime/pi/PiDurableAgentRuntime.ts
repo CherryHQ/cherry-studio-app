@@ -1,17 +1,18 @@
-import type { Context } from '@earendil-works/chord';
-import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+import { BACKGROUND_CONTEXT, type Context } from '@earendil-works/chord/context';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { estimateTextTokens } from '@earendil-works/pi-ai/utils/estimate';
 import type { CodemodeSandboxBase } from '@earendil-works/pi-codemode/native';
 import {
+  AgentDoc,
   CompactionTask,
   createRegistry,
   GenerationTask,
   hook,
+  LiveDoc,
   section,
   type AgentChange,
-  type Cursor,
   type EntryId,
+  type Extension,
   CompactionEntry,
   ResetEntry,
   type HookApi,
@@ -19,15 +20,20 @@ import {
   type Registry,
   type Storage,
   type SubmissionRecord,
+  type TaskId,
+  type ToolRegistration,
 } from '@earendil-works/pi-durable';
 import { createCodemodeExtension } from '@earendil-works/pi-durable/codemode';
+import { createFitImagesExtension } from '@earendil-works/pi-durable/images/fit';
 import { SqliteStorage } from '@earendil-works/pi-durable/storage/sqlite';
 import { ZodError } from 'zod';
 
+import type { AgentUserAnswers } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import {
   LANES_PER_SESSION,
+  RuntimeCorruptLaneError,
   laneKey,
   parseLaneKey,
   runtimeLane,
@@ -49,7 +55,7 @@ import { estimatePiContextUsage, toPiConversation } from './modelMessages';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
 import { PI_CODEMODE_STORE_CHARACTERS, retainPiCodemodeOutput } from './piCodemodeOutput';
 import { createPiCodemodeSandbox } from './piCodemodeSandbox';
-import { summarizePiCompaction } from './piCompaction';
+import { PiCompactionError, summarizePiCompaction } from './piCompaction';
 import { cherryClientIdentity, createPiDurableModels, piDurableModelKey } from './piDurableModels';
 import { PiDurableObserver } from './PiDurableObserver';
 import {
@@ -66,6 +72,14 @@ import {
 import { hasRunnablePiTasks, PiDurableRuntime } from './PiDurableRuntime';
 import { createPiDurableToolExtension } from './piDurableTools';
 import type { PiRuntimeDependencies } from './piModelTypes';
+import {
+  hasLiveTool,
+  PiPendingApprovalsDoc,
+  PiPendingQuestionsDoc,
+  pruneStaleInteractions,
+  ToolApprovalSignal,
+  UserQuestionAnswerSignal,
+} from './piPendingInteractions';
 import { createPiReplyEdits } from './piReplyEditing';
 import { PiToolBudget } from './piToolBudget';
 import {
@@ -74,7 +88,11 @@ import {
   selectPiClientTools,
   type PiWebToolRoutes,
 } from './piWebTools';
-import { createPiContextCheckpoint, createWorkingPiEntries } from './piWorkingHistory';
+import {
+  createPiContextCheckpoint,
+  createWorkingPiEntries,
+  fitWorkingPiEntries,
+} from './piWorkingHistory';
 
 const DESCRIPTOR: RuntimeDescriptor = {
   id: 'pi-durable',
@@ -215,6 +233,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       signal?.throwIfAborted();
       storage = await this.createStorage(database);
       signal?.throwIfAborted();
+      if (ports.imageProcessor)
+        this.registry.install(createFitImagesExtension(ports.imageProcessor));
       this.storageDatabase = database;
       this.runtimeFailed = false;
       this.runtime = await PiDurableRuntime.open(storage, {
@@ -226,7 +246,6 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
           steeringMode: 'all',
           followUpMode: 'one-at-a-time',
           afterFailedRun: 'continue',
-          progress: { persistWithinMs: 0 },
           compaction: { modelOverrides: this.models.compactionOverrides },
         }),
         identity: cherryClientIdentity(),
@@ -259,7 +278,15 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         })
         .catch((error) => logger.warn('Could not report runtime closure', { error }));
       // Stored history needs no registry code. Rebuild only unfinished owners before any resume.
-      for (const lane of await this.unfinishedLanes()) await this.restoreLane(lane, signal);
+      for (const lane of await this.unfinishedLanes()) {
+        try {
+          await this.restoreLane(lane, signal);
+        } catch (error) {
+          signal?.throwIfAborted();
+          if (!(error instanceof RuntimeCorruptLaneError) || !ports.onRecoveryFailure) throw error;
+          await ports.onRecoveryFailure(lane, error);
+        }
+      }
       signal?.throwIfAborted();
     } catch (error) {
       this.runtimeFailed = !signal?.aborted;
@@ -283,6 +310,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         this.configurations.clear();
         this.providerOwners.clear();
         this.slots.clear();
+        for (const extension of this.registry.snapshot().installed())
+          this.registry.uninstall(extension);
       }
       throw error;
     }
@@ -415,11 +444,22 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       .map(({ sessionId }) => parseLaneKey(sessionId));
   }
 
+  private wrapCorruptLaneError(error: unknown, lane?: RuntimeLane): unknown {
+    return error instanceof ZodError
+      ? new RuntimeCorruptLaneError(error.message, { lane, cause: error })
+      : error;
+  }
+
   async configuration(lane: RuntimeLane): Promise<RuntimeConversationConfiguration> {
     const key = laneKey(lane);
-    const stored =
-      this.configurations.get(key) ??
-      PiConfigurationSchema.parse(await this.requireRuntime().configuration(key));
+    let stored: PiStoredConfiguration;
+    try {
+      stored =
+        this.configurations.get(key) ??
+        PiConfigurationSchema.parse(await this.requireRuntime().configuration(key));
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
     return {
       kind: stored.kind,
       model: { ...stored.model },
@@ -427,6 +467,10 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       initialInstructions: stored.initialInstructions,
       options: { ...stored.options },
       tools: stored.tools.map((tool) => this.toolTemplate(tool)),
+      ...(stored.mcpNamespaces
+        ? { mcpNamespaces: stored.mcpNamespaces.map((namespace) => ({ ...namespace })) }
+        : {}),
+      ...(stored.compaction ? { compaction: { ...stored.compaction } } : {}),
       ...(stored.webTools ? { webTools: { ...stored.webTools } } : {}),
     };
   }
@@ -447,14 +491,19 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const agent = await this.installConfiguration(seed.lane, configuration);
     const model = this.requireModel(configuration);
     const originalEntries = seed.history
-      ? createWorkingPiEntries(
-          {
-            instructions: configuration.instructions,
-            input: [],
-            history: seed.history.history,
-            contextCheckpoint: seed.history.contextCheckpoint,
-          },
+      ? await fitWorkingPiEntries(
+          createWorkingPiEntries(
+            {
+              instructions: configuration.instructions,
+              input: [],
+              history: seed.history.history,
+              contextCheckpoint: seed.history.contextCheckpoint,
+            },
+            model,
+          ),
           model,
+          this.ports?.imageProcessor,
+          signal,
         )
       : undefined;
     signal?.throwIfAborted();
@@ -481,14 +530,22 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const runtime = this.requireRuntime();
     if (await runtime.conversation(laneKey(seed.lane)))
       throw new Error('The working copy already exists.');
-    const configuration = await this.configurationBlueprint(seed.configuration);
+    const fromKey = laneKey(seed.from.lane);
+    const parentConfig =
+      this.configurations.get(fromKey) ??
+      PiConfigurationSchema.safeParse(await runtime.configuration(fromKey)).data;
+    const compaction = seed.configuration.compaction ?? parentConfig?.compaction;
+    const configuration = await this.configurationBlueprint({
+      ...seed.configuration,
+      ...(compaction ? { compaction } : {}),
+    });
     const agent = await this.installConfiguration(seed.lane, configuration);
     signal?.throwIfAborted();
     await this.rebinding(seed.lane, () =>
-      runtime.forkConversation(laneKey(seed.from.lane), {
+      runtime.forkConversation(fromKey, {
         sessionId: laneKey(seed.lane),
         revision: seed.revision,
-        agent,
+        agent: { ...agent, compaction: agent.compaction ?? null },
         options: configuration.options,
         configuration: serializePiConfiguration(configuration),
         initialInstructions: configuration.initialInstructions,
@@ -506,7 +563,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     try {
       await this.requireRuntime().configure(
         laneKey(lane),
-        agent,
+        { ...agent, compaction: agent.compaction ?? null },
         configuration.options,
         BACKGROUND_CONTEXT,
         serializePiConfiguration(configuration),
@@ -553,16 +610,22 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
 
   async observe(lane: RuntimeLane, listener: (event: RuntimeConversationEvent) => void) {
     const runtime = this.requireRuntime();
-    const observer = new PiDurableObserver(runtime, lane, listener);
-    const snapshot = await observer.start();
-    this.observers.add(observer);
-    return {
-      snapshot,
-      unsubscribe: async () => {
-        this.observers.delete(observer);
-        await observer.stop();
-      },
-    };
+    try {
+      // Idle copies also need validation before the Host can admit more input to them.
+      await this.configuration(lane);
+      const observer = new PiDurableObserver(runtime, lane, listener);
+      const snapshot = await observer.start();
+      this.observers.add(observer);
+      return {
+        snapshot,
+        unsubscribe: async () => {
+          this.observers.delete(observer);
+          await observer.stop();
+        },
+      };
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
   }
 
   async history(
@@ -572,64 +635,71 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 128)
       throw new Error('A history page must contain between 1 and 128 turns.');
     const runtime = this.requireRuntime();
-    let maxEntryId = query.cursor !== undefined ? parseBoundary(query.cursor) : undefined;
-    const turns: RuntimeDurableTurn[] = [];
-    let nextCursor: string | undefined;
-    let cursor: Cursor | undefined;
-    do {
-      const page = await runtime.history(
-        laneKey(lane),
-        256,
-        cursor,
-        BACKGROUND_CONTEXT,
-        maxEntryId !== undefined ? { maxEntryId } : {},
-      );
-      const visible = new Set(page.entries.map((entry) => entry.id));
-      for (const { record, metadata } of [...page.submissions].sort(
-        (a, b) => (b.record.entry ?? 0) - (a.record.entry ?? 0),
-      )) {
-        if (record.type !== 'input' || record.entry === undefined || !visible.has(record.entry))
-          continue;
-        if (query.requestIds && (!record.requestId || !query.requestIds.includes(record.requestId)))
-          continue;
+    const maxEntryId = query.cursor !== undefined ? parseBoundary(query.cursor) : undefined;
+    try {
+      const matched = await runtime.placedInputs(laneKey(lane), {
+        limit: query.limit,
+        ...(maxEntryId !== undefined ? { maxEntryId } : {}),
+        ...(query.requestIds ? { requestIds: query.requestIds } : {}),
+      });
+      const turns: RuntimeDurableTurn[] = [];
+      for (const { record, metadata } of matched)
         turns.push(await this.project(lane, record, metadata));
-        if (turns.length === query.limit) {
-          maxEntryId = (Number(record.entry) - 1) as EntryId;
-          nextCursor = `pi:${maxEntryId}`;
-          break;
-        }
-      }
-      if (turns.length === query.limit || !page.next) break;
-      cursor = page.next;
-    } while (cursor !== undefined);
-    return { turns, ...(nextCursor ? { nextCursor } : {}) };
+      return {
+        turns,
+        ...(turns.length === query.limit
+          ? { nextCursor: `pi:${Number(matched.at(-1)!.record.entry) - 1}` }
+          : {}),
+      };
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
+  }
+
+  async assistantMessageIdForRequest(
+    lane: RuntimeLane,
+    requestId: string,
+  ): Promise<string | undefined> {
+    try {
+      const [match] = await this.requireRuntime().placedInputs(laneKey(lane), {
+        limit: 1,
+        requestIds: [requestId],
+      });
+      return match ? readPiSubmission(match.metadata).assistantMessageId : undefined;
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
   }
 
   async message(lane: RuntimeLane, messageId: string, options?: { fullReasoning?: boolean }) {
     const runtime = this.requireRuntime();
-    if (options?.fullReasoning) {
-      for (const observer of this.observers) {
-        const turn = observer.readReasoningTurn(lane, messageId);
-        if (turn) return { turn, role: 'assistant' as const };
+    try {
+      if (options?.fullReasoning) {
+        for (const observer of this.observers) {
+          const turn = observer.readReasoningTurn(lane, messageId);
+          if (turn) return { turn, role: 'assistant' as const };
+        }
       }
+      const selected = await runtime.submissionForMessage(laneKey(lane), messageId);
+      if (!selected) return undefined;
+      const turn = await this.project(lane, selected.record, selected.metadata, options);
+      if (
+        selected.role === 'assistant' &&
+        !turn.hasAssistant &&
+        turn.status !== 'queued' &&
+        turn.status !== 'running'
+      )
+        return undefined;
+      // Forking would drop that edit; Cherry rebuilds the edited history instead.
+      if (
+        turn.answerBoundary &&
+        (await runtime.editedAfter(laneKey(lane), parseBoundary(turn.answerBoundary)))
+      )
+        return { turn: { ...turn, answerBoundary: null }, role: selected.role };
+      return { turn, role: selected.role };
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
     }
-    const selected = await runtime.submissionForMessage(laneKey(lane), messageId);
-    if (!selected) return undefined;
-    const turn = await this.project(lane, selected.record, selected.metadata, options);
-    if (
-      selected.role === 'assistant' &&
-      !turn.hasAssistant &&
-      turn.status !== 'queued' &&
-      turn.status !== 'running'
-    )
-      return undefined;
-    // Forking would drop that edit; Cherry rebuilds the edited history instead.
-    if (
-      turn.answerBoundary &&
-      (await runtime.editedAfter(laneKey(lane), parseBoundary(turn.answerBoundary)))
-    )
-      return { turn: { ...turn, answerBoundary: null }, role: selected.role };
-    return { turn, role: selected.role };
   }
 
   async exportTurn(
@@ -638,21 +708,25 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     options: { currentContext?: boolean } = {},
   ) {
     const runtime = this.requireRuntime();
-    const record = await runtime.inputRecord(laneKey(lane), requestId);
-    if (!record || record.type !== 'input' || record.status !== 'done')
-      return { contextCheckpoint: null };
-    const stored = readPiSubmission(await runtime.submissionMetadata(record));
-    const conversation = await runtime.conversation(laneKey(lane));
-    if (!conversation) throw new Error('The working copy is missing.');
-    const view = await conversation.context(
-      BACKGROUND_CONTEXT,
-      options.currentContext ? {} : { at: await runtime.answerBoundary(laneKey(lane), record) },
-    );
-    const contextCheckpoint =
-      view.head && (CompactionEntry.is(view.head) || ResetEntry.is(view.head))
-        ? createPiContextCheckpoint(stored.turnId, view.messages)
-        : null;
-    return { contextCheckpoint };
+    try {
+      const record = await runtime.inputRecord(laneKey(lane), requestId);
+      if (!record || record.type !== 'input' || record.status !== 'done')
+        return { contextCheckpoint: null };
+      const stored = readPiSubmission(await runtime.submissionMetadata(record));
+      const conversation = await runtime.conversation(laneKey(lane));
+      if (!conversation) throw new Error('The working copy is missing.');
+      const view = await conversation.context(
+        BACKGROUND_CONTEXT,
+        options.currentContext ? {} : { at: await runtime.answerBoundary(laneKey(lane), record) },
+      );
+      const contextCheckpoint =
+        view.head && (CompactionEntry.is(view.head) || ResetEntry.is(view.head))
+          ? createPiContextCheckpoint(stored.turnId, view.messages)
+          : null;
+      return { contextCheckpoint };
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
   }
 
   async editReply(lane: RuntimeLane, input: Parameters<DurableAgentRuntime['editReply']>[1]) {
@@ -695,6 +769,77 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     };
   }
 
+  async respondApproval(lane: RuntimeLane, approvalId: string, decision: 'approve' | 'deny') {
+    const runtime = this.requireRuntime();
+    const key = laneKey(lane);
+    if (!(await runtime.conversation(key))) return false;
+    return runtime.commitConversation(key, async (tx, conversationId) => {
+      const pending = await tx.doc(PiPendingApprovalsDoc, conversationId);
+      const item = Object.hasOwn(pending.items, approvalId) ? pending.items[approvalId] : undefined;
+      if (!item) return false;
+      const live = await tx.doc(LiveDoc, conversationId);
+      if (!hasLiveTool(live, item.toolCallId, item.taskId)) {
+        delete pending.items[approvalId];
+        return false;
+      }
+      const result = await tx.signal(item.taskId as TaskId, ToolApprovalSignal, item.key, {
+        decision,
+        ...(item.executionSettingsKey !== undefined
+          ? { executionSettingsKey: item.executionSettingsKey }
+          : {}),
+      });
+      // Remove inside the same transaction so a crash after signal persistence never re-prompts
+      // or admits an opposite second decision as a duplicate.
+      delete pending.items[approvalId];
+      return result === 'delivered';
+    });
+  }
+
+  async respondQuestion(
+    lane: RuntimeLane,
+    toolCallId: string,
+    answer: AgentUserAnswers,
+    turnId?: string,
+  ) {
+    const runtime = this.requireRuntime();
+    const key = laneKey(lane);
+    if (!(await runtime.conversation(key))) return false;
+    return runtime.commitConversation(key, async (tx, conversationId) => {
+      const pending = await tx.doc(PiPendingQuestionsDoc, conversationId);
+      const item = Object.hasOwn(pending.items, toolCallId) ? pending.items[toolCallId] : undefined;
+      if (!item) return false;
+      if (turnId !== undefined && item.turnId !== turnId) return false;
+      const live = await tx.doc(LiveDoc, conversationId);
+      if (!hasLiveTool(live, item.toolCallId, item.taskId)) {
+        delete pending.items[toolCallId];
+        return false;
+      }
+      this.requirePorts().validateQuestionAnswer?.(item.question, answer);
+      const result = await tx.signal(
+        item.taskId as TaskId,
+        UserQuestionAnswerSignal,
+        item.key,
+        detachedJson(answer),
+      );
+      delete pending.items[toolCallId];
+      return result === 'delivered';
+    });
+  }
+
+  async hasPendingQuestion(lane: RuntimeLane): Promise<boolean> {
+    const runtime = this.requireRuntime();
+    const key = laneKey(lane);
+    if (!(await runtime.conversation(key))) return false;
+    return runtime.commitConversation(key, async (tx, conversationId) => {
+      const pending = await tx.doc(PiPendingQuestionsDoc, conversationId);
+      const live = await tx.doc(LiveDoc, conversationId);
+      pruneStaleInteractions(pending.items, live);
+      return Object.values(pending.items).some((item) =>
+        hasLiveTool(live, item.toolCallId, item.taskId),
+      );
+    });
+  }
+
   async abort(lane: RuntimeLane) {
     await this.requireRuntime().stop(laneKey(lane));
   }
@@ -717,9 +862,9 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     this.configurations.delete(key);
     for (const [providerId, owner] of this.providerOwners)
       if (sameLane(owner, lane)) this.providerOwners.delete(providerId);
-    const name = `cherry.capabilities:${key}`;
-    for (const extension of this.registry.snapshot().installed())
-      if (extension.name === name) this.registry.uninstall(extension);
+    const capabilities = this.registry.snapshot().extension(`cherry.capabilities:${key}`);
+    if (capabilities) this.registry.uninstall(capabilities);
+    this.replaceMcpExtensions(key, []);
   }
   async withdraw(lane: RuntimeLane, requestId: string) {
     const result = await this.requireRuntime().withdrawInput(laneKey(lane), requestId);
@@ -733,7 +878,11 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     return this.requireRuntime().steerInput(laneKey(lane), requestId);
   }
   async inputParents(lane: RuntimeLane, userMessageIds: readonly string[]) {
-    return this.requireRuntime().inputParents(laneKey(lane), userMessageIds);
+    try {
+      return await this.requireRuntime().inputParents(laneKey(lane), userMessageIds);
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
   }
   async hasUnfinishedWork() {
     const state = await this.requireRuntime().inspect();
@@ -774,19 +923,48 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const runtime = this.requireRuntime();
     const key = laneKey(lane);
     signal?.throwIfAborted();
-    const stored = await runtime.configuration(key);
-    signal?.throwIfAborted();
-    const configuration = PiConfigurationSchema.parse(stored);
-    const agent = await this.installConfiguration(lane, configuration, true, signal);
+    let stored: Awaited<ReturnType<PiDurableRuntime['configuration']>>;
+    let configuration: PiStoredConfiguration;
     try {
+      stored = await runtime.configuration(key);
       signal?.throwIfAborted();
-      if (stored?.version === 1)
-        await runtime.restoreConfiguration(key, serializePiConfiguration(configuration), agent);
+      configuration = PiConfigurationSchema.parse(stored);
+    } catch (error) {
+      throw this.wrapCorruptLaneError(error, lane);
+    }
+    try {
+      const agent = await this.installConfiguration(lane, configuration, true, signal);
+      signal?.throwIfAborted();
+      const conversation = await runtime.conversation(key);
+      if (!conversation) throw new Error('The working copy is missing.');
+      const state = await runtime.snapshotDocument(AgentDoc, conversation.id);
+      const selected = state?.extensions;
+      const extensionsDiffer =
+        !Array.isArray(selected) ||
+        selected.length !== agent.extensions.length ||
+        agent.extensions.some(({ name }, index) => name !== selected[index]);
+      const desiredCompaction = agent.compaction ?? null;
+      const compactionChanged =
+        JSON.stringify(desiredCompaction) !== JSON.stringify(state?.compaction ?? null);
+      signal?.throwIfAborted();
+      if (stored?.version === 1 || extensionsDiffer || compactionChanged) {
+        // Update the selected extensions without resetting deferred tools or loaded instructions.
+        await runtime.restoreConfiguration(
+          key,
+          serializePiConfiguration(configuration),
+          stored?.version === 1
+            ? { ...agent, compaction: desiredCompaction }
+            : {
+                extensions: agent.extensions,
+                ...(compactionChanged ? { compaction: desiredCompaction } : {}),
+              },
+        );
+      }
       signal?.throwIfAborted();
       await this.bindProvider(lane);
     } catch (error) {
       this.configurations.delete(key);
-      throw error;
+      throw this.wrapCorruptLaneError(error, lane);
     }
   }
 
@@ -795,7 +973,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     configuration: PiStoredConfiguration,
     rehydrating = false,
     signal?: AbortSignal,
-  ): Promise<AgentChange> {
+  ): Promise<AgentChange & { extensions: readonly Extension[] }> {
     const key = laneKey(lane);
     try {
       const existing = rehydrating
@@ -810,6 +988,15 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     signal?.throwIfAborted();
     const routes = configuration.webRoutes ?? { search: 'client', fetch: 'client' };
     const nativeWeb = routes.search === 'server' || routes.fetch === 'server';
+    const tools = selectPiClientTools(
+      configuration.tools.map((blueprint) => this.toolTemplate(blueprint)),
+      routes,
+    );
+    const mcpServerByTool = new Map(
+      tools.flatMap(({ providerName, ref }) =>
+        ref.source === 'mcp' ? [[providerName, ref.serverId] as const] : [],
+      ),
+    );
     const extension = createPiDurableToolExtension({
       name: `cherry.capabilities:${key}`,
       acceptsImages:
@@ -823,11 +1010,6 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
               // Every inlined declaration repeats a direct tool's schema; scripts discover signatures instead.
               inlineBudget: 0,
               maxStoreCharacters: PI_CODEMODE_STORE_CHARACTERS,
-              // MCP provider names share this prefix. Earlier tool_search results also named the
-              // group "mcp", so scripts in migrated conversations filter by it.
-              namespaces: [
-                { name: 'mcp', prefix: 'mcp_', description: 'Tools of the connected MCP servers.' },
-              ],
               writeOutput: async (name, data, api, context, storeWrites) => {
                 const signal = requireSignal(context);
                 const identity = await this.taskIdentity(lane, api, context);
@@ -836,7 +1018,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
                 if (typeof data === 'string')
                   return retainPiCodemodeOutput(name, data, api, context, storeWrites);
                 const writer = this.requirePorts().writeToolOutput;
-                if (!writer) return { error: 'Managed output storage is unavailable.' };
+                if (!writer)
+                  return { kind: 'failed', error: 'Managed output storage is unavailable.' };
                 try {
                   const previous = await api.snapshot(PiCodemodeFiles, api.taskId, context);
                   const artifact =
@@ -848,20 +1031,17 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
                   await this.requirePorts().admitArtifacts(identity, [artifact], signal);
                   await this.requireRuntime().grantFiles(key, [artifact.ref.fileEntryId], context);
                   await retainPiCodemodeArtifacts(api, api.taskId, api.callId, [artifact], context);
-                  return { path: `managed-file:${artifact.ref.fileEntryId}` };
+                  return { kind: 'saved', path: `managed-file:${artifact.ref.fileEntryId}` };
                 } catch {
                   signal.throwIfAborted();
-                  return { error: 'Could not save the managed output file.' };
+                  return { kind: 'failed', error: 'Could not save the managed output file.' };
                 }
               },
             }),
           }
         : {}),
       // A web capability reaches the model through one route: its function or the native tool.
-      tools: selectPiClientTools(
-        configuration.tools.map((blueprint) => this.toolTemplate(blueprint)),
-        routes,
-      ),
+      tools,
       previousFailures: async (api, context) => {
         const inputs = await this.requireRuntime().inputsForTask(api, context);
         const input = inputs.at(-1);
@@ -893,23 +1073,11 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
           turnId: identity.turnId,
         };
       },
-      approve: async (tool, input, call, api, context) => {
-        const identity = await this.taskIdentity(lane, api, context);
-        return (
-          (await this.requirePorts().requestApproval(
-            identity,
-            {
-              id: `pi:${api.taskId}:${call.id}`,
-              turnId: identity.turnId,
-              toolCallId: call.id,
-              toolRef: tool.ref,
-              displayName: tool.displayName,
-              input,
-              status: 'pending',
-            },
-            requireSignal(context),
-          )) === 'approve'
-        );
+      durableInteractions: {
+        identity: (api, context) => this.taskIdentity(lane, api, context),
+        hasPendingHostQuestion: (identity) =>
+          this.requirePorts().hasPendingHostQuestion?.({ ...lane, ...identity }) ?? false,
+        commit: (change, context) => this.requireRuntime().commit(change, context),
       },
       onResult: async (tool, result, api, context) => {
         if (result.failure?.scope === 'tool' && tool.failureGroup) {
@@ -928,6 +1096,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         }
         if (!result.artifacts.length) return;
         const identity = await this.taskIdentity(lane, api, context);
+        if (!identity) return;
         await this.requirePorts().admitArtifacts(
           identity,
           result.artifacts,
@@ -940,8 +1109,34 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         );
       },
     });
-    this.registry.install({
+    const namespaces = configuration.kind === 'image' ? [] : (configuration.mcpNamespaces ?? []);
+    const mcpToolsByServer = new Map(
+      namespaces.map(({ serverId }) => [serverId, [] as ToolRegistration[]]),
+    );
+    const fallbackTools: ToolRegistration[] = [];
+    const capabilityTools = (extension.tools ?? []).filter((tool) => {
+      const serverId = mcpServerByTool.get(tool.name);
+      if (serverId === undefined) return true;
+      (mcpToolsByServer.get(serverId) ?? fallbackTools).push(tool);
+      return false;
+    });
+    const mcpExtensions: Extension[] = namespaces.map(({ serverId, ...namespace }) => ({
+      name: `cherry.mcp:${key}:${serverId}`,
+      namespace,
+      tools: mcpToolsByServer.get(serverId)!,
+    }));
+    if (fallbackTools.length) {
+      mcpExtensions.push({
+        name: `cherry.mcp:${key}`,
+        namespace: { name: 'mcp', description: 'Tools of the connected MCP servers.' },
+        tools: fallbackTools,
+      });
+    }
+    this.replaceMcpExtensions(key, mcpExtensions);
+    const capabilities: Extension = {
       ...extension,
+      // Keep the shared hooks and catalog so authorization and failure groups span both owners.
+      tools: capabilityTools,
       sections: [
         section(
           'cherry-runtime',
@@ -959,7 +1154,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
             const failure = 'The conversation could not be summarized.';
             try {
               const providerSessionId = await this.requireRuntime().providerSessionId(key, context);
-              if (!providerSessionId) return { failure };
+              if (!providerSessionId) return { kind: 'failure', failure };
               const configuration = this.requireConfiguration(key);
               const summary = await summarizePiCompaction(
                 messages,
@@ -972,10 +1167,17 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
                   instructions,
                 },
               );
-              return summary ? { summary } : { failure };
-            } catch {
+              return summary ? { kind: 'summary', summary } : { kind: 'failure', failure };
+            } catch (error) {
               signal.throwIfAborted();
-              return { failure };
+              logger.warn('Pi compaction summarization failed', {
+                error,
+                operation: 'pi.compaction',
+              });
+              return {
+                kind: 'failure',
+                failure: error instanceof PiCompactionError ? error.message : failure,
+              };
             }
           },
         }),
@@ -990,7 +1192,11 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
           },
         }),
       ],
-    });
+    };
+    this.registry.install(capabilities);
+    const fitImages = this.registry.snapshot().extension('fit-images');
+    const compaction =
+      configuration.kind === 'image' ? { enabled: false } : configuration.compaction;
     this.configurations.set(key, configuration);
     return {
       model: {
@@ -999,8 +1205,23 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       },
       // The reserved instructions section renders last; the extension keeps fixed rules first.
       instructions: null,
-      extensions: [extension],
+      extensions: [capabilities, ...mcpExtensions, ...(fitImages ? [fitImages] : [])],
+      ...(compaction ? { compaction } : {}),
     };
+  }
+
+  private replaceMcpExtensions(key: string, extensions: readonly Extension[]): void {
+    const prefix = `cherry.mcp:${key}`;
+    const names = new Set(extensions.map(({ name }) => name));
+    for (const extension of this.registry.snapshot().installed()) {
+      if (
+        (extension.name === prefix || extension.name.startsWith(`${prefix}:`)) &&
+        !names.has(extension.name)
+      ) {
+        this.registry.uninstall(extension);
+      }
+    }
+    for (const extension of extensions) this.registry.install(extension);
   }
 
   /** The route is chosen once per configuration and stored with it, never re-derived on recovery. */
@@ -1101,7 +1322,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       } catch (error) {
         // A malformed historical owner must not block startup or later valid receipts.
         // Leave this receipt pending so repairing its owner can deliver it on a later pass.
-        if (!(error instanceof ZodError)) throw error;
+        if (!(error instanceof RuntimeCorruptLaneError) && !(error instanceof ZodError))
+          throw error;
         logger.warn('Pi durable usage delivery failed', {
           error,
           operation: 'pi.usage_delivery',

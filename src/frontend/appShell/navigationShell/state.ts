@@ -55,6 +55,7 @@ export {
   WIDE_RAIL_WIDTH,
   type NavigationShellMode,
 } from './shellMode';
+export type { SidebarNavDestination } from './navRouteManifest';
 
 export type DockRect = {
   height: number;
@@ -92,6 +93,7 @@ export type MiddleColumnSource = 'files' | 'sidebar';
 
 export type MainStackRouterLike = {
   dismiss: (count?: number) => void;
+  dismissTo: (href: Href) => void;
   push: (href: Href) => void;
   replace: (href: Href) => void;
 };
@@ -108,6 +110,7 @@ export type NavigationShellState = {
   dockClearance: number;
   isAtRoot: boolean;
   isDockVisible: boolean;
+  isOnboardingBlocking: boolean;
   isFileListCollapsed: boolean;
   isVerticalRailVisible: boolean;
   middleColumnWidth: number;

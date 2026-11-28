@@ -94,7 +94,6 @@ export type PersistCacheSchema = {
   /** Origin of the last sign-in attempt, retained for cold and duplicate callback delivery. */
   'account.sign_in.return_to': string | null;
   'cloud.model_login_return': string | null;
-  'app_update.last_reminder': { releaseId: string; remindedAt: number } | null;
   /** Skill document translations indexed by content hash and target language. */
   'skills.translations': Record<string, string>;
   'diagnostics.feedback_history': DiagnosticFeedbackRecord[];
@@ -114,7 +113,6 @@ export type PersistCacheSchema = {
 export const DefaultPersistCache: PersistCacheSchema = {
   'account.sign_in.return_to': null,
   'cloud.model_login_return': null,
-  'app_update.last_reminder': null,
   'skills.translations': {},
   'diagnostics.feedback_history': [],
   'remote_agent.drafts': {},

@@ -10,6 +10,7 @@ const CONTENT_DIRECTORIES = [
   'RemoteAttachments',
   'ImageEdits',
   'ImageExports',
+  'ModelImages',
   'FileExports',
   'DocumentExport',
   'DocumentExportStitch',

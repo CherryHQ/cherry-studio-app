@@ -1,7 +1,9 @@
 import {
   collectChatExportSources,
   replaceChatCitations,
+  type ExportCitationSource,
 } from '@/frontend/utils/chatExportCitations';
+import { citationIds } from '@/frontend/utils/messageCitations';
 import { omitGeneratedImageReferencesFromMarkdown } from '@/frontend/utils/omitGeneratedImageReferences';
 import type { AgentMessageView } from '@/shared/contracts/agent';
 import { escapeMarkdown } from '@/shared/utils/documentExportMarkdown';
@@ -36,7 +38,7 @@ export function conversationToMarkdown(
   if (!messages.length) throw new ConversationExportError('empty');
   if (messages.some((message) => message.status === 'pending' || message.status === 'streaming'))
     throw new ConversationExportError('unsettled');
-  const priorSources = new Map<string, { title: string; url: string }>();
+  const priorSources = new Map<string, ExportCitationSource>();
   const sections = messages.map((message) => {
     const parts = message.parts
       .filter((part) => part.type !== 'tool-summary' && part.type !== 'prepared-file')
@@ -48,12 +50,16 @@ export function conversationToMarkdown(
     const sources = collectChatExportSources(parts);
     for (const part of parts) {
       if (part.type !== 'text' && part.type !== 'reasoning') continue;
-      for (const match of part.text.matchAll(/\[cite:([\w-]+)\]/g)) {
-        const prior = priorSources.get(match[1]);
-        if (prior && !sources.has(match[1])) sources.set(match[1], prior);
+      for (const id of citationIds([{ type: 'text', text: part.text }])) {
+        const prior = priorSources.get(id);
+        if (prior && !sources.has(id)) sources.set(id, prior);
       }
     }
     for (const [id, source] of sources) priorSources.set(id, source);
+    const urlSources = [...sources].filter(
+      (entry): entry is [string, { title: string; url: string }] => Boolean(entry[1].url),
+    );
+    const preferredNumbers = new Map(urlSources.map(([id], index) => [id, index + 1]));
     const author =
       message.role === 'user' ? labels.user : snapshot.assistantName?.trim() || labels.assistant;
     const heading = `## ${escapeMarkdown(author)}${message.role === 'assistant' && message.modelName ? ` · ${escapeMarkdown(message.modelName)}` : ''}`;
@@ -80,7 +86,7 @@ export function conversationToMarkdown(
           blocks.push(
             `### ${escapeMarkdown(part.type === 'reasoning' ? labels.reasoning : labels.response)}`,
           );
-        blocks.push(replaceChatCitations(text, sources));
+        blocks.push(replaceChatCitations(text, sources, preferredNumbers));
       } else if (part.type === 'file') {
         blocks.push(
           `- ${escapeMarkdown(labels.file)}: ${escapeMarkdown(part.filename || labels.file)}`,
@@ -89,12 +95,13 @@ export function conversationToMarkdown(
     }
     for (const attachment of message.attachments ?? [])
       blocks.push(`- ${escapeMarkdown(labels.file)}: ${escapeMarkdown(attachment.name)}`);
-    if (sources.size)
+    if (urlSources.length)
       blocks.push(
         `### ${escapeMarkdown(labels.sources)}`,
-        [...sources.values()]
+        urlSources
           .map(
-            (source, index) => `${index + 1}. [${escapeMarkdown(source.title)}](<${source.url}>)`,
+            ([, source], index) =>
+              `${index + 1}. [${escapeMarkdown(source.title)}](<${source.url}>)`,
           )
           .join('\n'),
       );

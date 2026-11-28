@@ -1,7 +1,7 @@
 import { ModalBottomSheet } from '@swmansion/react-native-bottom-sheet';
 import { useLayoutEffect, useState, type ReactNode } from 'react';
 import { BackHandler, Dimensions, Keyboard, ScrollView, StyleSheet, Text } from 'react-native';
-import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BottomSheet, BottomSheetBoundsProvider } from '..';
 import { OverlayNavigationProvider, useOverlayNavigation } from '../../portal/overlay-navigation';
@@ -519,14 +519,16 @@ describe('BottomSheet', () => {
     });
 
     const [, minimum, maximum] = mockBottomSheetProps.detents as number[];
-    const layout = mockAnimatedStyleFactories.at(-1)!;
-    expect(layout()).toEqual({ height: minimum });
+    expect(mockBottomSheetProps.disableScrollableNegotiation).toBe(true);
+    expect(mockBottomSheetProps.surface).toBeUndefined();
+    const footerStyle = mockAnimatedStyleFactories.at(-1)!;
+    expect(footerStyle()).toEqual({ transform: [{ translateY: minimum - maximum }] });
     const card = renderer?.root
       .findAllByProps({ testID: 'resizable-sheet' })
       .find((node) => typeof node.type === 'string');
     const cardStyle = StyleSheet.flatten(card?.props.style);
-    expect(cardStyle.flex).toBe(1);
-    expect(cardStyle.height).toBeUndefined();
+    expect(cardStyle.height).toBe(maximum);
+    expect(cardStyle.flex).toBeUndefined();
 
     const onPositionChange = mockBottomSheetProps.onPositionChange as (event: {
       position: number;
@@ -534,11 +536,11 @@ describe('BottomSheet', () => {
     }) => void;
     const middle = (minimum + maximum) / 2;
     onPositionChange({ position: middle, index: 1.5 });
-    expect(layout()).toEqual({ height: middle });
+    expect(footerStyle()).toEqual({ transform: [{ translateY: middle - maximum }] });
     onPositionChange({ position: maximum, index: 2 });
-    expect(layout()).toEqual({ height: maximum });
+    expect(footerStyle()).toEqual({ transform: [{ translateY: 0 }] });
     onPositionChange({ position: minimum / 2, index: 0.5 });
-    expect(layout()).toEqual({ height: minimum });
+    expect(footerStyle()).toEqual({ transform: [{ translateY: minimum - maximum }] });
   });
 
   test('sizes an overlay to its content and safe-area space', () => {
@@ -551,6 +553,8 @@ describe('BottomSheet', () => {
     });
     act(() => renderer!.root.findByType(ScrollView).props.onContentSizeChange(320, 200));
     expect(mockBottomSheetProps.detents).toEqual([0, 200 + 32 + 34]);
+    expect(mockBottomSheetProps.disableScrollableNegotiation).toBe(false);
+    expect(mockBottomSheetProps.surface).toBeUndefined();
     expect(renderer!.root.findAllByType(Text).some((node) => node.props.children === 'Tools')).toBe(
       false,
     );
@@ -610,10 +614,155 @@ describe('BottomSheet', () => {
       );
     });
 
-    const layout = mockAnimatedStyleFactories.at(-1)!;
+    const footerStyle = mockAnimatedStyleFactories.at(-1)!;
     const detents = mockBottomSheetProps.detents as number[];
-    expect(layout()).toEqual({ height: detents[1] });
+    expect(mockBottomSheetProps.disableScrollableNegotiation).toBe(true);
+    expect(mockBottomSheetProps.surface).toBeUndefined();
+    expect(footerStyle()).toEqual({ transform: [{ translateY: detents[1] - detents[2] }] });
     expect(detents[1]).toBeLessThan(detents[2]);
+  });
+
+  test('updates body layout height on commit when growing and on settle when shrinking', () => {
+    const onSizeChange = jest.fn();
+    const sheet = (size: 'medium' | 'full') => (
+      <BottomSheet
+        onClose={jest.fn()}
+        onSizeChange={onSizeChange}
+        open
+        size={size}
+        sizes={['medium', 'full']}
+        testID="models-sheet"
+        title="Models"
+      >
+        <Text>Models</Text>
+      </BottomSheet>
+    );
+
+    act(() => {
+      renderer = create(sheet('medium'));
+    });
+
+    const [, mediumHeight, fullHeight] = mockBottomSheetProps.detents as number[];
+    expect(mockBottomSheetProps.disableScrollableNegotiation).toBe(true);
+    expect(mockBottomSheetProps.onPositionChange).toBeUndefined();
+    const bodyHeight = () => {
+      const card = renderer!.root
+        .findAllByProps({ testID: 'models-sheet' })
+        .find((node) => typeof node.type === 'string');
+      const bodyWrapper = card!.children.find(
+        (child): child is ReactTestInstance =>
+          typeof child !== 'string' && StyleSheet.flatten(child.props.style)?.height !== undefined,
+      );
+      return StyleSheet.flatten(bodyWrapper!.props.style).height;
+    };
+
+    expect(bodyHeight()).toBe(mediumHeight);
+
+    act(() => (mockBottomSheetProps.onIndexChange as (index: number) => void)(2));
+    expect(bodyHeight()).toBe(fullHeight);
+
+    act(() => renderer!.update(sheet('full')));
+    act(() => (mockBottomSheetProps.onIndexChange as (index: number) => void)(1));
+    expect(bodyHeight()).toBe(fullHeight);
+
+    // Mirror onSizeChange('medium') before requesting 'full' again, then deliver a stale settle.
+    act(() => renderer!.update(sheet('medium')));
+    act(() => renderer!.update(sheet('full')));
+    act(() => (mockBottomSheetProps.onSettle as (index: number) => void)(1));
+    expect(bodyHeight()).toBe(fullHeight);
+
+    act(() => renderer!.update(sheet('medium')));
+    act(() => (mockBottomSheetProps.onSettle as (index: number) => void)(1));
+    expect(bodyHeight()).toBe(mediumHeight);
+  });
+
+  test('dismisses the keyboard immediately on drag or scrim close', () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    try {
+      act(() => {
+        renderer = create(
+          <BottomSheet
+            avoidKeyboard
+            onClose={jest.fn()}
+            open
+            sizes={['medium', 'full']}
+            title="Models"
+          >
+            <Text>Models</Text>
+          </BottomSheet>,
+        );
+      });
+
+      act(() => (mockBottomSheetProps.onIndexChange as (index: number) => void)(0));
+      expect(dismiss).toHaveBeenCalledTimes(1);
+    } finally {
+      dismiss.mockRestore();
+    }
+  });
+
+  test('does not reopen when size changes mid-dismissal before settle', () => {
+    const sheet = (size: 'medium' | 'full') => (
+      <BottomSheet onClose={jest.fn()} open size={size} sizes={['medium', 'full']} title="Models">
+        <Text>Models</Text>
+      </BottomSheet>
+    );
+
+    act(() => {
+      renderer = create(sheet('full'));
+    });
+    expect(mockBottomSheetProps.index).toBe(2);
+
+    act(() => (mockBottomSheetProps.onIndexChange as (index: number) => void)(0));
+    expect(mockBottomSheetProps.index).toBe(0);
+
+    act(() => renderer!.update(sheet('medium')));
+    expect(mockBottomSheetProps.index).toBe(0);
+  });
+
+  test('gives headerless multi-detent sheets a 44pt handle zone', () => {
+    act(() => {
+      renderer = create(
+        <BottomSheet
+          onClose={jest.fn()}
+          open
+          presentation="overlay"
+          sizes={['medium', 'full']}
+          title="Models"
+        >
+          <Text>Models</Text>
+        </BottomSheet>,
+      );
+    });
+
+    const handleContainer = renderer!.root.findByProps({ accessibilityLabel: 'Models' });
+    expect(handleContainer.props.className).toContain('h-11');
+    expect(StyleSheet.flatten(handleContainer.props.style)).toEqual({ height: 44 });
+  });
+
+  test('omits outer bottom safe-area padding when bodyInset is none', () => {
+    const renderWithInset = (bodyInset?: 'safe-area' | 'none') => {
+      act(() => {
+        const tree = (
+          <BottomSheet bodyInset={bodyInset} onClose={jest.fn()} open size="large" title="Models">
+            <Text testID="body-child">Models</Text>
+          </BottomSheet>
+        );
+        if (renderer) renderer.update(tree);
+        else renderer = create(tree);
+      });
+
+      return renderer!.root.find(
+        (node) =>
+          typeof node.props.className === 'string' &&
+          node.props.className.includes('min-h-0 flex-1') &&
+          node.findAllByProps({ testID: 'body-child' }).length > 0,
+      );
+    };
+
+    expect(StyleSheet.flatten(renderWithInset('safe-area').props.style)).toEqual({
+      paddingBottom: 34,
+    });
+    expect(renderWithInset('none').props.style).toBeUndefined();
   });
 
   test('uses a caller-provided fixed height on a bounded sheet with only top corners rounded', () => {

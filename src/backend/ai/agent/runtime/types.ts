@@ -23,7 +23,7 @@ import type {
   AiUsagePricingSnapshot,
   ServingCredentialReceipt,
 } from '@/shared/data/types/aiUsageRecord';
-import type { Currency } from '@/shared/data/types/model';
+import type { Currency, UniqueModelId } from '@/shared/data/types/model';
 
 import type { TraceSpan } from '../../observability';
 
@@ -217,7 +217,8 @@ export type RuntimeInputPart =
   | RuntimeImagePart;
 
 export type RuntimeMessagePart =
-  | { type: 'text' | 'reasoning'; text: string }
+  | { type: 'text'; text: string }
+  | { type: 'reasoning'; text: string; sourceModelId?: UniqueModelId }
   | RuntimeTextAttachmentPart
   | RuntimeDocumentAttachmentPart
   | RuntimeImagePart
@@ -283,6 +284,8 @@ export type RuntimeToolCall = {
   turnId: string;
   /** The Runtime's executor for a capability the Host only describes, such as Code Mode. */
   run?(): Promise<RuntimeToolResult>;
+  /** Validated answer supplied when resuming a parked question capability. */
+  answer?: RuntimeJsonValue;
 };
 
 export type RuntimeTool = {
@@ -319,6 +322,8 @@ export type RuntimeTool = {
   requiredInstructions?: { key: string; refusal: string };
   /** Low-frequency tools are found through tool_search instead of sent with every request. */
   deferred?: boolean;
+  /** Normalize and validate question arguments before parking; owned by the capability. */
+  parseQuestion?: (input: RuntimeJsonValue) => RuntimeJsonValue;
   execute(call: RuntimeToolCall): Promise<RuntimeToolResult>;
 };
 

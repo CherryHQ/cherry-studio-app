@@ -1,5 +1,6 @@
 import type { AgentSubmitMessageInput } from '@/shared/contracts/agent';
 import type {
+  RemoteAgentSource,
   RemoteAttachment,
   RemoteAttachmentDraftView,
   RemoteModelOption,
@@ -185,10 +186,12 @@ export interface RemoteConversationSource extends ConversationSource {
   readonly draftScope: string;
   readonly catalog: RemoteConversationCatalog;
   readonly tasks: RemoteTaskCatalogQueries;
+  getDispatch: RemoteAgentSource['getDispatch'];
+  subscribeDispatches: RemoteAgentSource['subscribeOperations'];
   /** Whether the draft's input already belongs to a start; an undelivered one stays with the draft. */
   hasSubmission(draftId: DraftId): boolean;
   openSession(ref: ConversationRef, signal: AbortSignal): Promise<RemoteConversationSession>;
-  /** Task-scoped membership is verified before opening a capability-free reader. */
+  /** Verifies membership in the selected task before opening the existing conversation. */
   openTaskSession(
     taskId: string,
     ref: ConversationRef,

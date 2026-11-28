@@ -87,6 +87,17 @@ describe('standalone code-block controls patch', () => {
 });
 
 describe('native Markdown table interaction patch', () => {
+  test('reserves touches on the Android table grid and releases parent interception before cell dispatch', () => {
+    const table = readFileSync(
+      `${process.cwd()}/node_modules/react-native-enriched-markdown/android/src/main/java/com/swmansion/enriched/markdown/segments/TableContainerView.kt`,
+      'utf8',
+    );
+    const grid = table.split('private class GridContainerView(')[1]?.split('private class ')[0];
+    expect(grid).toMatch(
+      /if \(event\.actionMasked == MotionEvent\.ACTION_DOWN\) \{[^}]*requestDisallowInterceptTouchEvent\(true\)\s+parent\?\.requestDisallowInterceptTouchEvent\(false\)\s*\}\s*return super\.dispatchTouchEvent\(event\)/,
+    );
+  });
+
   test('preserves the upstream iOS table copy menu and restricts link gestures to links', () => {
     expect(patch).not.toContain('-  [_gridContainer addInteraction:contextMenu];');
     expect(patch).toContain('+  return [self linkURLAtPoint:[touch locationInView:self]] != nil;');

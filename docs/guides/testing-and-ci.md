@@ -75,17 +75,24 @@ platform adapter family.
 
 ## Before Creating A Draft PR
 
-Run these full local gates on the final local head:
+Run targeted unit tests covering the changed files and affected consumers (using `pnpm test:changed`
+or explicit file paths such as `pnpm test:app -- path/to/file.test.ts --runInBand` and
+`pnpm --filter @cherrystudio/ai-runtime test src/path/to/file.test.ts`), then run the incremental
+static and typecheck gate matching PR CI:
 
 ```bash
-pnpm lint
-pnpm format:check
-pnpm typecheck
+pnpm check:changed
 ```
 
-Also rerun the behavior-related fixed suites and specialized checks selected above. Do not run the
-full local `pnpm test`; remote PR CI owns the application/package suite. The local-only tooling
-suites described below still run as focused checks when their behavior changes.
+Use `pnpm check:plan` to inspect what `scripts/changedChecks.ts` selects against `main` (including
+staged, unstaged, and untracked files). With `--no-tests` (used by `pnpm check:changed` and PR CI),
+only incremental lint, format, scoped typecheck, and triggered specialized contract checks run. When
+global configuration changes (`package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`,
+`eslint.config.js`, `.oxfmtrc.json`, etc.), impacted static checks automatically promote to full.
+
+Do not run the full local `pnpm test` unless explicitly requested; use `pnpm check:full` when you
+want an explicit full local run. The local-only native fixture check described below still runs
+explicitly when changing that native patch.
 
 ### After Changing Dependencies
 
@@ -105,34 +112,39 @@ same commit as the change itself.
 
 ## Ready For Review
 
-Pull requests start as drafts. If the draft changed after its local gates, rerun the gates on the
-final head before marking it ready. [PR CI](../../.github/workflows/pr-ci.yml) runs the configured
-application/package tests, typecheck, lint, format, translation, UI/AI-runtime boundary, design,
-skill, workflow lint, and documentation link checks for non-draft PRs targeting `main`.
-A new push cancels the PR's previous run. The `CI` job succeeds only when test, typecheck, and lint
-all succeed; use it as the required check on `main`. [Release](../../.github/workflows/release.yml)
-runs the same workflow on the tagged commit before building.
+Pull requests start as drafts. If the draft changed after its local gates, rerun your targeted tests
+and `pnpm check:changed` on the final head before marking it ready.
+[PR CI](../../.github/workflows/pr-ci.yml) shares `scripts/changedChecks.ts` with `--no-tests` for
+non-draft PRs targeting `main`: it runs scoped typechecks, incremental lint/format, and triggered
+specialized checks while skipping unit tests and bypassing `pnpm install` on workflow-only or
+docs-only PRs. Add the `ci:full` label to a PR (or dispatch `pr-ci.yml` with `mode: full`) when
+you want a full remote test run on that PR. A new push cancels the PR's previous run, and
+[Cancel closed PR CI](../../.github/workflows/ci-cancel-closed-pr.yml) cancels unfinished PR CI runs
+when a PR closes. The `CI` job succeeds only when planning succeeds and every planned `test`,
+`typecheck`, and `lint` job reports success without unexpected skips; use `CI` as the required check
+on `main`.
+
+Full test coverage runs automatically outside ordinary PRs:
+
+- [Release](../../.github/workflows/release.yml) calls `pr-ci.yml` with `mode: full` on every
+  `v*.*.*` tag before building.
+- [Nightly Full CI](../../.github/workflows/nightly-ci.yml) runs `pr-ci.yml` with `mode: full`
+  every day at `17 18 * * *` UTC (02:17 Beijing time) and supports manual `workflow_dispatch`.
 
 ### Remote Coverage And Local Exceptions
 
 - Root `pnpm test` runs the `ai-runtime` package suite, then root Jest.
 - Provider registry schemas and catalog generation are tested upstream in the published package.
   Root Jest covers Mobile registry loading, compatibility projections, and consumed behavior.
-- With `PRCI` set, Jest includes `scripts/__tests__/architectureBoundaries.test.ts` to protect
-  dependency rules on every PR, `scripts/__tests__/reactNativeTextCache.test.ts` to guard the
-  React Native text cache patch, and `scripts/__tests__/androidWindowCompatibility.test.ts` to guard
-  the Screens Material dependency patch. `scripts/__tests__/expoFilePermissions.test.ts` guards
-  Android no-backup model storage access. `scripts/__tests__/nitroIosCompatibility.test.ts` guards
-  Nitro's iOS 17 exception compatibility patch. `expoModulesCoreSwiftCompatibility.test.ts` guards
-  Expo's Swift consuming-result compiler workaround. `skiaCompilerMemory.test.ts` guards Skia's
-  compiler-memory patch delivery and shared C++ compilation graph.
-  `enrichedMarkdownInlineMath.test.ts` compiles the patched md4c and checks the inline math it
-  hands both platforms' renderers.
-  `enrichedMarkdownInputMeasurement.test.ts` guards the iOS input measurement patch; its native
-  regression requires an explicitly selected simulator
-  as described in [Development](./development.md#enriched-markdown-patch). Other `scripts/__tests__/` suites, including
-  instruction-tooling regressions, remain excluded. Run the affected tooling suites locally without
-  `PRCI` when changing those tools; remote success does not cover them.
+- `scripts/__tests__/` suites are enabled in both `pnpm test:changed` and remote full CI runs
+  (nightly, release tags, `ci:full`, and manual `workflow_dispatch`).
+  `scripts/__tests__/patchReapplication.test.ts` remains temporarily excluded in `jest.config.js`
+  because `virtualStoreDirMaxLength: 40` short-hashes `.pnpm` virtual-store directories and
+  `patches/react-native-enriched-markdown@1.1.1.patch` has pre-existing `EventEmitters.cpp`
+  reapplication findings tracked separately.
+- `scripts/__tests__/enrichedMarkdownInputMeasurement.test.ts` guards the iOS input measurement
+  patch; its native `.mm` regression requires an explicitly selected simulator as described in
+  [Development](./development.md#enriched-markdown-patch).
 - `skills:check` checks public skill entry points, whitelist files, and Claude symlinks.
   `docs:check-links` checks relative file links in project docs, the
   [Project Skills usage rules](../../.agents/skills/README.md), and public skill Markdown, including

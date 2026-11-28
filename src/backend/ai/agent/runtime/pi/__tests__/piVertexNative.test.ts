@@ -16,8 +16,8 @@ describe('native Vertex adapter patches', () => {
   });
 
   it.each([
-    '@earendil-works/pi-ai@1.5.0',
-    '@google/genai@2.23.0',
+    '@earendil-works/pi-ai@1.7.0',
+    '@google/genai@3.6.1',
     '@anthropic-ai/vertex-sdk@0.22.0',
   ])('pins %s to its versioned patch and lockfile hash', (name) => {
     const path = `patches/${name.replace('/', '__')}.patch`;

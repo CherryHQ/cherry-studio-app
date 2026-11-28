@@ -3,6 +3,7 @@ import type { AssistantMessage } from '@earendil-works/pi-ai';
 import { normalizeAiError } from '@/backend/ai/normalizeAiError';
 
 import type { RuntimeError } from '../types';
+import { isPiNonStreamingError } from './piNonStreamingFetch';
 
 /** Adapt Pi's terminal provider facts without deciding their product meaning. */
 export function readPiTerminalError(message: AssistantMessage): RuntimeError | undefined {
@@ -26,8 +27,8 @@ export function readPiTerminalError(message: AssistantMessage): RuntimeError | u
       responseBody: typeof body === 'string' ? body : JSON.stringify(body),
       finishReason:
         typeof message.rawStopReason === 'string' ? message.rawStopReason : message.stopReason,
-      // A user may retry after fixing configuration; Pi owns automatic retry separately.
-      retryable: message.api !== 'cherry-image',
+      // Finite mode/protocol errors stay terminal; keep the existing user-retry policy otherwise.
+      retryable: !isPiNonStreamingError(diagnostic?.error) && message.api !== 'cherry-image',
     },
     [],
     { providerId: message.provider, modelId: message.model },

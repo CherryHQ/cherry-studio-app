@@ -7,6 +7,7 @@ import type { ManagedFileResolver } from '../resources/managedFileResolver';
 import type {
   RuntimeSqlDatabase,
   RuntimeExecutionPorts,
+  RuntimeImageProcessor,
   RuntimeScriptSandbox,
   RuntimeUsageOwner,
   RuntimeUsageReport,
@@ -33,6 +34,7 @@ export type MobileAgentHostNaming = Pick<
  */
 export type MobileAgentHostPorts = {
   scriptSandbox?(): RuntimeScriptSandbox | undefined;
+  imageProcessor?: RuntimeImageProcessor;
   writeToolOutput?(
     /** `folderId` is the turn's workspace; outputs land beside the Agent's other writes. */
     output: { name: string; data: string | Uint8Array; folderId: string | null },
@@ -45,6 +47,7 @@ export type MobileAgentHostPorts = {
   /** Screen-awake demand for user-visible generation; independent of background execution. */
   generationLease?(tag: string): { release(): void };
   shouldRecoverStorage?(): boolean;
+  isForeground?(): boolean;
   /** Supplied by data composition; the Host never imports SQLite or Pi storage. */
   durableStorage?: {
     open(): Promise<RuntimeSqlDatabase>;
@@ -77,5 +80,6 @@ export type MobileAgentHostPorts = {
   usage: Pick<AgentSessionUsageRecorder, 'drain' | 'record'>;
   tools: SystemCapabilitySource;
   webTools?(): Promise<RuntimeWebTools>;
+  onSessionDeleted?(sessionId: string): Promise<void> | void;
   traces?: TraceRecorder;
 };

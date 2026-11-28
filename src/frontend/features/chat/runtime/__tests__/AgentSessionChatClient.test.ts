@@ -429,6 +429,7 @@ describe('AgentSessionChatClient', () => {
     const client = new AgentSessionChatClient(protocol);
     const release = client.subscribe('session-1', () => undefined);
     await client.observe('session-1');
+    const originalRevision = client.getState('session-1').transcriptRevision;
     expect(client.getState('session-1').liveMessages[0]?.parts[0]).toMatchObject({
       text: 'before',
     });
@@ -450,6 +451,7 @@ describe('AgentSessionChatClient', () => {
 
     await client.resumeObservedSessions();
     expect(protocol.observeSession).toHaveBeenCalledTimes(2);
+    expect(client.getState('session-1').transcriptRevision).toBe((originalRevision ?? 0) + 1);
     expect(client.getState('session-1').liveMessages[0]?.parts[0]).toMatchObject({
       text: 'before and after',
     });
@@ -817,6 +819,7 @@ describe('AgentSessionChatClient', () => {
     const client = new AgentSessionChatClient(protocol, { onTranscriptChanged });
     await client.observe('session-1');
     onTranscriptChanged.mockClear();
+    const revision = client.getState('session-1').transcriptRevision ?? 0;
     const second = { ...assistantMessage(), id: 'assistant-2' };
     listener?.({ type: 'message.created', message: userMessage() });
     listener?.({ type: 'message.created', message: assistantMessage() });
@@ -828,8 +831,10 @@ describe('AgentSessionChatClient', () => {
       message: { ...assistantMessage(), status: 'success' },
     });
     expect(onTranscriptChanged).not.toHaveBeenCalled();
+    expect(client.getState('session-1').transcriptRevision).toBe(revision);
     listener?.({ type: 'message.finalized', message: { ...second, status: 'success' } });
     expect(onTranscriptChanged).toHaveBeenCalledTimes(1);
+    expect(client.getState('session-1').transcriptRevision).toBe(revision + 1);
   });
 
   test('drops a deleted turn from live state and refreshes the durable transcript', async () => {
@@ -854,11 +859,13 @@ describe('AgentSessionChatClient', () => {
 
     onTranscriptChanged.mockClear();
     onSessionChanged.mockClear();
+    const revisionBeforeDelete = client.getState('session-1').transcriptRevision ?? 0;
     listener?.({ type: 'turn.deleted', turnId: 'turn-1', messageIds: ['user-1', 'assistant-1'] });
 
     // The rows are gone from the live overlay, so the refetched window is the
     // only thing left describing the transcript.
     expect(client.getState('session-1').liveMessages).toEqual([]);
+    expect(client.getState('session-1').transcriptRevision).toBe(revisionBeforeDelete + 1);
     expect(onTranscriptChanged).toHaveBeenCalledWith('session-1');
     expect(onSessionChanged).toHaveBeenCalledWith('session-1');
   });
@@ -889,7 +896,9 @@ describe('AgentSessionChatClient', () => {
         endedAt: '2026-09-22T00:00:01.000Z',
       },
     });
+    const revisionBeforeDelete = client.getState('session-1').transcriptRevision ?? 0;
     listener?.({ type: 'messages.deleted', messageIds: ['another-answer'] });
+    expect(client.getState('session-1').transcriptRevision).toBe(revisionBeforeDelete + 1);
     expect(client.getState('session-1').activeTurn?.assistantMessageId).toBe('assistant-1');
     expect(client.getState('session-1').liveMessages.map(({ id }) => id)).toEqual([
       'user-1',

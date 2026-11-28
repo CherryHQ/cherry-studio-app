@@ -102,7 +102,7 @@ export async function generatePiText(
     );
     for await (const event of events) {
       signal.throwIfAborted();
-      if (event.type === 'text_delta') {
+      if (event.type === 'text_delta' && resolved.shouldStream !== false) {
         text += event.delta;
         onText?.(text);
       }
@@ -113,7 +113,7 @@ export async function generatePiText(
         .filter((part) => part.type === 'text')
         .map((part) => part.text)
         .join('');
-      if (content !== text) {
+      if (resolved.shouldStream === false ? event.type === 'done' : content !== text) {
         text = content;
         onText?.(text);
       }

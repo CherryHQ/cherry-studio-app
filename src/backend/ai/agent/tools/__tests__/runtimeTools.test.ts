@@ -133,13 +133,62 @@ describe('Agent Runtime MCP tool resolution', () => {
       }),
     });
 
-    await resolver.resolve(AGENT_ID, onUnavailable);
+    const { mcpNamespaces, unavailableServerIds } = await resolver.resolve(AGENT_ID, onUnavailable);
 
+    expect(unavailableServerIds).toEqual([SERVER_A]);
     expect(createRuntimeTools).toHaveBeenCalledWith([
       { descriptor: descriptor(SERVER_B, 'lookup'), approval: 'ask' },
     ]);
     expect(onUnavailable).toHaveBeenCalledWith(expect.stringContaining('Remote tools'));
     expect(JSON.stringify(onUnavailable.mock.calls)).not.toContain('private endpoint');
+    expect(mcpNamespaces).toEqual([
+      {
+        serverId: SERVER_A,
+        name: 'remote_tools',
+        description:
+          'MCP server "Remote tools" (remote endpoint) (currently disconnected or unavailable).',
+      },
+      {
+        serverId: SERVER_B,
+        name: 'remote_tools_2',
+        description: 'MCP server "Remote tools" (remote endpoint).',
+      },
+    ]);
+  });
+
+  test('prefixes digit-leading MCP namespace slugs so Code Mode keeps them distinct', async () => {
+    const resolver = createAgentRuntimeToolResolver({
+      servers: {
+        list: async () => ({
+          items: [
+            { ...remoteServer(SERVER_A), name: '1 Docs' },
+            { ...remoteServer(SERVER_B), name: '2 Docs' },
+          ],
+        }),
+      },
+      bindings: {
+        list: async () => ({ items: [binding(SERVER_A), binding(SERVER_B)] }),
+        resolveMcpTool: async () => ({ approval: 'ask', enabled: true }),
+      },
+      getMcpRuntime: () => ({
+        createRuntimeTools: (selections) => selections as unknown as RuntimeTool[],
+        listExecutableToolDescriptors: async (serverId) => [descriptor(serverId, 'lookup')],
+      }),
+    });
+
+    const { mcpNamespaces } = await resolver.resolve(AGENT_ID);
+    expect(mcpNamespaces).toEqual([
+      {
+        serverId: SERVER_A,
+        name: 'mcp_1_docs',
+        description: 'MCP server "1 Docs" (remote endpoint).',
+      },
+      {
+        serverId: SERVER_B,
+        name: 'mcp_2_docs',
+        description: 'MCP server "2 Docs" (remote endpoint).',
+      },
+    ]);
   });
 
   test('skips discovery without connected plugins or enabled remote bindings', async () => {
@@ -153,7 +202,12 @@ describe('Agent Runtime MCP tool resolution', () => {
       getMcpRuntime,
     });
 
-    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({ tools: [], pluginGuides: [] });
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({
+      tools: [],
+      pluginGuides: [],
+      mcpNamespaces: [],
+      unavailableServerIds: [],
+    });
     expect(getMcpRuntime).not.toHaveBeenCalled();
   });
 
@@ -195,6 +249,19 @@ describe('Agent Runtime MCP tool resolution', () => {
     const expected = {
       tools: pluginDescriptors.map((descriptor) => ({ descriptor, approval: 'ask' })),
       pluginGuides: [],
+      mcpNamespaces: [
+        {
+          serverId: SERVER_A,
+          name: 'github',
+          description: 'MCP server "GitHub" (built-in plugin).',
+        },
+        {
+          serverId: SERVER_B,
+          name: 'feishu',
+          description: 'MCP server "Feishu" (built-in plugin).',
+        },
+      ],
+      unavailableServerIds: [],
     };
     await expect(resolver.resolve(AGENT_ID, onUnavailable)).resolves.toEqual(expected);
     await expect(resolver.resolve(AGENT_ID)).resolves.toEqual(expected);
@@ -213,7 +280,12 @@ describe('Agent Runtime MCP tool resolution', () => {
       },
       getMcpRuntime,
     });
-    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({ tools: [], pluginGuides: [] });
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({
+      tools: [],
+      pluginGuides: [],
+      mcpNamespaces: [],
+      unavailableServerIds: [],
+    });
     expect(getMcpRuntime).not.toHaveBeenCalled();
   });
 
@@ -261,13 +333,26 @@ describe('Agent Runtime MCP tool resolution', () => {
     const { tools: first } = await resolver.resolve(AGENT_ID);
     expect(first).toHaveLength(1);
     connected = [];
-    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({ tools: [], pluginGuides: [] });
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({
+      tools: [],
+      pluginGuides: [],
+      mcpNamespaces: [],
+      unavailableServerIds: [],
+    });
     connected = [pluginServer(SERVER_B)];
     await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({
       tools: [
         { descriptor: { ...descriptor(SERVER_B, 'search'), endpointUrl: null }, approval: 'ask' },
       ],
       pluginGuides: [],
+      mcpNamespaces: [
+        {
+          serverId: SERVER_B,
+          name: 'github',
+          description: 'MCP server "GitHub" (built-in plugin).',
+        },
+      ],
+      unavailableServerIds: [],
     });
     expect(first).toEqual([
       { descriptor: { ...descriptor(SERVER_A, 'search'), endpointUrl: null }, approval: 'ask' },
@@ -305,6 +390,15 @@ describe('Agent Runtime MCP tool resolution', () => {
     expect(firstTurn.pluginGuides).toHaveLength(1);
     expect(firstTurn.pluginGuides[0].content).toContain('## Read a document');
     expect(firstTurn.pluginGuides[0].content).not.toContain('update-doc');
+    expect(firstTurn.mcpNamespaces).toEqual([
+      {
+        serverId: SERVER_A,
+        name: 'feishu',
+        description: 'MCP server "Feishu" (built-in plugin).',
+        instructions: `Load workflow "plugin:${SERVER_A}" with load_workflow in a separate tool round before calling tools in this namespace.`,
+      },
+    ]);
+    expect(firstTurn.mcpNamespaces?.[0]?.instructions).toBeTruthy();
     await expect(resolver.resolve('another-agent')).resolves.toEqual(firstTurn);
 
     canWrite = true;
@@ -313,7 +407,19 @@ describe('Agent Runtime MCP tool resolution', () => {
     expect(firstTurn.pluginGuides[0].content).not.toContain('update-doc');
 
     isConnected = false;
-    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({ tools: [], pluginGuides: [] });
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({
+      tools: [],
+      pluginGuides: [],
+      mcpNamespaces: [
+        {
+          serverId: SERVER_A,
+          name: 'feishu',
+          description:
+            'MCP server "Feishu" (built-in plugin) (currently disconnected or unavailable).',
+        },
+      ],
+      unavailableServerIds: [SERVER_A],
+    });
     expect(secondTurn.pluginGuides[0].content).toContain('## Modify an existing document');
   });
 
@@ -332,8 +438,14 @@ describe('Agent Runtime MCP tool resolution', () => {
       },
       getMcpRuntime: () => ({
         createRuntimeTools: (selections) => selections as unknown as RuntimeTool[],
-        listExecutableToolDescriptors: async (_serverId, report) => {
+        listExecutableToolDescriptors: async (
+          _serverId,
+          report,
+          _signal,
+          reportDiscoveryIncomplete,
+        ) => {
           report?.(warning);
+          reportDiscoveryIncomplete?.();
           return [
             'wiki_get_node',
             'base_list_fields',
@@ -349,8 +461,20 @@ describe('Agent Runtime MCP tool resolution', () => {
       }),
     });
 
-    const { tools, pluginGuides } = await resolver.resolve(AGENT_ID, onUnavailable);
+    const { tools, pluginGuides, mcpNamespaces, unavailableServerIds } = await resolver.resolve(
+      AGENT_ID,
+      onUnavailable,
+    );
     expect(tools).toHaveLength(5);
+    expect(unavailableServerIds).toEqual([SERVER_A]);
+    expect(mcpNamespaces).toEqual([
+      {
+        serverId: SERVER_A,
+        name: 'feishu',
+        description: 'MCP server "Feishu" (built-in plugin).',
+        instructions: expect.any(String),
+      },
+    ]);
     expect(onUnavailable.mock.calls).toEqual([[warning]]);
     expect(pluginGuides).toHaveLength(1);
     const content = pluginGuides[0].content;
@@ -359,5 +483,138 @@ describe('Agent Runtime MCP tool resolution', () => {
     expect(content).not.toContain('## Update a Base record');
     expect(content).not.toContain('fetch-doc');
     expect(content).not.toContain('search-user');
+  });
+
+  test('treats clean empty remote catalogs and non-retryable unavailable errors as confirmed absence', async () => {
+    const emptyResolver = createAgentRuntimeToolResolver({
+      servers: { list: async () => ({ items: [remoteServer(SERVER_A)] }) },
+      bindings: {
+        list: async () => ({ items: [binding(SERVER_A)] }),
+        resolveMcpTool: jest.fn(),
+      },
+      getMcpRuntime: () => ({
+        createRuntimeTools: () => [],
+        listExecutableToolDescriptors: async (_serverId, report) => {
+          report?.('Remote tools: the service returned no available tools.');
+          return [];
+        },
+      }),
+    });
+
+    await expect(emptyResolver.resolve(AGENT_ID)).resolves.toMatchObject({
+      tools: [],
+      mcpNamespaces: [
+        {
+          serverId: SERVER_A,
+          name: 'remote_tools',
+          description: 'MCP server "Remote tools" (remote endpoint).',
+        },
+      ],
+      unavailableServerIds: [],
+    });
+
+    const nonRetryableResolver = createAgentRuntimeToolResolver({
+      servers: { list: async () => ({ items: [remoteServer(SERVER_A)] }) },
+      bindings: {
+        list: async () => ({ items: [binding(SERVER_A)] }),
+        resolveMcpTool: jest.fn(),
+      },
+      getMcpRuntime: () => ({
+        createRuntimeTools: () => [],
+        listExecutableToolDescriptors: async () => {
+          throw Object.assign(new Error('The MCP server is not executable.'), {
+            code: 'mcp_tool_unavailable',
+            retryable: false,
+          });
+        },
+      }),
+    });
+
+    await expect(nonRetryableResolver.resolve(AGENT_ID)).resolves.toMatchObject({
+      tools: [],
+      mcpNamespaces: [
+        {
+          serverId: SERVER_A,
+          name: 'remote_tools',
+          description: 'MCP server "Remote tools" (remote endpoint).',
+        },
+      ],
+      unavailableServerIds: [],
+    });
+  });
+
+  test('marks incomplete empty discovery via onDiscoveryIncomplete in unavailableServerIds and namespace availability', async () => {
+    const resolver = createAgentRuntimeToolResolver({
+      servers: { list: async () => ({ items: [remoteServer(SERVER_A)] }) },
+      bindings: {
+        list: async () => ({ items: [binding(SERVER_A)] }),
+        resolveMcpTool: jest.fn(),
+      },
+      getMcpRuntime: () => ({
+        createRuntimeTools: () => [],
+        listExecutableToolDescriptors: async (
+          _serverId,
+          report,
+          _signal,
+          reportDiscoveryIncomplete,
+        ) => {
+          report?.('Timed out.');
+          reportDiscoveryIncomplete?.();
+          return [];
+        },
+      }),
+    });
+
+    await expect(resolver.resolve(AGENT_ID)).resolves.toMatchObject({
+      tools: [],
+      mcpNamespaces: [
+        {
+          serverId: SERVER_A,
+          name: 'remote_tools',
+          description:
+            'MCP server "Remote tools" (remote endpoint) (currently disconnected or unavailable).',
+        },
+      ],
+      unavailableServerIds: [SERVER_A],
+    });
+  });
+
+  test('preserves onDiscoveryIncomplete when listExecutableToolDescriptors rejects non-retryably after state invalidation', async () => {
+    const resolver = createAgentRuntimeToolResolver({
+      servers: { list: async () => ({ items: [remoteServer(SERVER_A)] }) },
+      bindings: {
+        list: async () => ({ items: [binding(SERVER_A)] }),
+        resolveMcpTool: jest.fn(),
+      },
+      getMcpRuntime: () => ({
+        createRuntimeTools: () => [],
+        listExecutableToolDescriptors: async (
+          _serverId,
+          report,
+          _signal,
+          reportDiscoveryIncomplete,
+        ) => {
+          report?.('Server state changed during discovery.');
+          reportDiscoveryIncomplete?.();
+          throw Object.assign(new Error('This tool is currently unavailable.'), {
+            code: 'mcp_tool_unavailable',
+            retryable: false,
+          });
+        },
+      }),
+    });
+
+    await expect(resolver.resolve(AGENT_ID)).resolves.toMatchObject({
+      tools: [],
+      mcpNamespaces: [
+        {
+          serverId: SERVER_A,
+          name: 'remote_tools',
+          description:
+            'MCP server "Remote tools" (remote endpoint) (currently disconnected or unavailable).',
+        },
+      ],
+      unavailableServerIds: [SERVER_A],
+    });
   });
 });

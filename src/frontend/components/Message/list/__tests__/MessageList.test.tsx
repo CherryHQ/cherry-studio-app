@@ -886,6 +886,33 @@ describe('MessageList scroll-controller ownership', () => {
     expect(mockListScrollToEnd).toHaveBeenCalledTimes(2);
   });
 
+  test('captures one reading anchor after the keyboard transition instead of reading on every scroll', async () => {
+    act(() => {
+      renderer = create(<MessageList {...listProps([createMessage('user-1', 'user')])} />);
+    });
+    await loadList();
+    mockListState = { ...mockListState, start: 0, scroll: 36 };
+    const getState = jest.spyOn(mockLegendListRef, 'getState');
+    try {
+      act(() => {
+        mockLatestListProps?.onScrollBeginDrag?.();
+        mockKeyboardHandlers.onStart?.({} as never);
+        mockLatestListProps?.onScroll?.({} as never);
+        mockLatestListProps?.onScroll?.({} as never);
+      });
+      expect(getState).not.toHaveBeenCalled();
+
+      act(() => mockKeyboardHandlers.onEnd?.({} as never));
+      expect(getState).toHaveBeenCalledTimes(1);
+      expect(cacheService.get('chat.scroll_anchor.session-1')).toEqual({
+        key: 'user-1',
+        offset: 36,
+      });
+    } finally {
+      getState.mockRestore();
+    }
+  });
+
   test('corrects the live edge after keyboard dismissal even without a viewport resize', async () => {
     act(() => {
       renderer = create(<MessageList {...listProps([createMessage('user-1', 'user')])} />);
@@ -1056,6 +1083,60 @@ describe('MessageList scroll-controller ownership', () => {
     expect(mockScrollButtonProps?.bottomAccessoryHeight?.get()).toBe(167);
     accessoryHeight.set(120);
     expect(mockScrollButtonProps?.bottomAccessoryHeight?.get()).toBe(207);
+  });
+
+  test('uses the composer visual bottom for the button without changing list content padding', async () => {
+    const settledHeight = mockCreateSharedValue(148);
+    const visualHeight = mockCreateSharedValue(148);
+    act(() => {
+      renderer = create(
+        <MessageList
+          {...listProps([createMessage('user-1', 'user')], {
+            bottomAccessoryHeight: settledHeight,
+            visualBottomAccessoryHeight: visualHeight,
+            keyboardOffset: 80,
+          })}
+        />,
+      );
+    });
+    await loadList();
+    expect(mockLatestListProps?.contentInsetEndAdjustment).toBe(settledHeight);
+    expect(mockScrollButtonProps?.bottomAccessoryHeight?.get()).toBe(148);
+
+    mockKeyboardHeight.set(-336);
+    mockKeyboardProgress.set(1);
+    visualHeight.set(158 + 256);
+    expect(mockLatestListProps?.contentInsetEndAdjustment).toBe(settledHeight);
+    expect(settledHeight.get()).toBe(148);
+    expect(mockScrollButtonProps?.bottomAccessoryHeight?.get()).toBe(414);
+  });
+
+  test('defers the scroll button visibility change until the keyboard settles', async () => {
+    act(() => {
+      renderer = create(<MessageList {...listProps([createMessage('user-1', 'user')])} />);
+    });
+    await loadList();
+    act(() => {
+      mockLatestListProps?.onLayout?.(layoutEvent(400));
+      mockLatestListProps?.onContentSizeChange?.(390, 300);
+      mockLatestListProps?.onScrollBeginDrag?.();
+      flushAnimatedReactions();
+    });
+    expect(mockScrollButtonProps?.isAtBottom).toBe(true);
+
+    act(() => {
+      mockKeyboardHandlers.onStart?.({} as never);
+      mockKeyboardHeight.set(-200);
+      mockKeyboardProgress.set(1);
+      flushAnimatedReactions();
+    });
+    expect(mockScrollButtonProps?.isAtBottom).toBe(true);
+
+    act(() => {
+      mockKeyboardHandlers.onEnd?.({} as never);
+      flushAnimatedReactions();
+    });
+    expect(mockScrollButtonProps?.isAtBottom).toBe(false);
   });
 
   test('counts the floating composer inset when determining the visible bottom', async () => {

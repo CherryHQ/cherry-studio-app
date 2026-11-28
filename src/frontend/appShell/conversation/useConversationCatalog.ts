@@ -87,6 +87,11 @@ export function useCatalog<T>(
     ...query,
     // A disabled source can still have an unsettled read, but cannot report active loading.
     isLoading: active && query.isLoading,
+    isCachedCatalog:
+      source.ref.kind === 'desktop' &&
+      availability.state === 'disabled' &&
+      !retired &&
+      !!query.data,
     data: retired ? undefined : query.data,
     items: retired ? [] : (query.data?.pages.flatMap((page) => page.items) ?? []),
   };
@@ -95,6 +100,21 @@ export function useCatalog<T>(
 export function useConversationAgents(enabled = true) {
   const { catalog } = useConversationSource();
   return useCatalog(['agents'], catalog.listAgents, enabled);
+}
+
+export function useResolvedConversationAgent(agentId?: string, fallbackToFirst = true) {
+  const agents = useConversationAgents();
+  const { fetchNextPage, hasNextPage, isFetching, isError, items } = agents;
+  const agent = agentId
+    ? items.find((item) => item.id === agentId)
+    : fallbackToFirst
+      ? items[0]
+      : undefined;
+  useEffect(() => {
+    if (agentId && !agent && hasNextPage && !isFetching && !isError)
+      void fetchNextPage({ cancelRefetch: false });
+  }, [agentId, agent, fetchNextPage, hasNextPage, isFetching, isError]);
+  return { agent, agents };
 }
 export function useConversationSessions(
   agent?: AgentRef,

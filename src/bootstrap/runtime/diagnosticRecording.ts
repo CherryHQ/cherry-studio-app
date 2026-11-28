@@ -9,7 +9,10 @@ import {
   installLogWriter,
   loggerService,
 } from '@/shared/core/logger/LoggerService';
-import { recordStartupEvent } from '@/shared/core/logger/startupDiagnostics';
+import {
+  markStartupInterrupted,
+  recordStartupEvent,
+} from '@/shared/core/logger/startupDiagnostics';
 
 import { captureDiagnosticContext } from './diagnosticContext';
 
@@ -28,12 +31,20 @@ type RuntimeGlobals = {
 // A process-level log sink must also survive a failed/replaced ApplicationHost.
 const logger = loggerService.withContext('CrashTelemetry');
 try {
-  installDiagnosticContextReader(captureDiagnosticContext);
-  installLogWriter(createDiagnosticLogWriter());
-  // This observer has the same app-entry process lifetime as the installed writer.
+  if (AppState.currentState === 'background') markStartupInterrupted();
   AppState.addEventListener('change', (state) => {
+    if (state === 'background') markStartupInterrupted();
     if (state !== 'active') flushLogWriter();
   });
+} catch (error) {
+  // Without lifecycle history this launch cannot supply a foreground-only sample.
+  markStartupInterrupted();
+  logger.warn('Startup lifecycle observation unavailable', { error });
+}
+
+try {
+  installDiagnosticContextReader(captureDiagnosticContext);
+  installLogWriter(createDiagnosticLogWriter());
 } catch (error) {
   // Unavailable file storage must not turn diagnostic setup into a boot failure.
   logger.warn('Diagnostic file logging unavailable', { error });

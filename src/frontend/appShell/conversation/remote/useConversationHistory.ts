@@ -135,15 +135,19 @@ export function useConversationHistory(
   const loadNewer = useCallback(async () => {
     if (hasPreviousPage && !isFetching) await fetchPreviousPage({ cancelRefetch: false });
   }, [hasPreviousPage, isFetching, fetchPreviousPage]);
+  const visibleStartIndex =
+    retired || around ? 0 : Math.max(0, messages.length - renderWindow.visibleMessages.length);
+  let hiddenUserTurnCount = 0;
+  if (!retired) {
+    for (let index = 0; index < visibleStartIndex; index += 1) {
+      if (messages[index]?.display.role === 'user') hiddenUserTurnCount += 1;
+    }
+  }
   return {
     dataKey: JSON.stringify([session?.scope, session?.ref.sessionId, around, navigationKey]),
     revision: version,
     readCitations: retired ? undefined : session?.history.readCitations,
-    messages: retired
-      ? []
-      : around
-        ? messages
-        : messages.slice(Math.max(0, messages.length - renderWindow.visibleMessages.length)),
+    messages: retired ? [] : around ? messages : messages.slice(visibleStartIndex),
     installedVersion: query.isPlaceholderData ? undefined : query.data?.pages[0]?.version,
     error: retired ? RETIRED : (query.error ?? undefined),
     isLoadingInitial: Boolean(
@@ -157,6 +161,12 @@ export function useConversationHistory(
     isLoadingOlder: query.isFetchingNextPage,
     isLoadingNewer: query.isFetchingPreviousPage,
     hasOlderMessages: Boolean(query.hasNextPage || (!around && renderWindow.hasHiddenMessages)),
+    hasUnfetchedOlderMessages: retired
+      ? false
+      : query.data
+        ? Boolean(query.hasNextPage)
+        : Boolean(preview?.hasOlderMessages),
+    hiddenUserTurnCount,
     hasNewerMessages: Boolean(
       around && (!query.data || query.isPlaceholderData || query.hasPreviousPage),
     ),

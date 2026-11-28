@@ -1,5 +1,5 @@
 import { createRef, useLayoutEffect, useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { EnrichedMarkdownTextInput } from 'react-native-enriched-markdown';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -69,13 +69,19 @@ jest.mock('react-native-reanimated', () => {
     // `bezier` and the interpolation helpers are `Composer.Menu`'s, which the
     // root pulls in even when nothing renders a menu.
     Easing: { bezier: () => 'bezier', ease: 'ease', inOut: (easing: unknown) => easing },
+    Extrapolation: { CLAMP: 'clamp' },
     ReduceMotion: { System: 'system' },
     interpolate: (value: number, _input: number[], output: number[]) =>
       output[0]! + (output[1]! - output[0]!) * value,
     runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
+    useAnimatedReaction: jest.fn(),
     useAnimatedStyle: (factory: () => object) => factory(),
+    useDerivedValue: (read: () => unknown) => ({ get: read }),
     useReducedMotion: () => false,
     useSharedValue: (initial: number) => ({
+      get() {
+        return this.value;
+      },
       set(next: number) {
         this.value = next;
       },
@@ -259,6 +265,38 @@ describe('Composer', () => {
     const input = tree.root.findByType(TextInput);
 
     expect(input.props.style).toEqual(expect.objectContaining({ color: '#111827', fontSize: 16 }));
+  });
+
+  it.each([
+    { value: '', defaultValue: undefined },
+    { value: 'Hello', defaultValue: 'Hello' },
+  ])('sets the native initial value for draft "$value"', ({ value, defaultValue }) => {
+    const tree = render({ value, children: <Composer.Input placeholder="Write a message" /> });
+
+    expect(tree.root.findByType(EnrichedMarkdownTextInput).props.defaultValue).toBe(defaultValue);
+  });
+
+  it('keeps placeholder padding outside the compact native field and restores it when editing', () => {
+    const editor = (active: boolean) => (
+      <Composer.Editor
+        active={active}
+        expandLabel="Expand"
+        field={<Composer.Input placeholder="Write a message" />}
+      />
+    );
+    const tree = render({ children: editor(false) });
+    const nativeStyle = () => StyleSheet.flatten(tree.root.findByType(TextInput).props.style);
+
+    expect(nativeStyle()).toMatchObject({ maxHeight: 32, paddingVertical: 0 });
+
+    act(() => {
+      tree.update(
+        <Composer onChangeText={jest.fn()} onSend={jest.fn()} value="">
+          {editor(true)}
+        </Composer>,
+      );
+    });
+    expect(nativeStyle()).toMatchObject({ maxHeight: 132, paddingVertical: 4 });
   });
 
   function renderReturnInput(submitOnReturn: boolean, insertNewlineLabel = 'Insert newline') {

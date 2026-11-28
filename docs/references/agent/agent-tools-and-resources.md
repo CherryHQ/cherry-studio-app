@@ -983,9 +983,12 @@ A second simultaneous question call is rejected.
 
 Question arguments and successful answers use ordinary persisted tool parts. The transcript shows
 a flat read-only record of every question and answer, associated by `questionId`. Missing, duplicate,
-unknown, or invalid answers reject the whole response without settling the wait. Pending callbacks and waiting state are memory-only, like
-approvals: leaving a route does not cancel the turn, but cancellation, host disposal, and process
-restart invalidate the question. Persisted unanswered questions are not resumable controls.
+unknown, or invalid answers reject the whole response without settling the wait. `ask_user_question`
+parks its waiting tool task durably in Pi so unanswered calls recover across process restarts until
+answered or cancelled, while in-turn confirmation flows (`adapt_skill`) stay memory-only and share
+the single-pending-question mutual exclusion check with durable questions. Leaving a route does not
+cancel the turn; cancellation or Host disposal discards memory-only confirmation waits, and aborting
+the parked turn clears the durable pending question.
 
 A question waits for its answer like an approval wait; the turn has no deadline to expire meanwhile. Background activity uses the existing approval attention phase
 with a question-specific label and retains its keep-alive lease until the turn settles. This does not promise indefinite

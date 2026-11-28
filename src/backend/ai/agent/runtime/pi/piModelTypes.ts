@@ -33,6 +33,7 @@ export type PiModelResolution = {
   maxInputTokens?: number;
   model: Model<Api>;
   redactionValues: readonly string[];
+  shouldStream?: boolean;
   streamFn: PiStreamFn;
   supportsTools: boolean;
   nativeWebTools?: PiNativeWebTools;

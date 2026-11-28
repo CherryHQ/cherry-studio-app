@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
-  <application>
+  <application> <!-- NOSONAR library manifest merged into the app; this does not assert secure app defaults. Review app.json and the generated release manifest separately, including intentional cleartext support for local model endpoints. -->
     <receiver android:name=".BackgroundTaskActionReceiver" android:exported="false" />
     <activity
       android:name=".ShareReceiverActivity"

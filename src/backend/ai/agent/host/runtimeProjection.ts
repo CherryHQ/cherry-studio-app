@@ -56,7 +56,7 @@ export function toAgentMessagePart(part: RuntimeOutputPart): AgentMessagePart {
             },
             details: runtimeOutput.value,
           },
-          artifacts: runtimeOutput.artifacts,
+          artifacts: [],
         }
       : runtimeOutput
         ? {

@@ -1,8 +1,9 @@
-import { TextInput, View } from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ComposerEditor, useComposerEditorInput } from '../components/composer-editor';
+import { textInputBoxStyle } from '../utils/composer-layout';
 
 const mockTiming = jest.fn((target: number, _motion: object) => target);
 
@@ -20,6 +21,7 @@ jest.mock('react-native-reanimated', () => {
     interpolate: (value: number, _input: number[], [from, to]: [number, number]) =>
       from + (to - from) * value,
     useDerivedValue: (read: () => unknown) => ({ get: read }),
+    useAnimatedReaction: jest.fn(),
     useAnimatedStyle: (read: () => object) => ({ read }),
     useSharedValue: (initial: number) => {
       const cell = React.useRef(initial);
@@ -40,7 +42,8 @@ jest.mock('../components/composer-expansion', () => ({
 }));
 
 function Field() {
-  return <TextInput style={useComposerEditorInput()?.style} />;
+  const editorInput = useComposerEditorInput();
+  return <TextInput style={[textInputBoxStyle, editorInput?.style]} />;
 }
 
 describe('Composer.Editor', () => {
@@ -63,7 +66,7 @@ describe('Composer.Editor', () => {
       .find((style) => style?.left !== undefined && style?.right !== undefined);
   beforeEach(() => {
     visible = false;
-    mockTiming.mockClear();
+    mockTiming.mockReset().mockImplementation((target) => target);
     act(() => {
       renderer = create(renderEditor(false));
     });
@@ -71,12 +74,12 @@ describe('Composer.Editor', () => {
   afterEach(() => act(() => renderer.unmount()));
 
   it('bounds the native text field to a single row only while compact', () => {
-    const nativeHeightLimit = () => renderer.root.findByType(TextInput).props.style?.maxHeight;
-    expect(nativeHeightLimit()).toBe(24);
+    const nativeStyle = () => StyleSheet.flatten(renderer.root.findByType(TextInput).props.style);
+    expect(nativeStyle()).toMatchObject({ maxHeight: 32, paddingVertical: 0 });
     act(() => renderer.update(renderEditor(true)));
-    expect(nativeHeightLimit()).toBeUndefined();
+    expect(nativeStyle()).toMatchObject({ maxHeight: 132, paddingVertical: 4 });
     act(() => renderer.update(renderEditor(false)));
-    expect(nativeHeightLimit()).toBe(24);
+    expect(nativeStyle()).toMatchObject({ maxHeight: 32, paddingVertical: 0 });
   });
 
   it('keeps the resting field clear of both trailing actions without adding a leading slot', () => {
@@ -86,6 +89,7 @@ describe('Composer.Editor', () => {
   });
 
   it('opens and closes from the keyboard even while React still renders the previous state', () => {
+    mockTiming.mockReturnValue(0.5);
     visible = true;
     expect(fieldFrame()).toMatchObject({ left: 0, right: 0 });
     act(() => renderer.update(renderEditor(true)));
@@ -95,7 +99,7 @@ describe('Composer.Editor', () => {
     expect(fieldFrame()).toMatchObject({ left: 0, right: 0 });
   });
 
-  it('retargets wrapped text height on the settle curve and keeps a long draft one row when closed', () => {
+  it('commits wrapped input height once per measurement and keeps a long draft one row when closed', () => {
     const measure = (height: number) => {
       const field = renderer.root.findAllByType(View).find((view) => view.props.onLayout);
       act(() => field!.props.onLayout({ nativeEvent: { layout: { height } } }));
@@ -106,11 +110,7 @@ describe('Composer.Editor', () => {
     expect(fieldFrame().height).toBe(130);
     measure(80);
     expect(fieldFrame().height).toBe(80);
-    expect(mockTiming).toHaveBeenCalledWith(80, {
-      duration: 90,
-      easing: 'settle',
-      reduceMotion: 'system',
-    });
+    expect(mockTiming).not.toHaveBeenCalledWith(80, expect.anything());
     visible = false;
     measure(130);
     expect(fieldFrame().height).toBe(32);

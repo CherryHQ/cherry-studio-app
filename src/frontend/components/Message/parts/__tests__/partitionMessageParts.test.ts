@@ -99,6 +99,52 @@ describe('groupMessageProcessItems', () => {
 });
 
 describe('partitionMessageParts', () => {
+  test('moves completed desktop dispatches into the transcript and keeps active calls in process', () => {
+    const toolMetadata = { cherry: { tool: { type: 'builtin' } } };
+    const active = {
+      type: 'dynamic-tool',
+      toolName: 'desktop_dispatch_task',
+      toolCallId: 'dispatch-active',
+      toolMetadata,
+      state: 'input-available',
+      input: {},
+    } as const;
+    const completed = { ...tool('desktop_dispatch_task'), toolMetadata };
+    const answer = text('I sent the task to your desktop.');
+    const { body, process } = partitionMessageParts([active, completed, answer]);
+
+    expect(body.map(({ part }) => part)).toEqual([completed, answer]);
+    expect(process.map(({ part }) => part)).toEqual([active]);
+  });
+
+  test('keeps MCP and unmarked tools named desktop_dispatch_task in process', () => {
+    const unmarked = tool('desktop_dispatch_task');
+    const mcp = {
+      ...unmarked,
+      toolCallId: 'dispatch-mcp',
+      toolMetadata: { cherry: { tool: { type: 'mcp', serverId: 'desktop-mcp' } } },
+    };
+    const { body, process } = partitionMessageParts([mcp, unmarked]);
+
+    expect(body).toEqual([]);
+    expect(process.map(({ part }) => part)).toEqual([mcp, unmarked]);
+  });
+
+  test('recognizes a desktop dispatch by its built-in capability even when its tool name differs', () => {
+    const receipt = {
+      type: 'dynamic-tool',
+      toolName: 'desktop_dispatch_alias',
+      toolRef: { source: 'builtin', capabilityId: 'desktop_dispatch_task' },
+      toolCallId: 'dispatch-aliased',
+      state: 'output-available',
+      input: {},
+      output: {},
+    } as const;
+    expect(partitionMessageParts([receipt]).body).toEqual([
+      { index: 0, kind: 'part', part: receipt },
+    ]);
+  });
+
   test('keeps adaptation receipts visible outside the collapsed process with or without model prose', () => {
     const receipt = tool('adapt_skill');
     for (const parts of [

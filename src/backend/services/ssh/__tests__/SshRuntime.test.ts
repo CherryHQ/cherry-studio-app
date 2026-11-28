@@ -827,3 +827,92 @@ test('does not reconnect repeatedly after a second pre-command failure', async (
   await runtime.execute(profile, { command: 'uname -a' }, new AbortController().signal);
   expect(native.run).toHaveBeenCalledTimes(2);
 });
+
+test('forgetSession revokes the live target even when removing the remembered binding fails', async () => {
+  const profile = await trusted();
+  const sessionId = mockRandomUUID();
+  await runtime.selectTarget(sessionId, profile);
+  profileStorage.set.mockImplementationOnce(() => {
+    throw new Error('Storage unavailable');
+  });
+
+  await expect(runtime.forgetSession(sessionId)).rejects.toMatchObject({ code: 'storage' });
+  expect(runtime.getTarget(sessionId)).toBeNull();
+});
+
+test('forgetSession clears in-memory target, grant timer, MMKV binding, and 64-slot capacity', async () => {
+  jest.useFakeTimers();
+  try {
+    const profile = await trusted();
+    const sessionId = mockRandomUUID();
+    const listener = jest.fn();
+    const unsubscribe = runtime.subscribeTargets(listener);
+
+    for (let index = 0; index < 63; index++) {
+      await runtime.selectTarget(`session-${index}`, profile);
+    }
+    await runtime.selectTarget(sessionId, profile);
+    await runtime.setGrant(sessionId, runtime.getTarget(sessionId)!, 'diagnostics');
+    await expect(runtime.selectTarget('overflow-session', profile)).rejects.toMatchObject({
+      code: 'busy',
+    });
+
+    listener.mockClear();
+    await runtime.forgetSession(sessionId);
+
+    expect(runtime.getTarget(sessionId)).toBeNull();
+    expect(await runtime.getRememberedTarget(sessionId)).toBeNull();
+    expect(new SshProfileService(profileStorage).getRememberedTarget(sessionId)).toBeUndefined();
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    // Freed slot allows binding a new session, and expired grant timer does not resurrect anything.
+    jest.runAllTimers();
+    expect(runtime.getTarget(sessionId)).toBeNull();
+    await runtime.selectTarget('overflow-session', profile);
+    expect(runtime.getTarget('overflow-session')?.profile.id).toBe(profile.id);
+
+    // Repeating forgetSession for missing/invalid IDs is a quiet no-op.
+    listener.mockClear();
+    await expect(runtime.forgetSession(sessionId)).resolves.toBeUndefined();
+    await expect(runtime.forgetSession('')).resolves.toBeUndefined();
+    await expect(runtime.forgetSession('x'.repeat(201))).resolves.toBeUndefined();
+    expect(listener).not.toHaveBeenCalled();
+
+    unsubscribe();
+
+    // Also cancels active transfers for the deleted session.
+    jest.useRealTimers();
+    const activeSessionId = 'overflow-session';
+    jest.mocked(createSshStagingFile).mockReturnValue({
+      file: { uri: 'file:///forget-stage' } as ReturnType<typeof createSshStagingFile>['file'],
+      path: '/forget-stage',
+      dispose: jest.fn(),
+    });
+    let started!: () => void;
+    let complete!: (value: string) => void;
+    const starting = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    native.run.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+          started();
+        }),
+    );
+    const pendingTransfer = runtime.downloadForAgent(
+      activeSessionId,
+      runtime.getTarget(activeSessionId)!,
+      'report.txt',
+      null,
+      new AbortController().signal,
+    );
+    await starting;
+    await runtime.forgetSession(activeSessionId);
+    complete(outcome('completed'));
+    await expect(pendingTransfer).rejects.toThrow();
+    expect(importSshDownload).not.toHaveBeenCalled();
+  } finally {
+    jest.useRealTimers();
+  }
+});

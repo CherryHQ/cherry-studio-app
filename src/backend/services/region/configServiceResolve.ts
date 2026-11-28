@@ -35,7 +35,12 @@ export async function requestConfigServiceResolve(
     timeoutMs?: number;
   },
 ): Promise<{ data: unknown; status: number }> {
-  const http = createHttpClient({ baseUrl: origin, timeoutMs: options?.timeoutMs ?? 15_000 });
+  const http = createHttpClient({
+    serviceName: 'RegionService',
+    operation: 'region.resolve',
+    baseUrl: origin,
+    timeoutMs: options?.timeoutMs ?? 15_000,
+  });
   const { data, status } = await http.request({
     method: 'POST',
     path: '/v1/resolve',

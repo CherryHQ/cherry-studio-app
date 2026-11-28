@@ -14,6 +14,8 @@ import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.kotlin.records.Field
+import expo.modules.kotlin.records.Record
 import java.io.File
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
@@ -24,6 +26,17 @@ import kotlin.math.sqrt
 private const val SAMPLE_RATE = 16000
 private const val MAX_SAMPLES = SAMPLE_RATE * 30
 
+class PlaybackRequest : Record {
+  @Field var id: String = ""
+  @Field var title: String = ""
+  @Field var subtitle: String = ""
+  @Field var channelName: String = ""
+  @Field var playLabel: String = ""
+  @Field var pauseLabel: String = ""
+  @Field var stopLabel: String = ""
+  @Field var deepLinkUrl: String? = null
+}
+
 class VoiceInputModule : Module() {
   private var playbackId: String? = null
   private val lock = Any()
@@ -32,17 +45,38 @@ class VoiceInputModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("VoiceInput")
-    Events("finished", "level", "playbackStopped")
+    Events("finished", "level", "playbackCommand")
 
-    AsyncFunction("beginPlayback") { id: String, title: String, stop: String, promise: Promise ->
-      SpeechPlaybackService.begin(requireNotNull(appContext.reactContext), id, title, stop, promise) {
-        sendEvent("playbackStopped", mapOf("id" to id))
-      }
-      playbackId = id
+    AsyncFunction("beginPlayback") { request: PlaybackRequest, promise: Promise ->
+      require(request.id.isNotEmpty()) { "Playback id is required" }
+      SpeechPlaybackService.begin(
+        context = requireNotNull(appContext.reactContext),
+        id = request.id,
+        title = request.title,
+        subtitle = request.subtitle,
+        channelName = request.channelName,
+        playLabel = request.playLabel,
+        pauseLabel = request.pauseLabel,
+        stopLabel = request.stopLabel,
+        deepLinkUrl = request.deepLinkUrl,
+        ready = promise,
+        onCommand = { action ->
+          sendEvent("playbackCommand", mapOf("id" to request.id, "action" to action))
+        },
+      )
+      playbackId = request.id
     }.runOnQueue(Queues.MAIN)
 
-    AsyncFunction("endPlayback") { id: String ->
-      SpeechPlaybackService.end(id)
+    AsyncFunction("requestPlaybackFocus") { id: String ->
+      SpeechPlaybackService.requestFocus(id)
+    }.runOnQueue(Queues.MAIN)
+
+    AsyncFunction("updatePlaybackState") { id: String, state: String ->
+      SpeechPlaybackService.updateState(id, state)
+    }.runOnQueue(Queues.MAIN)
+
+    AsyncFunction("endPlayback") { id: String, promise: Promise ->
+      SpeechPlaybackService.end(id, promise)
       if (playbackId == id) playbackId = null
     }.runOnQueue(Queues.MAIN)
 

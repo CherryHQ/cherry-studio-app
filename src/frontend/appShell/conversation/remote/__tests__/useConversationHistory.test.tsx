@@ -416,3 +416,45 @@ it('shows a preview while history is pending without acknowledging it as install
   expect(result.messages.map((message) => message.key)).toEqual(['fresh']);
   expect(result.installedVersion).toBe('1');
 });
+
+it('tracks hidden loaded user turns independently of unfetched older pages', async () => {
+  const test = setup();
+  const makeRemoteMessage = (index: number) => ({
+    key: `m-${index}`,
+    state: 'success' as const,
+    completeness: 'complete' as const,
+    actions: {},
+    display: {
+      id: `m-${index}`,
+      role: index % 2 === 0 ? ('user' as const) : ('assistant' as const),
+      status: 'success' as const,
+      data: {},
+    },
+  });
+
+  await render(test.session);
+  await act(async () => {
+    test.opens.at(-1)!.result.resolve({
+      ...test.window('six'),
+      initial: { items: [0, 1, 2, 3, 4, 5].map(makeRemoteMessage) },
+    });
+    await settle();
+  });
+  await act(settle);
+
+  expect(result.messages).toHaveLength(4);
+  expect(result.hasOlderMessages).toBe(true);
+  expect(result.hasUnfetchedOlderMessages).toBe(false);
+  expect(result.hiddenUserTurnCount).toBe(1);
+
+  await act(async () => {
+    await result.loadOlder();
+    await settle();
+  });
+  await act(settle);
+
+  expect(result.messages).toHaveLength(6);
+  expect(result.hasOlderMessages).toBe(false);
+  expect(result.hasUnfetchedOlderMessages).toBe(false);
+  expect(result.hiddenUserTurnCount).toBe(0);
+});

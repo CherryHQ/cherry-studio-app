@@ -1,11 +1,10 @@
 # Domestic Android Store Updates
 
-One `production-domestic-stores` APK is submitted separately to HONOR, Xiaomi, OPPO and vivo.
-It retains the production package ID and signing credentials, has its own embedded update channel,
-and disables direct APK downloads and installation. The stable-tag workflow saves the APK,
-checksum and signing identity as `domestic-stores-release`; each store owns review, publication
-and installation. Follow the
-[per-release upload and archiving procedure](./cloud-releases.md#manual-domestic-store-upload).
+The reserved `production-domestic-stores` profile builds one APK for HONOR, Xiaomi, OPPO and
+vivo. It retains the production package ID and signing credentials, has its own embedded update
+channel, and disables direct APK downloads and installation. Domestic distribution is currently
+paused in the [tag release workflow](./cloud-releases.md#domestic-android-stores). Each store
+owns its review and live availability.
 
 ## Checks And Store Actions
 

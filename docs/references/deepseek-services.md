@@ -1,7 +1,8 @@
 # DeepSeek Services
 
-Status: implemented in Mobile source; live-provider, automated, build and device acceptance have
-not been run for this change. The published Cherry Studio packages are unchanged.
+Status: implemented in Mobile source, with focused request-compatibility and scripted-transport
+regression coverage. Live-provider, build and device acceptance remain separate. The published
+Cherry Studio packages are unchanged.
 
 ## Configuration And Ownership
 
@@ -31,7 +32,7 @@ HTTP client and ordered multipart fields. Domain services own their own results 
 | Model document input | Host attachment admission, Pi wire adapter, `services/file/deepseekFiles.ts` | Select DeepSeek on Document parsing and use the DeepSeek Provider's exact `deepseek-flash` model |
 | Dictation/audio transcription | `services/voice/deepseekRecognition.ts` | Select DeepSeek separately for each capability in Voice settings |
 | Read aloud | `services/voice/deepseekSpeech.ts` | Select the DeepSeek speech engine and Stella or Tide |
-| Native web tools/content checks | Existing Pi model payload/response owners | Native tools follow existing web routing and permissions; enhanced checks are optional in the DeepSeek model Provider page |
+| Native web tools/content checks | Existing Pi model payload/response owners | Native tools follow existing web routing and permissions; enhanced checks are optional in the DeepSeek model Provider page; both require a request without incompatible client tools |
 
 Document parsing defaults to AnyDoc, OCR to on-device recognition, and enhanced checks to off.
 A configured Provider does not automatically replace a voice engine or choose an external web
@@ -110,24 +111,37 @@ converts it to 16 kHz mono PCM16 for upload and deletes the converted file after
 transcription still publishes one managed text document
 through `transcribeAudioFile`. This is batch recognition, not live partial dictation.
 
-DeepSeek read aloud uses the existing voice activity and audio-session owner. It converts a settled
-answer to prose, synthesizes bounded WAV utterances, plays them sequentially and deletes temporary
-audio on completion, failure or cancellation. Playback errors and interruptions settle the activity.
+DeepSeek read aloud uses the existing voice activity and audio-session owner. It reads prose from a
+settled answer, synthesizing up to 140 UTF-16 units for the first utterance and 400 for each later
+one. While the current WAV plays, at most one next utterance is synthesized and validated in
+memory. Only the currently playing utterance uses a temporary WAV and player. Playback errors and
+interruptions settle the activity after player, file, and prefetch cleanup.
 WebSocket synthesis while an answer is still being generated is deferred; the current toolbar reads
 settled replies. Existing session naming continues through the normal text generator.
 
 The Pi adapter declares `deepseek_web_search` and `deepseek_read_url` only through the Host's
-existing web routes and permissions. Messages retains original server blocks; Responses restores
-raw web-call items at their output positions; Chat Completions retains full `server_tool_calls`
+existing [web routes and permissions](./web-search.md#native-tools-and-selection). On
+`deepseek-flash`, these server tools cannot share a request with client function tools. Standard
+Agent turns declaring other functions therefore use configured external Search/Fetch, or omit
+unavailable web capabilities. When no other functions are declared, native web tools remain
+available under the same web policy, including in minimal mode, which has no external fallback.
+Messages retains original server blocks; Responses restores raw web-call items at their output
+positions; Chat Completions retains full `server_tool_calls`
 and final-step reasoning. Signed link state is replayed only to the same Provider/model/protocol.
 Citation display converts DeepSeek's Unicode code-point indices without rewriting signed text.
 Native Chat tool progress commits a credential attempt before any answer text, preventing another
 key from repeating a search already started. Older native-tool declarations remain for other models.
 
-Enhanced content checks add `safety_check` to the selected model request. Both successful and
-failed terminal stream events honor a late refusal: displayed text and reasoning are replaced by
-an empty terminal message with the existing content-filter error, and the settled transcript keeps
-that cleared content. Web-enabled requests also handle refusal without the enhanced-check opt-in.
+Enhanced content checks add `safety_check: { level: 'high' }` only when enabled and the outgoing
+request has no tools or contains only `deepseek_web_search` / `deepseek_read_url`. Pi checks the
+actual tool list after the caller's payload hook, recognizing client tools across Chat Completions,
+Responses and Messages, including Messages function definitions without a `type` field. A request
+with other tools omits `safety_check` to avoid DeepSeek's HTTP 400 tool-mixing rejection; it does
+not change the stored preference, so later compatible requests can still enable enhanced checks.
+Both successful and failed terminal stream events honor a late refusal: displayed text and
+reasoning are replaced by an empty terminal message with the existing content-filter error, and
+the settled transcript keeps that cleared content. Web-enabled requests also handle refusal
+without the enhanced-check opt-in.
 
 ## API References
 

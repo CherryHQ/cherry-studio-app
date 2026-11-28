@@ -21,10 +21,13 @@ import {
   type RuntimeConversationSnapshot,
   type RuntimeContextUsage,
   type RuntimeLane,
+  type RuntimePendingApproval,
+  type RuntimePendingQuestion,
 } from '../durableTypes';
 import type { RuntimeToolProgress } from '../types';
 import { projectPiTurn, readPiSubmission } from './piDurableProjection';
-import type { PiDurableRuntime } from './PiDurableRuntime';
+import { canonicalJson, type PiDurableRuntime } from './PiDurableRuntime';
+import { hasLiveTool, PiPendingApprovalsDoc, PiPendingQuestionsDoc } from './piPendingInteractions';
 import { hasResponseContent } from './piStreamEvents';
 
 type InputView = {
@@ -32,12 +35,21 @@ type InputView = {
   metadata: JsonObject | undefined;
   terminalEntries?: readonly EntryRecord[];
 };
+type TrackedApproval = RuntimePendingApproval & { taskId: number };
+type TrackedQuestion = RuntimePendingQuestion & { taskId: number };
 const logger = loggerService.withContext('PiDurableObserver');
 
 /** A disposable presentation mount. Cherry owns settled history; Pi supplies current execution. */
 export class PiDurableObserver {
   private stream: WatchHandle<ConversationView> | undefined;
   private unsubscribeSubmissions: (() => void) | undefined;
+  private unsubscribeInteractions: (() => void) | undefined;
+  private interactionsDirty = true;
+  private approvals: readonly TrackedApproval[] = [];
+  private questions: readonly TrackedQuestion[] = [];
+  private pendingApprovals: RuntimePendingApproval[] = [];
+  private pendingQuestion: RuntimePendingQuestion | null = null;
+  private readonly approvalIds = new Map<string, string>();
   private view: ConversationView | undefined;
   private processing: Promise<void> = Promise.resolve();
   private ready = false;
@@ -73,12 +85,21 @@ export class PiDurableObserver {
       (records) => {
         for (const record of records)
           if (record.type === 'input') this.pendingSubmissions.set(record.id, record);
-        if (this.ready && this.pendingSubmissions.size) this.flushSubmissions();
+        if (this.ready && this.pendingSubmissions.size) this.flushCommits();
       },
     );
     try {
       const stream = await this.runtime.watch(laneKey(this.lane));
       this.stream = stream;
+      // Custom docs are outside the watch. Attach before the initial read so a racing commit
+      // invalidates it and schedules another projection, even without a new LiveDoc frame.
+      this.unsubscribeInteractions = this.runtime.observePendingInteractions(
+        stream.value.conversation.id,
+        () => {
+          this.interactionsDirty = true;
+          if (this.ready) this.flushCommits();
+        },
+      );
       await this.advance(stream.value, true);
       const snapshot = this.snapshot();
       this.ready = true;
@@ -87,10 +108,11 @@ export class PiDurableObserver {
       });
       // The initial read may already see a terminal record. Deliver it after the snapshot too.
       if (
+        this.interactionsDirty ||
         this.pendingSubmissions.size ||
         [...this.inputs.values()].some(({ record }) => isTerminal(record))
       )
-        this.flushSubmissions();
+        this.flushCommits();
       return snapshot;
     } catch (error) {
       await this.stop();
@@ -103,6 +125,8 @@ export class PiDurableObserver {
     this.ready = false;
     this.unsubscribeSubmissions?.();
     this.unsubscribeSubmissions = undefined;
+    this.unsubscribeInteractions?.();
+    this.unsubscribeInteractions = undefined;
     const stream = this.stream;
     this.stream = undefined;
     await stream?.stop();
@@ -113,6 +137,12 @@ export class PiDurableObserver {
     this.entries.clear();
     this.settled.clear();
     this.toolStates.clear();
+    this.approvalIds.clear();
+    this.interactionsDirty = true;
+    this.approvals = [];
+    this.questions = [];
+    this.pendingApprovals = [];
+    this.pendingQuestion = null;
     this.nestedTools.clear();
     this.newest = undefined;
     this.contextInput = undefined;
@@ -130,10 +160,10 @@ export class PiDurableObserver {
     return input ? this.project(input, true) : undefined;
   }
 
-  private flushSubmissions() {
+  private flushCommits() {
     // Commit observers only buffer synchronously. All Session reads happen on this async queue.
     void this.enqueue().catch((error) => {
-      logger.error('Could not project committed Pi inputs', {
+      logger.error('Could not project committed Pi state', {
         sessionId: this.lane.sessionId,
         slot: this.lane.slot,
         error,
@@ -251,6 +281,7 @@ export class PiDurableObserver {
         if (terminal) input.terminalEntries = entries;
         for (const entry of entries) this.entries.set(entry.id, entry);
       }
+      if (this.interactionsDirty) await this.readInteractions(view.conversation.id);
       if (this.stopped) return;
       const previousRun = this.live.run;
       this.logProgress(live);
@@ -264,12 +295,26 @@ export class PiDurableObserver {
       this.live = live;
       this.view = view;
       this.newest = through;
+      const previousApprovals = this.pendingApprovals;
+      const previousQuestion = this.pendingQuestion;
+      this.pendingApprovals = this.approvals
+        .filter((item) => hasLiveTool(live, item.toolCallId, item.taskId))
+        .map(({ taskId: _taskId, ...item }) => item);
+      const activeQuestion = this.questions.find((item) =>
+        hasLiveTool(live, item.toolCallId, item.taskId),
+      );
+      this.pendingQuestion = activeQuestion
+        ? (({ taskId: _taskId, ...item }) => item)(activeQuestion)
+        : null;
+      this.approvalIds.clear();
+      for (const approval of this.pendingApprovals)
+        this.approvalIds.set(approval.toolCallId, approval.id);
       this.toolStates.clear();
       for (const tool of live.tools ?? []) {
         if (tool.status !== 'done')
           this.toolStates.set(
             tool.callId,
-            tool.status === 'running' ? 'running' : 'input-available',
+            tool.status === 'running' || tool.status === 'waiting' ? 'running' : 'input-available',
           );
         else if (tool.entry === undefined) this.toolStates.set(tool.callId, 'interrupted');
       }
@@ -285,11 +330,27 @@ export class PiDurableObserver {
               : 'ok'
             : tool.status === 'done'
               ? 'interrupted'
-              : tool.status,
+              : tool.status === 'waiting' || tool.status === 'sleeping'
+                ? 'pending'
+                : tool.status,
         });
       }
       if (initial) return;
 
+      if (
+        this.pendingApprovals.length !== previousApprovals.length ||
+        this.pendingApprovals.some(
+          (approval, index) =>
+            approval !== previousApprovals[index] &&
+            canonicalJson(approval) !== canonicalJson(previousApprovals[index]!),
+        )
+      )
+        this.listener({ type: 'approvals.updated', approvals: this.pendingApprovals });
+      if (
+        this.pendingQuestion !== previousQuestion &&
+        canonicalJson(this.pendingQuestion) !== canonicalJson(previousQuestion)
+      )
+        this.listener({ type: 'question.updated', question: this.pendingQuestion });
       if (this.contextStatus() !== previousContext)
         this.listener({ type: 'context.updated', status: this.contextStatus() });
       if (
@@ -343,6 +404,25 @@ export class PiDurableObserver {
     }
   }
 
+  private async readInteractions(conversationId: ConversationView['conversation']['id']) {
+    this.interactionsDirty = false;
+    try {
+      const [approvals, questions] = await Promise.all([
+        this.runtime.snapshotDocument(PiPendingApprovalsDoc, conversationId),
+        this.runtime.snapshotDocument(PiPendingQuestionsDoc, conversationId),
+      ]);
+      this.approvals = Object.entries(approvals?.items ?? {})
+        .map(([id, { key: _key, ...item }]) => ({ id, ...item }))
+        .sort((a, b) => a.requestedAt - b.requestedAt || a.id.localeCompare(b.id));
+      this.questions = Object.values(questions?.items ?? {})
+        .map(({ key: _key, ...item }) => item)
+        .sort((a, b) => a.requestedAt - b.requestedAt || a.toolCallId.localeCompare(b.toolCallId));
+    } catch (error) {
+      this.interactionsDirty = true;
+      throw error;
+    }
+  }
+
   private queueKey() {
     return [...this.inputs.values()]
       .filter((input) => input.record.status === 'queued')
@@ -357,6 +437,8 @@ export class PiDurableObserver {
       activeTurn: active && !isTerminal(active.record) ? this.project(active) : null,
       contextStatus: this.contextStatus(),
       contextUsage: this.contextUsage,
+      pendingApprovals: this.pendingApprovals,
+      pendingQuestion: this.pendingQuestion,
       queue: [...this.inputs.values()]
         .filter((input) => input.record.status === 'queued')
         .sort(
@@ -447,6 +529,7 @@ export class PiDurableObserver {
           )),
       fullReasoning,
       toolStates: this.toolStates,
+      approvalIds: this.approvalIds,
       nestedTools: this.nestedTools,
       ...(active && partial
         ? {

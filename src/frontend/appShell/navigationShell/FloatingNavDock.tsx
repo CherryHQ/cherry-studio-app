@@ -47,6 +47,7 @@ export function FloatingNavDock() {
     activeDestination,
     activeDockTab,
     isAtRoot,
+    isOnboardingBlocking,
     isDockVisible,
     navigateToDestination,
     pinnedTabs,
@@ -56,10 +57,11 @@ export function FloatingNavDock() {
   } = useNavigationShell();
   const { dragState } = useNavigationShellInteraction();
 
-  const [defaultSurfaceColor, foregroundColor, mutedForegroundColor] = useThemeColor([
+  const [defaultSurfaceColor, foregroundColor, mutedForegroundColor, rippleColor] = useThemeColor([
     'background',
     'foreground',
     'muted-foreground',
+    'secondary',
   ]);
   const transparentDefaultSurface = toColor(
     useResolveClassNames('bg-background/0').backgroundColor,
@@ -98,7 +100,7 @@ export function FloatingNavDock() {
     [measureDockBounds, reportDockHeight],
   );
 
-  if (shellMode !== 'compact-dock') {
+  if (isOnboardingBlocking || shellMode !== 'compact-dock') {
     return null;
   }
 
@@ -141,7 +143,7 @@ export function FloatingNavDock() {
         dragState={dragState}
         pillTestID="floating-dock-status-pill"
         preview={preview}
-        style={{ bottom: 58 + bottomPadding, left: 16, position: 'absolute', right: 16 }}
+        style={{ bottom: 60 + bottomPadding, left: 16, position: 'absolute', right: 16 }}
       />
       <View className="relative" pointerEvents="box-none">
         {trayClassName ? (
@@ -153,7 +155,7 @@ export function FloatingNavDock() {
         ) : null}
         <View
           ref={rowRef}
-          className="flex-row items-center justify-center px-4"
+          className="flex-row items-center justify-center gap-2 px-6"
           onLayout={handleRowLayout}
           pointerEvents={isDockVisible ? 'auto' : 'none'}
           testID="floating-nav-row"
@@ -167,6 +169,7 @@ export function FloatingNavDock() {
             orientation="horizontal"
             pinnedTabs={pinnedTabs}
             preview={preview}
+            rippleColor={rippleColor}
             testIDPrefix="floating-nav"
           />
         </View>

@@ -15,7 +15,12 @@ const LookupSchema = z.object({
     }),
   ),
 });
-const apple = createHttpClient({ baseUrl: 'https://itunes.apple.com', timeoutMs: 10_000 });
+const apple = createHttpClient({
+  serviceName: 'AppUpdate',
+  operation: 'appStore.release',
+  baseUrl: 'https://itunes.apple.com',
+  timeoutMs: 10_000,
+});
 
 /** APK releases and TestFlight uploads are not App Store availability signals. */
 export async function checkAppStoreRelease(

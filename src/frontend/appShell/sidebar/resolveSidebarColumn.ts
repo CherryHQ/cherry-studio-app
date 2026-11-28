@@ -95,7 +95,7 @@ export function resolveSidebarOverlayWidth(windowWidth: number, trailingInset = 
 export function resolveSidebarDrawer(column: SidebarColumn, overlayWidth: number, isWide = true) {
   if (column.kind === 'overlay') {
     return {
-      drawerType: 'slide',
+      drawerType: 'front',
       drawerStyle: { pointerEvents: 'auto', width: overlayWidth },
     } as const;
   }
@@ -103,10 +103,10 @@ export function resolveSidebarDrawer(column: SidebarColumn, overlayWidth: number
     return { drawerType: 'permanent', drawerStyle: { width: column.width } } as const;
   }
   if (!isWide) {
-    // Keep compact drawers in `slide` mode across secondary routes so native drawer
+    // Keep compact drawers in `front` mode across secondary routes so native drawer
     // physics and gesture listeners never tear down on navigation transitions.
     return {
-      drawerType: 'slide',
+      drawerType: 'front',
       drawerStyle: { pointerEvents: 'none', width: overlayWidth },
     } as const;
   }

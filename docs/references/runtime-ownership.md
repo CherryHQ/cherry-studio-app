@@ -3,9 +3,9 @@
 The current Agent lifetime is specified in
 [Pi Durable Migration](./agent/pi-durable-migration.md). One app generation owns the native Harness
 and Pi connection. Native task demand, including compaction, holds the existing execution lease.
-Ordinary disposal or loss of the finite UIKit background window preserves work; foreground reopening
-reconstructs current capabilities before resuming. Revocation of an iOS continued-processing task
-stops its owning work instead of suspending it for restart, as specified in
+Ordinary disposal or loss of iOS background execution preserves Agent work; foreground reopening
+reconstructs current capabilities before resuming. Continued-processing expiry suspends the Agent
+Host without marking unfinished turns as aborted, as specified in
 [Background Activity Presentation](./background-activity-presentation.md). User stop aborts the
 selected Session. Route disposal only releases observation.
 
@@ -73,7 +73,7 @@ side-effect imports in the root layout, ordinary app code uses only `src/bootstr
 - creates an `ApplicationHost` and configures its platform-facing activity environment;
 - creates one stable workflow `Backend`, `ApiClient`, and `PreferenceClient`;
 - installs the host, whose dependency graph initializes SQLite seeding before preferences, then
-  waits for the native splash handoff before applying boot theme and i18n;
+  applies boot theme and i18n;
 - starts best-effort post-ready tasks after the gate opens;
 - uninstalls the host on unmount; reverse dependency order drains consumers before their
   infrastructure.
@@ -89,11 +89,9 @@ providers: `DataApiProvider` for typed resource endpoints, `PreferenceProvider` 
 `StartupFailureScreen` after an initialization error, so a failed start never becomes a crash
 loop. The provider has already logged the failure and initialized translations for that screen
 when an earlier step failed. Render failures after the gate opens are contained by the app-shell
-`AppErrorBoundary`. The root layout retains the native splash, while the app-shell
-`StartupCoordinator` hides it only after its matching React Native cover has laid out and crossed
-two composited frames. The provider owns initialization state and post-ready work; it does not own
-splash visibility. `startupCoverHandoff` prevents Uniwind's native appearance synchronization from
-running until the native surface is gone.
+`AppErrorBoundary`. The root layout retains the native splash, while the app-shell `StartupCoordinator` hides it once
+bootstrap and initial route content are ready. The provider owns initialization state and post-ready
+work; it does not own splash visibility.
 
 ## Query Runtime
 
@@ -129,8 +127,9 @@ User cancellation affects only the selected Session. Pi executes one input at a 
 Session and retains admitted follow-ups in its inbox; different Sessions may run concurrently.
 Ordinary disposal suspends the Harness without a user-abort mark. Finite UIKit window expiry does
 the same only when no continued-processing or audio protection remains. The next Host reopens
-committed tasks and reconstructs current capabilities. Continued-processing revocation
-stops the owning work and does not follow this recovery path. An unsafe tool interrupted after
+committed tasks and reconstructs current capabilities. Continued-processing expiry follows the same
+recovery path because the native signal cannot distinguish system revocation from system-UI
+cancellation. An unsafe tool interrupted after
 execution intent is not blindly replayed. Missing or obsolete execution copies reconcile through
 Cherry reservations, as specified in [Pi Durable Migration](./agent/pi-durable-migration.md).
 None of this guarantees continuous execution or a preserved network stream after process death.
@@ -284,7 +283,9 @@ user-owned verification policy.
   and approvals retain protection on the same lease. The final release stops finite/audio protection
   immediately. Official requests follow the owning work through final settlement.
   New local painting enqueues carry process-local intent and real handler progress. Native continued-task
-  revocation stops its owning work and never restarts it through audio. SystemIntegration's `BackgroundAudio` yields the profile to token-owned voice
+  expiry suspends Agent work for foreground recovery; jobs retain their interruption policy. The
+  expired owner cannot restart through audio before settling and releasing its lease.
+  SystemIntegration's `BackgroundAudio` yields the profile to token-owned voice
   uses, stops its loop for capture, and reports native protection loss. `AndroidBackgroundActivityRuntime`
   owns Android execution demand, reused task notifications, protection status, and background budget.
   SystemIntegration shares notification IDs with the patched background-actions service. The host stops
@@ -296,9 +297,9 @@ user-owned verification policy.
 
 ## Startup Work
 
-`initializeAppRuntime()` reads cached boot preferences, waits for the native-to-React cover handoff,
-then applies the frontend theme and initializes i18n. It must not refresh catalogs, prefetch history,
-repair data, or run diagnostics.
+`initializeAppRuntime()` reads cached boot preferences, initializes i18n, seeds the initial Agent,
+and applies the frontend theme. It must not refresh catalogs, prefetch history, repair data, or run
+diagnostics.
 
 The bootstrap runtime's `runPostReadyTasks()` starts the host PostReady phase after status becomes
 `ready`. Agent reconciliation, MCP initialization, and the job cold-start pump stay off the

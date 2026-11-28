@@ -818,20 +818,18 @@ function TextChatInput({
           </View>
         </Dialog>
       ) : null}
-      {modelPicker.isOpen ? (
-        <ModelPickerDrawer
-          // Parallel answers refuse image generation, so several models are chosen among text ones.
-          modelType={mode === 'minimal' || modelPicker.multiSelect.enabled ? 'text' : 'all'}
-          multiSelect={modelPicker.multiSelect}
-          open
-          onAddProvider={handleAddProvider}
-          onClose={dismissPicker}
-          onSelect={modelPicker.select}
-          selectedModelId={selectedModelId}
-          loginReturnTo={cloudReturnTo}
-          variant="chat"
-        />
-      ) : null}
+      <ModelPickerDrawer
+        // Parallel answers refuse image generation, so several models are chosen among text ones.
+        modelType={mode === 'minimal' || modelPicker.multiSelect?.enabled ? 'text' : 'all'}
+        multiSelect={modelPicker.multiSelect}
+        open={modelPicker.isOpen}
+        onAddProvider={handleAddProvider}
+        onClose={dismissPicker}
+        onSelect={modelPicker.select}
+        selectedModelId={selectedModelId}
+        loginReturnTo={cloudReturnTo}
+        variant="chat"
+      />
     </>
   );
 }

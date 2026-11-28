@@ -13,17 +13,13 @@ type StartupOperation =
   | 'startup.database.migrate'
   | 'startup.database.custom_migrate'
   | 'startup.database.seed'
-  | 'startup.cover.wait'
   | 'startup.theme'
   | 'startup.i18n'
   | 'startup.agent'
   | 'startup.skills'
-  | 'startup.cover.layout'
-  | 'startup.cover.presented'
-  | 'startup.cover.minimum_elapsed'
   | 'startup.content.ready'
-  | 'startup.cover.exit'
-  | 'startup.cover.hidden';
+  | 'startup.chat_input.ready'
+  | 'startup.splash.hidden';
 
 type StartupOutcome = 'started' | 'completed' | 'failed' | 'cancelled';
 type StartupFacts = {
@@ -40,19 +36,31 @@ const logger = loggerService.withContext('Startup');
 // JS-entry identity only: neither a device identifier nor a native process-start measurement.
 const startupStartedAt = Date.now();
 const clockStartedAt = performance.now();
+let startupInterrupted = false;
+
+export function markStartupInterrupted() {
+  startupInterrupted = true;
+}
+
+export function wasStartupInterrupted() {
+  return startupInterrupted;
+}
 
 export function recordStartupEvent(
   operation: StartupOperation,
   outcome: StartupOutcome,
   facts: StartupFacts = {},
+  at = performance.now(),
 ) {
+  const elapsedMs = at - clockStartedAt;
   logger.info('Startup stage', {
     ...facts,
     operation,
     outcome,
     startupStartedAt,
-    elapsedMs: performance.now() - clockStartedAt,
+    elapsedMs,
   });
+  return elapsedMs;
 }
 
 /** Relates every event's `elapsedMs` to React Native's `performance.timeOrigin` milestones. */

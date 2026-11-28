@@ -20,23 +20,36 @@ const signedOutCloud: CloudState = {
   plans: null,
 };
 let mockCloudState = signedOutCloud;
+const mockCloudPress = jest.fn();
 let mockListProps:
   | {
+      bottomInset?: number;
       emptyText?: string;
       emptyAction?: { label: string; onPress: () => void };
       cherryAiEntry?: ReactNode;
       listItems: readonly ModelPickerListItem[];
       maxSelectedCount?: number;
+      onCloudOffer?: (id: string) => void;
       selectedModelIds?: readonly string[];
+    }
+  | undefined;
+let mockSheetProps:
+  | {
+      bodyInset?: string;
+      onClosed?: () => void;
+      onSizeChange?: (size: BottomSheetSize) => void;
+      open: boolean;
+      presentation?: string;
+      size: string;
+      sizes?: readonly string[];
     }
   | undefined;
 let mockOnSizeChange: ((size: BottomSheetSize) => void) | undefined;
 let mockFilterItems: { id: string; onPress: () => void }[] = [];
 const chosenModelId = 'provider::chosen';
 
-jest.mock('expo-router', () => ({
-  ...jest.requireActual('expo-router'),
-  useGlobalSearchParams: () => ({}),
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ bottom: 34, left: 0, right: 0, top: 59 }),
 }));
 
 jest.mock('@/frontend/components/ModelRegistry', () => ({
@@ -57,19 +70,29 @@ jest.mock('@cherrystudio/ui/components', () => {
 
   return {
     BottomSheet: ({
+      bodyInset,
       children,
       footer,
       headerAction,
+      onClosed,
       onSizeChange,
+      open,
+      presentation,
       size,
+      sizes,
       testID,
       title,
     }: {
+      bodyInset?: string;
       children: ReactNode;
       footer?: ReactNode;
       headerAction?: ReactNode;
+      onClosed?: () => void;
       onSizeChange?: (size: BottomSheetSize) => void;
+      open: boolean;
+      presentation?: string;
       size: string;
+      sizes?: readonly string[];
       testID: string;
       title: string;
     }) => {
@@ -79,6 +102,7 @@ jest.mock('@cherrystudio/ui/components', () => {
       );
       const { OPEN_POLICY } = jest.requireActual('@/shared/data/managedPolicy');
       mockOnSizeChange = onSizeChange;
+      mockSheetProps = { bodyInset, onClosed, onSizeChange, open, presentation, size, sizes };
       return (
         <MockView
           accessibilityLabel={title}
@@ -114,7 +138,7 @@ jest.mock('@/frontend/appShell/cloud', () => ({
     offers: jest
       .requireActual('@/frontend/appShell/cloud/cloudModelOffers')
       .getCloudModelOffers(mockCloudState, use),
-    press: jest.fn(),
+    press: mockCloudPress,
     refresh: jest.fn(),
   }),
   useReturnedCloudModel: () => {},
@@ -148,9 +172,11 @@ describe('ModelPickerDrawer', () => {
 
   beforeEach(() => {
     mockCloudState = signedOutCloud;
+    mockCloudPress.mockClear();
     mockGroups = [];
     mockEnabledProviders = [{ id: CLOUD_PROVIDER_ID }];
     mockListProps = undefined;
+    mockSheetProps = undefined;
     mockOnSizeChange = undefined;
     mockFilterItems = [];
     act(() => {
@@ -277,7 +303,11 @@ describe('ModelPickerDrawer', () => {
     const sheet = () => renderer.root.findByProps({ testID: 'model-picker-surface' });
     const search = () => renderer.root.findByProps({ testID: 'model-picker-search-input' });
 
-    expect(sheet().props.accessibilityValue).toEqual({ text: 'large' });
+    expect(sheet().props.accessibilityValue).toEqual({ text: 'medium' });
+    expect(mockSheetProps?.sizes).toEqual(['medium', 'full']);
+    expect(mockSheetProps?.bodyInset).toBe('none');
+    expect(mockSheetProps?.presentation).toBe('default');
+    expect(mockListProps?.bottomInset).toBe(34);
 
     act(() => search().props.onFocus());
     expect(sheet().props.accessibilityValue).toEqual({ text: 'full' });
@@ -290,9 +320,71 @@ describe('ModelPickerDrawer', () => {
     expect(sheet().props.accessibilityValue).toEqual({ text: 'full' });
 
     act(() => search().props.onChangeText('qwen'));
-    act(() => mockOnSizeChange?.('large'));
-    expect(sheet().props.accessibilityValue).toEqual({ text: 'large' });
+    act(() => mockOnSizeChange?.('medium'));
+    expect(sheet().props.accessibilityValue).toEqual({ text: 'medium' });
     expect(search().props.value).toBe('qwen');
+  });
+
+  test('stays mounted through controlled close settlement, resets state, and unmounts', () => {
+    const surfaceNodes = () =>
+      renderer.root.findAll(
+        (node) => typeof node.type === 'string' && node.props.testID === 'model-picker-surface',
+      );
+    const search = () => renderer.root.findByProps({ testID: 'model-picker-search-input' });
+
+    act(() => {
+      renderer.update(
+        <ModelPickerDrawer
+          modelType="text"
+          onClose={jest.fn()}
+          onSelect={jest.fn()}
+          open
+          selectedModelId={null}
+          variant="chat"
+        />,
+      );
+    });
+    act(() => search().props.onFocus());
+    act(() => search().props.onChangeText('qwen'));
+    act(() => mockFilterItems.find((item) => item.id === 'vision')?.onPress());
+    expect(mockSheetProps?.size).toBe('full');
+
+    act(() => {
+      renderer.update(
+        <ModelPickerDrawer
+          modelType="text"
+          onClose={jest.fn()}
+          onSelect={jest.fn()}
+          open={false}
+          selectedModelId={null}
+          variant="chat"
+        />,
+      );
+    });
+    expect(surfaceNodes()).toHaveLength(1);
+    expect(mockSheetProps?.open).toBe(false);
+
+    act(() => mockSheetProps?.onClosed?.());
+    expect(surfaceNodes()).toHaveLength(0);
+
+    act(() => {
+      renderer.update(
+        <ModelPickerDrawer
+          modelType="text"
+          onClose={jest.fn()}
+          onSelect={jest.fn()}
+          open
+          selectedModelId={null}
+          variant="chat"
+        />,
+      );
+    });
+    expect(surfaceNodes()).toHaveLength(1);
+    expect(mockSheetProps?.size).toBe('medium');
+    expect(search().props.value).toBe('');
+    expect(
+      renderer.root.findByProps({ testID: 'model-picker-filter' }).props.accessibilityState,
+    ).toEqual({ selected: false });
   });
 
   test('distinguishes filtered emptiness and clears both the query and capability condition', () => {
@@ -454,5 +546,40 @@ describe('ModelPickerDrawer', () => {
     expect(mockListProps).toMatchObject({ maxSelectedCount: 8, selectedModelIds: [chosenModelId] });
     act(() => toggle().props.onPress());
     expect(multiSelect.onEnabledChange).toHaveBeenLastCalledWith(false);
+  });
+
+  test('forwards loginReturnTo or falls back to root when activating a cloud offer', () => {
+    const onClose = jest.fn();
+    const renderChatOffer = (loginReturnTo?: string) =>
+      act(() => {
+        renderer = create(
+          <ModelPickerDrawer
+            loginReturnTo={loginReturnTo}
+            modelType="text"
+            onClose={onClose}
+            onSelect={jest.fn()}
+            open
+            selectedModelId={null}
+            variant="chat"
+          />,
+        );
+      });
+
+    renderChatOffer('/chat?sessionId=s1');
+    mockListProps?.onCloudOffer?.('offer-1');
+    expect(mockCloudPress).toHaveBeenLastCalledWith(
+      'offer-1',
+      '/chat?sessionId=s1',
+      expect.any(Function),
+      true,
+    );
+    act(() => {
+      (mockCloudPress.mock.calls.at(-1)?.[2] as (() => void) | undefined)?.();
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    renderChatOffer(undefined);
+    mockListProps?.onCloudOffer?.('offer-2');
+    expect(mockCloudPress).toHaveBeenLastCalledWith('offer-2', '/', expect.any(Function), false);
   });
 });

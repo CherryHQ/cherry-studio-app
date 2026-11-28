@@ -1,4 +1,8 @@
-import type { AgentReplyPartEdit } from '@/shared/contracts/agent';
+import type {
+  AgentReplyPartEdit,
+  AgentUserAnswers,
+  AgentUserQuestions,
+} from '@/shared/contracts/agent';
 import { MAX_PARALLEL_ANSWERS } from '@/shared/contracts/agent/inputs';
 
 import type { TraceSpan } from '../../observability';
@@ -25,6 +29,37 @@ import type {
 
 /** Provider name of the Host tool that runs an explicitly submitted image request. */
 export const DURABLE_IMAGE_TOOL_NAME = 'cherry_generate_image';
+/** Built-in user-question capability whose pause/resume lifecycle Pi can persist durably. */
+export const DURABLE_QUESTION_TOOL_NAME = 'ask_user_question';
+
+/** Durable lane payload or configuration failed schema validation and must be isolated. */
+export class RuntimeCorruptLaneError extends Error {
+  readonly lane?: RuntimeLane;
+
+  constructor(message: string, options?: { lane?: RuntimeLane; cause?: unknown }) {
+    super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = 'RuntimeCorruptLaneError';
+    this.lane = options?.lane;
+  }
+}
+
+/** Confirmed capability revocation: the tool disappeared from the owning input's catalog. */
+export class RuntimeToolUnavailableError extends Error {
+  constructor(message = 'This capability is no longer available for the owning input.') {
+    super(message);
+    this.name = 'RuntimeToolUnavailableError';
+  }
+}
+
+/** Transient capability discovery outage: the tool could not be resolved right now and may recover. */
+export class RuntimeToolDiscoveryError extends Error {
+  constructor(
+    message = 'This capability is temporarily unavailable because tool discovery failed.',
+  ) {
+    super(message);
+    this.name = 'RuntimeToolDiscoveryError';
+  }
+}
 
 /** Portable storage capability supplied by composition; no Expo, data service, or Pi types. */
 export type RuntimeSqlValue = null | number | bigint | string | Uint8Array;
@@ -36,6 +71,7 @@ export interface RuntimeSqlExecutor {
   all<Row extends object>(sql: string, ...params: RuntimeSqlValue[]): Promise<Row[]>;
 }
 export interface RuntimeSqlDatabase extends RuntimeSqlExecutor {
+  readonly maxPayloadReadBytes?: number;
   transaction<Value>(callback: (transaction: RuntimeSqlExecutor) => Promise<Value>): Promise<Value>;
   close(): Promise<void>;
 }
@@ -95,9 +131,35 @@ export type RuntimeScriptSandbox = {
   }>;
 };
 
+export type RuntimeImageLimits = {
+  readonly maxWidth: number;
+  readonly maxHeight: number;
+  /** Maximum encoded base64 length. */
+  readonly maxBytes: number;
+};
+
+export type RuntimePreparedImage = {
+  readonly data: string;
+  readonly mimeType: string;
+  readonly resized?: {
+    readonly from: { readonly width: number; readonly height: number };
+    readonly to: { readonly width: number; readonly height: number };
+  };
+  readonly convertedFrom?: string;
+};
+
+export type RuntimeImageProcessor = {
+  prepare(
+    bytes: Uint8Array,
+    mimeType: string,
+    limits: RuntimeImageLimits,
+  ): Promise<RuntimePreparedImage | undefined>;
+};
+
 /** Callbacks are reconstructed for the current process; never serialized with a conversation. */
 export type RuntimeExecutionPorts = {
   scriptSandbox?: RuntimeScriptSandbox;
+  imageProcessor?: RuntimeImageProcessor;
   writeToolOutput?(
     identity: RuntimeExecutionIdentity,
     output: { name: string; data: string | Uint8Array },
@@ -105,6 +167,8 @@ export type RuntimeExecutionPorts = {
   ): Promise<RuntimeArtifact>;
   /** The shared storage session closed itself; reopen its working copies before accepting work. */
   onFailure?(error: RuntimeError): void;
+  /** Preserve an unreadable working copy while the Host isolates its Session before resume. */
+  onRecoveryFailure?(lane: RuntimeLane, error: unknown): Promise<void>;
   traceModel?(owner: RuntimeUsageOwner): Promise<TraceSpan | undefined>;
   assertExecutionAllowed(owner: RuntimeUsageOwner, signal: AbortSignal): Promise<void>;
   resolveTool(
@@ -117,12 +181,24 @@ export type RuntimeExecutionPorts = {
     approval: RuntimeApproval,
     signal: AbortSignal,
   ): Promise<'approve' | 'deny'>;
+  hasPendingHostQuestion?(identity: RuntimeExecutionIdentity): boolean;
+  validateQuestionAnswer?(
+    question: RuntimePendingQuestion['question'],
+    answer: AgentUserAnswers,
+  ): void;
   admitArtifacts(
     identity: RuntimeExecutionIdentity,
     artifacts: readonly RuntimeArtifact[],
     signal: AbortSignal,
   ): Promise<void>;
   recordUsage(owner: RuntimeUsageOwner, report: RuntimeUsageReport): Promise<void>;
+};
+
+export type RuntimeMcpNamespace = {
+  serverId: string;
+  name: string;
+  description: string;
+  instructions?: string;
 };
 
 export type RuntimeConversationConfiguration = {
@@ -135,6 +211,8 @@ export type RuntimeConversationConfiguration = {
   options: RuntimeOptions;
   /** The current offered schema/catalog; execution resolves the owning durable run through ports. */
   tools: readonly RuntimeTool[];
+  mcpNamespaces?: readonly RuntimeMcpNamespace[];
+  compaction?: { enabled?: boolean };
   /** Absent when the Agent may not use the web; the Runtime then never adds a native web tool. */
   webTools?: RuntimeWebTools;
 };
@@ -180,6 +258,8 @@ export type RuntimeDurableSubmission = {
   input: RuntimeInputPart[];
   /** Completed tool prefix imported into a replacement working copy; never execute it again. */
   resume?: RuntimeMessagePart[];
+  /** Host retained prior non-empty reply parts that are merged back at display projection. */
+  readonly hasRetainedOutput?: boolean;
   /** Original display parts and inference facts. Assistant/model/tool bodies belong to the engine. */
   metadata: { [key: string]: RuntimeJsonValue };
 };
@@ -226,11 +306,33 @@ export type RuntimeInputParent = {
 
 export type RuntimeQueueSelection = { from: string; to: string };
 
+export type RuntimePendingApproval = {
+  id: string;
+  turnId: string;
+  requestId: string;
+  toolCallId: string;
+  toolRef: RuntimeToolRef;
+  providerName: string;
+  displayName: string;
+  input: RuntimeJsonValue;
+  requestedAt: number;
+};
+
+export type RuntimePendingQuestion = {
+  turnId: string;
+  requestId: string;
+  toolCallId: string;
+  question: AgentUserQuestions;
+  requestedAt: number;
+};
+
 export type RuntimeConversationSnapshot = {
   activeTurn: RuntimeDurableTurn | null;
   queue: readonly RuntimeDurableTurn[];
   contextStatus?: 'compacting' | 'compaction-failed' | null;
   contextUsage?: RuntimeContextUsage | null;
+  pendingApprovals?: readonly RuntimePendingApproval[];
+  pendingQuestion?: RuntimePendingQuestion | null;
 };
 
 export type RuntimeConversationEvent =
@@ -238,7 +340,9 @@ export type RuntimeConversationEvent =
   | { type: 'turn.updated'; turn: RuntimeDurableTurn }
   | { type: 'context.updated'; status: 'compacting' | 'compaction-failed' | null }
   | { type: 'context.usage.updated'; usage: RuntimeContextUsage | null }
-  | { type: 'queue.updated'; queue: readonly RuntimeDurableTurn[] };
+  | { type: 'queue.updated'; queue: readonly RuntimeDurableTurn[] }
+  | { type: 'approvals.updated'; approvals: readonly RuntimePendingApproval[] }
+  | { type: 'question.updated'; question: RuntimePendingQuestion | null };
 
 /** Persistent execution working copies. Cherry owns the user transcript and its lifecycle. */
 export interface DurableAgentRuntime {
@@ -342,6 +446,7 @@ export interface DurableAgentRuntime {
     turns: readonly RuntimeDurableTurn[];
     nextCursor?: string;
   }>;
+  assistantMessageIdForRequest?(lane: RuntimeLane, requestId: string): Promise<string | undefined>;
   message(
     lane: RuntimeLane,
     messageId: string,
@@ -352,6 +457,18 @@ export interface DurableAgentRuntime {
     requestId: string,
     options?: { currentContext?: boolean },
   ): Promise<{ contextCheckpoint: RuntimeContextCheckpoint | null }>;
+  respondApproval?(
+    lane: RuntimeLane,
+    approvalId: string,
+    decision: 'approve' | 'deny',
+  ): Promise<boolean>;
+  respondQuestion?(
+    lane: RuntimeLane,
+    toolCallId: string,
+    answer: AgentUserAnswers,
+    turnId?: string,
+  ): Promise<boolean>;
+  hasPendingQuestion?(lane: RuntimeLane): Promise<boolean>;
   compactContext(
     lane: RuntimeLane,
     signal: AbortSignal,

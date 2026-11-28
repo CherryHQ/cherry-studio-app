@@ -10,7 +10,11 @@ import { CLOUD_PROVIDER_NAME, type CloudModelUse } from '@/shared/contracts/clou
 import { getCloudModelOffers, getCloudModelTapNotice } from './cloudModelOffers';
 import { useCloudModelActivation } from './useCloudModelActivation';
 
-export function useCloudModelBrowser(enabled: boolean, use?: CloudModelUse) {
+export function useCloudModelBrowser(
+  enabled: boolean,
+  use?: CloudModelUse,
+  { autoRefresh = true }: { autoRefresh?: boolean } = {},
+) {
   const { cloud, state } = useCloud();
   const { account, state: accountState } = useAccount();
   const { t } = useTranslation();
@@ -22,9 +26,27 @@ export function useCloudModelBrowser(enabled: boolean, use?: CloudModelUse) {
     if (canBrowse) void cloud.refreshProvider().catch(() => {});
   }, [canBrowse, cloud]);
   useEffect(() => {
-    if (canBrowse) void cloud.refresh().catch(() => {});
-  }, [canBrowse, cloud]);
+    if (autoRefresh && canBrowse) void cloud.refresh().catch(() => {});
+  }, [autoRefresh, canBrowse, cloud]);
   const offers = useMemo(() => getCloudModelOffers(state, use), [state, use]);
+  const hasLockedAmdOffer = useMemo(
+    () =>
+      Array.from(offers.values()).some(
+        (offer) =>
+          offer.isAmd &&
+          offer.model.activation_required &&
+          Boolean(offer.model.activation_endpoint) &&
+          offer.reason !== 'subscription_required',
+      ),
+    [offers],
+  );
+  const isActiveAccount =
+    state.phase === 'ready' && !state.accountIssue && state.account?.account.status === 'active';
+  useEffect(() => {
+    if (autoRefresh && canBrowse && isActiveAccount && hasLockedAmdOffer) {
+      void cloud.refreshAmd().catch(() => {});
+    }
+  }, [autoRefresh, canBrowse, cloud, hasLockedAmdOffer, isActiveAccount]);
 
   const signInAgain = useCallback(
     (destination: string) => {

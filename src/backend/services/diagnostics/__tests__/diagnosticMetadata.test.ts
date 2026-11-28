@@ -345,6 +345,10 @@ test('preserves request budgets and failure facts together through capture and a
   const attributes = sanitizeTraceAttributes({
     'runtime.name': 'pi-durable',
     'gen_ai.request.model': 'test-model',
+    'cherry.gateway.request_id': '0123456789abcdef0123456789abcdef',
+    'error.provider.type': 'invalid_request_error',
+    'error.provider.code': 'unsupported_parameter',
+    'error.provider.param': 'max_tokens',
     'gen_ai.provider.id': 'test-provider',
     'gen_ai.provider.api': 'openai-completions',
     'gen_ai.model.context_window': 128_000,
@@ -373,6 +377,8 @@ test('preserves request budgets and failure facts together through capture and a
   expect(exported?.attributes).toMatchObject({
     'gen_ai.request.estimated_input_tokens': 100,
     'gen_ai.request.max_tokens': 4096,
+    'cherry.gateway.request_id': '0123456789abcdef0123456789abcdef',
+    'error.provider.code': 'unsupported_parameter',
     'http.status_code': 400,
     'error.retry_scope': 'automatic',
   });
@@ -386,6 +392,10 @@ test('exports only numeric budgets and closed product reasons and retry scopes',
     attributes: {
       'error.product_reason': 'context_length',
       'error.source.code': 'provider_error',
+      'error.provider.type': 'Bearer private',
+      'gen_ai.request.message_roles': 'user|private',
+      'error.provider.param': 'private_field',
+      'cherry.gateway.request_id': 'client-request-1',
       'error.retry_scope': 'user',
       'gen_ai.request.estimated_input_tokens': 'private-value',
       'gen_ai.request.max_tokens': -1,
@@ -677,4 +687,32 @@ test('projects repetition counts and times without accepting payload fields or i
       repetition: { ...record.repetition, firstSeenAt: new Date(3000).toISOString() },
     })?.repetition,
   ).toBeUndefined();
+});
+
+test('retains static HTTP caller facts through persistence and export while dropping request data', () => {
+  const persisted = projectDiagnosticLog(
+    createLogRecord('warn', 'HTTP request failed.', 'HttpTransport', {}, [
+      {
+        status: 429,
+        code: 'ERR_BAD_REQUEST',
+        serviceName: 'ProviderRegistryUpdaterService',
+        operation: 'registry.manifest',
+        method: 'GET',
+        url: 'https://example.com?token=secret',
+        message: 'private upstream response',
+        headers: { authorization: 'Bearer secret' },
+      },
+    ]),
+  );
+  expect(persisted?.facts).toEqual({
+    status: 429,
+    code: 'ERR_BAD_REQUEST',
+    'error.code': 'ERR_BAD_REQUEST',
+    'http.status_code': 429,
+    serviceName: 'ProviderRegistryUpdaterService',
+    operation: 'registry.manifest',
+  });
+  const exported = projectDiagnosticLog(JSON.parse(JSON.stringify(persisted)));
+  expect(exported).toEqual(persisted);
+  expect(JSON.stringify(exported)).not.toMatch(/secret|private|https|authorization|method/);
 });

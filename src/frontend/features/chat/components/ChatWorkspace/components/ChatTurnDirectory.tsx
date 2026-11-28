@@ -1,11 +1,23 @@
 import XIcon from '@cherrystudio/app-icons/icons/x';
 import { BackgroundPressExclusion, Button, Spinner, useToast } from '@cherrystudio/ui/components';
+import { haptics } from '@cherrystudio/ui/haptics';
+import { duration, easing } from '@cherrystudio/ui/motion';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FlatList, Keyboard, Pressable, Text, View } from 'react-native';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
-import Animated, { type SharedValue, useAnimatedStyle } from 'react-native-reanimated';
+import Animated, {
+  Extrapolation,
+  interpolate,
+  ReduceMotion,
+  type SharedValue,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import type { HistoryPosition } from '@/frontend/appShell/conversation/remote';
 import { useFocusedBackPress } from '@/frontend/appShell/navigation';
@@ -27,6 +39,7 @@ const LIST_CONTENT_STYLE = {
 const LIST_SCROLL_INDICATOR_INSETS = { top: 4, bottom: 12, right: 0 } as const;
 const RAIL_STYLE = { gap: 4.5, width: 14 } as const;
 const TRIGGER_TICKS = ['t0', 't1', 't2', 't3', 't4', 't5', 't6'] as const;
+export const MAX_TRIGGER_TICKS = TRIGGER_TICKS.length;
 const TICK_MIN_WIDTH = 5.5;
 const TICK_MAX_WIDTH = 13;
 const TICK_MIN_OPACITY = 0.22;
@@ -36,6 +49,11 @@ const TICK_FISHEYE_RADIUS = 1.65;
 const TICK_TRACK_STYLE = { height: 2, width: TICK_MAX_WIDTH } as const;
 const TICK_BAR_STYLE = { width: TICK_MAX_WIDTH } as const;
 const turnKey = (turn: ChatTurn) => turn.id;
+
+export function resolveTurnDirectoryTickCount(turnCount?: number): number {
+  if (turnCount === undefined || !Number.isFinite(turnCount)) return MAX_TRIGGER_TICKS;
+  return Math.min(MAX_TRIGGER_TICKS, Math.max(2, Math.floor(turnCount)));
+}
 
 export function getFisheyeTickMetrics(progress: number, index: number, count: number) {
   'worklet';
@@ -52,23 +70,21 @@ export function getFisheyeTickMetrics(progress: number, index: number, count: nu
 }
 
 function FisheyeTick({
+  count,
   index,
   scrollProgress,
 }: {
+  count: number;
   index: number;
   scrollProgress: SharedValue<number>;
 }) {
   const animatedStyle = useAnimatedStyle(() => {
-    const { opacity, scaleY, width } = getFisheyeTickMetrics(
-      scrollProgress.get(),
-      index,
-      TRIGGER_TICKS.length,
-    );
+    const { opacity, scaleY, width } = getFisheyeTickMetrics(scrollProgress.get(), index, count);
     return {
       opacity,
       transform: [{ translateX: TICK_MAX_WIDTH - width }, { scaleY }],
     };
-  });
+  }, [count, index, scrollProgress]);
 
   return (
     <View className="overflow-hidden rounded-r-full" style={TICK_TRACK_STYLE}>
@@ -86,26 +102,79 @@ export function ChatTurnDirectory({
   bottomAccessoryHeight,
   contentBottomInset,
   contentTopInset,
+  dockLift,
   keyboardOffset,
   scrollProgress,
   scrollToMessage,
+  turnCount,
 }: {
   navigator: ChatTurnNavigator;
   bottomAccessoryHeight: SharedValue<number>;
   contentBottomInset: number;
   contentTopInset: number;
+  dockLift?: SharedValue<number>;
   keyboardOffset: number;
   scrollProgress: SharedValue<number>;
   scrollToMessage: MessageListHandle['scrollToMessage'];
+  turnCount?: number;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
+  const [hasExited, setHasExited] = useState(true);
+  const motion = useSharedValue(0);
+  const reducedMotion = useReducedMotion();
+  const presentation = useRef({ open: false, closeId: 0 });
+  const tickCount = resolveTurnDirectoryTickCount(turnCount);
+
+  // The trigger and panel share an interruptible transition. Keep rows mounted through exit,
+  // but release their touch and accessibility surfaces on the closing action.
   const open = useCallback(() => {
+    if (presentation.current.open) return;
+    presentation.current.open = true;
+    haptics.light();
     Keyboard.dismiss();
+    setHasExited(false);
     setIsOpen(true);
+    motion.set(
+      reducedMotion
+        ? 1
+        : withTiming(1, {
+            duration: duration.slow,
+            easing: easing.overshoot,
+            reduceMotion: ReduceMotion.System,
+          }),
+    );
+  }, [motion, reducedMotion]);
+  const finishExit = useCallback((closeId: number) => {
+    if (!presentation.current.open && presentation.current.closeId === closeId) {
+      setHasExited(true);
+    }
   }, []);
-  const close = useCallback(() => setIsOpen(false), []);
+  const close = useCallback(() => {
+    if (!presentation.current.open) return;
+    presentation.current.open = false;
+    const closeId = ++presentation.current.closeId;
+    setIsOpen(false);
+    if (reducedMotion) {
+      motion.set(0);
+      finishExit(closeId);
+      return;
+    }
+    motion.set(
+      withTiming(
+        0,
+        {
+          duration: duration.base,
+          easing: easing.settle,
+          reduceMotion: ReduceMotion.System,
+        },
+        (finished) => {
+          if (finished) scheduleOnRN(finishExit, closeId);
+        },
+      ),
+    );
+  }, [finishExit, motion, reducedMotion]);
   useFocusedBackPress(close, isOpen);
   const { onLayout, width: containerWidth } = useLayoutWidth();
   const { height, progress } = useReanimatedKeyboardAnimation();
@@ -113,18 +182,33 @@ export function ChatTurnDirectory({
     containerWidth >= 832 ? Math.max(8, Math.floor((containerWidth - 720) / 2) - 24) : 2;
   const panelRightInset =
     containerWidth >= 832 ? Math.max(16, Math.floor((containerWidth - 720) / 2)) : 16;
-  const rightInset = isOpen ? panelRightInset : triggerRightInset;
   const position = useAnimatedStyle(() => ({
-    right: rightInset,
-    top: contentTopInset + 12,
-    bottom:
-      bottomAccessoryHeight.get() +
-      Math.max(0, -height.get() - progress.get() * keyboardOffset) +
-      Math.max(contentBottomInset, 12) +
-      16,
+    transform: [
+      {
+        translateY:
+          -(
+            bottomAccessoryHeight.get() +
+            (dockLift?.get() ?? Math.max(0, -height.get() - progress.get() * keyboardOffset))
+          ) / 2,
+      },
+    ],
   }));
+  const panelMotion = useAnimatedStyle(() => ({
+    opacity: interpolate(motion.get(), [0, 0.25, 1], [0, 1, 1], Extrapolation.CLAMP),
+    transform: [
+      { translateX: interpolate(motion.get(), [0, 1], [24, 0]) },
+      { scale: interpolate(motion.get(), [0, 1], [0.86, 1]) },
+    ],
+  }));
+  const triggerMotion = useAnimatedStyle(() => ({
+    opacity: interpolate(motion.get(), [0, 0.25, 1], [1, 0, 0], Extrapolation.CLAMP),
+    transform: [{ translateX: interpolate(motion.get(), [0, 1], [0, 8], Extrapolation.CLAMP) }],
+  }));
+  const top = contentTopInset + 12;
+  const bottom = Math.max(contentBottomInset, 12) + 16;
 
   async function select(turn: ChatTurn, targetProgress?: number) {
+    if (!presentation.current.open) return;
     const previousProgress = scrollProgress.get();
     if (targetProgress !== undefined) {
       scrollProgress.set(targetProgress);
@@ -152,13 +236,13 @@ export function ChatTurnDirectory({
         </BackgroundPressExclusion>
       ) : null}
       <Animated.View
+        accessibilityElementsHidden={isOpen}
         className="absolute left-4 flex-row-reverse items-center"
-        pointerEvents="box-none"
-        style={position}
+        importantForAccessibility={isOpen ? 'no-hide-descendants' : 'auto'}
+        pointerEvents={isOpen ? 'none' : 'box-none'}
+        style={[{ right: triggerRightInset, top, bottom }, position]}
       >
-        {isOpen ? (
-          <ChatTurnDirectoryPanel navigator={navigator} onClose={close} onSelect={select} />
-        ) : (
+        <Animated.View style={triggerMotion}>
           <BackgroundPressExclusion>
             <Pressable
               accessibilityLabel={t('chat.turns.title')}
@@ -170,14 +254,36 @@ export function ChatTurnDirectory({
               testID="chat-turn-directory-trigger"
             >
               <View className="items-end" style={RAIL_STYLE}>
-                {TRIGGER_TICKS.map((id, index) => (
-                  <FisheyeTick key={id} index={index} scrollProgress={scrollProgress} />
+                {TRIGGER_TICKS.slice(0, tickCount).map((id, index) => (
+                  <FisheyeTick
+                    count={tickCount}
+                    key={id}
+                    index={index}
+                    scrollProgress={scrollProgress}
+                  />
                 ))}
               </View>
             </Pressable>
           </BackgroundPressExclusion>
-        )}
+        </Animated.View>
       </Animated.View>
+      {!hasExited ? (
+        <Animated.View
+          accessibilityElementsHidden={!isOpen}
+          className="absolute left-4 flex-row-reverse items-center"
+          importantForAccessibility={isOpen ? 'auto' : 'no-hide-descendants'}
+          pointerEvents={isOpen ? 'box-none' : 'none'}
+          style={[{ right: panelRightInset, top, bottom }, position]}
+          testID="chat-turn-directory-layer"
+        >
+          <Animated.View
+            className="max-h-full max-w-full shrink"
+            style={[{ transformOrigin: 'right center' }, panelMotion]}
+          >
+            <ChatTurnDirectoryPanel navigator={navigator} onClose={close} onSelect={select} />
+          </Animated.View>
+        </Animated.View>
+      ) : null}
     </View>
   );
 }

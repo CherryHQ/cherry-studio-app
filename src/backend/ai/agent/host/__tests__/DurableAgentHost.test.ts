@@ -1,5 +1,4 @@
 import { v4 as uuidv4, v7 as uuid } from 'uuid';
-import { ZodError } from 'zod';
 
 import type { BackgroundReplyTurnInput } from '@/backend/services/backgroundReply';
 import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
@@ -18,6 +17,9 @@ import { createTraceRecorder } from '../../../observability/__tests__/_traceReco
 import {
   FakeRuntime,
   LANES_PER_SESSION,
+  RuntimeCorruptLaneError,
+  RuntimeToolDiscoveryError,
+  RuntimeToolUnavailableError,
   laneKey,
   parseLaneKey,
   runtimeLane,
@@ -27,6 +29,8 @@ import {
   type RuntimeConversationSeed,
   type RuntimeDurableTurn,
   type RuntimeExecutionPorts,
+  type RuntimePendingApproval,
+  type RuntimePendingQuestion,
   type RuntimeError,
   type RuntimeSqlDatabase,
   type RuntimeTool,
@@ -336,6 +340,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
   };
   return {
     host,
+    ports,
     store,
     raw: harness.raw,
     seedFolder: harness.seedFolder,
@@ -527,6 +532,475 @@ describe.each([true, false])('screen-awake generation demand (port provided: %s)
     state.expectLeases(2, 1);
     await state.host.close();
     state.expectLeases(2, 2);
+  });
+
+  test('resolveTool throws RuntimeToolUnavailableError when the capability is absent from the rebuilt catalog', async () => {
+    const state = fixture({
+      tools: { getTools: async () => [] },
+    });
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    try {
+      await expect(
+        state
+          .execution()!
+          .resolveTool(
+            turn.identity,
+            { source: 'builtin', capabilityId: 'generate_image' },
+            new AbortController().signal,
+          ),
+      ).rejects.toBeInstanceOf(RuntimeToolUnavailableError);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('resolveTool throws a plain Error and clears cached preparation on transient MCP discovery failure, allowing recovery', async () => {
+    const mcpTool: RuntimeTool = {
+      ref: { source: 'mcp', serverId: 'srv-transient', rawToolName: 'search' },
+      providerName: 'mcp_srv_search',
+      displayName: 'Search',
+      description: 'Search records.',
+      inputSchema: { type: 'object' },
+      approval: 'ask',
+      execute: async () => ({ value: 'ok', artifacts: [] }),
+    };
+    let available = false;
+    const state = fixture({
+      runtimeTools: {
+        resolve: async () =>
+          available
+            ? { tools: [mcpTool], pluginGuides: [], unavailableServerIds: [] }
+            : { tools: [], pluginGuides: [], unavailableServerIds: ['srv-transient'] },
+      },
+    });
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    try {
+      const error = await state
+        .execution()!
+        .resolveTool(turn.identity, mcpTool.ref, new AbortController().signal)
+        .catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(RuntimeToolDiscoveryError);
+      expect(error).not.toBeInstanceOf(RuntimeToolUnavailableError);
+
+      available = true;
+      await expect(
+        state.execution()!.resolveTool(turn.identity, mcpTool.ref, new AbortController().signal),
+      ).resolves.toMatchObject({ providerName: mcpTool.providerName });
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('resolveTool distinguishes transient system-capability errors from recovery', async () => {
+    const builtinTool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'generate_image' },
+      providerName: 'generate_image',
+      displayName: 'Generate image',
+      description: 'Generate an image.',
+      inputSchema: { type: 'object' },
+      approval: 'ask',
+      execute: async () => ({ value: 'ok', artifacts: [] }),
+    };
+    let shouldThrow = true;
+    const state = fixture({
+      tools: {
+        getTools: async () => {
+          if (shouldThrow) throw new Error('DB busy');
+          return [builtinTool];
+        },
+      },
+    });
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    try {
+      const firstError = await state
+        .execution()!
+        .resolveTool(turn.identity, builtinTool.ref, new AbortController().signal)
+        .catch((caught: unknown) => caught);
+      expect(firstError).toBeInstanceOf(RuntimeToolDiscoveryError);
+      expect(firstError).not.toBeInstanceOf(RuntimeToolUnavailableError);
+
+      shouldThrow = false;
+      await expect(
+        state
+          .execution()!
+          .resolveTool(turn.identity, builtinTool.ref, new AbortController().signal),
+      ).resolves.toMatchObject({ providerName: 'generate_image' });
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test.each([
+    ['approve', true, 'approved'],
+    ['deny', true, 'denied'],
+    ['approve', false, 'cancelled'],
+  ] as const)(
+    'reconciles a restored approval when %s is delivered=%s',
+    async (decision, delivered, status) => {
+      const state = screenFixture();
+      const turn = await state.reserve('running');
+      const approval: RuntimePendingApproval = {
+        id: 'pi:10:save',
+        turnId: turn.identity.turnId,
+        requestId: turn.identity.requestId,
+        toolCallId: 'save',
+        toolRef: { source: 'builtin', capabilityId: 'write_file' },
+        providerName: 'write_file',
+        displayName: 'Write file',
+        input: {},
+        requestedAt: 123,
+      };
+      const originalObserve = state.conversations.observe;
+      state.conversations.observe = async (lane, listener) => {
+        const observation = await originalObserve(lane, listener);
+        return {
+          ...observation,
+          snapshot: { ...observation.snapshot, pendingApprovals: [approval] },
+        };
+      };
+      const respond = jest.fn(async () => {
+        state.listeners.get(state.sessionId)?.({ type: 'approvals.updated', approvals: [] });
+        return delivered;
+      });
+      state.conversations.respondApproval = respond;
+      await state.host.initialize();
+      const events: AgentEvent[] = [];
+      const observation = await state.host.observeSession(state.sessionId, (event) =>
+        events.push(event),
+      );
+      try {
+        expect(observation.snapshot.activeTurn?.status).toBe('awaiting-approval');
+        expect(observation.snapshot.pendingApprovals).toEqual([
+          expect.objectContaining({ id: approval.id, status: 'pending' }),
+        ]);
+        state.expectLeases(0, 0);
+        await settle();
+        expect(state.reply.setInteraction).toHaveBeenCalledWith(
+          expect.objectContaining({ kind: 'approval', id: approval.id }),
+        );
+        const response = state.host.respondApproval({
+          sessionId: state.sessionId,
+          turnId: approval.turnId,
+          approvalId: approval.id,
+          decision,
+        });
+        if (delivered) await response;
+        else await expect(response).rejects.toMatchObject({ view: { code: 'APPROVAL_NOT_FOUND' } });
+        expect(respond).toHaveBeenCalledWith(runtimeLane(state.sessionId), approval.id, decision);
+        expect(events.filter((event) => event.type === 'approval.resolved')).toEqual([
+          {
+            type: 'approval.resolved',
+            approval: expect.objectContaining({ id: approval.id, status }),
+          },
+        ]);
+        expect(events).toContainEqual(
+          expect.objectContaining({
+            type: 'turn.updated',
+            turn: expect.objectContaining({ status: 'running' }),
+          }),
+        );
+        state.expectLeases(1, 0);
+      } finally {
+        await observation.unsubscribe();
+        await state.host.close();
+      }
+    },
+  );
+
+  test('rejects an opposite concurrent approval decision instead of resolving both', async () => {
+    const state = screenFixture();
+    const turn = await state.reserve('running');
+    const approval: RuntimePendingApproval = {
+      id: 'pi:10:save',
+      turnId: turn.identity.turnId,
+      requestId: turn.identity.requestId,
+      toolCallId: 'save',
+      toolRef: { source: 'builtin', capabilityId: 'write_file' },
+      providerName: 'write_file',
+      displayName: 'Write file',
+      input: {},
+      requestedAt: 123,
+    };
+    const originalObserve = state.conversations.observe;
+    state.conversations.observe = async (lane, listener) => {
+      const observation = await originalObserve(lane, listener);
+      return {
+        ...observation,
+        snapshot: { ...observation.snapshot, pendingApprovals: [approval] },
+      };
+    };
+    let resolveRespond!: (delivered: boolean) => void;
+    const respond = jest.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveRespond = resolve;
+        }),
+    );
+    state.conversations.respondApproval = respond;
+    await state.host.initialize();
+    const observation = await state.host.observeSession(state.sessionId, () => undefined);
+    try {
+      await settle();
+      const first = state.host.respondApproval({
+        sessionId: state.sessionId,
+        turnId: approval.turnId,
+        approvalId: approval.id,
+        decision: 'approve',
+      });
+      await expect(
+        state.host.respondApproval({
+          sessionId: state.sessionId,
+          turnId: approval.turnId,
+          approvalId: approval.id,
+          decision: 'deny',
+        }),
+      ).rejects.toMatchObject({ view: { code: 'APPROVAL_NOT_FOUND' } });
+      expect(respond).toHaveBeenCalledTimes(1);
+      state.listeners.get(state.sessionId)?.({ type: 'approvals.updated', approvals: [] });
+      resolveRespond(true);
+      await expect(first).resolves.toBeUndefined();
+    } finally {
+      await observation.unsubscribe();
+      await state.host.close();
+    }
+  });
+
+  test('projects a durable question and validates answers before routing to its lane', async () => {
+    const state = screenFixture();
+    const turn = await state.reserve('running');
+    const question: RuntimePendingQuestion = {
+      turnId: turn.identity.turnId,
+      requestId: turn.identity.requestId,
+      toolCallId: 'choice',
+      question: {
+        questions: [{ id: 'choice', question: 'Which one?', selection: 'single', options: [] }],
+      },
+      requestedAt: 123,
+    };
+    const respond = jest.fn(async () => {
+      state.listeners.get(state.sessionId)?.({ type: 'question.updated', question: null });
+      return true;
+    });
+    state.conversations.respondQuestion = respond;
+    await state.host.initialize();
+    const events: AgentEvent[] = [];
+    const observation = await state.host.observeSession(state.sessionId, (event) =>
+      events.push(event),
+    );
+    try {
+      await settle();
+      state.listeners.get(state.sessionId)?.({ type: 'question.updated', question });
+      expect(events).toContainEqual({
+        type: 'question.updated',
+        question: {
+          turnId: question.turnId,
+          toolCallId: question.toolCallId,
+          question: question.question,
+        },
+      });
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'turn.updated',
+          turn: expect.objectContaining({ status: 'awaiting-input' }),
+        }),
+      );
+      expect(state.reply.setInteraction).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'question', id: question.toolCallId }),
+      );
+      state.expectLeases(1, 1);
+      const response = {
+        sessionId: state.sessionId,
+        turnId: question.turnId,
+        toolCallId: question.toolCallId,
+        answer: {
+          answers: [{ questionId: 'choice', selectedOptionIds: [], text: 'First', skipped: false }],
+        },
+      };
+      await expect(
+        state.host.respondQuestion({
+          ...response,
+          answer: { answers: [{ ...response.answer.answers[0]!, text: '' }] },
+        }),
+      ).rejects.toThrow('Invalid answer for this question.');
+      expect(respond).not.toHaveBeenCalled();
+      await state.host.respondQuestion(response);
+      expect(respond).toHaveBeenCalledWith(
+        runtimeLane(state.sessionId),
+        question.toolCallId,
+        response.answer,
+        question.turnId,
+      );
+      expect(events).toContainEqual({ type: 'question.updated', question: null });
+      state.expectLeases(2, 1);
+    } finally {
+      await observation.unsubscribe();
+      await state.host.close();
+    }
+  });
+
+  test('passes turnId into durable respondQuestion and rejects mismatched turns', async () => {
+    const state = screenFixture();
+    const turn = await state.reserve('running');
+    const question: RuntimePendingQuestion = {
+      turnId: turn.identity.turnId,
+      requestId: turn.identity.requestId,
+      toolCallId: 'choice',
+      question: {
+        questions: [{ id: 'choice', question: 'Which one?', selection: 'single', options: [] }],
+      },
+      requestedAt: 123,
+    };
+    const respond = jest.fn(async (_lane, _toolCallId, _answer, turnId?: string) => {
+      const matched = turnId === question.turnId;
+      if (matched)
+        state.listeners.get(state.sessionId)?.({ type: 'question.updated', question: null });
+      return matched;
+    });
+    state.conversations.respondQuestion = respond;
+    await state.host.initialize();
+    const observation = await state.host.observeSession(state.sessionId, () => undefined);
+    try {
+      await settle();
+      state.listeners.get(state.sessionId)?.({ type: 'question.updated', question });
+      const answer = {
+        answers: [{ questionId: 'choice', selectedOptionIds: [], text: 'First', skipped: false }],
+      };
+      await expect(
+        state.host.respondQuestion({
+          sessionId: state.sessionId,
+          turnId: `${question.turnId}-stale`,
+          toolCallId: question.toolCallId,
+          answer,
+        }),
+      ).rejects.toMatchObject({ view: { code: 'QUESTION_NOT_FOUND' } });
+      expect(respond).not.toHaveBeenCalled();
+
+      state.conversations.respondQuestion = jest.fn(async () => false);
+      await expect(
+        state.host.respondQuestion({
+          sessionId: state.sessionId,
+          turnId: question.turnId,
+          toolCallId: question.toolCallId,
+          answer,
+        }),
+      ).rejects.toMatchObject({ view: { code: 'QUESTION_NOT_FOUND' } });
+      expect(state.conversations.respondQuestion).toHaveBeenCalledWith(
+        runtimeLane(state.sessionId),
+        question.toolCallId,
+        answer,
+        question.turnId,
+      );
+    } finally {
+      await observation.unsubscribe();
+      await state.host.close();
+    }
+  });
+
+  test('shares single-question exclusion between durable questions and in-memory askUser callers', async () => {
+    let checkRuntimePending: () => Promise<boolean> = async () => false;
+    const state = screenFixture({
+      tools: { getTools: async ({ askUser }) => [createAskUserQuestionTool(askUser)] },
+    });
+    state.conversations.hasPendingQuestion = () => checkRuntimePending();
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    const events: AgentEvent[] = [];
+    const observation = await state.host.observeSession(state.sessionId, (event) =>
+      events.push(event),
+    );
+    const controller = new AbortController();
+    const askQuestion = {
+      questions: [
+        { id: 'choice', question: 'Which one?', selection: 'single' as const, options: [] },
+      ],
+    };
+    const durableQuestion: RuntimePendingQuestion = {
+      turnId: turn.identity.turnId,
+      requestId: turn.identity.requestId,
+      toolCallId: 'durable-q',
+      question: askQuestion,
+      requestedAt: 123,
+    };
+    try {
+      await settle();
+      const ports = state.execution()!;
+      expect(ports.hasPendingHostQuestion?.(turn.identity)).toBe(false);
+      const tool = await ports.resolveTool(
+        turn.identity,
+        { source: 'builtin', capabilityId: 'ask_user_question' },
+        controller.signal,
+      );
+
+      // (a) When a durable question is projected, an in-memory caller (e.g. adapt_skill) is rejected.
+      state.listeners.get(state.sessionId)?.({
+        type: 'question.updated',
+        question: durableQuestion,
+      });
+      await expect(
+        tool.execute({
+          turnId: turn.identity.turnId,
+          toolCallId: 'in-memory-q-1',
+          signal: controller.signal,
+          input: askQuestion,
+        }),
+      ).rejects.toThrow('Wait for the current question before asking another.');
+      expect(events.findLast((event) => event.type === 'question.updated')).toEqual({
+        type: 'question.updated',
+        question: {
+          turnId: durableQuestion.turnId,
+          toolCallId: durableQuestion.toolCallId,
+          question: durableQuestion.question,
+        },
+      });
+      state.listeners.get(state.sessionId)?.({ type: 'question.updated', question: null });
+
+      // (b) When runtime reports a parked question in-flight before projection, askUser claims then rejects,
+      //     and hasPendingHostQuestion stays true while claiming and while an in-memory question waits.
+      let releaseCheck!: (pending: boolean) => void;
+      checkRuntimePending = () =>
+        new Promise<boolean>((resolve) => {
+          releaseCheck = resolve;
+        });
+      const pendingRejection = tool.execute({
+        turnId: turn.identity.turnId,
+        toolCallId: 'in-memory-q-2',
+        signal: controller.signal,
+        input: askQuestion,
+      });
+      expect(ports.hasPendingHostQuestion?.(turn.identity)).toBe(true);
+      releaseCheck(true);
+      await expect(pendingRejection).rejects.toThrow(
+        'Wait for the current question before asking another.',
+      );
+      expect(ports.hasPendingHostQuestion?.(turn.identity)).toBe(false);
+
+      // An ordinary in-memory question sets hasPendingHostQuestion=true until answered.
+      checkRuntimePending = async () => false;
+      const activeInMemory = tool.execute({
+        turnId: turn.identity.turnId,
+        toolCallId: 'in-memory-q-3',
+        signal: controller.signal,
+        input: askQuestion,
+      });
+      await settle();
+      expect(ports.hasPendingHostQuestion?.(turn.identity)).toBe(true);
+      await state.host.respondQuestion({
+        sessionId: state.sessionId,
+        turnId: turn.identity.turnId,
+        toolCallId: 'in-memory-q-3',
+        answer: {
+          answers: [{ questionId: 'choice', selectedOptionIds: [], text: 'Ok', skipped: false }],
+        },
+      });
+      await activeInMemory;
+      expect(ports.hasPendingHostQuestion?.(turn.identity)).toBe(false);
+    } finally {
+      await observation.unsubscribe();
+      await state.host.close();
+    }
   });
 
   test('cancel suppresses late running deltas and a new successor restores demand', async () => {
@@ -1170,6 +1644,354 @@ describe('durable tool diagnostics', () => {
       }
     },
   );
+
+  test('keeps unchanged follow-ups admissible on legacy pre-1.6 busy MCP sessions', async () => {
+    let mcpTool: RuntimeTool = {
+      ref: { source: 'mcp', serverId: 'srv-legacy', rawToolName: 'search' },
+      providerName: 'mcp_search',
+      displayName: 'Search',
+      description: 'Search records',
+      inputSchema: { type: 'object' },
+      executionSettingsKey: 'remote:conn-a',
+      approval: 'auto',
+      effect: 'read',
+      execute: async () => ({ value: null, artifacts: [] }),
+    };
+    let mcpNamespaces = [
+      { serverId: 'srv-legacy', name: 'srv_legacy', description: 'Legacy MCP server' },
+      { serverId: 'srv-empty', name: 'srv_empty', description: 'Enabled server with zero tools' },
+    ];
+    let tools: RuntimeTool[] = [mcpTool];
+    const f = fixture({
+      runtimeTools: {
+        resolve: async () => ({ tools, pluginGuides: [], mcpNamespaces }),
+      },
+    });
+    await f.reserve('running');
+    const storedConfig: RuntimeConversationSeed['configuration'] = {
+      ...configuration,
+      instructions: buildAgentSystemPrompt({
+        agentInstructions: '',
+        appLanguage: 'zh-CN',
+        tools: [mcpTool],
+      }),
+      mcpNamespaces: undefined,
+      tools: [mcpTool],
+    };
+    const configSpy = jest.spyOn(f.conversations, 'configuration').mockResolvedValue(storedConfig);
+    await f.host.initialize();
+    const submit = () =>
+      f.host.submitMessage({
+        sessionId: f.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Next.' }],
+      });
+    try {
+      await expect(submit()).resolves.toMatchObject({ turnId: expect.any(String) });
+      expect(f.conversations.submit).toHaveBeenCalledTimes(1);
+
+      // Genuine configuration changes still trigger SESSION_BUSY on legacy sessions.
+      mcpTool = { ...mcpTool, approval: 'ask' };
+      tools = [mcpTool];
+      await expect(submit()).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+      expect(f.conversations.submit).toHaveBeenCalledTimes(1);
+
+      // New 1.6 sessions persist mcpNamespaces ([] or populated) and compare namespaces strictly.
+      mcpTool = { ...mcpTool, approval: 'auto' };
+      tools = [];
+      mcpNamespaces = [{ serverId: 'srv-added', name: 'srv_added', description: 'Added server' }];
+      configSpy.mockResolvedValue({
+        ...configuration,
+        instructions: buildAgentSystemPrompt({
+          agentInstructions: '',
+          appLanguage: 'zh-CN',
+          tools: [],
+        }),
+        mcpNamespaces: [],
+        tools: [],
+      });
+      await expect(submit()).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+      expect(f.conversations.submit).toHaveBeenCalledTimes(1);
+
+      tools = [mcpTool];
+      mcpNamespaces = [
+        { serverId: 'srv-legacy', name: 'srv_legacy', description: 'Legacy MCP server' },
+      ];
+      configSpy.mockResolvedValue({
+        ...configuration,
+        instructions: buildAgentSystemPrompt({
+          agentInstructions: '',
+          appLanguage: 'zh-CN',
+          tools: [mcpTool],
+        }),
+        mcpNamespaces,
+        tools: [{ ...mcpTool, executionSettingsKey: 'remote:conn-old' }],
+      });
+      await expect(submit()).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+      expect(f.conversations.submit).toHaveBeenCalledTimes(1);
+    } finally {
+      await f.host.close();
+    }
+  });
+
+  test('refuses queueing a follow-up when a tool effect changes during an active turn', async () => {
+    const mcpTool: RuntimeTool = {
+      ref: { source: 'mcp', serverId: 'srv-effect', rawToolName: 'query_or_mutate' },
+      providerName: 'mcp_query_or_mutate',
+      displayName: 'Query Or Mutate',
+      description: 'Remote tool.',
+      inputSchema: { type: 'object' },
+      executionSettingsKey: 'remote:conn-a',
+      approval: 'auto',
+      effect: 'read',
+      execute: async () => ({ value: null, artifacts: [] }),
+    };
+    const mcpNamespaces = [
+      { serverId: 'srv-effect', name: 'srv_effect', description: 'Effect MCP server' },
+    ];
+    let liveTools: RuntimeTool[] = [mcpTool];
+    const f = fixture({
+      runtimeTools: {
+        resolve: async () => ({ tools: liveTools, pluginGuides: [], mcpNamespaces }),
+      },
+    });
+    await f.reserve('running');
+    const storedConfig: RuntimeConversationSeed['configuration'] = {
+      ...configuration,
+      instructions: buildAgentSystemPrompt({
+        agentInstructions: '',
+        appLanguage: 'zh-CN',
+        tools: [mcpTool],
+      }),
+      mcpNamespaces,
+      tools: [mcpTool],
+    };
+    const configSpy = jest.spyOn(f.conversations, 'configuration').mockResolvedValue(storedConfig);
+    await f.host.initialize();
+    const submit = () =>
+      f.host.submitMessage({
+        sessionId: f.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Continue.' }],
+      });
+    try {
+      await expect(submit()).resolves.toMatchObject({ turnId: expect.any(String) });
+      expect(f.conversations.submit).toHaveBeenCalledTimes(1);
+
+      liveTools = [{ ...mcpTool, effect: undefined }];
+      await expect(submit()).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+      expect(f.conversations.submit).toHaveBeenCalledTimes(1);
+
+      liveTools = [{ ...mcpTool, effect: 'write' }];
+      await expect(submit()).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+      expect(f.conversations.submit).toHaveBeenCalledTimes(1);
+
+      liveTools = [mcpTool];
+      configSpy.mockResolvedValue({
+        ...storedConfig,
+        tools: [{ ...mcpTool, effect: undefined }],
+      });
+      await expect(submit()).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+      expect(f.conversations.submit).toHaveBeenCalledTimes(1);
+    } finally {
+      await f.host.close();
+    }
+  });
+
+  test('refreshes cached turn preparation on respondApproval so in-process MCP binding revocation blocks wakeup while keeping admitted files', async () => {
+    const mcpTool: RuntimeTool = {
+      ref: { source: 'mcp', serverId: 'srv-1', rawToolName: 'search' },
+      providerName: 'mcp_srv1_search',
+      displayName: 'Search',
+      description: 'Search records.',
+      inputSchema: { type: 'object' },
+      approval: 'ask',
+      execute: async () => ({ value: 'ok', artifacts: [] }),
+    };
+    let bound = true;
+    const resolveRuntimeTools = jest.fn(async () => ({
+      tools: bound ? [mcpTool] : [],
+      pluginGuides: [],
+      mcpNamespaces: [{ serverId: 'srv-1', name: 'srv_1', description: 'Server 1' }],
+      unavailableServerIds: [],
+    }));
+    const grantedId = uuid();
+    let capturedResources: { fileEntryIds: ReadonlySet<string> } | undefined;
+    const f = fixture({
+      runtimeTools: { resolve: resolveRuntimeTools },
+      tools: {
+        getTools: async ({ resources }) => {
+          capturedResources = resources;
+          return [];
+        },
+      },
+      files: {
+        resolveAvailable: async (ids) =>
+          ids.includes(grantedId)
+            ? new Map([
+                [
+                  grantedId,
+                  { fileEntryId: grantedId, name: 'spec.txt', mediaType: 'text/plain', size: 12 },
+                ],
+              ])
+            : new Map(),
+        readAsBytes: async () => undefined,
+        readDocumentText: async () => undefined,
+        readImageText: async () => undefined,
+        readAsDataUrl: async () => undefined,
+      },
+    });
+    const respond = jest.fn(async () => true);
+    f.conversations.respondApproval = respond;
+    await f.reserve('completed');
+    await f.host.initialize();
+    const submitted = await f.host.submitMessage({
+      sessionId: f.sessionId,
+      userMessageId: uuid(),
+      assistantMessageId: uuid(),
+      parts: [{ type: 'text', text: 'Run search' }],
+    });
+    const turn = f.copies.get(f.sessionId)!.turns.at(-1)!;
+    const approval: RuntimePendingApproval = {
+      id: 'pi:10:search',
+      turnId: submitted.turnId,
+      requestId: turn.identity.requestId,
+      toolCallId: 'search-call',
+      toolRef: mcpTool.ref,
+      providerName: mcpTool.providerName,
+      displayName: mcpTool.displayName,
+      input: {},
+      requestedAt: 123,
+    };
+    const observation = await f.host.observeSession(f.sessionId, () => undefined);
+    try {
+      f.listeners.get(f.sessionId)?.({ type: 'approvals.updated', approvals: [approval] });
+      await expect(
+        f.execution()!.resolveTool(turn.identity, mcpTool.ref, new AbortController().signal),
+      ).resolves.toMatchObject({ providerName: mcpTool.providerName });
+      expect(resolveRuntimeTools).toHaveBeenCalledTimes(1);
+
+      await f.execution()!.admitArtifacts(
+        turn.identity,
+        [
+          {
+            ref: { kind: 'managed-file', fileEntryId: grantedId },
+            name: 'spec.txt',
+            mediaType: 'text/plain',
+            kind: 'created',
+          },
+        ],
+        new AbortController().signal,
+      );
+      expect(capturedResources?.fileEntryIds.has(grantedId)).toBe(true);
+
+      // Revoke the Agent's MCP binding in-process before approving the parked call.
+      bound = false;
+      await f.host.respondApproval({
+        sessionId: f.sessionId,
+        turnId: submitted.turnId,
+        approvalId: approval.id,
+        decision: 'approve',
+      });
+
+      await expect(
+        f.execution()!.resolveTool(turn.identity, mcpTool.ref, new AbortController().signal),
+      ).rejects.toBeInstanceOf(RuntimeToolUnavailableError);
+      expect(resolveRuntimeTools).toHaveBeenCalledTimes(2);
+      expect(capturedResources?.fileEntryIds.has(grantedId)).toBe(true);
+    } finally {
+      await observation.unsubscribe();
+      await f.host.close();
+    }
+  });
+
+  test('respondApproval refresh exposes updated SSH tool approval and diagnostics grant on resolveTool', async () => {
+    let granted = false;
+    const f = fixture({
+      tools: {
+        getTools: async () => [
+          {
+            ref: { source: 'builtin', capabilityId: 'ssh_execute' },
+            providerName: 'ssh_execute',
+            displayName: 'SSH · host',
+            description: 'Run command.',
+            inputSchema: { type: 'object' },
+            approval: granted ? 'auto' : 'ask',
+            executionSettingsKey: JSON.stringify([
+              'prof-1',
+              'rev-1',
+              'sel-1',
+              granted ? 'diag-1' : null,
+            ]),
+            execute: async () => ({ value: null, artifacts: [] }),
+          },
+        ],
+      },
+    });
+    f.conversations.respondApproval = jest.fn(async () => true);
+    await f.reserve('completed');
+    await f.host.initialize();
+    const submitted = await f.host.submitMessage({
+      sessionId: f.sessionId,
+      userMessageId: uuid(),
+      assistantMessageId: uuid(),
+      parts: [{ type: 'text', text: 'Check host' }],
+    });
+    const turn = f.copies.get(f.sessionId)!.turns.at(-1)!;
+    const approval: RuntimePendingApproval = {
+      id: 'pi:10:ssh',
+      turnId: submitted.turnId,
+      requestId: turn.identity.requestId,
+      toolCallId: 'ssh-call',
+      toolRef: { source: 'builtin', capabilityId: 'ssh_execute' },
+      providerName: 'ssh_execute',
+      displayName: 'SSH · host',
+      input: { command: 'uname -a' },
+      requestedAt: 123,
+    };
+    const observation = await f.host.observeSession(f.sessionId, () => undefined);
+    try {
+      f.listeners.get(f.sessionId)?.({ type: 'approvals.updated', approvals: [approval] });
+      await expect(
+        f
+          .execution()!
+          .resolveTool(
+            turn.identity,
+            { source: 'builtin', capabilityId: 'ssh_execute' },
+            new AbortController().signal,
+          ),
+      ).resolves.toMatchObject({
+        approval: 'ask',
+        executionSettingsKey: JSON.stringify(['prof-1', 'rev-1', 'sel-1', null]),
+      });
+
+      granted = true;
+      await f.host.respondApproval({
+        sessionId: f.sessionId,
+        turnId: submitted.turnId,
+        approvalId: approval.id,
+        decision: 'approve',
+      });
+
+      await expect(
+        f
+          .execution()!
+          .resolveTool(
+            turn.identity,
+            { source: 'builtin', capabilityId: 'ssh_execute' },
+            new AbortController().signal,
+          ),
+      ).resolves.toMatchObject({
+        approval: 'auto',
+        executionSettingsKey: JSON.stringify(['prof-1', 'rev-1', 'sel-1', 'diag-1']),
+      });
+    } finally {
+      await observation.unsubscribe();
+      await f.host.close();
+    }
+  });
 
   test('publishes the recovered queue to observations installed before initialization', async () => {
     const f = fixture();
@@ -1975,6 +2797,10 @@ describe('durable tool diagnostics', () => {
           { name: 'result.csv', data: 'a,b', folderId: originalFolderId },
           signal,
         );
+        await state
+          .execution()!
+          .resolveTool(turn.identity, { source: 'builtin', capabilityId: 'missing' }, signal)
+          .catch(() => undefined);
         expect(getTools).toHaveBeenLastCalledWith(
           expect.objectContaining({ workspaceFolderId: originalFolderId }),
         );
@@ -2121,6 +2947,229 @@ describe('durable tool diagnostics', () => {
 });
 
 describe('Cherry-owned transcript and disposable execution recovery', () => {
+  test('isolates configuration restore failures reported before startup observation', async () => {
+    const state = fixture();
+    const unreadable = await state.reserve('running');
+    const original = await state.store.getMessage(state.sessionId, unreadable.assistantMessageId);
+    const initialize = jest.mocked(state.conversations.initialize).getMockImplementation()!;
+    jest
+      .spyOn(state.conversations, 'initialize')
+      .mockImplementation(async (database, ports, signal) => {
+        await initialize(database, ports, signal);
+        await ports.onRecoveryFailure!(
+          runtimeLane(state.sessionId),
+          new RuntimeCorruptLaneError('corrupt lane'),
+        );
+      });
+    const observe = jest.spyOn(state.conversations, 'observe');
+    try {
+      await state.host.initialize();
+      expect(state.host.isReady).toBe(true);
+      expect(observe).not.toHaveBeenCalled();
+      expect(state.conversations.discardConversation).not.toHaveBeenCalled();
+      expect(await state.store.getMessage(state.sessionId, unreadable.assistantMessageId)).toEqual(
+        original,
+      );
+      await expect(state.host.observeSession(state.sessionId, () => {})).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED' },
+      });
+      await state.host.startSession({
+        sessionId: uuid(),
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Synthetic healthy input' }],
+      });
+      expect(state.conversations.submit).toHaveBeenCalledTimes(1);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('isolates an idle RuntimeCorruptLaneError without leaking schema error internals', async () => {
+    const state = fixture();
+    const completed = await state.reserve();
+    await state.host.initialize();
+    const lane = runtimeLane(state.sessionId);
+    jest
+      .spyOn(state.conversations, 'observe')
+      .mockRejectedValueOnce(new RuntimeCorruptLaneError('corrupt lane', { lane }));
+    try {
+      await expect(state.host.observeSession(state.sessionId, () => {})).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED' },
+      });
+      expect(state.host.isReady).toBe(true);
+      await state.host.startSession({
+        sessionId: uuid(),
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Synthetic healthy input' }],
+      });
+      expect(state.conversations.submit).toHaveBeenCalledTimes(1);
+      expect(
+        await state.store.getMessage(state.sessionId, completed.assistantMessageId),
+      ).not.toBeNull();
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('isolates an idle observation failure without changing history or blocking other Sessions', async () => {
+    const state = fixture();
+    const completed = await state.reserve();
+    await state.host.initialize();
+    const original = await state.store.getMessage(state.sessionId, completed.assistantMessageId);
+    const observe = jest
+      .spyOn(state.conversations, 'observe')
+      .mockRejectedValueOnce(new RuntimeCorruptLaneError('corrupt lane'));
+    try {
+      const observations = await Promise.allSettled([
+        state.host.observeSession(state.sessionId, () => {}),
+        state.host.observeSession(state.sessionId, () => {}),
+      ]);
+      for (const observed of observations)
+        expect(observed).toMatchObject({
+          status: 'rejected',
+          reason: { view: { code: 'SESSION_RECOVERY_FAILED' } },
+        });
+      await expect(state.host.observeSession(state.sessionId, () => {})).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED' },
+      });
+      await expect(async () =>
+        state.host.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'Must stay unreserved' }],
+        }),
+      ).rejects.toMatchObject({ view: { code: 'SESSION_RECOVERY_FAILED' } });
+      expect(observe).toHaveBeenCalledTimes(1);
+      expect(state.host.isReady).toBe(true);
+      expect(state.host.hasPendingStorageWork()).toBe(true);
+      expect(state.conversations.abort).not.toHaveBeenCalled();
+      expect(state.conversations.discardConversation).not.toHaveBeenCalled();
+      expect(await state.store.getMessage(state.sessionId, completed.assistantMessageId)).toEqual(
+        original,
+      );
+      await state.host.startSession({
+        sessionId: uuid(),
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Synthetic healthy input' }],
+      });
+      expect(state.conversations.submit).toHaveBeenCalledTimes(1);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('keeps an idle storage failure retryable without isolating its Session', async () => {
+    const state = fixture();
+    await state.reserve();
+    await state.host.initialize();
+    jest
+      .spyOn(state.conversations, 'observe')
+      .mockRejectedValueOnce(new Error('Storage unavailable'));
+    try {
+      await expect(state.host.observeSession(state.sessionId, () => {})).rejects.toThrow(
+        'Storage unavailable',
+      );
+      const observation = await state.host.observeSession(state.sessionId, () => {});
+      observation.unsubscribe();
+      expect(state.host.isReady).toBe(true);
+      expect(state.host.hasPendingStorageWork()).toBe(false);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('seals in-flight admission and concurrent sibling attach when observation hits RuntimeCorruptLaneError', async () => {
+    const state = fixture();
+    await state.reserve();
+    await state.host.initialize();
+    let releasePreflight!: () => void;
+    let enteredPreflight!: () => void;
+    const preflightGate = new Promise<void>((resolve) => {
+      releasePreflight = resolve;
+    });
+    const preflightStarted = new Promise<void>((resolve) => {
+      enteredPreflight = resolve;
+    });
+    jest.spyOn(state.conversations, 'preflightModel').mockImplementationOnce(async () => {
+      enteredPreflight();
+      await preflightGate;
+      return {
+        contextWindow: 32768,
+        maxInputTokens: 28672,
+        maxOutputTokens: 4096,
+        inputModalities: ['text'],
+        supportsTools: true,
+      };
+    });
+    const siblingUnsubscribe = jest.fn(async () => {});
+    let releaseSiblingObserve!: () => void;
+    let enteredSiblingObserve!: () => void;
+    const siblingGate = new Promise<void>((resolve) => {
+      releaseSiblingObserve = resolve;
+    });
+    const siblingStarted = new Promise<void>((resolve) => {
+      enteredSiblingObserve = resolve;
+    });
+    jest.spyOn(state.conversations, 'observe').mockImplementation(async (lane) => {
+      if (lane.slot === 1) {
+        enteredSiblingObserve();
+        await siblingGate;
+        return {
+          snapshot: { activeTurn: null, queue: [], contextStatus: null, contextUsage: null },
+          unsubscribe: siblingUnsubscribe,
+        };
+      }
+      throw new RuntimeCorruptLaneError('corrupt lane');
+    });
+
+    try {
+      const pendingAdmission = state.host.submitMessage({
+        sessionId: state.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Must fail safely' }],
+      });
+      await preflightStarted;
+      const messagesBefore = await state.store.listMessages(state.sessionId);
+
+      // Start an in-flight sibling lane attach that settles only after slot 0 isolates the session.
+      const attachHost = state.host as unknown as {
+        attach: (lane: ReturnType<typeof runtimeLane>) => Promise<unknown>;
+        live: Map<string, unknown>;
+      };
+      const pendingSibling = attachHost.attach(runtimeLane(state.sessionId, 1));
+      await siblingStarted;
+
+      await expect(state.host.observeSession(state.sessionId, () => {})).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED' },
+      });
+
+      releaseSiblingObserve();
+      await expect(pendingSibling).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED' },
+      });
+      expect(siblingUnsubscribe).toHaveBeenCalledTimes(1);
+      expect(attachHost.live.has(laneKey(runtimeLane(state.sessionId, 1)))).toBe(false);
+
+      releasePreflight();
+      await expect(pendingAdmission).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED' },
+      });
+      expect(await state.store.listMessages(state.sessionId)).toEqual(messagesBefore);
+    } finally {
+      releaseSiblingObserve?.();
+      releasePreflight?.();
+      await state.host.close();
+    }
+  });
+
   test('isolates an unreadable observer before resuming unrelated work and denies its execution', async () => {
     const state = fixture();
     const unreadable = await state.reserve('running');
@@ -2170,7 +3219,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     const observing = jest
       .spyOn(state.conversations, 'observe')
       .mockImplementation(async (lane, listener) => {
-        if (lane.sessionId === state.sessionId) throw new ZodError([]);
+        if (lane.sessionId === state.sessionId) throw new RuntimeCorruptLaneError('corrupt lane');
         return observe(lane, listener);
       });
 
@@ -2289,7 +3338,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       jest.spyOn(state.conversations, 'observe').mockImplementation(async (lane, listener) => {
         if (lane.slot === 1) {
           await lookupEntered;
-          throw new ZodError([]);
+          throw new RuntimeCorruptLaneError('corrupt lane');
         }
         const observation = await observe(lane, listener);
         return {
@@ -2359,7 +3408,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     const initializing = state.host.initialize(controller.signal);
     await entered;
     controller.abort(new Error('Host replaced'));
-    rejectObservation(new ZodError([]));
+    rejectObservation(new RuntimeCorruptLaneError('corrupt lane'));
     await expect(initializing).rejects.toThrow('Host replaced');
     await state.host.close();
     expect(state.conversations.resume).not.toHaveBeenCalled();
@@ -2368,7 +3417,9 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
   test('retries isolated data when a fresh runtime generation can observe it', async () => {
     const state = fixture();
     await state.reserve('running');
-    jest.spyOn(state.conversations, 'observe').mockRejectedValueOnce(new ZodError([]));
+    jest
+      .spyOn(state.conversations, 'observe')
+      .mockRejectedValueOnce(new RuntimeCorruptLaneError('corrupt lane'));
     try {
       await state.host.initialize();
       await state.host.suspend();
@@ -2381,13 +3432,13 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
-  test.each(['runtime-metadata', 'stored-parts'] as const)(
+  test.each(['runtime-metadata', 'stored-parts', 'stored-stats'] as const)(
     'isolates invalid %s at startup without rewriting it or relaxing backup reads',
     async (source) => {
       const state = fixture();
       const unreadable = await state.reserve();
       if (source === 'runtime-metadata') unreadable.metadata = {};
-      else {
+      else if (source === 'stored-parts') {
         state.copies.clear();
         state.raw
           .prepare('UPDATE agent_session_message SET data = ? WHERE id = ?')
@@ -2395,10 +3446,14 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
             JSON.stringify({ parts: [{ id: 'future', type: 'unsupported-part' }] }),
             unreadable.assistantMessageId,
           );
+      } else {
+        state.raw
+          .prepare('UPDATE agent_session_message SET stats = ? WHERE id = ?')
+          .run(JSON.stringify({ requestCount: 'invalid' }), unreadable.assistantMessageId);
       }
       const readUnreadable = () =>
         state.raw
-          .prepare('SELECT status, data FROM agent_session_message WHERE id = ?')
+          .prepare('SELECT status, data, stats FROM agent_session_message WHERE id = ?')
           .get(unreadable.assistantMessageId);
       const original = readUnreadable();
       const healthy = await state.store.reserveInitialSubmission({
@@ -2418,7 +3473,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         expect(
           (await state.store.getMessage(healthy.session.id, healthy.assistantMessage.id))?.status,
         ).toBe('interrupted');
-        await expect(state.host.quiesce()).rejects.toBeInstanceOf(ZodError);
+        await expect(state.host.quiesce()).rejects.toBeInstanceOf(RuntimeCorruptLaneError);
         await state.host.startSession({
           sessionId: uuid(),
           agentId: state.agentId,
@@ -2473,7 +3528,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         modelId: inferenceSnapshot.model.uniqueModelId,
         inferenceSnapshot,
       });
-      const failure = new ZodError([]);
+      const failure = new RuntimeCorruptLaneError('corrupt lane');
       if (source === 'native-read') {
         const message = state.conversations.message;
         jest.spyOn(state.conversations, 'message').mockImplementation(async (lane, id) => {
@@ -3156,6 +4211,116 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       ]);
       expect(messages[1]).toMatchObject({ status: 'pending' });
       expect(messages[1].turnId).not.toBe(failed.identity.turnId);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test.each(
+    ['startup', 'live'].flatMap((delivery) =>
+      ['empty', 'whitespace', 'rate-limit'].map((kind) => ({ delivery, kind })),
+    ),
+  )(
+    'persists textless $kind failures and retries the same leaf ($delivery)',
+    async ({ delivery, kind }) => {
+      const state = fixture();
+      const original = await state.reserve('running');
+      const terminal: RuntimeDurableTurn = {
+        ...original,
+        status: 'failed',
+        parts:
+          kind === 'whitespace'
+            ? [{ id: 'blank', type: 'text', text: ' \n\t', state: 'done' }]
+            : [],
+        error: {
+          code: kind === 'rate-limit' ? 'provider_error' : 'invalid_response',
+          message:
+            kind === 'rate-limit'
+              ? 'Too many requests'
+              : 'The model returned an invalid response with no content.',
+          retryable: true,
+          origin: 'provider',
+        },
+      };
+      if (delivery === 'live') await state.host.initialize();
+      state.emit(terminal);
+      if (delivery === 'startup') await state.host.initialize();
+      try {
+        await settle();
+        const saved = await state.store.getMessage(state.sessionId, original.assistantMessageId);
+        expect(saved).toMatchObject({
+          status: 'error',
+          parts: expect.arrayContaining([
+            expect.objectContaining({
+              type: 'data-error',
+              data: expect.objectContaining({
+                code: 'EXECUTION_FAILED',
+                retryable: true,
+                failure: expect.objectContaining({
+                  reasonCode: kind === 'rate-limit' ? 'rate_limit' : 'parse',
+                  source: expect.objectContaining({
+                    code: kind === 'rate-limit' ? 'provider_error' : 'invalid_response',
+                  }),
+                }),
+              }),
+            }),
+          ]),
+        });
+        await state.host.retryMessage({
+          sessionId: state.sessionId,
+          messageId: original.assistantMessageId,
+        });
+        const messages = await state.store.listMessages(state.sessionId);
+        expect(messages.map(({ id }) => id)).toEqual([
+          original.userMessageId,
+          original.assistantMessageId,
+        ]);
+        expect(messages[1]).toMatchObject({ status: 'pending', parts: [] });
+        expect(messages[1].turnId).not.toBe(original.identity.turnId);
+      } finally {
+        await state.host.close();
+      }
+    },
+  );
+
+  test('marks resumed retry submissions with hasRetainedOutput when retaining prior tool output', async () => {
+    const state = fixture();
+    const original = await state.reserve('failed');
+    await state.store.finalizeAssistantMessage({
+      assistantMessageId: original.assistantMessageId,
+      status: 'error',
+      parts: [
+        {
+          id: 'tool-1',
+          type: 'dynamic-tool',
+          toolCallId: 'call-1',
+          toolRef: { source: 'builtin', capabilityId: 'load_workflow' },
+          toolName: 'load_workflow',
+          title: 'Load workflow',
+          state: 'output-available',
+          input: { workflow_id: 'plugin:feishu-1' },
+          output: { value: { status: 'ok', workflow_id: 'plugin:feishu-1' }, artifacts: [] },
+        },
+      ],
+      usage: null,
+      error: { code: 'INTERRUPTED', message: 'The app stopped.', retryable: true },
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+    });
+    const submit = jest.spyOn(state.conversations, 'submit');
+    await state.host.initialize();
+    try {
+      await state.host.retryMessage({
+        sessionId: state.sessionId,
+        messageId: original.assistantMessageId,
+      });
+      expect(submit).toHaveBeenCalledWith(
+        { sessionId: state.sessionId, slot: 0 },
+        expect.objectContaining({
+          assistantMessageId: original.assistantMessageId,
+          hasRetainedOutput: true,
+        }),
+      );
     } finally {
       await state.host.close();
     }
@@ -4494,7 +5659,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
-  test('continued processing revocation cancels its execution owner independently of reply presentation', async () => {
+  test('continued processing expiry suspends parallel replies and foreground recovery completes them', async () => {
     const protection = executionProtection();
     const state = fixture({ executionLease: protection.acquire });
     await state.reserve('completed');
@@ -4503,18 +5668,160 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       await askTwoModels(state);
       await settle();
       const running = runningTurns(state);
-      const before = [...state.steps];
       await protection.acquire.mock.calls[0]![0](
         new KeepAliveInterruptionError('continued-processing-expired'),
       );
       await settle();
-      expect(state.conversations.abort).toHaveBeenCalledTimes(running.length);
-      expect(runningTurns(state)).toHaveLength(0);
+      expect(state.conversations.abort).not.toHaveBeenCalled();
+      expect(state.conversations.close).toHaveBeenCalledTimes(1);
+      expect(protection.lease.release).toHaveBeenCalledTimes(1);
+      expect(protection.lease.release).toHaveBeenCalledWith();
+      expect(runningTurns(state)).toEqual(running);
+      expect(await state.conversations.unfinishedLanes()).toHaveLength(running.length);
+      for (const turn of running)
+        expect(
+          (await state.store.getMessage(state.sessionId, turn.assistantMessageId))?.status,
+        ).toBe('pending');
+
       await state.host.resumeSuspended();
-      expect(state.steps.filter((step) => step === 'close' || step === 'open')).toEqual(
-        before.filter((step) => step === 'close' || step === 'open'),
-      );
+      expect(state.steps.filter((step) => ['close', 'open', 'resume'].includes(step))).toEqual([
+        'open',
+        'resume',
+        'close',
+        'open',
+        'resume',
+      ]);
+      const observation = await state.host.observeSession(state.sessionId, () => {});
+      expect(observation.snapshot.activeTurn).toMatchObject({
+        id: running[0]!.identity.turnId,
+        status: 'running',
+      });
+      observation.unsubscribe();
+      for (const turn of running)
+        state.emit({ ...turn, status: 'completed', answerBoundary: 'pi:3' });
+      await settle();
+      expect(state.conversations.abort).not.toHaveBeenCalled();
+      expect(await state.conversations.unfinishedLanes()).toEqual([]);
+      for (const turn of running)
+        expect(
+          (await state.store.getMessage(state.sessionId, turn.assistantMessageId))?.status,
+        ).toBe('success');
     } finally {
+      await state.host.close();
+    }
+  });
+
+  test('reopens after foreground continued processing expiry so cancel and completion work cleanly', async () => {
+    const protection = executionProtection();
+    const state = fixture({ executionLease: protection.acquire, isForeground: () => true });
+    const events: AgentEvent[] = [];
+    await state.reserve('completed');
+    await state.host.initialize();
+    const observation = await state.host.observeSession(state.sessionId, (event) =>
+      events.push(event),
+    );
+    try {
+      await askTwoModels(state);
+      await settle();
+      const running = runningTurns(state);
+      await protection.acquire.mock.calls[0]![0](
+        new KeepAliveInterruptionError('continued-processing-expired'),
+      );
+      await settle();
+      expect(events).toContainEqual({ type: 'runtime.recovered' });
+      expect(state.steps.filter((step) => ['close', 'open', 'resume'].includes(step))).toEqual([
+        'open',
+        'resume',
+        'close',
+        'open',
+        'resume',
+      ]);
+      await state.host.cancelTurn({
+        sessionId: state.sessionId,
+        turnId: running[0]!.identity.turnId,
+      });
+      expect(state.conversations.abort).toHaveBeenCalledTimes(running.length);
+      for (const turn of running)
+        state.emit({ ...turn, status: 'cancelled', answerBoundary: null });
+      await settle();
+      expect(await state.conversations.unfinishedLanes()).toEqual([]);
+      for (const turn of running)
+        expect(
+          (await state.store.getMessage(state.sessionId, turn.assistantMessageId))?.status,
+        ).toBe('cancelled');
+    } finally {
+      observation.unsubscribe();
+      await state.host.close();
+    }
+  });
+
+  test('publishes runtime.failed when foreground lease expiration cannot reopen the runtime', async () => {
+    const protection = executionProtection();
+    const state = fixture({ executionLease: protection.acquire, isForeground: () => true });
+    const events: AgentEvent[] = [];
+    await state.reserve('completed');
+    await state.host.initialize();
+    const observation = await state.host.observeSession(state.sessionId, (event) =>
+      events.push(event),
+    );
+    jest
+      .spyOn(state.conversations, 'initialize')
+      .mockRejectedValueOnce(new Error('Storage unavailable'));
+    try {
+      await askTwoModels(state);
+      await settle();
+      await protection.acquire.mock.calls[0]![0](
+        new KeepAliveInterruptionError('continued-processing-expired'),
+      );
+      await settle();
+      expect(events).toContainEqual({ type: 'runtime.failed' });
+    } finally {
+      observation.unsubscribe();
+      await state.host.close();
+    }
+  });
+
+  test('successful independent lease recovery resets a previously used storage retry', async () => {
+    const protection = executionProtection();
+    const state = fixture({
+      executionLease: protection.acquire,
+      isForeground: () => true,
+      shouldRecoverStorage: () => true,
+    });
+    jest
+      .spyOn(state.conversations, 'watchWork')
+      .mockResolvedValue({ active: true, unsubscribe: async () => {} });
+    await state.reserve('running');
+    await state.host.initialize();
+    const runtimeEvents: string[] = [];
+    const observation = await state.host.observeSession(state.sessionId, (event) => {
+      if (event.type === 'runtime.recovered' || event.type === 'runtime.failed') {
+        runtimeEvents.push(event.type);
+      }
+    });
+    const failure = {
+      code: 'runtime_storage_failed',
+      message: 'Storage unavailable',
+      retryable: true,
+    };
+    try {
+      state.execution()!.onFailure!(failure);
+      await settle();
+      await protection.acquire.mock.calls[1]![0](
+        new KeepAliveInterruptionError('continued-processing-expired'),
+      );
+      state.execution()!.onFailure!(failure);
+      await settle();
+
+      expect(state.conversations.initialize).toHaveBeenCalledTimes(4);
+      expect(runtimeEvents).toEqual([
+        'runtime.recovered',
+        'runtime.recovered',
+        'runtime.recovered',
+      ]);
+      expect(state.host.isReady).toBe(true);
+    } finally {
+      observation.unsubscribe();
       await state.host.close();
     }
   });
@@ -4535,6 +5842,260 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       await state.host.close();
     }
   });
+
+  test.each(['storage-first', 'lease-first'] as const)(
+    'serializes overlapping storage recovery and foreground lease expiry (%s)',
+    async (order) => {
+      const protection = executionProtection();
+      const state = fixture({
+        executionLease: protection.acquire,
+        isForeground: () => true,
+        shouldRecoverStorage: () => true,
+      });
+      await state.reserve('completed');
+      await state.host.initialize();
+      const runtimeEvents: AgentEvent[] = [];
+      const observation = await state.host.observeSession(state.sessionId, (event) => {
+        if (event.type === 'runtime.recovered' || event.type === 'runtime.failed') {
+          runtimeEvents.push(event);
+        }
+      });
+      let releaseClose!: () => void;
+      jest.spyOn(state.conversations, 'close').mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            releaseClose = resolve;
+          }),
+      );
+      const failure = {
+        code: 'runtime_storage_failed',
+        message: 'Storage unavailable',
+        retryable: true,
+      };
+      try {
+        await askTwoModels(state);
+        await settle();
+
+        let leasePromise!: Promise<void>;
+        if (order === 'storage-first') {
+          state.execution()!.onFailure!(failure);
+          await settle();
+          leasePromise = protection.acquire.mock.calls[0]![0](
+            new KeepAliveInterruptionError('continued-processing-expired'),
+          ) as Promise<void>;
+        } else {
+          leasePromise = protection.acquire.mock.calls[0]![0](
+            new KeepAliveInterruptionError('continued-processing-expired'),
+          ) as Promise<void>;
+          await settle();
+          state.execution()!.onFailure!(failure);
+        }
+
+        await settle();
+        releaseClose();
+        await leasePromise;
+        await settle();
+
+        expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+        expect(runtimeEvents).toEqual([{ type: 'runtime.recovered' }]);
+
+        state.execution()!.onFailure!(failure);
+        expect(runtimeEvents).toEqual([
+          { type: 'runtime.recovered' },
+          { type: 'runtime.failed', retryable: false },
+        ]);
+        expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+      } finally {
+        observation.unsubscribe();
+        await state.host.close();
+      }
+    },
+  );
+
+  test.each(['storage-first', 'lease-first'] as const)(
+    'does not reopen behind a terminal storage failure when foreground lease expiry overlaps (%s)',
+    async (order) => {
+      const protection = executionProtection();
+      const state = fixture({
+        executionLease: protection.acquire,
+        isForeground: () => true,
+        shouldRecoverStorage: () => true,
+      });
+      await state.reserve('completed');
+      await state.host.initialize();
+      const runtimeEvents: AgentEvent[] = [];
+      const observation = await state.host.observeSession(state.sessionId, (event) => {
+        if (event.type === 'runtime.recovered' || event.type === 'runtime.failed') {
+          runtimeEvents.push(event);
+        }
+      });
+      const failure = {
+        code: 'runtime_storage_failed',
+        message: 'Storage unavailable',
+        retryable: true,
+      };
+      try {
+        await askTwoModels(state);
+        await settle();
+
+        // Exhaust the single automatic storage recovery first while work is in flight.
+        state.execution()!.onFailure!(failure);
+        await settle();
+        expect(runtimeEvents).toEqual([{ type: 'runtime.recovered' }]);
+        expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+
+        runtimeEvents.length = 0;
+
+        let releaseClose!: () => void;
+        jest.spyOn(state.conversations, 'close').mockImplementationOnce(
+          () =>
+            new Promise<void>((resolve) => {
+              releaseClose = resolve;
+            }),
+        );
+
+        let leasePromise!: Promise<void>;
+        const onInterrupt = protection.acquire.mock.calls.at(-1)![0];
+        if (order === 'storage-first') {
+          state.execution()!.onFailure!(failure);
+          await settle();
+          leasePromise = onInterrupt(
+            new KeepAliveInterruptionError('continued-processing-expired'),
+          ) as Promise<void>;
+        } else {
+          leasePromise = onInterrupt(
+            new KeepAliveInterruptionError('continued-processing-expired'),
+          ) as Promise<void>;
+          await settle();
+          state.execution()!.onFailure!(failure);
+        }
+
+        await settle();
+        releaseClose();
+        await leasePromise;
+        await settle();
+
+        expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+        expect(state.host.isReady).toBe(false);
+        expect(runtimeEvents).toEqual([{ type: 'runtime.failed', retryable: false }]);
+      } finally {
+        observation.unsubscribe();
+        await state.host.close();
+      }
+    },
+  );
+
+  test('does not emit runtime.recovered when storage fails again during storage recovery reopen', async () => {
+    const state = fixture({ shouldRecoverStorage: () => true });
+    await state.reserve('completed');
+    await state.host.initialize();
+    const runtimeEvents: AgentEvent[] = [];
+    const observation = await state.host.observeSession(state.sessionId, (event) => {
+      if (event.type === 'runtime.recovered' || event.type === 'runtime.failed') {
+        runtimeEvents.push(event);
+      }
+    });
+    const failure = {
+      code: 'runtime_storage_failed',
+      message: 'Storage unavailable',
+      retryable: true,
+    };
+    jest.spyOn(state.conversations, 'resume').mockImplementationOnce(() => {
+      state.steps.push('resume');
+      state.execution()!.onFailure!(failure);
+    });
+    try {
+      await askTwoModels(state);
+      await settle();
+
+      state.execution()!.onFailure!(failure);
+      await settle();
+
+      expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+      expect(state.host.isReady).toBe(false);
+      expect(runtimeEvents).toEqual([{ type: 'runtime.failed', retryable: false }]);
+    } finally {
+      observation.unsubscribe();
+      await state.host.close();
+    }
+  });
+
+  test.each(['lease', 'storage'] as const)(
+    're-evaluates foreground lease expiry arriving during %s reopen',
+    async (mode) => {
+      const protection = executionProtection();
+      const state = fixture({
+        executionLease: protection.acquire,
+        isForeground: () => true,
+        shouldRecoverStorage: () => true,
+      });
+      await state.reserve('completed');
+      await state.host.initialize();
+      const runtimeEvents: AgentEvent[] = [];
+      const observation = await state.host.observeSession(state.sessionId, (event) => {
+        if (event.type === 'runtime.recovered' || event.type === 'runtime.failed') {
+          runtimeEvents.push(event);
+        }
+      });
+      const failure = {
+        code: 'runtime_storage_failed',
+        message: 'Storage unavailable',
+        retryable: true,
+      };
+      const baseInitialize = jest.mocked(state.conversations.initialize).getMockImplementation()!;
+      let reopenStarted!: () => void;
+      const reopenInFlight = new Promise<void>((resolve) => {
+        reopenStarted = resolve;
+      });
+      let releaseReopenInit!: () => void;
+      jest
+        .spyOn(state.conversations, 'initialize')
+        .mockImplementationOnce(async (database, ports, signal) => {
+          await baseInitialize(database, ports, signal);
+          reopenStarted();
+          await new Promise<void>((resolve) => {
+            releaseReopenInit = resolve;
+          });
+        });
+      try {
+        await askTwoModels(state);
+        await settle();
+
+        let firstOp: Promise<void> | undefined;
+        if (mode === 'lease') {
+          firstOp = protection.acquire.mock.calls.at(-1)![0](
+            new KeepAliveInterruptionError('continued-processing-expired'),
+          ) as Promise<void>;
+        } else {
+          state.execution()!.onFailure!(failure);
+        }
+
+        await reopenInFlight;
+        const secondLease = protection.acquire.mock.calls.at(-1)![0](
+          new KeepAliveInterruptionError('continued-processing-expired'),
+        ) as Promise<void>;
+        await settle();
+        releaseReopenInit();
+        await Promise.all([firstOp, secondLease]);
+        await settle();
+
+        expect(state.host.isReady).toBe(true);
+        expect(state.conversations.initialize).toHaveBeenCalledTimes(3);
+        expect(runtimeEvents.length).toBeGreaterThanOrEqual(1);
+        expect(runtimeEvents.every((event) => event.type === 'runtime.recovered')).toBe(true);
+
+        if (mode === 'storage') {
+          state.execution()!.onFailure!(failure);
+          await settle();
+          expect(runtimeEvents.at(-1)).toEqual({ type: 'runtime.failed', retryable: false });
+          expect(state.conversations.initialize).toHaveBeenCalledTimes(3);
+        }
+      } finally {
+        observation.unsubscribe();
+        await state.host.close();
+      }
+    },
+  );
 
   test('the background reply passes to a running answer and ends with the last one', async () => {
     const state = fixture();
@@ -5205,6 +6766,81 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test('preserves first-turn conversation summary auto-naming after respondApproval refreshes prepared plan', async () => {
+    const naming = {
+      drain: async () => {},
+      maybeRenameFromFirstUserMessage: jest.fn(async () => null),
+      maybeRenameFromConversationSummary: jest.fn(async () => null),
+    };
+    const state = fixture({
+      naming: () => naming,
+      tools: {
+        getTools: async () => [
+          {
+            ref: { source: 'builtin', capabilityId: 'echo_tool' },
+            providerName: 'echo_tool',
+            displayName: 'Echo',
+            description: 'Echo.',
+            inputSchema: { type: 'object' },
+            approval: 'ask',
+            execute: async () => ({ value: null, artifacts: [] }),
+          },
+        ],
+      },
+    });
+    state.conversations.respondApproval = jest.fn(async () => true);
+    await state.host.initialize();
+    let observation: Awaited<ReturnType<typeof state.host.observeSession>> | undefined;
+    try {
+      await state.host.startSession({
+        sessionId: state.sessionId,
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'First question in session' }],
+      });
+      observation = await state.host.observeSession(state.sessionId, () => undefined);
+      const turn = state.copies.get(state.sessionId)!.turns.at(-1)!;
+      const approval: RuntimePendingApproval = {
+        id: 'pi:10:echo',
+        turnId: turn.identity.turnId,
+        requestId: turn.identity.requestId,
+        toolCallId: 'echo-call',
+        toolRef: { source: 'builtin', capabilityId: 'echo_tool' },
+        providerName: 'echo_tool',
+        displayName: 'Echo',
+        input: {},
+        requestedAt: 123,
+      };
+      state.listeners.get(state.sessionId)?.({ type: 'approvals.updated', approvals: [approval] });
+      await state.host.respondApproval({
+        sessionId: state.sessionId,
+        turnId: turn.identity.turnId,
+        approvalId: approval.id,
+        decision: 'approve',
+      });
+      await state
+        .execution()!
+        .resolveTool(
+          turn.identity,
+          { source: 'builtin', capabilityId: 'echo_tool' },
+          new AbortController().signal,
+        );
+      state.emit({
+        ...turn,
+        status: 'completed',
+        answerBoundary: 'pi:done',
+        updatedAt: turn.updatedAt + 1,
+        parts: [{ id: 'answer', type: 'text', text: 'First answer', state: 'done' }],
+      });
+      await settle();
+      expect(naming.maybeRenameFromConversationSummary).toHaveBeenCalledTimes(1);
+    } finally {
+      await observation?.unsubscribe();
+      await state.host.close();
+    }
+  });
+
   test('manually renaming a new fork cancels its first-input naming trigger', async () => {
     const naming = {
       drain: async () => {},
@@ -5246,6 +6882,30 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       expect(await state.store.getSession(state.sessionId)).toBeNull();
       expect(await state.store.listMessages(state.sessionId)).toEqual([]);
       expect((await state.store.listMessages(fork.id)).at(-1)?.parts).toEqual(turn.parts);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('deleteSession notifies onSessionDeleted best-effort only after deleting an existing session', async () => {
+    const onSessionDeleted = jest
+      .fn<Promise<void>, [string]>()
+      .mockRejectedValueOnce(new Error('cleanup failed'))
+      .mockResolvedValueOnce(undefined);
+    const state = fixture({ onSessionDeleted });
+    await state.reserve();
+    await state.host.initialize();
+    try {
+      await expect(
+        state.host.deleteSession({ sessionId: state.sessionId }),
+      ).resolves.toBeUndefined();
+      expect(onSessionDeleted).toHaveBeenCalledTimes(1);
+      expect(onSessionDeleted).toHaveBeenCalledWith(state.sessionId);
+
+      await expect(state.host.deleteSession({ sessionId: state.sessionId })).rejects.toMatchObject({
+        view: { code: 'SESSION_NOT_FOUND' },
+      });
+      expect(onSessionDeleted).toHaveBeenCalledTimes(1);
     } finally {
       await state.host.close();
     }
@@ -5469,6 +7129,171 @@ describe('quoted requests through durable execution', () => {
       ).resolves.toBeUndefined();
     } finally {
       await state.host.close();
+    }
+  });
+
+  test('submitMessage on a native conversation rejects unavailable or unreadable selected Skills before submitting', async () => {
+    const skillS = '00000000-0000-4000-8000-000000000144';
+    const skillMissing = '00000000-0000-4000-8000-000000000145';
+    const scope: SkillTurnScope = {
+      entries: [
+        {
+          id: skillS,
+          name: 'skill-s',
+          description: 'Skill S',
+          invocation: { modelInvocable: true, userInvocable: true },
+          contentHash: 'hash-s-v1',
+          folderName: 'skill-s',
+          files: ['SKILL.md'],
+          limitations: { scripts: [], unavailableTools: [] },
+        },
+      ],
+      readInstructions: async () => null,
+      readFile: async () => null,
+    };
+    const state = fixture({ skills: { resolve: jest.fn(async () => scope) } });
+    await state.reserve('completed');
+    const loadRuntimeTurnContext = jest.spyOn(state.store, 'loadRuntimeTurnContext');
+    await state.host.initialize();
+    try {
+      await expect(
+        state.host.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          skillIds: [skillS],
+          parts: [
+            {
+              type: 'text',
+              text: 'skill-s run',
+              skillReferences: [{ type: 'skill', skillId: skillS, label: 'skill-s', offset: 0 }],
+            },
+          ],
+        }),
+      ).rejects.toMatchObject({ view: { code: 'EXECUTION_UNAVAILABLE' } });
+      await expect(
+        state.host.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          skillIds: [skillMissing],
+          parts: [
+            {
+              type: 'text',
+              text: 'missing-skill run',
+              skillReferences: [
+                { type: 'skill', skillId: skillMissing, label: 'missing-skill', offset: 0 },
+              ],
+            },
+          ],
+        }),
+      ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+      expect(loadRuntimeTurnContext).not.toHaveBeenCalled();
+      expect(state.conversations.submit).not.toHaveBeenCalled();
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('treats transient runtimeTools.resolve errors as RuntimeToolDiscoveryError during recovery while still failing new submissions', async () => {
+    const mcpRef = { source: 'mcp' as const, serverId: 'srv-db', rawToolName: 'query' };
+    const mcpTool: RuntimeTool = {
+      ref: mcpRef,
+      providerName: 'mcp_srv_query',
+      displayName: 'Query',
+      description: 'Query external records.',
+      inputSchema: { type: 'object' },
+      approval: 'ask',
+      execute: async () => ({ value: 'ok', artifacts: [] }),
+    };
+    const echoTool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'echo_tool' },
+      providerName: 'echo_tool',
+      displayName: 'Echo',
+      description: 'Echo.',
+      inputSchema: { type: 'object' },
+      approval: 'auto',
+      execute: async () => ({ value: 'echo', artifacts: [] }),
+    };
+    let failRuntimeTools = false;
+    const state = fixture({
+      tools: { getTools: async () => [echoTool] },
+      runtimeTools: {
+        resolve: async () => {
+          if (failRuntimeTools) throw new Error('SQLite busy reading mcp_servers');
+          return { tools: [mcpTool], pluginGuides: [], unavailableServerIds: [] };
+        },
+      },
+    });
+    await state.host.initialize();
+    const signal = new AbortController().signal;
+    try {
+      await state.host.startSession({
+        sessionId: state.sessionId,
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Run MCP call' }],
+      });
+    } finally {
+      await state.host.close();
+    }
+
+    failRuntimeTools = true;
+    let restartedExecution: RuntimeExecutionPorts | undefined;
+    const baseInit = state.conversations.initialize;
+    state.conversations.initialize = jest.fn(async (database, ports) => {
+      restartedExecution = ports;
+      return baseInit(database, ports);
+    });
+    const restartedHost = new DurableAgentHost(
+      state.store,
+      state.ports,
+      state.background,
+      state.conversations,
+    );
+    await restartedHost.initialize();
+    let restartedObs: Awaited<ReturnType<typeof restartedHost.observeSession>> | undefined;
+    try {
+      restartedObs = await restartedHost.observeSession(state.sessionId, () => undefined);
+      const turn = state.copies.get(state.sessionId)!.turns.at(-1)!;
+
+      // Built-in tools remain resolvable during transient configured-tool DB outage on reopen.
+      await expect(
+        restartedExecution!.resolveTool(turn.identity, echoTool.ref, signal),
+      ).resolves.toMatchObject({ providerName: 'echo_tool' });
+
+      // Parked MCP tools & load_workflow surface RuntimeToolDiscoveryError so parked approvals stay alive.
+      const mcpError = await restartedExecution!
+        .resolveTool(turn.identity, mcpRef, signal)
+        .catch((caught: unknown) => caught);
+      expect(mcpError).toBeInstanceOf(RuntimeToolDiscoveryError);
+
+      // Once runtimeTools recovers, the next resolveTool immediately rebuilds and returns the MCP tool.
+      failRuntimeTools = false;
+      await expect(
+        restartedExecution!.resolveTool(turn.identity, mcpRef, signal),
+      ).resolves.toMatchObject({ providerName: 'mcp_srv_query' });
+
+      // Strict new submissions (!recovering) still reject upfront when runtimeTools fails.
+      state.emit({
+        ...turn,
+        status: 'completed',
+        parts: [{ id: 'done-1', type: 'text', text: 'Done.', state: 'done' }],
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      failRuntimeTools = true;
+      await expect(
+        restartedHost.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'Next message' }],
+        }),
+      ).rejects.toMatchObject({ view: { code: 'EXECUTION_UNAVAILABLE' } });
+    } finally {
+      await restartedObs?.unsubscribe();
+      await restartedHost.close();
     }
   });
 });

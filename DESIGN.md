@@ -107,7 +107,7 @@ notification's large-icon content slot.
 
 Enterprise profiles use the official blue desktop artwork in `assets/enterprise-logo.png`.
 App-shell `branding` selects it on sign-in, account and About surfaces. The launcher icon, native
-splash, its matching React cover, notification and Live Activity artwork stay unchanged.
+splash, notification and Live Activity artwork stay unchanged.
 
 Use `control-active` for switch fills, `primary` for emphasized actions and adjustable progress,
 `link` for links and tool mentions,
@@ -351,9 +351,10 @@ pnpm lint
 pnpm format:check
 ```
 
-Before opening a draft PR, follow the complete local gate in
-[Testing And CI](docs/guides/testing-and-ci.md). If the draft changes later, rerun that gate on the
-final head before marking it ready. The full test suite then runs in remote CI.
+Before opening a draft PR, run targeted tests plus `pnpm check:changed` as described in
+[Testing And CI](docs/guides/testing-and-ci.md). If the draft changes later, rerun them on the final
+head before marking it ready. Full-suite test regression runs nightly, on release tags, and via
+manual dispatch or the `ci:full` PR label.
 
 **Plus: look at it in both light and dark on a device or simulator.** Structural verification is not the same as having seen it — contrast, hierarchy, and how a colour reads against real content only show up on screen.
 

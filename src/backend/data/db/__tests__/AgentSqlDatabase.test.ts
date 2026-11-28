@@ -1,8 +1,14 @@
 import { Directory } from 'expo-file-system';
 import * as SQLite from 'expo-sqlite';
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { Platform } from 'react-native';
 
-import { AgentSqlDatabase, type AgentSqlExecutor } from '../AgentSqlDatabase';
+import {
+  AGENT_DATABASE_NAME,
+  ANDROID_MAX_PAYLOAD_READ_BYTES,
+  AgentSqlDatabase,
+  type AgentSqlExecutor,
+} from '../AgentSqlDatabase';
 
 jest.mock('expo-sqlite', () => ({
   ...jest.requireActual('expo-sqlite'),
@@ -33,7 +39,7 @@ function connection() {
     }),
     getAllAsync: jest.fn(async (sql: string) => {
       operations.push(sql);
-      return [];
+      return [{ id: 2 }, { id: 1 }];
     }),
     closeAsync: jest.fn(async () => {
       operations.push('close');
@@ -47,6 +53,10 @@ function connection() {
 }
 
 describe('AgentSqlDatabase', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   test.each([0, 1, 4])(
     'returns %i changed rows on the connection and inside a transaction',
     async (changes) => {
@@ -156,8 +166,10 @@ describe('AgentSqlDatabase', () => {
     await expect(escaped.run('late write')).rejects.toThrow('already settled');
     await expect(escaped.runCounted('late counted write')).rejects.toThrow('already settled');
     await expect(escaped.get('late read')).rejects.toThrow('already settled');
+    await expect(escaped.all('late multi-row read')).rejects.toThrow('already settled');
     expect(sqlite.runAsync).not.toHaveBeenCalled();
     expect(sqlite.getFirstAsync).not.toHaveBeenCalled();
+    expect(sqlite.getAllAsync).not.toHaveBeenCalled();
   });
 
   test('seals admission immediately and drains accepted work before closing once', async () => {
@@ -186,5 +198,15 @@ describe('AgentSqlDatabase', () => {
     await expect(database.run('unsafe', 9_007_199_254_740_993n)).rejects.toThrow('precision');
     expect(sqlite.runAsync).toHaveBeenCalledTimes(1);
     await expect(database.get('absent')).resolves.toBeUndefined();
+  });
+
+  test.each([
+    ['android', ANDROID_MAX_PAYLOAD_READ_BYTES],
+    ['ios', undefined],
+  ] as const)('sets maxPayloadReadBytes on %s (database %s)', async (platform, expectedBudget) => {
+    jest.replaceProperty(Platform, 'OS', platform);
+    const { database } = connection();
+    expect(AGENT_DATABASE_NAME).toBe('pi-agent.db');
+    expect(database.maxPayloadReadBytes).toBe(expectedBudget);
   });
 });

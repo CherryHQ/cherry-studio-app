@@ -17,6 +17,7 @@ export * from './custom/gateway/gatewayProvider';
 export * from './custom/imageGenerationModel';
 export * from './custom/imageTransportRegistry';
 export * from './custom/minimax/MinimaxImageModel';
+export { isMinimaxH3ImageModel } from './custom/minimax/minimaxH3Image';
 export * from './custom/minimax/minimaxProvider';
 export * from './custom/modelscope/modelscopeProvider';
 export * from './custom/modelscope/modelscopeTransport';

@@ -39,6 +39,7 @@ export type AgentSessionChatState = {
   snapshot?: AgentSessionSnapshot;
   contextStatus?: AgentSessionSnapshot['contextStatus'];
   contextUsages?: AgentSessionSnapshot['contextUsages'];
+  transcriptRevision?: number;
   status: AgentSessionChatStatus;
 };
 
@@ -229,9 +230,6 @@ export class AgentSessionChatClient {
 
         entry.observation = observation;
         this.installSnapshot(entry, observation.snapshot);
-        // A fresh Host snapshot can reflect terminal events missed while this
-        // session had no observers. Refresh the durable transcript projection.
-        this.options.onTranscriptChanged?.(sessionId);
         isSnapshotInstalled = true;
         for (const event of queuedEvents) {
           this.applyEvent(entry, event);
@@ -321,7 +319,7 @@ export class AgentSessionChatClient {
   async selectMessage(sessionId: string, messageId: string): Promise<AgentSessionView> {
     const session = await this.protocol.selectMessage({ sessionId, messageId });
     this.options.onSessionChanged?.(sessionId);
-    this.options.onTranscriptChanged?.(sessionId);
+    this.invalidateTranscript(sessionId);
     return session;
   }
 
@@ -366,7 +364,7 @@ export class AgentSessionChatClient {
       applied: (session) => {
         if (session) {
           this.options.onSessionChanged?.(session.id);
-          this.options.onTranscriptChanged?.(session.id);
+          this.invalidateTranscript(session.id);
         }
       },
     });
@@ -394,7 +392,7 @@ export class AgentSessionChatClient {
       throwIfSubmissionCancelled(submission);
       const result = await submit();
       this.options.onSessionChanged?.(sessionId);
-      this.options.onTranscriptChanged?.(sessionId);
+      this.invalidateTranscript(sessionId);
       options.applied?.(result);
       return result;
     } finally {
@@ -634,10 +632,13 @@ export class AgentSessionChatClient {
       pendingQuestion: snapshot.pendingQuestion,
       contextStatus: snapshot.contextStatus,
       contextUsages: snapshot.contextUsages,
+      // A new observation can see transcript mutations missed while it was paused.
+      transcriptRevision: (entry.state.transcriptRevision ?? 0) + 1,
       sessionId: snapshot.session.id,
       snapshot,
       status: 'ready',
     });
+    this.options.onTranscriptChanged?.(snapshot.session.id);
   }
 
   private applyEvent(entry: SessionEntry, event: AgentEvent): void {
@@ -775,26 +776,31 @@ export class AgentSessionChatClient {
         return;
       }
       case 'message.edited':
-      case 'message.finalized':
+      case 'message.finalized': {
         // Parallel answers keep streaming: drop only this message's unflushed text.
         for (const [key, pending] of entry.pendingTextDeltas)
           if (pending.messageId === event.message.id) entry.pendingTextDeltas.delete(key);
         entry.liveMessages.set(event.message.id, event.message);
         this.toolInputPreviews.clearMessage(event.message.id);
-        this.commitLiveMessages(entry);
         // Settled history omits a turn while any of its answers runs; only the last answer to
         // finish changes what it reads.
-        if (
+        const transcriptChanged =
           !event.message.turnId ||
           ![...entry.liveMessages.values()].some(
             (message) =>
               message.role === 'assistant' &&
               message.turnId === event.message.turnId &&
               !isTerminalMessage(message),
-          )
-        )
-          this.options.onTranscriptChanged?.(entry.state.sessionId);
+          );
+        this.commitLiveMessages(
+          entry,
+          transcriptChanged
+            ? { transcriptRevision: (entry.state.transcriptRevision ?? 0) + 1 }
+            : undefined,
+        );
+        if (transcriptChanged) this.options.onTranscriptChanged?.(entry.state.sessionId);
         return;
+      }
       case 'turn.deleted':
       case 'messages.deleted': {
         for (const messageId of event.messageIds) {
@@ -810,6 +816,7 @@ export class AgentSessionChatClient {
             : event.messageIds.includes(entry.state.activeTurn.assistantMessageId)),
         );
         this.commitLiveMessages(entry, {
+          transcriptRevision: (entry.state.transcriptRevision ?? 0) + 1,
           ...(isActiveTurnDeleted
             ? { activeTurn: null, pendingApprovals: [], pendingQuestion: null }
             : {}),
@@ -947,6 +954,17 @@ export class AgentSessionChatClient {
     for (const listener of entry.listeners) {
       listener();
     }
+  }
+
+  private invalidateTranscript(sessionId: string): void {
+    const entry = this.sessions.get(sessionId);
+    if (entry) {
+      this.updateState(entry, {
+        ...entry.state,
+        transcriptRevision: (entry.state.transcriptRevision ?? 0) + 1,
+      });
+    }
+    this.options.onTranscriptChanged?.(sessionId);
   }
 }
 

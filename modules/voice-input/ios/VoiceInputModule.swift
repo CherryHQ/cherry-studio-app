@@ -2,13 +2,44 @@ import AVFoundation
 import ExpoModulesCore
 import UIKit
 
+struct PlaybackRequest: Record {
+  @Field var id: String = ""
+  @Field var title: String = ""
+  @Field var subtitle: String = ""
+  @Field var channelName: String = ""
+  @Field var playLabel: String = ""
+  @Field var pauseLabel: String = ""
+  @Field var stopLabel: String = ""
+  @Field var deepLinkUrl: String? = nil
+}
+
 public class VoiceInputModule: Module {
   private var capture: VoiceCapture?
   private var transcription: SystemAudioTranscription?
+  private let playback = SpeechPlaybackControls()
 
   public func definition() -> ModuleDefinition {
     Name("VoiceInput")
-    Events("finished", "level")
+    Events("finished", "level", "playbackCommand")
+
+    AsyncFunction("beginPlayback") { (request: PlaybackRequest) in
+      self.playback.begin(
+        id: request.id,
+        title: request.title,
+        subtitle: request.subtitle,
+        onCommand: { [weak self] action in
+          self?.sendEvent("playbackCommand", ["id": request.id, "action": action])
+        }
+      )
+    }.runOnQueue(.main)
+
+    AsyncFunction("updatePlaybackState") { (id: String, state: String) in
+      self.playback.updateState(id: id, state: state)
+    }.runOnQueue(.main)
+
+    AsyncFunction("endPlayback") { (id: String) in
+      self.playback.end(id: id)
+    }.runOnQueue(.main)
 
     AsyncFunction("modelDirectory") { () -> String in
       var directory = try FileManager.default.url(
@@ -77,6 +108,7 @@ public class VoiceInputModule: Module {
 
     OnDestroy {
       DispatchQueue.main.async {
+        self.playback.endAll()
         self.capture?.cancel()
         self.capture = nil
         self.transcription?.cancel()

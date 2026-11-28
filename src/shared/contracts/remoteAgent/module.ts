@@ -4,6 +4,7 @@ import type {
   RemoteAttachment,
   RemoteAttachmentDraftTarget,
   RemoteCommand,
+  RemoteDispatchReceipt,
   RemoteModelSummary,
   RemoteModelOption,
   RemoteStartInput,
@@ -11,6 +12,7 @@ import type {
   RemotePage,
   RemoteResource,
   RemoteResourceValue,
+  RemoteSessionLivePreview,
   RemoteSessionSnapshot,
   RemoteSessionView,
   RemoteSessionReadPreview,
@@ -83,6 +85,7 @@ export interface RemoteAgentSource {
   respond(target: string, response: InteractionResponse): Promise<RemoteCommand>;
   getCommands(): readonly RemoteCommand[];
   getStarts(): readonly RemoteStartOperation[];
+  getDispatch(draftId: string, operationId?: string): RemoteDispatchReceipt | undefined;
   subscribeOperations(listener: () => void): () => void;
   /** Forgets a final outcome; pending work stays until the journal settles it. */
   discard(operationId: string): void;
@@ -91,5 +94,16 @@ export interface RemoteAgentSource {
   dispose(): void;
 }
 export interface RemoteAgentModule {
+  /** Warm one likely desktop, optionally reading its first page of Agent metadata. */
+  prewarm(connectionId: string, view: 'agents' | 'sessions', signal: AbortSignal): Promise<void>;
   open(connectionId: string, signal: AbortSignal): Promise<RemoteAgentSource>;
+  /** Passive dispatch updates never acquire a source or keep it open. */
+  peekDispatch?(
+    connectionId: string,
+    draftId: string,
+    operationId: string,
+  ): RemoteDispatchReceipt | undefined;
+  subscribeDispatches?(connectionId: string, listener: () => void): () => void;
+  peekLiveSession?(connectionId: string, sessionId: string): RemoteSessionLivePreview | undefined;
+  subscribeLiveSession?(connectionId: string, sessionId: string, listener: () => void): () => void;
 }

@@ -1,4 +1,4 @@
-import type { Context } from '@earendil-works/chord';
+import type { Context } from '@earendil-works/chord/context';
 import { defineDoc, defineEntry, type ToolExecutionApi } from '@earendil-works/pi-durable';
 
 import type { RuntimeArtifact } from '../types';
@@ -11,7 +11,7 @@ export const PiCodemodeFiles = defineDoc<{
   kind: 'cherry.codemode-files',
   version: 1,
   scope: 'task',
-  checkpointWhen: () => false,
+  checkpointWhen: (_value, _ops, { deltasSinceBase }) => deltasSinceBase >= 32,
   initial: () => ({ outputs: {}, artifacts: [] }),
 });
 

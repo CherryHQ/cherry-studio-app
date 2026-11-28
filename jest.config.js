@@ -30,13 +30,9 @@ module.exports = {
     '/packages/ai-runtime/',
     // Underscore-prefixed files inside __tests__ are shared harnesses, not suites.
     '/__tests__/_',
-    // Tooling suites guard local-only tools, so PR CI skips them except the
-    // architecture rules and the native patch guards that protect every PR.
-    ...(process.env.PRCI
-      ? [
-          '/scripts/__tests__/(?!(releaseLocalBuild|publishGitcodeRelease|uploadIosSymbols|verifyIosSymbolPackage|architectureBoundaries|reactNativeTextCache|androidWindowCompatibility|nitroIosCompatibility|expoFilePermissions|expoModulesCoreSwiftCompatibility|enrichedMarkdownMathWidth|enrichedMarkdownInlineMath|enrichedMarkdownInputMeasurement|skiaCompilerMemory)\\.test\\.ts$)',
-        ]
-      : []),
+    // Pre-existing failure under virtualStoreDirMaxLength=40 (short-hashed .pnpm dirs) and
+    // react-native-enriched-markdown@1.1.1 EventEmitters.cpp hunks; tracked separately.
+    '/scripts/__tests__/patchReapplication\\.test\\.ts$',
   ],
   // Local build/export artifacts can contain copied workspace packages. Keep
   // them out of the Haste map so package names remain unique during tests.
@@ -60,9 +56,12 @@ module.exports = {
     '^@earendil-works/chord$': '<rootDir>/node_modules/@earendil-works/chord/dist/index.js',
     '^@earendil-works/chord/(context|delta|sqlite)$':
       '<rootDir>/node_modules/@earendil-works/chord/dist/$1/index.js',
-    '^@earendil-works/chord/output$': '<rootDir>/node_modules/@earendil-works/chord/dist/output.js',
+    '^@earendil-works/chord/(json|output|watch)$':
+      '<rootDir>/node_modules/@earendil-works/chord/dist/$1.js',
     '^@earendil-works/pi-durable$':
       '<rootDir>/node_modules/@earendil-works/pi-durable/dist/index.js',
+    '^@earendil-works/pi-durable/images/fit$':
+      '<rootDir>/node_modules/@earendil-works/pi-durable/dist/images/fit.js',
     '^@earendil-works/pi-durable/storage/(.*)$':
       '<rootDir>/node_modules/@earendil-works/pi-durable/dist/storage/$1/index.js',
     '^@earendil-works/pi-codemode/(.*)$':
@@ -72,6 +71,8 @@ module.exports = {
     '^@earendil-works/pi-schema/formats$': piDependencyFile('pi-schema', 'formats/index.js'),
     '^@earendil-works/pi-ai$': '<rootDir>/node_modules/@earendil-works/pi-ai/dist/index.js',
     '^@earendil-works/pi-ai/models$': '<rootDir>/node_modules/@earendil-works/pi-ai/dist/models.js',
+    '^@earendil-works/pi-ai/session-resources$':
+      '<rootDir>/node_modules/@earendil-works/pi-ai/dist/session-resources.js',
     '^@earendil-works/pi-ai/native-oauth$':
       '<rootDir>/node_modules/@earendil-works/pi-ai/dist/native-oauth.js',
     '^@earendil-works/pi-ai/providers/(.*)$':

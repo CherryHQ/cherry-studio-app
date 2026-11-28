@@ -22,7 +22,9 @@ configuration, not in repository rules.
   transport adapter, store, or component, check
   [Shared Building Blocks](docs/references/shared-building-blocks.md).
 - When adding, changing, removing, or running tests, read
-  [Testing And CI](docs/guides/testing-and-ci.md).
+  [Testing And CI](docs/guides/testing-and-ci.md). For local PR work, run targeted tests
+  (`pnpm test:changed` or explicit test file paths) plus `pnpm check:changed` instead of full
+  `pnpm test`.
 - When changing user-visible copy, translations, or supported languages, read
   [Internationalization](docs/guides/internationalization.md). The coding AI must directly
   translate new or changed copy into every supported locale in the same change, using the feature
@@ -31,7 +33,7 @@ configuration, not in repository rules.
   resolver owns locale selection for UI and Agent behavior.
 - Before creating commits, splitting work, or opening a pull request, read
   [Git Workflow](docs/guides/git-workflow.md).
-- Before preparing or publishing a release, read [Cloud Releases](docs/guides/cloud-releases.md).
+- Before preparing or publishing a release, follow [Native Releases](docs/guides/cloud-releases.md).
 - Before creating installation packages or changing build configuration, read
   [Local EAS Builds](docs/guides/local-builds.md). Use `pnpm build:local` for local EAS packaging;
   it defaults to development. Sentry reporting and build-time uploads are production-only.

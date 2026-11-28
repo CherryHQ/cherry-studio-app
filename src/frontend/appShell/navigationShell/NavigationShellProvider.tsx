@@ -16,6 +16,7 @@ import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useFoldRegionLayout, useWindowClass } from '@/frontend/appShell/layout';
+import { useFirstUseAdmission } from '@/frontend/appShell/navigation';
 import { usePreference } from '@/frontend/data/hooks/usePreference';
 import type { NavigationPinTabId } from '@/shared/data/preference/preferenceSchema';
 
@@ -23,6 +24,7 @@ import {
   canPinTab,
   canUnpinTab,
   getNavHref,
+  hasDockPopoverActions,
   isRootNavPathname,
   type NavDestinationId,
   normalizePinnedTabs,
@@ -143,7 +145,10 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
     sidebar: 0,
   });
   const [isFileListCollapsed, setFileListCollapsed] = useState(false);
-  const [popover, setPopover] = useState<NavPinPopoverState | null>(null);
+  const [storedPopover, setStoredPopover] = useState<{
+    pinnedTabs: readonly NavigationPinTabId[];
+    popover: NavPinPopoverState;
+  } | null>(null);
   const [dragState, setDragState] = useState<NavDragState | null>(null);
 
   const dragPositionX = useSharedValue(0);
@@ -176,14 +181,17 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
     tRef.current = t;
   });
 
+  const isOnboardingBlocking = useFirstUseAdmission() !== 'admitted';
   const platform = Platform?.OS ?? 'ios';
-  const isDockVisible = shellMode === 'compact-dock' && isAtRoot && hideDockCount === 0;
-  const isVerticalRailVisible = shellMode === 'vertical-rail' && isAtRoot && hideDockCount === 0;
+  const isDockVisible =
+    !isOnboardingBlocking && shellMode === 'compact-dock' && isAtRoot && hideDockCount === 0;
+  const isVerticalRailVisible =
+    !isOnboardingBlocking && shellMode === 'vertical-rail' && isAtRoot && hideDockCount === 0;
   const restingDockClearance =
     shellMode === 'compact-dock'
       ? resolveFloatingDockClearance(restingDockHeight, insets.bottom, platform)
       : 0;
-  const dockClearance = isAtRoot ? restingDockClearance : 0;
+  const dockClearance = isAtRoot && !isOnboardingBlocking ? restingDockClearance : 0;
 
   useEffect(() => {
     if ((!isAtRoot || shellMode === 'wide-rail') && dragStateRef.current) {
@@ -208,7 +216,7 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
       ? 0
       : activeDestination === 'files'
         ? columnWidths.files
-        : activeDestination === 'chat'
+        : activeDestination === 'chat' || activeDestination === 'settings'
           ? columnWidths.sidebar
           : 0;
 
@@ -246,12 +254,16 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
   }, []);
 
   const openPinPopover = useCallback((next: NavPinPopoverState) => {
+    if (next.source === 'dock' && !hasDockPopoverActions(pinnedTabsRef.current, next.id)) {
+      setStoredPopover(null);
+      return;
+    }
     haptics.light();
-    setPopover(next);
+    setStoredPopover({ pinnedTabs: pinnedTabsRef.current, popover: next });
   }, []);
 
   const closePinPopover = useCallback(() => {
-    setPopover(null);
+    setStoredPopover(null);
   }, []);
 
   const pinTabToDock = useCallback((id: NavigationPinTabId, insertIndex?: number): boolean => {
@@ -296,7 +308,7 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
 
   const startDrag = useCallback(
     (input: { id: NavigationPinTabId; source: 'dock' | 'more'; x: number; y: number }) => {
-      setPopover(null);
+      setStoredPopover(null);
       dragPositionX.set(input.x);
       dragPositionY.set(input.y);
       haptics.medium();
@@ -391,7 +403,7 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
 
   const navigateToDestination = useCallback(
     (id: NavDestinationId, options?: NavigationNavigateOptions) => {
-      setPopover(null);
+      setStoredPopover(null);
       const href = getNavHref(id) as Href;
       const currentRouter = routerRef.current;
 
@@ -400,6 +412,15 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
         return;
       }
       if (mainNavigatorRef.current?.(id, currentRouter, href)) {
+        return;
+      }
+      if (id === 'settings') {
+        if (pathnameRef.current.startsWith('/settings/')) currentRouter.dismissTo(href);
+        else if (pathnameRef.current !== '/settings') currentRouter.push(href);
+        return;
+      }
+      if (resolveNavDestination(pathnameRef.current) === 'settings') {
+        currentRouter.dismissTo(href);
         return;
       }
       if (id === 'chat') {
@@ -422,6 +443,7 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
       dockClearance,
       isAtRoot,
       isDockVisible,
+      isOnboardingBlocking,
       isFileListCollapsed,
       isVerticalRailVisible,
       middleColumnWidth,
@@ -436,6 +458,7 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
       dockClearance,
       isAtRoot,
       isDockVisible,
+      isOnboardingBlocking,
       isFileListCollapsed,
       isVerticalRailVisible,
       middleColumnWidth,
@@ -483,6 +506,18 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
       updateDrag,
     ],
   );
+
+  const popover = useMemo(() => {
+    if (!storedPopover || !isAtRoot || shellMode === 'wide-rail') return null;
+    if (
+      storedPopover.popover.source === 'dock' &&
+      (storedPopover.pinnedTabs !== pinnedTabs ||
+        !hasDockPopoverActions(pinnedTabs, storedPopover.popover.id))
+    ) {
+      return null;
+    }
+    return storedPopover.popover;
+  }, [isAtRoot, pinnedTabs, shellMode, storedPopover]);
 
   const interactionValue = useMemo<NavigationShellInteraction>(
     () => ({

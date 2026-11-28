@@ -6,6 +6,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import { getSystemIntegration } from '../../../../modules/system-integration';
 
 let nextAudioUseId = 0;
+let playbackModeTail: Promise<void> = Promise.resolve();
 const logger = loggerService.withContext('VoiceAudioSession');
 
 /**
@@ -13,17 +14,24 @@ const logger = loggerService.withContext('VoiceAudioSession');
  * aloud is requested media playback, so it plays with the ring switch silenced.
  */
 export const voiceAudioSession = {
-  playback: (backgroundPlayback = false) =>
-    setAudioModeAsync({
-      allowsRecording: false,
-      playsInSilentMode: true,
-      // The voice runtime still stops reading on background entry without consent.
-      shouldPlayInBackground: Platform.OS === 'ios' || backgroundPlayback,
-      // The Android playback service holds speech focus across synthesis and utterance gaps.
-      ...(Platform.OS === 'android'
-        ? { interruptionMode: backgroundPlayback ? 'mixWithOthers' : 'doNotMix' }
-        : {}),
-    }),
+  playback: (backgroundPlayback: boolean | (() => boolean) = false) => {
+    const run = playbackModeTail.then(() => {
+      const enabled =
+        typeof backgroundPlayback === 'function' ? backgroundPlayback() : backgroundPlayback;
+      return setAudioModeAsync({
+        allowsRecording: false,
+        playsInSilentMode: true,
+        // The voice runtime still stops reading on background entry without consent.
+        shouldPlayInBackground: Platform.OS === 'ios' || enabled,
+        // The Android playback service holds speech focus across synthesis and utterance gaps.
+        ...(Platform.OS === 'android'
+          ? { interruptionMode: enabled ? 'mixWithOthers' : 'doNotMix' }
+          : {}),
+      });
+    });
+    playbackModeTail = run.catch(() => {});
+    return run;
+  },
   /** Release only after the native speech/capture operation has actually settled. */
   async acquire(kind: 'speech' | 'capture'): Promise<() => Promise<void>> {
     const native = Platform.OS === 'ios' ? getSystemIntegration() : null;

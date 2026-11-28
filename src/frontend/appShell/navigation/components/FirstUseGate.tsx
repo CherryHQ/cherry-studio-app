@@ -4,18 +4,13 @@ import { type PropsWithChildren, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { withCapability } from '@/frontend/components/Policy';
+import { useStartupReadyAfterFrames } from '@/frontend/appShell/startup/useStartupReadyAfterFrames';
 import { usePreference } from '@/frontend/data';
 
-import { useFirstUseEligibility } from '../useFirstUseEligibility';
+import { useFirstUseAdmission } from '../FirstUseAdmission';
 
 function Loading() {
-  const { t } = useTranslation();
-  return (
-    <View className="flex-1 justify-center">
-      <ContentState.Loading title={t('onboarding.loading')} />
-    </View>
-  );
+  return <View className="flex-1 bg-background" />;
 }
 
 /** Commit before leaving, including before the SDK can switch to a new profile. */
@@ -25,6 +20,7 @@ function OnboardingRedirect({ href, status }: { href: Href; status: 'welcome' })
   const [saved, setSaved] = useState(false);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const reportReadyAfterFrames = useStartupReadyAfterFrames();
 
   useEffect(() => {
     let active = true;
@@ -44,7 +40,7 @@ function OnboardingRedirect({ href, status }: { href: Href; status: 'welcome' })
   if (saved) return <Redirect href={href} />;
   if (failed)
     return (
-      <View className="flex-1 justify-center px-6">
+      <View className="flex-1 justify-center bg-background px-6" onLayout={reportReadyAfterFrames}>
         <ContentState.Error
           title={t('onboarding.saveFailed')}
           primaryAction={{
@@ -60,26 +56,16 @@ function OnboardingRedirect({ href, status }: { href: Href; status: 'welcome' })
   return <Loading />;
 }
 
-function OnboardingGate({ children }: PropsWithChildren) {
-  const eligibility = useFirstUseEligibility();
-  if (eligibility === 'loading') return <Loading />;
-  if (eligibility === 'existing') return children;
-  return <OnboardingRedirect href="/onboarding" status="welcome" />;
-}
-
-function Children({ children }: PropsWithChildren) {
-  return children;
-}
-
-/**
- * Seeded Agents have no model, so first use is determined before restoring the chat route.
- * Onboarding sets up providers and default models, which the organization may own instead.
- */
-const NewInstallationGate = withCapability('providerOnboarding', OnboardingGate, Children);
-
+/** Admits the drawer route after first-use status is known. */
 export function FirstUseGate({ children }: PropsWithChildren) {
-  const [status] = usePreference('app.onboarding.status');
-  if (status === 'unseen') return <NewInstallationGate>{children}</NewInstallationGate>;
-  if (status !== 'completed' && status !== 'skipped') return <Redirect href="/onboarding" />;
-  return children;
+  switch (useFirstUseAdmission()) {
+    case 'checking':
+      return <Loading />;
+    case 'new':
+      return <OnboardingRedirect href="/onboarding" status="welcome" />;
+    case 'resume':
+      return <Redirect href="/onboarding" />;
+    case 'admitted':
+      return children;
+  }
 }

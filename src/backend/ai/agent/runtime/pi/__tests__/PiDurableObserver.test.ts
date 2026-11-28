@@ -6,6 +6,7 @@ import type {
   ConversationView,
   EntryId,
   EntryRecord,
+  JsonObject,
   LiveState,
   SubmissionId,
   SubmissionRecord,
@@ -19,6 +20,7 @@ import type { RuntimeConversationEvent, RuntimeDurableTurn } from '../../durable
 import { PiDurableObserver } from '../PiDurableObserver';
 import { detachedJson, piSubmissionMetadata } from '../piDurableProjection';
 import type { PiDurableRuntime } from '../PiDurableRuntime';
+import { PiPendingApprovalsDoc, PiPendingQuestionsDoc } from '../piPendingInteractions';
 
 const inputId = 1 as SubmissionId;
 const taskId = 42 as TaskId;
@@ -91,6 +93,8 @@ function attach(initial = view(), records: SubmissionRecord[] = []) {
     );
   let advance!: Parameters<WatchHandle<ConversationView>['start']>[0];
   let commit!: (records: readonly SubmissionRecord[]) => void;
+  let interactionCommitted!: () => void;
+  const documents = new Map<string, JsonObject>();
   const detach = jest.fn();
   const turnEntries = jest.fn(
     async (_session: string, record: SubmissionRecord) => history.get(record.id) ?? [],
@@ -105,6 +109,12 @@ function attach(initial = view(), records: SubmissionRecord[] = []) {
     return record ? { record, metadata: metadata(record) } : undefined;
   });
   const runtime = {
+    observePendingInteractions: (_conversationId: ConversationId, listener: () => void) => {
+      interactionCommitted = listener;
+      return () => {};
+    },
+    snapshotDocument: async (token: { definition: { kind: string } }) =>
+      documents.get(token.definition.kind),
     observeSubmissions: async (_session: string, listener: typeof commit) => {
       commit = listener;
       return detach;
@@ -137,6 +147,11 @@ function attach(initial = view(), records: SubmissionRecord[] = []) {
     contextUsageEstimate,
     latestInput,
     detach,
+    documents,
+    notifyInteractions: async () => {
+      interactionCommitted();
+      await new Promise((resolve) => setImmediate(resolve));
+    },
     latest: () => events.findLast((event) => event.type === 'turn.updated')!.turn,
     advance: (value: ConversationView) =>
       advance({ kind: 'value', value, ops: [], retired: false }, BACKGROUND_CONTEXT),
@@ -157,6 +172,117 @@ function attach(initial = view(), records: SubmissionRecord[] = []) {
       }),
   };
 }
+
+test('projects custom commits without a LiveDoc frame and ignores completed slots and equivalent updates', async () => {
+  const live: LiveState = {
+    tools: [{ callId: 'asked', name: 'ask_user_question', status: 'waiting', taskId }],
+    nestedTools: [
+      {
+        callId: 'script/1',
+        parentCallId: 'script',
+        parentTaskId: 20 as TaskId,
+        taskId: 43 as TaskId,
+        name: 'create_file',
+        status: 'sleeping',
+        arguments: {},
+      },
+    ],
+  };
+  const state = attach(view(live));
+  const approvalKind = PiPendingApprovalsDoc.definition.kind;
+  const questionKind = PiPendingQuestionsDoc.definition.kind;
+  const approval = {
+    taskId: 43,
+    key: 'script/1',
+    toolCallId: 'script/1',
+    turnId: 'turn',
+    requestId: 'request',
+    toolRef: { source: 'builtin', capabilityId: 'create_file' },
+    providerName: 'create_file',
+    displayName: 'Create file',
+    input: { name: 'note', size: 1 },
+    requestedAt: 2,
+  };
+  const question = {
+    taskId,
+    key: 'asked',
+    toolCallId: 'asked',
+    turnId: 'turn',
+    requestId: 'request',
+    question: {
+      questions: [{ id: 'first', question: 'Which one?', selection: 'single', options: [] }],
+    },
+    requestedAt: 3,
+  };
+  state.documents.set(questionKind, {
+    items: {
+      asked: question,
+      reusedOtherTask: { ...question, taskId: 999 },
+      stale: { ...question, toolCallId: 'stale' },
+    },
+  });
+  const observed = await state.observer.start();
+  try {
+    expect(observed.pendingQuestion).toMatchObject({
+      toolCallId: 'asked',
+      question: question.question,
+    });
+    expect(observed.pendingApprovals).toEqual([]);
+    state.documents.set(approvalKind, {
+      items: {
+        approval,
+        reusedOtherTask: { ...approval, taskId: 999, requestedAt: 1 },
+        stale: { ...approval, toolCallId: 'stale', requestedAt: 1 },
+      },
+    });
+    await state.notifyInteractions();
+    expect(state.events).toEqual([
+      {
+        type: 'approvals.updated',
+        approvals: [expect.objectContaining({ id: 'approval', toolCallId: 'script/1' })],
+      },
+    ]);
+    state.documents.set(approvalKind, {
+      items: {
+        approval: { ...approval, input: { size: 1, name: 'note' } },
+      },
+    });
+    await state.notifyInteractions();
+    expect(state.events).toHaveLength(1);
+    await state.advance(
+      view({
+        tools: [{ ...live.tools![0]!, status: 'done' }],
+        nestedTools: [{ ...live.nestedTools![0]!, status: 'done' }],
+      }),
+    );
+    expect(state.events.slice(1)).toEqual([
+      { type: 'approvals.updated', approvals: [] },
+      { type: 'question.updated', question: null },
+    ]);
+    // Reusing the same callId on a new task must not resurface stale approvals or questions.
+    await state.advance(
+      view({
+        tools: [
+          { callId: 'asked', name: 'ask_user_question', status: 'running', taskId: 88 as TaskId },
+        ],
+        nestedTools: [
+          {
+            callId: 'script/1',
+            parentCallId: 'script',
+            parentTaskId: 20 as TaskId,
+            taskId: 89 as TaskId,
+            name: 'create_file',
+            status: 'running',
+            arguments: {},
+          },
+        ],
+      }),
+    );
+    expect(state.events).toHaveLength(3);
+  } finally {
+    await state.observer.stop();
+  }
+});
 
 test('a steer owns subsequent streaming output while the preceding reply settles in place', async () => {
   const first = input(1);

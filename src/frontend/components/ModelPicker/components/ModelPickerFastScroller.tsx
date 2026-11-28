@@ -41,6 +41,7 @@ type ModelPickerFastScrollerProps = {
   activeIndex: number;
   anchors: readonly ModelPickerFastScrollAnchor[];
   blurTarget: RefObject<ViewInstance | null>;
+  bottomInset?: number;
   onNavigate: (index: number) => void;
 };
 
@@ -49,6 +50,7 @@ export function ModelPickerFastScroller({
   activeIndex,
   anchors,
   blurTarget,
+  bottomInset = 0,
   onNavigate,
 }: ModelPickerFastScrollerProps) {
   const { t } = useTranslation();
@@ -265,7 +267,7 @@ export function ModelPickerFastScroller({
     <View
       className="absolute bottom-0 right-0 top-0 justify-center"
       pointerEvents="box-none"
-      style={{ width: MODEL_PICKER_FAST_SCROLLER_WIDTH }}
+      style={{ paddingBottom: bottomInset, width: MODEL_PICKER_FAST_SCROLLER_WIDTH }}
     >
       <View
         accessibilityActions={accessibilityActions}

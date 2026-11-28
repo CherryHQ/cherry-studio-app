@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { G, Path } from 'react-native-svg';
 
 import { useFocusedBackPress } from '@/frontend/appShell/navigation';
+import { useStartupCoverVisible } from '@/frontend/appShell/startup';
 
 import { LogoDrawAnimation, type LogoDrawAnimationRef } from '../LogoDraw';
 import {
@@ -78,8 +79,10 @@ export function OnboardingPage({
 }: OnboardingPageProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const isStartupCoverVisible = useStartupCoverVisible();
   const welcome = variant === 'welcome';
   const reducedMotion = useReducedMotion();
+  const autoPlay = welcome && !reducedMotion && !isStartupCoverVisible;
   const logo = useRef<LogoDrawAnimationRef>(null);
   // Only an entry from the welcome screen needs a measured, moving mark.
   const [hasHeroMotion, setHasHeroMotion] = useState(welcome);
@@ -263,13 +266,14 @@ export function OnboardingPage({
               {footer}
             </View>
           ) : null}
-          {hasHeroMotion && measured ? (
+          {/* Mount the drawing at its first frame as the cover leaves. */}
+          {hasHeroMotion && measured && (!welcome || reducedMotion || autoPlay) ? (
             <Animated.View
               className="absolute top-0 left-0"
               pointerEvents="none"
               style={[{ transformOrigin: 'top left' }, markStyle]}
             >
-              <LogoDrawAnimation ref={logo} autoPlay={welcome && !reducedMotion} size={HERO_SIZE} />
+              <LogoDrawAnimation ref={logo} autoPlay={autoPlay} size={HERO_SIZE} />
             </Animated.View>
           ) : null}
         </View>

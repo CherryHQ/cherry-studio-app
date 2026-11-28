@@ -122,7 +122,7 @@ export function extractOfficeText(
       const slide = slides.item(index);
       const slideId =
         slide?.getAttributeNS(RELATIONSHIP_NAMESPACE, 'id') ??
-        slide?.getAttributeNS('http://purl.oclc.org/ooxml/officeDocument/relationships', 'id');
+        slide?.getAttributeNS('http://purl.oclc.org/ooxml/officeDocument/relationships', 'id'); // NOSONAR XML namespace identifier, not a network request
       const slidePath = relationshipTarget(
         presentationRelationships,
         slideId,

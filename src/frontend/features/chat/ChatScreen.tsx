@@ -4,7 +4,7 @@ import {
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
 import { useFocusEffect, useIsFocused, useIsPreview, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
@@ -19,11 +19,13 @@ import {
   parseChatRoute,
   getChatComposerHandoff,
 } from '@/frontend/appShell/navigation/chat';
+import { useNavigationDockClearance } from '@/frontend/appShell/navigationShell/state';
 import {
   ComposerDismissArea,
   ComposerDock,
   ComposerDropArea,
   ComposerSessionProvider,
+  getComposerExtraBottomOffset,
 } from '@/frontend/components/Composer';
 import { McpAppConversationProvider } from '@/frontend/components/McpApp';
 import type { MessageListItem } from '@/frontend/components/Message';
@@ -194,10 +196,6 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     [api, isPreview, openTurn, sessionId],
   );
   const readCitations = messageWindow.readCitations;
-  const readCitationsRef = useRef(readCitations);
-  useEffect(() => {
-    readCitationsRef.current = readCitations;
-  }, [readCitations]);
   const shareTarget = useMemo<ChatShareTarget | undefined>(
     () =>
       sessionId
@@ -238,7 +236,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                     ...message,
                     modelName: resolveMessageModel(message)?.name,
                     citationSources: missing.length
-                      ? await readCitationsRef.current?.(message.id, missing, signal)
+                      ? await readCitations?.(message.id, missing, signal)
                       : undefined,
                   };
                 }),
@@ -251,7 +249,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
             },
           }
         : undefined,
-    [api, sessionId],
+    [api, readCitations, sessionId],
   );
   const isSessionAvailable =
     Boolean(sessionId) && !session.error && (session.isLoading || Boolean(session.data));
@@ -267,13 +265,17 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     }, [activeAgentId]),
   );
   const { bottom: bottomInset } = useSafeAreaInsets();
+  const dockClearance = useNavigationDockClearance();
+  const extraBottomOffset = getComposerExtraBottomOffset(bottomInset, dockClearance);
   const composerHeight = useSharedValue(0);
   const setComposerHeight = useCallback(
     (height: number) => composerHeight.set(height),
     [composerHeight],
   );
   const contentBottomInset = hasComposer ? composerContentGap : PREVIEW_CONTENT_BOTTOM_INSET;
-  const keyboardOffset = hasComposer ? getComposerKeyboardStickyOffset(bottomInset) : 0;
+  const keyboardOffset = hasComposer
+    ? getComposerKeyboardStickyOffset(bottomInset) + extraBottomOffset
+    : 0;
 
   if (sessionId && session.error && isNotFoundError(session.error)) {
     return <ChatRouteResolver />;

@@ -9,6 +9,7 @@ import {
 } from 'axios';
 
 import type {
+  HttpCallerMetadata,
   HttpClient,
   HttpErrorDecoder,
   HttpHeaders,
@@ -29,8 +30,7 @@ import { serializeHttpQuery } from './serializeHttpQuery';
 import { toHttpHeaders } from './toHttpHeaders';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
-const HTTP_ROUTE = Symbol('httpRoute');
-const HTTP_REQUEST = Symbol('httpRequest');
+const HTTP_CONTEXT = Symbol('httpContext');
 const HTTP_METHODS = new Set<HttpMethod>([
   'DELETE',
   'GET',
@@ -42,7 +42,7 @@ const HTTP_METHODS = new Set<HttpMethod>([
 ]);
 const HTTP_RESPONSE_TYPES = new Set(['json', 'text', 'arraybuffer']);
 
-export interface CreateHttpClientOptions {
+export interface CreateHttpClientOptions extends HttpCallerMetadata {
   baseUrl: string;
   errorDecoder?: HttpErrorDecoder;
   headers?: HttpHeaders;
@@ -52,7 +52,7 @@ export interface CreateHttpClientOptions {
   timeoutMs?: number;
 }
 
-interface HttpRoute {
+interface HttpRoute extends HttpCallerMetadata {
   readonly baseUrl: string;
   readonly errorDecoder?: HttpErrorDecoder;
   readonly headers: HttpHeaders;
@@ -65,17 +65,26 @@ const acceptSuccessfulStatus = (status: number) => status >= 200 && status < 300
 const acceptAllStatuses = () => true;
 
 interface RoutedAxiosConfig {
-  [HTTP_REQUEST]?: HttpRequest<unknown>;
-  [HTTP_ROUTE]?: HttpRoute;
+  [HTTP_CONTEXT]?: HttpRequestContext;
 }
 
 type RoutedAxiosRequestConfig = AxiosRequestConfig & RoutedAxiosConfig;
-type RoutedInternalAxiosRequestConfig = InternalAxiosRequestConfig & RoutedAxiosConfig;
 type RoutedAxiosResponse = AxiosResponse & { truncated?: boolean };
 
 interface HttpRequestContext {
-  readonly request: HttpRequest<unknown>;
+  request: HttpRequest<unknown>;
   readonly route: HttpRoute;
+}
+
+// Non-plain class instance so Axios mergeConfig preserves object identity across request interceptors.
+class AxiosRequestContext implements HttpRequestContext {
+  request: HttpRequest<unknown>;
+  readonly route: HttpRoute;
+
+  constructor(request: HttpRequest<unknown>, route: HttpRoute) {
+    this.request = request;
+    this.route = route;
+  }
 }
 
 function assertValidBaseUrl(baseUrl: string): void {
@@ -202,11 +211,7 @@ function mergeHeaders(defaults: HttpHeaders, requestHeaders?: HttpHeaders): Http
 }
 
 function getRequestContext(config?: AxiosRequestConfig): HttpRequestContext | undefined {
-  const routedConfig = config as RoutedAxiosRequestConfig | undefined;
-  const request = routedConfig?.[HTTP_REQUEST];
-  const route = routedConfig?.[HTTP_ROUTE];
-
-  return request && route ? { request, route } : undefined;
+  return (config as RoutedAxiosRequestConfig | undefined)?.[HTTP_CONTEXT];
 }
 
 async function dispatchError(error: unknown, context?: HttpRequestContext): Promise<HttpError> {
@@ -214,6 +219,10 @@ async function dispatchError(error: unknown, context?: HttpRequestContext): Prom
     error,
     context?.request.errorDecoder ?? context?.route.errorDecoder,
     context?.request.logPath,
+    context && {
+      serviceName: context.request.serviceName ?? context.route.serviceName,
+      operation: context.request.operation ?? context.route.operation,
+    },
   );
 
   if (!context) {
@@ -234,7 +243,10 @@ async function dispatchError(error: unknown, context?: HttpRequestContext): Prom
             kind: 'internal',
           });
     } catch (interceptorError) {
-      mappedError = mapAxiosError(interceptorError, undefined, context.request.logPath);
+      mappedError = mapAxiosError(interceptorError, undefined, context.request.logPath, {
+        serviceName: context.request.serviceName ?? context.route.serviceName,
+        operation: context.request.operation ?? context.route.operation,
+      });
     }
   }
 
@@ -244,7 +256,6 @@ async function dispatchError(error: unknown, context?: HttpRequestContext): Prom
 const dispatchRequestInterceptors = async (
   config: InternalAxiosRequestConfig,
 ): Promise<InternalAxiosRequestConfig> => {
-  const routedConfig = config as RoutedInternalAxiosRequestConfig;
   const context = getRequestContext(config);
 
   if (!context) {
@@ -263,7 +274,7 @@ const dispatchRequestInterceptors = async (
 
     assertValidRequest(request);
 
-    routedConfig[HTTP_REQUEST] = request;
+    context.request = request;
     config.baseURL = context.route.baseUrl;
     config.data = request.body;
     config.headers = AxiosHeaders.from(request.headers);
@@ -346,7 +357,11 @@ const dispatchRejectedResponse = async (error: unknown): Promise<never> => {
     typeof error === 'object' && error !== null && 'config' in error
       ? (error.config as AxiosRequestConfig | undefined)
       : undefined;
-  throw await dispatchError(error, getRequestContext(config));
+  const context = getRequestContext(config);
+  if (!context) {
+    throw error;
+  }
+  throw await dispatchError(error, context);
 };
 
 function createAxiosTransport(adapter?: AxiosAdapter): AxiosInstance {
@@ -389,6 +404,8 @@ function createHttpClientWithTransport(
 
   const route: HttpRoute = Object.freeze({
     baseUrl: options.baseUrl,
+    serviceName: options.serviceName,
+    operation: options.operation,
     errorDecoder: options.errorDecoder,
     headers: Object.freeze({ ...options.headers }),
     interceptors: Object.freeze([...(options.interceptors ?? [])]),
@@ -405,11 +422,11 @@ function createHttpClientWithTransport(
         headers: mergeHeaders(route.headers, request.headers),
       };
       assertValidRequest(routedRequest);
+      const context: HttpRequestContext = new AxiosRequestContext(routedRequest, route);
 
       try {
         const response = await transport.request<TResponse>({
-          [HTTP_REQUEST]: routedRequest,
-          [HTTP_ROUTE]: route,
+          [HTTP_CONTEXT]: context,
           baseURL: route.baseUrl,
           data: routedRequest.body,
           headers: routedRequest.headers,
@@ -430,11 +447,10 @@ function createHttpClientWithTransport(
           ...(truncated === undefined ? {} : { truncated }),
         });
       } catch (error) {
-        throw mapAxiosError(
-          error,
-          routedRequest.errorDecoder ?? route.errorDecoder,
-          routedRequest.logPath,
-        );
+        if (isHttpError(error)) {
+          throw error;
+        }
+        throw await dispatchError(error, context);
       }
     },
   });

@@ -104,9 +104,7 @@ export function createRemoteConversationSession(
   assertSource: () => void,
   onDispose: () => void,
   bootstrapVerified = false,
-  access: 'interactive' | 'read-only' = 'interactive',
 ): RemoteConversationSession {
-  const isReadOnly = access === 'read-only';
   const scope = source.scope as QueryScope;
   const refs = createConversationReferences(scope, ref.sessionId);
   const lifetime = new AbortController();
@@ -247,22 +245,18 @@ export function createRemoteConversationSession(
   }
   function snapshot(): RemoteConversationSnapshot {
     const sourceState = source.getState();
-    const send = isReadOnly
-      ? undefined
-      : action<ConversationInput, Submission>(
-          'send',
-          latest?.sendTarget,
-          (target, input) => {
-            const value = remoteInput(input);
-            return source.send(target, value.text, value.attachments);
-          },
-          { conversation: ref },
-        );
-    const undelivered = isReadOnly
-      ? undefined
-      : source
-          .getCommands()
-          .findLast((command) => command.kind === 'send' && command.sessionId === ref.sessionId);
+    const send = action<ConversationInput, Submission>(
+      'send',
+      latest?.sendTarget,
+      (target, input) => {
+        const value = remoteInput(input);
+        return source.send(target, value.text, value.attachments);
+      },
+      { conversation: ref },
+    );
+    const undelivered = source
+      .getCommands()
+      .findLast((command) => command.kind === 'send' && command.sessionId === ref.sessionId);
     return {
       title: session.title,
       agentId: session.agentId,
@@ -304,8 +298,7 @@ export function createRemoteConversationSession(
                 },
               }
             : {}),
-          ...(!isReadOnly &&
-          ['running', 'awaiting-approval', 'finalizing'].includes(execution.state)
+          ...(['running', 'awaiting-approval', 'finalizing'].includes(execution.state)
             ? {
                 cancel: action(
                   `cancel:${execution.id}`,
@@ -316,39 +309,38 @@ export function createRemoteConversationSession(
               }
             : {}),
         })) ?? [],
-      interactions: !isReadOnly
-        ? (latest?.interactions.map((interaction) => ({
-            id: interaction.id,
-            ...(interaction.executionId ? { execution: interaction.executionId } : {}),
-            kind: interaction.kind ?? 'decision',
-            title: interaction.title,
-            state: interaction.state,
-            input: resource(interaction.input),
-            ...(interaction.state === 'pending'
-              ? {
-                  respond: action<ConversationInteractionResponse, void>(
-                    `respond:${interaction.id}`,
-                    interaction.respondTarget,
-                    (target, decision) => {
-                      if (decision.kind === 'user-answer')
-                        throw new ConversationReadError({ code: 'unsupported', retry: 'none' });
-                      return source.respond(target, decision);
-                    },
-                    undefined,
-                  ),
-                }
-              : {}),
-          })) ?? [])
-        : [],
+      interactions:
+        latest?.interactions.map((interaction) => ({
+          id: interaction.id,
+          ...(interaction.executionId ? { execution: interaction.executionId } : {}),
+          kind: interaction.kind ?? 'decision',
+          title: interaction.title,
+          state: interaction.state,
+          input: resource(interaction.input),
+          ...(interaction.state === 'pending'
+            ? {
+                respond: action<ConversationInteractionResponse, void>(
+                  `respond:${interaction.id}`,
+                  interaction.respondTarget,
+                  (target, decision) => {
+                    if (decision.kind === 'user-answer')
+                      throw new ConversationReadError({ code: 'unsupported', retry: 'none' });
+                    return source.respond(target, decision);
+                  },
+                  undefined,
+                ),
+              }
+            : {}),
+        })) ?? [],
       actions: {
         inputPolicy: {
           ...REMOTE_INPUT_POLICY,
-          attachments: !isReadOnly && sourceState.attachments === true,
+          attachments: sourceState.attachments === true,
         },
         send,
       },
       attachmentPreparation:
-        !isReadOnly && sourceState.preupload && source.stageAttachments
+        sourceState.preupload && source.stageAttachments
           ? {
               draft: sourceState.attachmentDrafts?.find(
                 (draft) => draft.key === `session:${ref.sessionId}`,
@@ -362,7 +354,7 @@ export function createRemoteConversationSession(
             }
           : undefined,
       upload:
-        !isReadOnly && sourceState.upload?.sessionId === ref.sessionId
+        sourceState.upload?.sessionId === ref.sessionId
           ? {
               ...sourceState.upload,
               cancel: () => source.cancelUpload?.(sourceState.upload!.id),
@@ -370,7 +362,6 @@ export function createRemoteConversationSession(
           : undefined,
       undelivered:
         undelivered &&
-        send &&
         undeliveredMessage(undelivered, operationId(undelivered.id), send, () => {
           assertCurrent();
           source.discard(undelivered.id);
@@ -392,7 +383,7 @@ export function createRemoteConversationSession(
     if (status === 'retired') lifetime.abort();
     publish();
   });
-  const unoperations = isReadOnly ? () => {} : source.subscribeOperations(publish);
+  const unoperations = source.subscribeOperations(publish);
   const historyRoot = (version: string): HistoryPosition => ({
     revision: refs.issue<HistoryVersion>('history', version, String(historyReset)),
   });
@@ -454,6 +445,42 @@ export function createRemoteConversationSession(
     }
   }
 
+  async function readEarlierCitations(
+    historyVersion: string,
+    messageId: string,
+    ids: readonly string[],
+    signal: AbortSignal,
+    isStreaming = false,
+  ): Promise<CitationSource[]> {
+    const missing = new Set(ids);
+    const found: CitationSource[] = [];
+    // A streaming message is beyond persisted history. Otherwise skip every later row.
+    let before = isStreaming;
+    let cursor: string | undefined;
+    const visited = new Set<string>();
+    do {
+      const page = await source.history(ref.sessionId, historyVersion, cursor, signal);
+      for (const message of page.items) {
+        if (message.id === messageId) {
+          before = true;
+          continue;
+        }
+        if (!before) continue;
+        for (const tool of projectHistory(message).tools ?? []) {
+          for (const source of await readToolCitations(tool, signal)) {
+            if (missing.delete(source.id)) found.push(source);
+          }
+          if (!missing.size) return found;
+        }
+      }
+      cursor = page.next;
+      if (cursor && visited.has(cursor))
+        throw new ConversationReadError({ code: 'internal', retry: 'none' });
+      if (cursor) visited.add(cursor);
+    } while (cursor && missing.size);
+    return found;
+  }
+
   const handle: RemoteConversationSession = {
     readingAidScope: JSON.stringify([source.draftScope, ref.sessionId]),
     ref,
@@ -494,36 +521,10 @@ export function createRemoteConversationSession(
       readCitations: (messageId, ids, signal) =>
         read(signal, async (signal) => {
           const fixed = await source.readSession(ref.sessionId, signal);
-          const missing = new Set(ids);
-          const found: CitationSource[] = [];
-          // A running message is beyond persisted history. Otherwise skip every later row.
-          let before =
-            latest?.messages.some(
-              (message) => message.id === messageId && message.state === 'streaming',
-            ) ?? false;
-          let cursor: string | undefined;
-          const visited = new Set<string>();
-          do {
-            const page = await source.history(ref.sessionId, fixed.historyVersion, cursor, signal);
-            for (const message of page.items) {
-              if (message.id === messageId) {
-                before = true;
-                continue;
-              }
-              if (!before) continue;
-              for (const tool of projectHistory(message).tools ?? []) {
-                for (const source of await readToolCitations(tool, signal)) {
-                  if (missing.delete(source.id)) found.push(source);
-                }
-                if (!missing.size) return found;
-              }
-            }
-            cursor = page.next;
-            if (cursor && visited.has(cursor))
-              throw new ConversationReadError({ code: 'internal', retry: 'none' });
-            if (cursor) visited.add(cursor);
-          } while (cursor && missing.size);
-          return found;
+          const isStreaming = latest?.messages.some(
+            (message) => message.id === messageId && message.state === 'streaming',
+          );
+          return readEarlierCitations(fixed.historyVersion, messageId, ids, signal, isStreaming);
         }),
       peekLatest: () => {
         assertCurrent();
@@ -625,8 +626,9 @@ export function createRemoteConversationSession(
           const ids = citationIds(row.display.data.parts ?? []);
           const sources: CitationSource[] = [];
           if (ids.length) {
-            for (const tool of row.tools ?? [])
+            for (const tool of row.tools ?? []) {
               sources.push(...(await readToolCitations(tool, signal)));
+            }
             const known = new Set([
               ...sources.map((source) => source.id),
               ...message.parts.flatMap((part) =>
@@ -636,8 +638,13 @@ export function createRemoteConversationSession(
               ),
             ]);
             const missing = ids.filter((id) => !known.has(id));
-            if (missing.length)
-              sources.push(...(await handle.history.readCitations!(message.id, missing, signal)));
+            if (missing.length) {
+              // Selected rows may skip a newer source with the same ID.
+              const earlier = await read(signal, (signal) =>
+                readEarlierCitations(fixed.historyVersion, message.id, missing, signal),
+              );
+              sources.push(...earlier);
+            }
           }
           transcript.citationSources = sources;
           for (const part of transcript.parts) {

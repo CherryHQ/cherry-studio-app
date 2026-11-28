@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { NavDragState } from '../state';
@@ -49,6 +49,12 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 
+jest.mock('@cherrystudio/ui/haptics', () => ({
+  haptics: {
+    selection: jest.fn(),
+  },
+}));
+
 jest.mock('@cherrystudio/ui/motion', () => ({
   duration: { fast: 200 },
   easing: { settle: 'settle' },
@@ -75,6 +81,7 @@ jest.mock('react-native-reanimated', () => {
     ReduceMotion: { System: 'system' },
     ZoomIn: transition,
     useAnimatedStyle: (factory: () => object) => factory(),
+    useSharedValue: <T,>(initialValue: T) => createMockSharedValue(initialValue),
     withTiming: (value: number) => value,
   };
 });
@@ -167,6 +174,25 @@ describe('VerticalNavRail', () => {
       'vertical-rail-tab-agents',
       'vertical-rail-tab-more',
     ]);
+
+    const activeTab = renderer!.root.findByProps({ testID: 'vertical-rail-tab-chat' });
+    const activeCapsule = activeTab
+      .findAllByType(View)
+      .find((view) => !view.props.testID && view.props.className?.split(' ').includes('h-11'));
+    expect(activeCapsule).toBeDefined();
+    expect(activeCapsule!.props.collapsable).toBe(false);
+    expect(activeCapsule!.props.className.split(' ')).toEqual(
+      expect.arrayContaining(['rounded-full', 'bg-secondary-active']),
+    );
+
+    const inactiveTab = renderer!.root.findByProps({ testID: 'vertical-rail-tab-more' });
+    const inactiveCapsule = inactiveTab
+      .findAllByType(View)
+      .find((view) => !view.props.testID && view.props.className?.split(' ').includes('h-11'));
+    expect(inactiveCapsule).toBeDefined();
+    expect(inactiveCapsule!.props.collapsable).toBe(false);
+    expect(inactiveCapsule!.props.className.split(' ')).toContain('rounded-full');
+    expect(inactiveCapsule!.props.className.split(' ')).not.toContain('bg-secondary-active');
   });
 
   it('shows monochrome live drop preview and status pill when dragging over the vertical capsule', () => {

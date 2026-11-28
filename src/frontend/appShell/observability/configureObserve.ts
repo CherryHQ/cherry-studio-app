@@ -1,5 +1,7 @@
 import { requireOptionalNativeModule } from 'expo';
 
+import { recordStartupEvent } from '@/shared/core/logger/startupDiagnostics';
+
 import { getReportingPolicy } from './reportingPolicy';
 
 // A non-production binary has no Observe module. Never evaluate the SDK entry in that case.
@@ -23,4 +25,14 @@ export function configureObserve() {
       },
     },
   });
+}
+
+export function recordStartupChatInputReady(readyAt: number) {
+  const elapsedMs = recordStartupEvent('startup.chat_input.ready', 'completed', {}, readyAt);
+  if (!observe || !getReportingPolicy('observe').enabled) return;
+  try {
+    observe.Observe.logEvent('startup.chat_input.ready', { attributes: { elapsedMs } });
+  } catch {
+    // Telemetry is best effort, including when the native module is unavailable.
+  }
 }

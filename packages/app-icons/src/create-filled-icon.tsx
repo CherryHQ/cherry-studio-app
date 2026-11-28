@@ -52,7 +52,13 @@ function resolveNodeAttributes(
 }
 
 /** Renders dual-state filled vector nodes wrapped for Uniwind icon compatibility. */
-export function createFilledIcon(iconNode: FilledIconNode): LucideIcon {
+export function createFilledIcon(
+  iconNode: FilledIconNode,
+  { strokeWidth: defaultStrokeWidth = 2, viewBoxPadding = 0 } = {},
+): LucideIcon {
+  const viewBoxSize = 24 + viewBoxPadding * 2;
+  const viewBox = `${-viewBoxPadding} ${-viewBoxPadding} ${viewBoxSize} ${viewBoxSize}`;
+
   const FilledIcon = forwardRef<NativeSvg.Svg, LucideProps>(function FilledIcon(
     {
       absoluteStrokeWidth = false,
@@ -60,7 +66,7 @@ export function createFilledIcon(iconNode: FilledIconNode): LucideIcon {
       color = 'currentColor',
       height,
       size = 24,
-      strokeWidth = 2,
+      strokeWidth = defaultStrokeWidth,
       width,
       ...props
     },
@@ -69,7 +75,7 @@ export function createFilledIcon(iconNode: FilledIconNode): LucideIcon {
     const resolvedWidth = width ?? size;
     const resolvedHeight = height ?? size;
     const resolvedStrokeWidth = absoluteStrokeWidth
-      ? (Number(strokeWidth) * 24) / Number(resolvedWidth)
+      ? (Number(strokeWidth) * viewBoxSize) / Number(resolvedWidth)
       : strokeWidth;
 
     return (
@@ -77,7 +83,7 @@ export function createFilledIcon(iconNode: FilledIconNode): LucideIcon {
         ref={ref}
         fill="none"
         height={resolvedHeight}
-        viewBox="0 0 24 24"
+        viewBox={viewBox}
         width={resolvedWidth}
         {...props}
       >

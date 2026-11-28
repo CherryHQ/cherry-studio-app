@@ -4,9 +4,10 @@ import { ChatTranscript } from '../ChatTranscript';
 import type { ChatTurnNavigator } from '../chatTurns';
 
 let mockHeaderHeight = 0;
+let mockSpeechPlaybackInset = 0;
 const mockList = jest.fn((_props: { contentTopInset: number }) => null);
 const mockTurnDirectory = jest.fn(
-  (_props: { navigator: ChatTurnNavigator; scrollProgress: unknown }) => null,
+  (_props: { navigator: ChatTurnNavigator; scrollProgress: unknown; turnCount?: number }) => null,
 );
 
 jest.mock('expo-router/react-navigation', () => ({ useHeaderHeight: () => mockHeaderHeight }));
@@ -28,13 +29,17 @@ jest.mock('@/frontend/appShell/navigation', () => ({
 
 jest.mock('@/frontend/appShell/header', () => ({ mainHeaderRowHeight: 56 }));
 
+jest.mock('@/frontend/appShell/speechPlayback', () => ({
+  useSpeechPlaybackInset: () => mockSpeechPlaybackInset,
+}));
+
 jest.mock('@/frontend/components/Message', () => ({
   MessageList: (props: { contentTopInset: number }) => mockList(props),
 }));
 
 jest.mock('../components/ChatTurnDirectory', () => ({
-  ChatTurnDirectory: (props: { navigator: ChatTurnNavigator; scrollProgress: unknown }) =>
-    mockTurnDirectory(props),
+  ChatTurnDirectory: (props: Parameters<typeof mockTurnDirectory>[0]) => mockTurnDirectory(props),
+  MAX_TRIGGER_TICKS: 7,
 }));
 
 jest.mock('../components/ChatInitialRenderCover', () => ({ ChatInitialRenderCover: () => null }));
@@ -51,6 +56,8 @@ describe('ChatTranscript', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
+    mockHeaderHeight = 0;
+    mockSpeechPlaybackInset = 0;
     mockList.mockClear();
     mockTurnDirectory.mockClear();
   });
@@ -74,6 +81,15 @@ describe('ChatTranscript', () => {
     mockHeaderHeight = 100;
     act(() => renderer!.update(transcript()));
     expect(mockList.mock.lastCall?.[0].contentTopInset).toBe(100);
+  });
+
+  test('adds speech playback capsule inset onto contentTopInset when visible', () => {
+    mockHeaderHeight = 96;
+    mockSpeechPlaybackInset = 64;
+    act(() => {
+      renderer = create(transcript());
+    });
+    expect(mockList.mock.lastCall?.[0].contentTopInset).toBe(160);
   });
 
   test('hides turn directory for fewer than two turns and shows it once two user turns exist', () => {
@@ -123,8 +139,71 @@ describe('ChatTranscript', () => {
       expect.objectContaining({
         navigator: turnNavigator,
         scrollProgress: expect.objectContaining({ value: 1 }),
+        turnCount: 2,
       }),
     );
+  });
+
+  test.each([
+    { hasOlderMessages: true, hasNewerMessages: false },
+    { hasOlderMessages: false, hasNewerMessages: true },
+  ])('uses seven ticks for a partial message window (%j)', (pagination) => {
+    const turnNavigator: ChatTurnNavigator = {
+      scope: 'local:s1',
+      queryKey: ['turns', 'local:s1'],
+      read: jest.fn(async () => ({ items: [] })),
+      jump: jest.fn(),
+    };
+    act(() => {
+      renderer = create(
+        transcript({
+          ...pagination,
+          messages: [
+            { id: 'u1', role: 'user', status: 'success', data: { parts: [] } },
+            { id: 'u2', role: 'user', status: 'success', data: { parts: [] } },
+          ],
+          turnNavigator,
+        }),
+      );
+    });
+
+    expect(mockTurnDirectory.mock.lastCall?.[0].turnCount).toBe(7);
+  });
+
+  test('combines hidden loaded user turns with visible user turns when older pages are absent', () => {
+    const turnNavigator: ChatTurnNavigator = {
+      scope: 'local:s1',
+      queryKey: ['turns', 'local:s1'],
+      read: jest.fn(async () => ({ items: [] })),
+      jump: jest.fn(),
+    };
+
+    act(() => {
+      renderer = create(
+        transcript({
+          hasOlderMessages: false,
+          hiddenUserTurnCount: 1,
+          messages: [{ id: 'u2', role: 'user', status: 'success', data: { parts: [] } }] as never,
+          turnNavigator,
+        }),
+      );
+    });
+    expect(mockTurnDirectory.mock.lastCall?.[0].turnCount).toBe(2);
+
+    act(() => {
+      renderer!.update(
+        transcript({
+          hasOlderMessages: false,
+          hiddenUserTurnCount: 1,
+          messages: [
+            { id: 'u2', role: 'user', status: 'success', data: { parts: [] } },
+            { id: 'u3', role: 'user', status: 'success', data: { parts: [] } },
+          ] as never,
+          turnNavigator,
+        }),
+      );
+    });
+    expect(mockTurnDirectory.mock.lastCall?.[0].turnCount).toBe(3);
   });
 });
 

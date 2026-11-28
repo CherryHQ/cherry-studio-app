@@ -76,3 +76,23 @@ export function fileToDataUrl(file: ImageModelV3File): string {
   }
   return `data:${file.mediaType || 'image/png'};base64,${uint8ToBase64(file.data)}`;
 }
+
+export function createTimeoutSignal(
+  parent: AbortSignal | undefined,
+  timeoutMs: number,
+  message: string,
+): { signal: AbortSignal; cleanup: () => void } {
+  const controller = new AbortController();
+  const abortFromParent = () => controller.abort(parent?.reason);
+  if (parent?.aborted) abortFromParent();
+  else parent?.addEventListener('abort', abortFromParent, { once: true });
+  const timer = setTimeout(() => controller.abort(new Error(message)), timeoutMs);
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timer);
+      parent?.removeEventListener('abort', abortFromParent);
+    },
+  };
+}

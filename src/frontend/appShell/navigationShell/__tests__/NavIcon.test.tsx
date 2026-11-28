@@ -42,15 +42,24 @@ describe('NavIcon', () => {
     renderer = undefined;
   });
 
-  it.each(tabIds)('renders outline and filled states for %s from @cherrystudio/app-icons', (id) => {
-    for (const filled of [false, true]) {
-      act(() => {
-        renderer = create(<NavIcon color="#123456" filled={filled} id={id} size={22} />);
-      });
+  it.each(tabIds)(
+    'renders distinct outline and filled states for %s from @cherrystudio/app-icons',
+    (id) => {
+      const serializedByState: string[] = [];
 
-      const tree = renderer!.toJSON();
-      expect(tree).not.toBeNull();
-      expect(JSON.stringify(tree)).toContain('#123456');
-    }
-  });
+      for (const filled of [false, true]) {
+        act(() => {
+          renderer = create(<NavIcon color="#123456" filled={filled} id={id} size={22} />);
+        });
+
+        const tree = renderer!.toJSON();
+        expect(tree).not.toBeNull();
+        const serialized = JSON.stringify(tree);
+        expect(serialized).toContain('#123456');
+        serializedByState.push(serialized);
+      }
+
+      expect(serializedByState[0]).not.toBe(serializedByState[1]);
+    },
+  );
 });

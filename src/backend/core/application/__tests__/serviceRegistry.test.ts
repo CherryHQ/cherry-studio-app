@@ -2,6 +2,7 @@ import { serviceList, services } from '@/backend/core/application/serviceRegistr
 import {
   getAppStatePolicy,
   getDependencies,
+  getErrorStrategy,
   getPhase,
   getServiceName,
   isInjectable,
@@ -91,6 +92,27 @@ describe('service registry', () => {
     },
   );
 
+  test('declares the complete startup gate without phase promotions', () => {
+    const container = new ServiceContainer();
+    container.registerAll(serviceList);
+    const nodes = [
+      ...container.buildDependencyGraph(Phase.Gate),
+      ...container.buildDependencyGraph(Phase.PostReady),
+    ];
+    expect(new DependencyResolver().hoistGateDependencies(nodes)).toEqual([]);
+    for (const name of [
+      'BackgroundReplyRuntime',
+      'KeepAliveCoordinator',
+      'BackgroundActivityEnvironment',
+      'AndroidBackgroundActivityRuntime',
+      'BackgroundActivityManager',
+      'IosBackgroundExecutionSource',
+    ] as const) {
+      expect(getPhase(services[name])).toBe(Phase.Gate);
+      expect(getErrorStrategy(services[name])).toBe('graceful');
+    }
+  });
+
   test('initializes conversation protection before desktop routes can recover active execution', () => {
     const container = new ServiceContainer();
     container.registerAll(serviceList);
@@ -173,6 +195,16 @@ describe('service registry', () => {
     });
     execution.release();
     expect(lease.release).toHaveBeenCalledTimes(1);
+  });
+
+  test('injects the Gate desktop Agent runtime after existing Host dependencies', () => {
+    expect(getPhase(services.RemoteAgentRuntime)).toBe(Phase.Gate);
+    expect(getPhase(services.AgentHostDependencies)).toBe(Phase.PostReady);
+    expect(getDependencies(services.AgentHostDependencies).slice(10)).toEqual([
+      'SshRuntime',
+      'ScreenAwakeRuntime',
+      'RemoteAgentRuntime',
+    ]);
   });
 
   test('declares the background policy of long-running and native-surface owners', () => {

@@ -1,4 +1,5 @@
 import { and, asc, eq, inArray, isNotNull, isNull, notInArray, sql } from 'drizzle-orm';
+import { ZodError } from 'zod';
 
 import {
   AppStatePolicy,
@@ -15,10 +16,10 @@ import {
   agentSessionMessageTable,
   agentSessionTable,
   agentTable,
+  createOrderedUuid,
   monotonicUpdateTimestamp,
   userModelTable,
 } from '@/backend/data/db/schemas';
-import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import { agentRowPolicy } from '@/backend/data/services/managedResources';
 import {
   messagePathIdsSql,
@@ -34,6 +35,7 @@ import {
   toAgentMessageView,
   toReadableAgentMessageViews,
   toAgentSessionView,
+  type AgentMessageViewRow,
 } from '@/backend/data/services/utils/agentSessionRows';
 import { requireActiveFolder } from '@/backend/data/services/utils/fileLibraryRows';
 import { toSearchableText } from '@/backend/data/services/utils/searchSnippet';
@@ -44,12 +46,13 @@ import {
   type AgentMessageView,
   type AgentSessionView,
 } from '@/shared/contracts/agent';
+import type { DesktopDispatchSessionRef } from '@/shared/data/types/desktopDispatchTool';
 import { SkillActivationSchema } from '@/shared/data/types/skill';
 import { applyReplyEdits } from '@/shared/utils/assistantReply';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
-import type { RuntimeContextCheckpoint } from '../runtime';
+import { RuntimeCorruptLaneError, type RuntimeContextCheckpoint } from '../runtime';
 import type {
   AgentSessionStore,
   DeleteTurnInput,
@@ -1004,9 +1007,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       )
       .limit(1);
     if (!row) return null;
-    return options?.tolerateInvalidParts
-      ? (toReadableAgentMessageViews([row])[0] ?? null)
-      : toAgentMessageView(row);
+    if (options?.tolerateInvalidParts) {
+      return toReadableAgentMessageViews([row])[0] ?? null;
+    }
+    return toRuntimeMessageView(row);
   }
 
   async listTurnMessages(sessionId: string, turnId: string): Promise<AgentMessageView[]> {
@@ -1194,6 +1198,58 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     return rows.flatMap(({ workflowId }) => (typeof workflowId === 'string' ? [workflowId] : []));
   }
 
+  async loadDispatchedDesktopSessions(
+    sessionId: string,
+    through?: string | null,
+  ): Promise<DesktopDispatchSessionRef[]> {
+    const rows = await readSqliteRows<{
+      connectionId: unknown;
+      sessionId: unknown;
+      draftId: unknown;
+      operationId: unknown;
+    }>(
+      this.dbService.getSqlite(),
+      sql`
+        SELECT json_extract(part.value, '$.output.value.connectionId') AS "connectionId",
+          json_extract(part.value, '$.output.value.sessionId') AS "sessionId",
+          json_extract(part.value, '$.output.value.draftId') AS "draftId",
+          json_extract(part.value, '$.output.value.operationId') AS "operationId"
+        FROM agent_session_message AS message, json_each(json_extract(message.data, '$.parts')) AS part
+        WHERE message.session_id = ${sessionId} AND message.role = 'assistant'
+          AND message.id IN (${messagePathIdsSql(sessionId, through)})
+          AND json_extract(part.value, '$.type') IN ('dynamic-tool', 'tool-desktop_dispatch_task')
+          AND json_extract(part.value, '$.toolRef.source') = 'builtin'
+          AND json_extract(part.value, '$.toolRef.capabilityId') = 'desktop_dispatch_task'
+          AND json_extract(part.value, '$.state') = 'output-available'
+          AND json_type(part.value, '$.output.value.connectionId') = 'text'
+          AND json_extract(part.value, '$.output.value.localSessionId') = ${sessionId}
+        ORDER BY message.created_at, message.id, part.key
+      `,
+    );
+    const sessions = new Map<string, DesktopDispatchSessionRef>();
+    for (const { connectionId, sessionId, draftId, operationId } of rows) {
+      if (typeof connectionId !== 'string' || !connectionId.trim()) continue;
+      if (typeof sessionId === 'string' && sessionId.trim()) {
+        sessions.set(JSON.stringify([connectionId, 'session', sessionId]), {
+          connectionId,
+          sessionId,
+        });
+      } else if (
+        typeof draftId === 'string' &&
+        draftId.trim() &&
+        typeof operationId === 'string' &&
+        operationId.trim()
+      ) {
+        sessions.set(JSON.stringify([connectionId, 'draft', draftId, operationId]), {
+          connectionId,
+          draftId,
+          operationId,
+        });
+      }
+    }
+    return [...sessions.values()];
+  }
+
   async getLatestContextCheckpoint(
     sessionId: string,
     excludeAssistantMessageId?: string,
@@ -1296,10 +1352,21 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
         })
         .where(eq(agentSessionTable.id, existing.sessionId));
-      return toAgentMessageView(row);
+      return toRuntimeMessageView(row);
     });
     publishDataApiChanges(['/agent-sessions', `/agent-sessions/${message.sessionId}`]);
     return message;
+  }
+}
+
+function toRuntimeMessageView(row: AgentMessageViewRow): AgentMessageView {
+  try {
+    return toAgentMessageView(row);
+  } catch (error) {
+    if (!(error instanceof ZodError)) throw error;
+    throw new RuntimeCorruptLaneError('Stored agent message failed schema validation.', {
+      cause: error,
+    });
   }
 }
 
