@@ -139,7 +139,7 @@ final class ContinuedProcessing {
     entry.cancellationTimeout?.cancel()
     let task = entry.task
     let identifier = entry.identifier
-    task?.expirationHandler = nil
+    // Leave the expiry handler installed while the system completion is queued.
     if completed, let task { task.progress.completedUnitCount = task.progress.totalUnitCount }
     Self.completionQueue.async {
       task?.setTaskCompleted(success: completed)
