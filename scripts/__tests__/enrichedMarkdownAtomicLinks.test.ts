@@ -44,7 +44,9 @@ describe('Enriched Markdown atomic link patch', () => {
     );
     expect(words).toContain('range.location == NSNotFound');
     expect(words).toContain('NSUInteger start = MIN(range.location, textLength)');
-    expect(words).toContain('NSUInteger left = start;');
+    expect(words).toMatch(
+      /NSUInteger left = start;\s*if \(left > 0\) \{\s*NSRange searchRange = NSMakeRange\(0, left\);\s*NSRange whitespaceHit = \[text rangeOfCharacterFromSet:whitespace options:NSBackwardsSearch range:searchRange\];/,
+    );
     expect(words).toContain('NSUInteger right = start + MIN(range.length, textLength - start)');
   });
 
