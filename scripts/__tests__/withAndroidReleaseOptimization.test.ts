@@ -43,6 +43,9 @@ test('applies Sentry after the application plugin while retaining optimization a
   expect(config.gradle.contents).toContain('proguard-android-optimize.txt');
   expect(config.gradle.contents).toContain('includeNativeSources = true');
   expect(config.gradle.contents).toContain('additionalSourceDirsForSourceContext');
+  expect(config.gradle.contents).toContain(
+    'apply from: "$rootDir/../scripts/androidHermesSymbols.gradle"',
+  );
   const first = config.gradle.contents;
   expect(plugin(config).gradle.contents).toBe(first);
 });
@@ -52,6 +55,7 @@ test('keeps Sentry disabled when reporting is disabled', () => {
   expect(config.gradle.contents).toContain('proguard-android-optimize.txt');
   expect(config.gradle.contents).not.toContain('sentry');
   expect(config.gradle.contents).not.toContain('additionalSourceDirsForSourceContext');
+  expect(config.gradle.contents).not.toContain('androidHermesSymbols.gradle');
 });
 
 test.each(['com.android.application', 'io.sentry.android.gradle'])(

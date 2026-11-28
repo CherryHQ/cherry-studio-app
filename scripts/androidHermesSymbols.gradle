@@ -1,0 +1,27 @@
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.type.ArtifactTypeDefinition
+
+def stageHermesSymbols = tasks.register("stageReleaseHermesSymbols", Sync) {
+    // The release AAR packages a stripped JNI library and a build-ID-matched Prefab library with DWARF.
+    def hermesAar = configurations.named("releaseRuntimeClasspath").map { runtime ->
+        runtime.incoming.artifactView { view ->
+            view.attributes.attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, "aar")
+            view.componentFilter { id ->
+                id instanceof ModuleComponentIdentifier && id.group == "com.facebook.hermes" && id.module == "hermes-android"
+            }
+        }.files.singleFile
+    }
+    def architectures = providers.gradleProperty("reactNativeArchitectures").getOrElse("*").tokenize(",")
+    from(zipTree(hermesAar)) {
+        architectures.each { abi ->
+            include "prefab/modules/hermesvm/libs/android.${abi.trim()}/libhermesvm.so"
+        }
+    }
+    includeEmptyDirs = false
+    // Sentry scans this parent. AGP packages only mergeReleaseNativeLibs/out, a sibling directory.
+    into(layout.buildDirectory.dir("intermediates/merged_native_libs/release/sentryHermesSymbols"))
+}
+
+tasks.matching { it.name == "uploadSentryNativeSymbolsForRelease" }.configureEach {
+    dependsOn(stageHermesSymbols)
+}
