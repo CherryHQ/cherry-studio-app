@@ -2767,6 +2767,7 @@
   "settings.websearch.source.fallback": "プラグイン画面で選んだツールを優先",
   "settings.websearch.source.label": "Webツールの提供元",
   "settings.websearch.source.preferred": "モデル内蔵のツールを優先（既定）",
+  "sharing.clipboardTooLarge": "コピーする範囲を短くするか、「共有」からメッセージを書き出してください。",
   "sharing.imageExcerpt": "以降の内容は省略されています",
   "sharing.imageGroup": "この画像グループを共有",
   "sharing.messageCount_other": "{{count}} 件のメッセージ",

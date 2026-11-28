@@ -2788,6 +2788,7 @@
   "settings.websearch.source.fallback": "Eklentiler sayfasında seçilen araçlara öncelik ver",
   "settings.websearch.source.label": "Web araçlarının kaynağı",
   "settings.websearch.source.preferred": "Modelin yerleşik araçlarına öncelik ver (varsayılan)",
+  "sharing.clipboardTooLarge": "Kopyalamak için daha az metin seçin veya iletiyi dışa aktarmak için Paylaş seçeneğini kullanın.",
   "sharing.imageExcerpt": "Kalan içerik gösterilmiyor",
   "sharing.imageGroup": "Görsel grubunu paylaş",
   "sharing.messageCount_one": "{{count}} mesaj",

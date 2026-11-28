@@ -2788,6 +2788,7 @@
   "settings.websearch.source.fallback": "Prefer tools selected in Plugins",
   "settings.websearch.source.label": "Web tool source",
   "settings.websearch.source.preferred": "Prefer built-in model tools (default)",
+  "sharing.clipboardTooLarge": "Select less text to copy, or use Share to export the message.",
   "sharing.imageExcerpt": "Additional content omitted",
   "sharing.imageGroup": "Share image group",
   "sharing.messageCount_one": "{{count}} message",

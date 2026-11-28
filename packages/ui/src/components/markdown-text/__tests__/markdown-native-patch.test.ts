@@ -235,3 +235,17 @@ describe('native Markdown streaming work patch', () => {
     expect(streamingPatch).not.toContain('+    streamingAnimation = false');
   });
 });
+
+// The Android regression suite exercises actual ClipData and Parcel serialization.
+test('ships the guarded text-selection copy path and its Android regressions', () => {
+  const android = `${process.cwd()}/node_modules/react-native-enriched-markdown/android/src`;
+  const selection = 'com/swmansion/enriched/markdown/utils/text/view';
+  const source = readFileSync(`${android}/main/java/${selection}/SelectionActionMode.kt`, 'utf8');
+  expect(source).toContain('emitDeviceEvent("enrichedMarkdownClipboardTooLarge")');
+  expect(source).toContain('parcel.dataSize() >= MAX_CLIP_BYTES');
+  const regressions = readFileSync(
+    `${android}/test/java/${selection}/ClipboardSelectionTest.kt`,
+    'utf8',
+  );
+  expect(regressions).toContain('keepsAllPlainTextWhenHtmlDoesNotFit');
+});
