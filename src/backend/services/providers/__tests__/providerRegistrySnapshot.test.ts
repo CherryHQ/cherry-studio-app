@@ -1,7 +1,16 @@
-import type { CatalogManifest } from '@/backend/data/services/MobileRegistryLoader';
+import {
+  type CatalogManifest,
+  type MobileRemoteRegistrySnapshot,
+  PARSED_REGISTRY_CACHE_VERSION,
+  REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
+} from '@/backend/data/services/MobileRegistryLoader';
 
 import {
+  readActiveProviderRegistrySlot,
+  readParsedProviderRegistryCache,
   readProviderRegistrySnapshots,
+  readProviderRegistrySnapshotSlot,
+  writeParsedProviderRegistryCache,
   writeProviderRegistrySnapshot,
 } from '../providerRegistrySnapshot';
 
@@ -99,4 +108,35 @@ it('reads the previous slot when the newer slot is truncated', async () => {
   expect(await readProviderRegistrySnapshots()).toEqual([
     { files, manifest: manifest(1), slot: 'a' },
   ]);
+});
+
+it('persists active slot pointer and parsed cache alongside the durable snapshot', async () => {
+  const parsedSnapshot = {
+    models: { models: [], version: 'models' },
+    providerModels: { overrides: [], version: 'providers' },
+  } as unknown as MobileRemoteRegistrySnapshot;
+
+  const slot = await writeProviderRegistrySnapshot(files, manifest(3), undefined, parsedSnapshot);
+
+  expect(slot).toBe('a');
+  expect(await readActiveProviderRegistrySlot()).toBe('a');
+  expect(await readParsedProviderRegistryCache('a')).toEqual({
+    cacheVersion: PARSED_REGISTRY_CACHE_VERSION,
+    desktopCompatibilityVersion: REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
+    manifest: manifest(3),
+    slot: 'a',
+    snapshot: parsedSnapshot,
+  });
+  expect(await readProviderRegistrySnapshotSlot('a')).toEqual({
+    files,
+    manifest: manifest(3),
+    slot: 'a',
+  });
+
+  // Corrupted parsed cache returns null cleanly without throwing.
+  testState.files.set('/documents/provider-registry/parsed-a.json', '{bad');
+  expect(await readParsedProviderRegistryCache('a')).toBeNull();
+
+  await writeParsedProviderRegistryCache('b', manifest(4), parsedSnapshot);
+  expect(await readActiveProviderRegistrySlot()).toBe('b');
 });

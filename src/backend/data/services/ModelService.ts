@@ -190,6 +190,22 @@ function lookupStoredModel(
   return registryData;
 }
 
+function resolveLegacyMimoApiModelId(
+  row: UserModelRow,
+  providerConfig?: ModelProviderConfig,
+): string | undefined {
+  return row.presetModelId === row.modelId &&
+    (row.providerId === 'mimo' || providerConfig?.presetProviderId === 'mimo')
+    ? LEGACY_MIMO_API_MODEL_IDS.get(row.modelId)
+    : undefined;
+}
+
+function materializeStoredModel(row: UserModelRow, providerConfig?: ModelProviderConfig): Model {
+  const baseline = createCustomModel(row.providerId, row.modelId);
+  const legacyMimoApiModelId = resolveLegacyMimoApiModelId(row, providerConfig);
+  return applyStoredFields(baseline, row, legacyMimoApiModelId ?? row.modelId);
+}
+
 function enrichModelFromRegistry(row: UserModelRow, providerConfig?: ModelProviderConfig): Model {
   const registryData = lookupStoredModel(row, providerConfig);
 
@@ -206,11 +222,7 @@ function enrichModelFromRegistry(row: UserModelRow, providerConfig?: ModelProvid
   const baseline = row.presetModelId
     ? (registryBaseline ?? createCustomModel(row.providerId, row.modelId))
     : createCustomModel(row.providerId, row.modelId);
-  const legacyMimoApiModelId =
-    row.presetModelId === row.modelId &&
-    (row.providerId === 'mimo' || providerConfig?.presetProviderId === 'mimo')
-      ? LEGACY_MIMO_API_MODEL_IDS.get(row.modelId)
-      : undefined;
+  const legacyMimoApiModelId = resolveLegacyMimoApiModelId(row, providerConfig);
   const model = applyStoredFields(
     baseline,
     row,
@@ -438,7 +450,12 @@ export class ModelService {
   }
 
   private async enrichModels(rows: UserModelRow[]): Promise<Model[]> {
+    if (rows.length === 0) return [];
     const configs = await this.getProviderConfigs(rows.map((row) => row.providerId));
+    // First-paint reads can run before the remote registry snapshot installs in PostReady.
+    if (!providerRegistryService.isReady()) {
+      return rows.map((row) => materializeStoredModel(row, configs.get(row.providerId)));
+    }
     return rows.map((row) => enrichModelFromRegistry(row, configs.get(row.providerId)));
   }
 
@@ -449,6 +466,9 @@ export class ModelService {
 
   async list(query: ModelListQuery = {}): Promise<Model[]> {
     const conditions: SQL[] = [];
+    if (query.id) {
+      conditions.push(eq(userModelTable.id, query.id));
+    }
     if (query.providerId) {
       conditions.push(eq(userModelTable.providerId, query.providerId));
     }

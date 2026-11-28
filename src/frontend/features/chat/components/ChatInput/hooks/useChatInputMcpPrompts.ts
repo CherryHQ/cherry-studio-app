@@ -4,8 +4,9 @@ import { useCachedMcpPrompts, useMcpServersApi } from '@/frontend/hooks/mcp/useM
 import { getChatInputMcpPrompts } from '../utils/chatInputMcpPrompts';
 
 export function useChatInputMcpPrompts(agentId: string | undefined) {
+  const enabled = Boolean(agentId);
   const { bindings } = useAgentToolBindingsApi(agentId);
-  const { servers } = useMcpServersApi();
-  const catalogs = useCachedMcpPrompts();
+  const { servers } = useMcpServersApi({ enabled });
+  const catalogs = useCachedMcpPrompts({ enabled });
   return agentId ? getChatInputMcpPrompts(servers, bindings, catalogs) : [];
 }

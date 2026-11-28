@@ -66,10 +66,12 @@ export function ChatToolsMenu<TPanel extends string = never>({
   const { openCamera, openPhotoLibrary } = useComposerMediaActions();
   const openDocumentPicker = useComposerDocumentPicker();
   const [isOpen, setIsOpen] = useState(false);
+  const [sheetMounted, setSheetMounted] = useState(false);
   const [activePanel, setActivePanel] = useState<ActivePanel<TPanel>>(null);
   if (!enabled && isOpen) {
     setIsOpen(false);
     setActivePanel(null);
+    setSheetMounted(false);
   }
   if (isOpen && activePanel?.kind === 'files' && media !== 'all') {
     setActivePanel(null);
@@ -80,6 +82,7 @@ export function ChatToolsMenu<TPanel extends string = never>({
     if (dismissToken) {
       setIsOpen(false);
       setActivePanel(null);
+      setSheetMounted(false);
     }
   }
   const pendingAction = useRef<(() => void) | undefined>(undefined);
@@ -106,6 +109,7 @@ export function ChatToolsMenu<TPanel extends string = never>({
       // A preview only hides these sheets; a deliberate close waits for both exit motions.
       if (!closingSurfaces.current.delete(surface) || closingSurfaces.current.size > 0) return;
       setActivePanel(null);
+      setSheetMounted(false);
       onAfterClose?.();
       const action = pendingAction.current;
       pendingAction.current = undefined;
@@ -134,6 +138,9 @@ export function ChatToolsMenu<TPanel extends string = never>({
   }
 
   const open = isOpen && focused && enabled;
+  if (open && !sheetMounted) {
+    setSheetMounted(true);
+  }
   const panel = activePanel?.kind === 'custom' ? activePanel.id : null;
   const controller = useMemo<ChatToolsMenuController<TPanel>>(
     () => ({
@@ -197,7 +204,7 @@ export function ChatToolsMenu<TPanel extends string = never>({
               ) : null}
             </View>
           ) : null}
-          {renderRows ? (
+          {sheetMounted && renderRows ? (
             <ChatToolsMenuRowsSlot controller={controller} render={renderRows} />
           ) : null}
         </View>
@@ -214,7 +221,7 @@ export function ChatToolsMenu<TPanel extends string = never>({
           returnFocusRef={fileRef}
         />
       ) : null}
-      {renderPanels ? (
+      {(sheetMounted || activePanel !== null) && renderPanels ? (
         <ChatToolsMenuPanelsSlot controller={controller} render={renderPanels} />
       ) : null}
     </>

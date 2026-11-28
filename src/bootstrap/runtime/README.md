@@ -10,7 +10,7 @@ feature UI may render.
 | `createAppBootstrapRuntime.ts` | Creates the stable `Backend`, `ApiClient`, and `PreferenceClient`; defines initialize and dispose ordering |
 | `initializeAppRuntime.ts` | Applies cached boot preferences, initializes i18n, and seeds localized first-run data |
 | `diagnosticRecording.ts` | App-entry process logger and JavaScript exception observers, independent of host or database readiness |
-| `AppBootstrapProvider.tsx` | Owns one runtime per startup attempt, injects its interfaces, tracks startup status, and disposes it |
+| `AppBootstrapProvider.tsx` | Owns one runtime per startup attempt, injects its interfaces, tracks startup status, triggers `AppBootstrapPostReady` after splash dismissal when deferred, and disposes it |
 | `AppBootstrapGate.tsx` | Renders nothing while loading and a retryable failure screen after initialization fails |
 
 ## Startup Contract

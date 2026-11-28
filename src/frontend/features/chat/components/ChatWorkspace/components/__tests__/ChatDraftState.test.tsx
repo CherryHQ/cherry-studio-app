@@ -11,11 +11,17 @@ const mockRouterPush = jest.fn();
 
 let mockAllowedModelIds: readonly string[] | undefined;
 let mockCanEditProviderSettings = true;
+let mockSelectedModelItem = {
+  hasResolved: false,
+  item: undefined as unknown,
+};
 let mockModelPickerData = {
   getModelItem: jest.fn(() => undefined as unknown),
   hasLoadedCatalog: true,
   modelItems: [] as unknown[],
 };
+const mockModelPickerCalls: unknown[] = [];
+const mockSelectedModelCalls: unknown[] = [];
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockRouterPush }),
@@ -40,7 +46,14 @@ jest.mock('@/frontend/components/Avatar', () => {
 });
 
 jest.mock('@/frontend/components/ModelPicker', () => ({
-  useModelPickerData: () => mockModelPickerData,
+  useModelPickerData: (options: unknown) => {
+    mockModelPickerCalls.push(options);
+    return mockModelPickerData;
+  },
+  useSelectedModelItem: (options: unknown) => {
+    mockSelectedModelCalls.push(options);
+    return mockSelectedModelItem;
+  },
 }));
 
 jest.mock('@/frontend/components/Policy', () => ({
@@ -118,6 +131,12 @@ describe('ChatDraftState', () => {
     jest.clearAllMocks();
     mockAllowedModelIds = undefined;
     mockCanEditProviderSettings = true;
+    mockModelPickerCalls.length = 0;
+    mockSelectedModelCalls.length = 0;
+    mockSelectedModelItem = {
+      hasResolved: false,
+      item: undefined,
+    };
     mockModelPickerData = {
       getModelItem: jest.fn(() => undefined),
       hasLoadedCatalog: true,
@@ -231,6 +250,40 @@ describe('ChatDraftState', () => {
     expect(collectText(renderer!.root)).toBe('No models available');
     expect(renderer!.root.findAllByProps({ testID: 'chat-draft-add-provider' })).toHaveLength(0);
     expect(renderer!.root.findAllByProps({ testID: 'chat-draft-desktop-sync' })).toHaveLength(0);
+  });
+
+  test('resolves a configured modelId without enabling the full catalog picker query', async () => {
+    mockSelectedModelItem = {
+      hasResolved: true,
+      item: { modelId: 'openai::gpt-4o' },
+    };
+
+    await renderDraftState({
+      modelSetup: { ...defaultModelSetup, modelId: 'openai::gpt-4o' },
+    });
+
+    expect(mockSelectedModelCalls).toContainEqual({
+      enabled: true,
+      modelId: 'openai::gpt-4o',
+      modelType: 'all',
+    });
+    expect(mockModelPickerCalls).toContainEqual({
+      enabled: false,
+      modelType: 'all',
+    });
+    expect(renderer!.root.findAllByProps({ testID: 'chat-draft-avatar' })).toHaveLength(1);
+    expect(collectText(renderer!.root)).toBe('What should we create together today?');
+
+    // If the configured model turns out to be deleted or disabled, fall back to the full catalog.
+    mockSelectedModelItem = { hasResolved: true, item: undefined };
+    await renderDraftState({
+      modelSetup: { ...defaultModelSetup, modelId: 'openai::gpt-4o' },
+    });
+    expect(mockModelPickerCalls).toContainEqual({
+      enabled: true,
+      modelType: 'all',
+    });
+    expect(collectText(renderer!.root)).toContain('Connect a provider');
   });
 
   async function renderDraftState({ modelSetup }: { modelSetup?: ChatDraftModelSetup }) {

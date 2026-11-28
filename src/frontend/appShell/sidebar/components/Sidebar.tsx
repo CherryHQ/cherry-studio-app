@@ -17,6 +17,7 @@ import { useCanDockSidebar } from '@/frontend/appShell/layout';
 import { useChatSource, useConversationTarget } from '@/frontend/appShell/navigation/chat';
 import { useOptionalNavigationShellActions } from '@/frontend/appShell/navigationShell/state';
 import type { AppSearchPanelProps } from '@/frontend/appShell/search';
+import { useStartupCoverVisible } from '@/frontend/appShell/startup';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { appSidebar } from '@/frontend/utils/constants';
 
@@ -28,7 +29,7 @@ import {
   useSessionSearch,
   useSessionSearchRequest,
 } from '../hooks/useSessionSearch';
-import { OverlaySidebarPresenceProvider } from '../hooks/useSidebarPresence';
+import { OverlaySidebarPresenceProvider, useSidebarPresence } from '../hooks/useSidebarPresence';
 import { useSidebarColumn } from '../SidebarColumn';
 import { SidebarSelectionProvider } from '../SidebarSelectionProvider';
 import { SidebarBody } from './SidebarBody';
@@ -51,6 +52,8 @@ function getContentStack(navigation: SidebarNavigation) {
   return route?.state as NavigationState | undefined;
 }
 
+const SIDEBAR_WARMUP_DELAY_MS = 250;
+
 /** The overlay uses the Drawer navigator for its native animation and close lifecycle. */
 export function Sidebar({
   navigation,
@@ -65,13 +68,51 @@ export function Sidebar({
   if (canDock) return null;
   return (
     <OverlaySidebarPresenceProvider>
-      <SidebarContent
-        drawer={navigation}
+      <DeferredOverlaySidebar
+        navigation={navigation}
         cancelPending={cancelPending}
         waitForClose={waitForClose}
         searchPanel={searchPanel}
       />
     </OverlaySidebarPresenceProvider>
+  );
+}
+
+function DeferredOverlaySidebar({
+  cancelPending,
+  navigation,
+  searchPanel,
+  waitForClose,
+}: SidebarProps & {
+  cancelPending: () => void;
+  navigation: SidebarNavigation;
+  waitForClose: SidebarActions['prepareExternalNavigation'];
+}) {
+  const presence = useSidebarPresence();
+  const coverVisible = useStartupCoverVisible();
+  const [mounted, setMounted] = useState(() => presence !== 'closed' || !coverVisible);
+
+  if (presence !== 'closed' && !mounted) {
+    setMounted(true);
+  }
+
+  useEffect(() => {
+    if (mounted || coverVisible) return;
+    const timer = setTimeout(() => setMounted(true), SIDEBAR_WARMUP_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [coverVisible, mounted]);
+
+  if (!mounted) {
+    return <View className="flex-1" />;
+  }
+
+  return (
+    <SidebarContent
+      drawer={navigation}
+      cancelPending={cancelPending}
+      waitForClose={waitForClose}
+      searchPanel={searchPanel}
+    />
   );
 }
 

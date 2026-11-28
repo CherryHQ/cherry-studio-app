@@ -127,14 +127,32 @@ jest.mock('@/frontend/components/McpApp', () => ({
   useMcpAppConversation: () => undefined,
   McpAppContextNotice: () => null,
 }));
+const mockUseModelPickerDataCalls: unknown[] = [];
+const mockUseSelectedModelItemCalls: unknown[] = [];
+
 jest.mock('@/frontend/components/ModelPicker', () => ({
-  useModelPickerData: () => ({
-    hasLoadedCatalog: mockHasLoadedCatalog,
-    getModelItem: (id: string | null) =>
-      id && (!mockHasLoadedCatalog || mockCatalogModels.has(id))
-        ? { ...mockModelItem, modelId: id, model: { id } }
-        : undefined,
-  }),
+  useModelPickerData: (options: unknown) => {
+    mockUseModelPickerDataCalls.push(options);
+    return {
+      hasLoadedCatalog: mockHasLoadedCatalog,
+      getModelItem: (id: string | null) =>
+        id && (!mockHasLoadedCatalog || mockCatalogModels.has(id))
+          ? { ...mockModelItem, modelId: id, model: { id } }
+          : undefined,
+    };
+  },
+  useSelectedModelItem: ({ enabled, modelId }: { enabled?: boolean; modelId: string | null }) => {
+    mockUseSelectedModelItemCalls.push({ enabled, modelId });
+    return {
+      error: undefined,
+      hasResolved: true,
+      isLoading: false,
+      item:
+        enabled !== false && modelId && (!mockHasLoadedCatalog || mockCatalogModels.has(modelId))
+          ? { ...mockModelItem, modelId, model: { id: modelId } }
+          : undefined,
+    };
+  },
   ModelPickerDrawer: () => null,
 }));
 jest.mock('@/shared/utils/modelPurpose', () => ({
@@ -203,6 +221,8 @@ beforeEach(() => {
   mockGetRememberedTarget.mockReset();
   mockDecideRememberedTarget.mockReset();
   mockDraft = '';
+  mockUseModelPickerDataCalls.length = 0;
+  mockUseSelectedModelItemCalls.length = 0;
   mockControls.canSend = true;
   mockControls.isBusy = false;
   mockEditMessage.mockResolvedValue(undefined);
@@ -634,4 +654,15 @@ test('disables manual compaction on ChatInputSurface when canSend is false even 
     );
   });
   expect(renderer.root.findByType('TextSurface' as never).props.compactDisabled).toBe(false);
+});
+
+test('keeps full model catalog disabled on initial single-model mount until user changes draft or parallel models', async () => {
+  mockAgentModel = 'p::m' as UniqueModelId;
+  await act(async () => {
+    renderer = create(<ChatInput agentId="a" controls={mockControls as never} />);
+  });
+
+  expect(mockUseModelPickerDataCalls).toContainEqual({ enabled: false, modelType: 'all' });
+  expect(mockUseSelectedModelItemCalls).toContainEqual({ enabled: true, modelId: 'p::m' });
+  expect(renderer.root.findByType('TextComposer' as never).props.canSend).toBe(true);
 });

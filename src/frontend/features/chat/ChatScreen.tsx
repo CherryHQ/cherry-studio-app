@@ -114,10 +114,13 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
   const isFocused = useIsFocused() && !isPreview;
   const agentId = target.kind === 'draft' ? target.agentId : undefined;
   const sessionId = target.kind === 'session' ? target.sessionId : undefined;
-  const workspace = useFileWorkspace({
-    sessionId,
-    workspaceDraftId: target.kind === 'draft' ? target.workspaceDraftId : undefined,
-  });
+  const workspace = useFileWorkspace(
+    {
+      sessionId,
+      workspaceDraftId: target.kind === 'draft' ? target.workspaceDraftId : undefined,
+    },
+    { loadFolders: false },
+  );
   const draftHandoff = useAgentChatDraftHandoff(sessionId);
   const { composerSession, completeAppend } = useChatComposerSession(target, draftHandoff);
   const session = useAgentSession(sessionId);

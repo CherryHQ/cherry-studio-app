@@ -12,8 +12,10 @@ const EMPTY_PROVIDERS: readonly Provider[] = Object.freeze([]);
  * on every open. `ProviderService.list` pins Plan first and then keeps saved `orderKey`
  * ordering; filtering on `isEnabled` below preserves that same order.
  */
-export function useProviders(query: { enabled?: boolean } = {}) {
-  const providersQuery = useQuery('/providers');
+export function useProviders(query: { enabled?: boolean } = {}, options?: { enabled?: boolean }) {
+  const providersQuery = useQuery('/providers', {
+    enabled: options?.enabled,
+  });
   const { enabled } = query;
   const { data } = providersQuery;
   const providers = useMemo(() => {

@@ -7,7 +7,11 @@ import { Text, View } from 'react-native';
 
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
 import { AgentAvatar } from '@/frontend/components/Avatar';
-import { type ModelTypeFilter, useModelPickerData } from '@/frontend/components/ModelPicker';
+import {
+  type ModelTypeFilter,
+  useModelPickerData,
+  useSelectedModelItem,
+} from '@/frontend/components/ModelPicker';
 import { useModelChoice } from '@/frontend/components/Policy';
 import { capabilityPolicy } from '@/shared/data/managedPolicy';
 import type { UniqueModelId } from '@/shared/data/types/model';
@@ -97,12 +101,26 @@ function LocalDraftContent({
   const { t } = useTranslation();
   const router = useRouter();
   const { allowedModelIds } = useModelChoice();
-  const { getModelItem, hasLoadedCatalog, modelItems } = useModelPickerData({ modelType });
+  const selected = useSelectedModelItem({
+    enabled: !allowedModelIds && Boolean(modelId),
+    modelId,
+    modelType,
+  });
+  const needsCatalogFallback =
+    !allowedModelIds && (!modelId || (selected.hasResolved && !selected.item));
+  const { getModelItem, hasLoadedCatalog, modelItems } = useModelPickerData({
+    enabled: needsCatalogFallback,
+    modelType,
+  });
   const openProviderSetup = useOpenProviderSetup(returnTo);
 
   // A managed Agent takes its model choices from the organization.
   const hasAvailableModel = Boolean(
-    allowedModelIds || !hasLoadedCatalog || modelItems.length > 0 || getModelItem(modelId),
+    allowedModelIds ||
+    (modelId && (!selected.hasResolved || selected.item)) ||
+    !hasLoadedCatalog ||
+    modelItems.length > 0 ||
+    getModelItem(modelId),
   );
   const canAddProvider = capabilityPolicy('providerSettings').canEdit('providerSettings');
 

@@ -1,5 +1,6 @@
 import {
   type CatalogManifest,
+  PARSED_REGISTRY_CACHE_VERSION,
   REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
   REGISTRY_SCHEMA_VERSION,
 } from '@/backend/data/services/MobileRegistryLoader';
@@ -8,7 +9,11 @@ import { HttpError } from '@/backend/services/http';
 import type { NetworkRegion } from '@/backend/services/region';
 
 import {
+  readActiveProviderRegistrySlot,
+  readParsedProviderRegistryCache,
   readProviderRegistrySnapshots,
+  readProviderRegistrySnapshotSlot,
+  writeParsedProviderRegistryCache,
   writeProviderRegistrySnapshot,
 } from '../providerRegistrySnapshot';
 import { ProviderRegistryUpdaterService } from '../ProviderRegistryUpdaterService';
@@ -26,7 +31,11 @@ jest.mock('@/backend/services/http', () => ({
   }),
 }));
 jest.mock('../providerRegistrySnapshot', () => ({
+  readActiveProviderRegistrySlot: jest.fn(),
+  readParsedProviderRegistryCache: jest.fn(),
   readProviderRegistrySnapshots: jest.fn(),
+  readProviderRegistrySnapshotSlot: jest.fn(),
+  writeParsedProviderRegistryCache: jest.fn(),
   writeProviderRegistrySnapshot: jest.fn(),
 }));
 
@@ -77,7 +86,10 @@ beforeEach(() => {
   mockGetRegion.mockResolvedValue('GLOBAL');
   providerRegistryService.clearRemoteSnapshot();
   providerRegistryUpdates.clear();
+  jest.mocked(readActiveProviderRegistrySlot).mockResolvedValue(null);
+  jest.mocked(readParsedProviderRegistryCache).mockResolvedValue(null);
   jest.mocked(readProviderRegistrySnapshots).mockResolvedValue([]);
+  jest.mocked(readProviderRegistrySnapshotSlot).mockResolvedValue(null);
   jest.mocked(writeProviderRegistrySnapshot).mockResolvedValue('a');
   updater = new Updater();
 });
@@ -139,6 +151,7 @@ it('starts from the saved snapshot without contacting the network until a model 
     expect.anything(),
     expect.objectContaining({ revision: 2 }),
     'a',
+    expect.anything(),
   );
   await expect(updater.applyUpdate()).resolves.toEqual({ status: 'current' });
 });
@@ -208,6 +221,7 @@ it('migrates a cached v3 schema to v4 even when its revision is higher', async (
     expect.anything(),
     expect.objectContaining({ schemaVersion: 4, revision: 2 }),
     'a',
+    expect.anything(),
   );
   expect(mockRequest.mock.calls.every(([source]) => source.endsWith('/v4'))).toBe(true);
 });
@@ -233,6 +247,7 @@ it('downloads v4 when the producer version predates its minimum reader', async (
     expect.anything(),
     expect.objectContaining({ schemaVersion: 4, minAppVersion: '2.1.11' }),
     undefined,
+    expect.anything(),
   );
 });
 
@@ -277,6 +292,7 @@ it('keeps first download retryable after cooldown and uses the fallback host', a
     remote.files,
     remote.manifest,
     undefined,
+    expect.anything(),
   );
 });
 
@@ -418,4 +434,73 @@ it('lets explicit forced retry recover immediately after an offline cold-start c
   expect(providerRegistryService.isReady()).toBe(true);
   expect(mockRequest).toHaveBeenCalledTimes(5);
   clock.mockRestore();
+});
+
+it('cold-starts from the active slot parsed cache without reading raw snapshots or running Zod', async () => {
+  const cached = snapshot(2);
+  const parsedSnapshot = providerRegistryService.parseRemoteSnapshot({
+    models: JSON.parse(cached.files['models.json']),
+    providerModels: JSON.parse(cached.files['provider-models.json']),
+  });
+  const parseSpy = jest.spyOn(providerRegistryService, 'parseRemoteSnapshot');
+  jest.mocked(readActiveProviderRegistrySlot).mockResolvedValue('b');
+  jest.mocked(readParsedProviderRegistryCache).mockResolvedValue({
+    cacheVersion: PARSED_REGISTRY_CACHE_VERSION,
+    desktopCompatibilityVersion: REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
+    manifest: cached.manifest,
+    slot: 'b',
+    snapshot: parsedSnapshot,
+  });
+
+  await updater.start();
+
+  expect(providerRegistryService.isReady()).toBe(true);
+  expect(providerRegistryService.getCatalogVersion('models.json')).toBe('models-2');
+  expect(parseSpy).not.toHaveBeenCalled();
+  expect(readParsedProviderRegistryCache).toHaveBeenCalledTimes(1);
+  expect(readParsedProviderRegistryCache).toHaveBeenCalledWith('b');
+  expect(readProviderRegistrySnapshotSlot).not.toHaveBeenCalled();
+  expect(readProviderRegistrySnapshots).not.toHaveBeenCalled();
+});
+
+it('falls back to the active raw snapshot and refreshes cache when parsed cache is stale', async () => {
+  const raw = snapshot(3);
+  jest.mocked(readActiveProviderRegistrySlot).mockResolvedValue('a');
+  jest.mocked(readParsedProviderRegistryCache).mockResolvedValue({
+    cacheVersion: 0,
+    desktopCompatibilityVersion: REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
+    manifest: raw.manifest,
+    slot: 'a',
+    snapshot: {},
+  });
+  jest.mocked(readProviderRegistrySnapshotSlot).mockResolvedValueOnce({ ...raw, slot: 'a' });
+
+  await updater.start();
+
+  expect(providerRegistryService.getCatalogVersion('models.json')).toBe('models-3');
+  expect(readProviderRegistrySnapshotSlot).toHaveBeenCalledTimes(1);
+  expect(readProviderRegistrySnapshotSlot).toHaveBeenCalledWith('a');
+  expect(writeParsedProviderRegistryCache).toHaveBeenCalledWith(
+    'a',
+    raw.manifest,
+    expect.objectContaining({
+      models: expect.objectContaining({ version: 'models-3' }),
+    }),
+  );
+});
+
+it('falls back to the previous slot when the active slot snapshot is invalid', async () => {
+  const corrupt = snapshot(2);
+  corrupt.files['models.json'] = JSON.stringify({ version: 'mismatched', models: [] });
+  jest.mocked(readActiveProviderRegistrySlot).mockResolvedValue('b');
+  jest.mocked(readParsedProviderRegistryCache).mockResolvedValue(null);
+  jest
+    .mocked(readProviderRegistrySnapshotSlot)
+    .mockResolvedValueOnce({ ...corrupt, slot: 'b' })
+    .mockResolvedValueOnce({ ...snapshot(1), slot: 'a' });
+
+  await updater.ensureReady();
+
+  expect(providerRegistryService.getCatalogVersion('models.json')).toBe('models-1');
+  expect(mockRequest).not.toHaveBeenCalled();
 });

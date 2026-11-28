@@ -4,7 +4,7 @@ import TerminalIcon from '@cherrystudio/app-icons/icons/terminal';
 import ToolCaseIcon from '@cherrystudio/app-icons/icons/tool-case';
 import { Image } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
+import { type RefObject, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type ViewInstance } from 'react-native';
 import { v7 as uuidv7 } from 'uuid';
@@ -16,10 +16,11 @@ import {
 } from '@/frontend/appShell/navigation/chat';
 import { type FileWorkspaceAddress, useFileWorkspace } from '@/frontend/hooks/file';
 import { useMcpIcon } from '@/frontend/hooks/mcp/useMcpIcon';
+import { usePluginCatalog, usePluginConnections } from '@/frontend/hooks/plugin';
 
 import { FileWorkspaceSheet } from '../../FileWorkspaceSheet';
-import type { ChatInputMcpPrompt } from '../utils/chatInputMcpPrompts';
-import type { ChatInputPlugin } from '../utils/chatInputPlugins';
+import { useChatInputMcpPrompts } from '../hooks/useChatInputMcpPrompts';
+import { getConnectedChatInputPlugins } from '../utils/chatInputPlugins';
 import { ChatInputPluginSheet } from './ChatInputPluginSheet';
 import { ChatInputPromptSheet } from './ChatInputPromptSheet';
 import { ChatInputSkillSheet } from './ChatInputSkillSheet';
@@ -27,6 +28,7 @@ import { ChatInputSshSheet } from './ChatInputSsh';
 import { ChatToolsMenu, ChatToolsMenuRow } from './ChatToolsMenu';
 
 type ToolPanel = 'workspace' | 'plugins' | 'skills' | 'prompts' | 'ssh';
+type ReadyChatTarget = Extract<ReturnType<typeof parseChatRoute>, { status: 'ready' }>['target'];
 
 /** The tool menu stays mounted beneath its independently dismissible child sheet. */
 export function ChatInputMenu({
@@ -34,8 +36,8 @@ export function ChatInputMenu({
   enabled,
   media,
   onPickSsh,
-  plugins,
-  prompts,
+  promptAgentId,
+  showPlugins = false,
   skillAgentId,
   sshContextId,
 }: {
@@ -43,8 +45,8 @@ export function ChatInputMenu({
   enabled: boolean;
   media: 'all' | 'images';
   onPickSsh?: () => void;
-  plugins?: readonly ChatInputPlugin[];
-  prompts: readonly ChatInputMcpPrompt[];
+  promptAgentId?: string;
+  showPlugins?: boolean;
   skillAgentId?: string;
   sshContextId?: string;
 }) {
@@ -52,11 +54,6 @@ export function ChatInputMenu({
   const router = useRouter();
   const route = parseChatRoute(useLocalSearchParams<ChatRouteParamsInput>());
   const target = route.status === 'ready' ? route.target : undefined;
-  const workspace = useFileWorkspace({
-    sessionId: target?.kind === 'session' ? target.sessionId : undefined,
-    workspaceDraftId: target?.kind === 'draft' ? target.workspaceDraftId : undefined,
-  });
-  const mcpIcon = useMcpIcon();
   const [workspaceAddress, setWorkspaceAddress] = useState<FileWorkspaceAddress>();
   if (!enabled && workspaceAddress) {
     setWorkspaceAddress(undefined);
@@ -98,16 +95,13 @@ export function ChatInputMenu({
       renderRows={(menu) => (
         <>
           {target ? (
-            <ChatToolsMenuRow
-              icon={<FolderIcon className="size-5 text-muted-foreground" />}
-              label={t('library.folders.title')}
-              value={workspace.workspace?.name ?? t('workspace.none')}
+            <ChatInputWorkspaceRow
               onPress={() => openWorkspace(menu.openPanel)}
-              ref={workspaceRef}
-              testID="chat-file-workspace"
+              rowRef={workspaceRef}
+              target={target}
             />
           ) : null}
-          {plugins ? (
+          {showPlugins ? (
             <ChatToolsMenuRow
               icon={<BoxesIcon className="size-5 text-muted-foreground" />}
               label={t('plugins.title')}
@@ -125,13 +119,11 @@ export function ChatInputMenu({
               testID="chat-composer-skills"
             />
           ) : null}
-          {prompts.length > 0 ? (
-            <ChatToolsMenuRow
-              icon={<Image className="size-5" contentFit="contain" source={mcpIcon} />}
-              label={t('plugins.mcp.title')}
+          {promptAgentId ? (
+            <ChatInputMcpPromptRow
               onPress={() => menu.openPanel('prompts')}
-              ref={promptRef}
-              testID="chat-composer-prompts"
+              promptAgentId={promptAgentId}
+              rowRef={promptRef}
             />
           ) : null}
           {onPickSsh ? (
@@ -160,9 +152,8 @@ export function ChatInputMenu({
               returnFocusRef={workspaceRef}
             />
           ) : null}
-          {menu.panel === 'plugins' && plugins ? (
-            <ChatInputPluginSheet
-              plugins={plugins}
+          {menu.panel === 'plugins' && showPlugins ? (
+            <ChatInputPluginPanel
               onClose={menu.closePanel}
               onClosed={menu.onPanelClosed}
               onSelect={menu.completeSelection}
@@ -192,14 +183,14 @@ export function ChatInputMenu({
               returnFocusRef={skillRef}
             />
           ) : null}
-          {menu.panel === 'prompts' ? (
-            <ChatInputPromptSheet
+          {menu.panel === 'prompts' && promptAgentId ? (
+            <ChatInputPromptPanel
               agentId={agentId}
-              prompts={prompts}
               onClose={menu.closePanel}
               onClosed={menu.onPanelClosed}
               onSelect={menu.completeSelection}
               open={menu.open}
+              promptAgentId={promptAgentId}
               returnFocusRef={promptRef}
             />
           ) : null}
@@ -215,6 +206,126 @@ export function ChatInputMenu({
           ) : null}
         </>
       )}
+    />
+  );
+}
+
+function ChatInputWorkspaceRow({
+  onPress,
+  rowRef,
+  target,
+}: {
+  onPress: () => void;
+  rowRef: RefObject<ViewInstance | null>;
+  target: ReadyChatTarget;
+}) {
+  const { t } = useTranslation();
+  const workspace = useFileWorkspace({
+    sessionId: target.kind === 'session' ? target.sessionId : undefined,
+    workspaceDraftId: target.kind === 'draft' ? target.workspaceDraftId : undefined,
+  });
+
+  return (
+    <ChatToolsMenuRow
+      icon={<FolderIcon className="size-5 text-muted-foreground" />}
+      label={t('library.folders.title')}
+      value={workspace.workspace?.name ?? t('workspace.none')}
+      onPress={onPress}
+      ref={rowRef}
+      testID="chat-file-workspace"
+    />
+  );
+}
+
+function ChatInputMcpPromptRow({
+  onPress,
+  promptAgentId,
+  rowRef,
+}: {
+  onPress: () => void;
+  promptAgentId: string;
+  rowRef: RefObject<ViewInstance | null>;
+}) {
+  const { t } = useTranslation();
+  const mcpIcon = useMcpIcon();
+  const prompts = useChatInputMcpPrompts(promptAgentId);
+
+  if (prompts.length === 0) return null;
+
+  return (
+    <ChatToolsMenuRow
+      icon={<Image className="size-5" contentFit="contain" source={mcpIcon} />}
+      label={t('plugins.mcp.title')}
+      onPress={onPress}
+      ref={rowRef}
+      testID="chat-composer-prompts"
+    />
+  );
+}
+
+function ChatInputPluginPanel({
+  onClose,
+  onClosed,
+  onConnect,
+  onSelect,
+  open,
+  returnFocusRef,
+}: {
+  onClose: () => void;
+  onClosed: () => void;
+  onConnect: () => void;
+  onSelect: () => void;
+  open: boolean;
+  returnFocusRef: RefObject<ViewInstance | null>;
+}) {
+  const pluginCatalog = usePluginCatalog();
+  const pluginConnections = usePluginConnections();
+  const connectedPlugins =
+    pluginCatalog.isError || pluginConnections.isError
+      ? []
+      : getConnectedChatInputPlugins(pluginCatalog.data, pluginConnections.data);
+
+  return (
+    <ChatInputPluginSheet
+      plugins={connectedPlugins}
+      onClose={onClose}
+      onClosed={onClosed}
+      onSelect={onSelect}
+      onConnect={onConnect}
+      open={open}
+      returnFocusRef={returnFocusRef}
+    />
+  );
+}
+
+function ChatInputPromptPanel({
+  agentId,
+  onClose,
+  onClosed,
+  onSelect,
+  open,
+  promptAgentId,
+  returnFocusRef,
+}: {
+  agentId?: string;
+  onClose: () => void;
+  onClosed: () => void;
+  onSelect: () => void;
+  open: boolean;
+  promptAgentId: string;
+  returnFocusRef: RefObject<ViewInstance | null>;
+}) {
+  const prompts = useChatInputMcpPrompts(promptAgentId);
+
+  return (
+    <ChatInputPromptSheet
+      agentId={agentId}
+      prompts={prompts}
+      onClose={onClose}
+      onClosed={onClosed}
+      onSelect={onSelect}
+      open={open}
+      returnFocusRef={returnFocusRef}
     />
   );
 }

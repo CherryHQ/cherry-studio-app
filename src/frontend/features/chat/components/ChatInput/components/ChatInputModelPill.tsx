@@ -28,8 +28,6 @@ export function ChatInputModelPill({
   onPress: () => void;
   replyModels: readonly UniqueModelId[] | null;
 }) {
-  const { t } = useTranslation();
-  const modelPickerData = useModelPickerData({ modelType: 'all' });
   if (!replyModels)
     return (
       <ComposerModelPill
@@ -42,6 +40,26 @@ export function ChatInputModelPill({
         onPress={onPress}
       />
     );
+  return (
+    <StackedReplyModelPill
+      onClearReplyModels={onClearReplyModels}
+      onPress={onPress}
+      replyModels={replyModels}
+    />
+  );
+}
+
+function StackedReplyModelPill({
+  onClearReplyModels,
+  onPress,
+  replyModels,
+}: {
+  onClearReplyModels: () => void;
+  onPress: () => void;
+  replyModels: readonly UniqueModelId[];
+}) {
+  const { t } = useTranslation();
+  const modelPickerData = useModelPickerData({ modelType: 'all' });
   const stacked = replyModels
     .slice(0, STACKED_AVATAR_COUNT)
     .flatMap((modelId) => modelPickerData.getModelItem(modelId) ?? []);

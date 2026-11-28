@@ -23,6 +23,9 @@ export type ProviderModelsBundle = ReturnType<typeof ProviderModelListSchema.par
 /** Includes GPT Image complexity and animated GIF generation. */
 export const REGISTRY_SCHEMA_VERSION = 4;
 
+/** Bump when the parsed snapshot cache structure changes incompatibly. */
+export const PARSED_REGISTRY_CACHE_VERSION = 1;
+
 /**
  * Desktop registry semantic baseline supported by Mobile's consumed fields.
  *
@@ -252,6 +255,54 @@ export class MobileRegistryLoader {
     };
   }
 
+  /**
+   * O(1) structural check for an already-validated parsed snapshot read from local disk.
+   * Avoids re-running full Zod schemas over thousands of models on every cold launch.
+   */
+  hydrateCachedSnapshot(
+    input: unknown,
+    expectedVersions: { modelsVersion: string; providerModelsVersion: string },
+  ): MobileRemoteRegistrySnapshot | null {
+    if (!isRecord(input)) return null;
+    const { models, providerModels } = input;
+    if (!isRecord(models) || !isRecord(providerModels)) return null;
+    if (
+      models.version !== expectedVersions.modelsVersion ||
+      !Array.isArray(models.models) ||
+      providerModels.version !== expectedVersions.providerModelsVersion ||
+      !Array.isArray(providerModels.overrides)
+    ) {
+      return null;
+    }
+    if (models.models.length > 0) {
+      const firstModel = models.models[0];
+      const lastModel = models.models.at(-1);
+      if (
+        !isRecord(firstModel) ||
+        typeof firstModel.id !== 'string' ||
+        !isRecord(lastModel) ||
+        typeof lastModel.id !== 'string'
+      ) {
+        return null;
+      }
+    }
+    if (providerModels.overrides.length > 0) {
+      const firstOverride = providerModels.overrides[0];
+      const lastOverride = providerModels.overrides.at(-1);
+      if (
+        !isRecord(firstOverride) ||
+        typeof firstOverride.providerId !== 'string' ||
+        typeof firstOverride.modelId !== 'string' ||
+        !isRecord(lastOverride) ||
+        typeof lastOverride.providerId !== 'string' ||
+        typeof lastOverride.modelId !== 'string'
+      ) {
+        return null;
+      }
+    }
+    return input as MobileRemoteRegistrySnapshot;
+  }
+
   installRemoteSnapshot(snapshot: MobileRemoteRegistrySnapshot): void {
     this.remoteSnapshot = snapshot;
     this.registry = null;
@@ -279,6 +330,10 @@ export class MobileRegistryLoader {
     return this.getRegistry().getOverridesForProvider(providerId);
   }
 }
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 let sharedLoader: MobileRegistryLoader | null = null;
 
 export function getMobileRegistryLoader(): MobileRegistryLoader {

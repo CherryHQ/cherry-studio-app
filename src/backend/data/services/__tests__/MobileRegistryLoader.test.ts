@@ -440,4 +440,30 @@ describe('MobileRegistryLoader', () => {
     });
     expect(loader.getProviderModelsVersion()).toBe('remote-provider-models');
   });
+
+  it('hydrates valid pre-parsed snapshots in O(1) and rejects mismatched or malformed ones', () => {
+    const loader = new MobileRegistryLoader();
+    const parsed = loader.parseRemoteSnapshot({ models, providerModels });
+    const versions = {
+      modelsVersion: parsed.models.version,
+      providerModelsVersion: parsed.providerModels.version,
+    };
+
+    expect(loader.hydrateCachedSnapshot(parsed, versions)).toBe(parsed);
+    expect(
+      loader.hydrateCachedSnapshot(parsed, { ...versions, modelsVersion: 'stale-version' }),
+    ).toBeNull();
+    expect(
+      loader.hydrateCachedSnapshot({ models: { version: 'x', models: [{}] } }, versions),
+    ).toBeNull();
+    expect(
+      loader.hydrateCachedSnapshot(
+        {
+          models: { version: versions.modelsVersion, models: [{ notId: 1 }] },
+          providerModels: { version: versions.providerModelsVersion, overrides: [] },
+        },
+        versions,
+      ),
+    ).toBeNull();
+  });
 });
