@@ -15,7 +15,7 @@ export {
   takeChatSelectionHandoff,
   type ChatComposerHandoff,
 } from './chatComposerHandoff';
-export { ChatSourceProvider, useChatSource } from './ChatSourceProvider';
+export { ChatSourceProvider, useChatSource, useOptionalChatSource } from './ChatSourceProvider';
 export {
   remoteChatHref,
   parseRemoteChatRoute,
@@ -25,3 +25,9 @@ export {
 export { OpenRemoteSessionSheetContext, type RemoteSessionSheetTarget } from './remoteSessionSheet';
 
 export { conversationHref, useConversationTarget } from './conversationRoute';
+export {
+  teamChatHref,
+  parseTeamChatRoute,
+  type TeamChatTarget,
+  type TeamChatRouteParams,
+} from './teamChatRoute';

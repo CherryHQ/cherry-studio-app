@@ -122,6 +122,11 @@ start another send or clear a newer draft while the first is pending. `useCompos
 covers preparation, admission, and failure recovery; it does not wait for background generation.
 Failure restoration also retains text and attachments added while the send was pending. A rejection named `AbortError` is a send the user stopped: the draft is restored without a failure notice. Pasting is baked into `ComposerField` for the same reason.
 
+`sendPolicy="confirmed"` retains the draft and attachments until admission succeeds. It then clears
+only matching text and the submitted attachment IDs, preserving newer edits. Rejection leaves the
+field intact. Team chat uses this policy because network ambiguity requires a user decision before
+another send; its composer permits text only and owns no persistent draft recovery.
+
 The full checklist for it is the behaviour contract in
 `src/frontend/features/chat/components/ChatInput/README.md` — that is the screen you actually
 walk to verify it.

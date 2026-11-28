@@ -6,8 +6,10 @@ import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 
 import { ConversationSourceBoundary } from '@/frontend/appShell/conversation';
+import { TeamCatalogOverlayProvider } from '@/frontend/appShell/conversation/team';
 import { useChatSource } from '@/frontend/appShell/navigation/chat';
 
+import { useSidebarPresence } from '../hooks/useSidebarPresence';
 import { useSidebarSelection, useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
 import { SidebarConversationList } from './SidebarConversationList';
 import { SidebarDesktopSource } from './SidebarDesktopSource';
@@ -20,9 +22,10 @@ export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProp
   const { t } = useTranslation();
   const { source, remoteTarget, viewMode: mode, setViewMode: setMode } = useChatSource();
   const { toast } = useToast();
+  const visible = useSidebarPresence() !== 'closed';
   const isSelecting = useSidebarSelectionSnapshot((state) => state.isSelecting);
   const isDeleting = useSidebarSelectionSnapshot((state) => state.isDeleting);
-  const loadingKey = `${source}:${remoteTarget.connectionId ?? ''}:${mode}`;
+  const loadingKey = `${source === 'remote' ? (remoteTarget.connectionId ?? '') : 'phone'}:${mode}`;
   const [loadingFeedback, setLoadingFeedback] = useState<string>();
   useEffect(() => {
     const timer = setTimeout(() => setLoadingFeedback(loadingKey), 200);
@@ -113,7 +116,9 @@ export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProp
           )
         }
       >
-        {content}
+        <TeamCatalogOverlayProvider enabled={visible} loadSessions={mode === 'sessions'}>
+          {content}
+        </TeamCatalogOverlayProvider>
       </ConversationSourceBoundary>
     </>
   );

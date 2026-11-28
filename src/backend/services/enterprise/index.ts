@@ -2,3 +2,4 @@ export { AccountRuntime, type AccountRuntimeOptions } from './account/AccountRun
 export { createPrivateAccountApi } from './account/privateAccountApi';
 export { createEnterpriseApi, type EnterpriseApi, type EnterpriseSession } from './enterpriseApi';
 export { EnterpriseSyncService } from './sync/EnterpriseSyncService';
+export { createEnterpriseTeamAdapter } from './teamAgent/createEnterpriseTeamAdapter';

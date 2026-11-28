@@ -90,7 +90,7 @@ export const DiagnosticFeedbackContextSchema = z.strictObject({
   feature: DiagnosticFeedbackFeatureSchema,
   capturedAt: z.iso.datetime({ offset: true }),
   occurredAt: z.iso.datetime({ offset: true }).optional(),
-  executionSource: z.enum(['local', 'desktop']).optional(),
+  executionSource: z.enum(['local', 'desktop', 'team']).optional(),
   sessionId: DiagnosticIdentifierSchema.optional(),
   agentId: DiagnosticIdentifierSchema.optional(),
   executionId: DiagnosticIdentifierSchema.optional(),

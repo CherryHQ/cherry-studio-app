@@ -153,6 +153,12 @@ consume the common boundary, and the superseded Controller entry is removed. Loc
 admission, managed export asset leases, pairing-channel adoption and device acceptance remain
 incomplete. Question responses and default-workspace creation need desktop protocol support.
 
+Team service execution uses the separate app-owned `TeamAgentRuntime`, composed in bootstrap and
+exposed through `Backend.teamAgent`. It owns only memory values, drafts and observation; protocol
+adapters own authorization and submission recovery. A route releases observation while admitted
+submissions settle independently. Reauthentication retires all old Team content and handles.
+See [Team Agent](./team-agent.md) for the current graph and capability map.
+
 ## Agent Tool Capabilities
 
 The Agent Host owns immutable per-turn tool snapshots, the monotonic resource ledger, approval

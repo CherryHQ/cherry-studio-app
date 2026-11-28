@@ -1,7 +1,7 @@
 # Conversation consumption
 
 This app-shell owner defines what the chat workspace, sidebar, Agent picker and transcript export
-read from either conversation source, and it retains the catalog sources those consumers share.
+read from local, desktop and Team conversation sources, and it retains the catalogs those consumers share.
 It does not own local execution or observation.
 
 Remote Session `readingAidScope` is a stable desktop-binding and Session namespace for phone-owned
@@ -102,3 +102,14 @@ simply absent.
 
 See [Service Dependencies And Ownership](../../../../docs/references/remote-access/service-ownership.md)
 for backend lifetimes and remaining migration work.
+
+## Team
+
+`team/index.ts` is the public boundary for the Team directory/resource hooks, focused foreground
+observation, opaque session references and display projector. Its catalog is scoped to the
+authenticated context and never opens transcripts
+for sidebar reads. Team chat uses full server snapshots and its own admission/recovery contract;
+it does not adopt desktop history cursors, commands or persisted drafts. The common projector
+always supplies display-only tools and binds replies to the current pending request.
+
+See [Team Agent](../../../../docs/references/team-agent.md) for implementation ownership and capabilities.

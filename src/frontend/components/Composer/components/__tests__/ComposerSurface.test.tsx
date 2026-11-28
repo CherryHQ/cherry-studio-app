@@ -480,6 +480,56 @@ describe('ComposerSurface', () => {
     });
   });
 
+  it('retains the draft until confirmed admission and preserves newer edits or rejected drafts', async () => {
+    const pending = deferred<void>();
+    const onSend = jest.fn(() => pending.promise);
+    render(
+      <ComposerSurface sendPolicy="confirmed" onSend={onSend} onStop={jest.fn()} streaming={false}>
+        <StateProbe />
+      </ComposerSurface>,
+      'hello',
+    );
+
+    let sendPromise!: Promise<void>;
+    act(() => {
+      sendPromise = Promise.resolve(mockComposerProps?.onSend());
+    });
+    expect(mockComposerState?.draft).toBe('hello');
+
+    await act(async () => {
+      pending.resolve();
+      await sendPromise;
+    });
+    expect(mockComposerState?.draft).toBe('');
+
+    const rejected = deferred<void>();
+    const failingSend = jest.fn(() => rejected.promise);
+    render(
+      <ComposerSurface
+        sendPolicy="confirmed"
+        onSend={failingSend}
+        onStop={jest.fn()}
+        streaming={false}
+      >
+        <StateProbe />
+      </ComposerSurface>,
+      'keep me',
+    );
+    let failedPromise!: Promise<void>;
+    act(() => {
+      failedPromise = Promise.resolve(mockComposerProps?.onSend());
+    });
+    await act(async () => {
+      rejected.reject(new Error('network timeout'));
+      await failedPromise;
+    });
+    expect(mockComposerState?.draft).toBe('keep me');
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'chat.input.sendFailed',
+      variant: 'danger',
+    });
+  });
+
   function render(
     children: ReactNode,
     initialDraft = '',

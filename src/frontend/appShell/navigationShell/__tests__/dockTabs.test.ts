@@ -98,12 +98,16 @@ describe('dockTabs', () => {
 
   test('resolves pathnames, active dock tab, and compact leading action', () => {
     expect(resolveNavDestination('/')).toBe('chat');
+    expect(resolveNavDestination('/remote')).toBe('chat');
+    expect(resolveNavDestination('/team')).toBe('chat');
     expect(resolveNavDestination('/skills/abc')).toBe('marketplace');
     expect(resolveNavDestination('/paintings/123')).toBe('drawings');
     expect(resolveNavDestination('/devices/pc-1')).toBe('devices');
     expect(resolveNavDestination('/more')).toBe('more');
 
     expect(isRootNavPathname('/')).toBe(true);
+    expect(isRootNavPathname('/remote')).toBe(true);
+    expect(isRootNavPathname('/team')).toBe(true);
     expect(isRootNavPathname('/more')).toBe(true);
     expect(isRootNavPathname('/agents')).toBe(true);
     expect(isRootNavPathname('/agents/1/edit')).toBe(false);
@@ -118,6 +122,7 @@ describe('dockTabs', () => {
     expect(isUnpinnedModuleRoot('/more', ['agents'])).toBe(false);
 
     expect(resolveCompactLeadingAction('/', ['agents'])).toBe('drawer');
+    expect(resolveCompactLeadingAction('/team', ['agents'])).toBe('drawer');
     expect(resolveCompactLeadingAction('/agents', ['agents'])).toBe('drawer');
     expect(resolveCompactLeadingAction('/more', ['agents'])).toBe('drawer');
     expect(resolveCompactLeadingAction('/drawings', ['agents'])).toBe('back');

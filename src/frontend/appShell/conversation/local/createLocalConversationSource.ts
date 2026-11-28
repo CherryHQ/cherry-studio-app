@@ -196,6 +196,7 @@ export function createLocalConversationSource(input: {
           items: result.items.map((agent) => ({
             id: agent.id,
             ref: refs.issue<AgentRef>('agent', agent.id),
+            source: ref,
             name: agent.name,
             configuration: agent.model ? ('available' as const) : ('unavailable' as const),
             modelName: agent.modelName,

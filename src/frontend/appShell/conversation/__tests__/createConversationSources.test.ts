@@ -1,5 +1,6 @@
 import type { AgentProtocol } from '@/shared/contracts/agent';
 import type { RemoteAgentModule, RemoteAgentSource } from '@/shared/contracts/remoteAgent';
+import type { TeamAgentModule } from '@/shared/contracts/teamAgent';
 import type { ApiClient } from '@/shared/data/api/types';
 
 import { createConversationSources } from '../createConversationSources';
@@ -10,6 +11,7 @@ test('shared catalog readers release connection demand only after the last consu
   const owner = createConversationSources({
     agent: {} as AgentProtocol,
     api: {} as ApiClient,
+    teamAgent: {} as TeamAgentModule,
     remoteAgent: {
       prewarm: jest.fn(async () => undefined),
       open: async () => {

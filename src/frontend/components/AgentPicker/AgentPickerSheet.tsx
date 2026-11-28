@@ -1,17 +1,18 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import SquarePenIcon from '@cherrystudio/app-icons/icons/square-pen';
-import { BottomSheet, Button, ContentState } from '@cherrystudio/ui/components';
-import type { ReactNode } from 'react';
+import { BottomSheet, Button, ContentState, SearchField } from '@cherrystudio/ui/components';
+import { type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import type { AgentSummary } from '@/frontend/appShell/conversation';
+import type { AgentSummary, ConversationSourceRef } from '@/frontend/appShell/conversation';
 import { AgentAvatar } from '@/frontend/components/Avatar';
+import { CloudMark } from '@/frontend/components/CloudMark';
 import { ManagedMark, useManagedLabel, withResourcePolicy } from '@/frontend/components/Policy';
 import { agentPolicy } from '@/shared/data/managedPolicy';
 
-type AgentPickerItem = Omit<AgentSummary, 'ref'>;
+export type AgentPickerItem = Omit<AgentSummary, 'ref'>;
 
 type AgentPickerCatalog = {
   items: readonly AgentPickerItem[];
@@ -25,9 +26,11 @@ type AgentPickerCatalog = {
 
 export type AgentPickerSheetProps = {
   currentAgentId?: string;
+  currentAgentSource?: ConversationSourceRef['kind'];
   catalog: AgentPickerCatalog;
   emptyState?: ReactNode;
-  onSelect(agentId: string): void;
+  searchable?: boolean;
+  onSelect(agentId: string, agent: AgentPickerItem): void;
   onEdit?(agentId: string): void;
   onCreate?(): void;
   onClose: () => void;
@@ -38,8 +41,10 @@ export type AgentPickerSheetProps = {
 
 export function AgentPickerSheet({
   currentAgentId,
+  currentAgentSource,
   catalog,
   emptyState,
+  searchable = false,
   onSelect,
   onEdit,
   onCreate,
@@ -50,16 +55,33 @@ export function AgentPickerSheet({
 }: AgentPickerSheetProps) {
   const { t } = useTranslation();
   const { items: agents, isError, isLoading, refetch } = catalog;
-  const selectAgent = (agentId: string) => {
+  const [query, setQuery] = useState('');
+  const handleClose = () => {
+    setQuery('');
     onClose();
-    if (agentId !== currentAgentId) onSelect(agentId);
+  };
+  const isSelected = (agent: AgentPickerItem) =>
+    agent.id === currentAgentId &&
+    (!currentAgentSource || (agent.source?.kind ?? 'local') === currentAgentSource);
+  const selectAgent = (agent: AgentPickerItem) => {
+    handleClose();
+    if (!isSelected(agent)) onSelect(agent.id, agent);
   };
   const editAgent = onEdit
     ? (agentId: string) => {
-        onClose();
+        handleClose();
         onEdit(agentId);
       }
     : undefined;
+  const normalizedQuery = searchable ? query.trim().toLowerCase() : '';
+  const filteredAgents = useMemo(() => {
+    if (!normalizedQuery) return agents;
+    return agents.filter((agent) =>
+      [agent.name, agent.modelName, agent.groupName].some((field) =>
+        field?.toLowerCase().includes(normalizedQuery),
+      ),
+    );
+  }, [agents, normalizedQuery]);
 
   return (
     <BottomSheet
@@ -68,7 +90,7 @@ export function AgentPickerSheet({
           <Button
             icon={<PlusIcon className="size-5 text-foreground" />}
             onPress={() => {
-              onClose();
+              handleClose();
               onCreate();
             }}
             variant="secondary"
@@ -77,12 +99,25 @@ export function AgentPickerSheet({
           </Button>
         ) : undefined
       }
-      onClose={onClose}
+      onClose={handleClose}
       open={open}
       size="medium"
       testID={testID}
       title={title ?? t('agent.list.title')}
     >
+      {searchable ? (
+        <View className="px-4 pt-1 pb-2">
+          <SearchField
+            accessibilityLabel={t('navigation.search')}
+            clearAccessibilityLabel={t('common.clear')}
+            onChangeText={setQuery}
+            onClear={() => setQuery('')}
+            placeholder={t('navigation.search')}
+            testID={`${testID}-search`}
+            value={query}
+          />
+        </View>
+      ) : null}
       <ScrollView
         className="min-h-0 flex-1"
         contentContainerClassName="px-4 pt-2 pb-4"
@@ -105,18 +140,24 @@ export function AgentPickerSheet({
               title={t('agent.list.emptyTitle')}
             />
           ))
+        ) : filteredAgents.length === 0 ? (
+          <ContentState.Empty title={t('agent.list.noResults')} />
         ) : (
           <View className="gap-1">
             {[
-              ...agents.filter((agent) => agent.id === currentAgentId),
-              ...agents.filter((agent) => agent.id !== currentAgentId),
+              ...filteredAgents.filter((agent) => isSelected(agent)),
+              ...filteredAgents.filter((agent) => !isSelected(agent)),
             ].map((agent) => (
               <AgentPickerRow
                 agent={agent}
-                key={agent.id}
+                key={
+                  agent.source?.kind === 'team'
+                    ? `team:${agent.source.bindingId}:${agent.id}`
+                    : `${agent.source?.kind ?? 'default'}:${agent.id}`
+                }
                 onEdit={editAgent}
                 onSelect={selectAgent}
-                selected={agent.id === currentAgentId}
+                selected={isSelected(agent)}
               />
             ))}
           </View>
@@ -143,11 +184,19 @@ function AgentPickerRowView({
 }: {
   agent: AgentPickerItem;
   onEdit?: (agentId: string) => void;
-  onSelect: (agentId: string) => void;
+  onSelect: (agent: AgentPickerItem) => void;
   selected: boolean;
 }) {
   const { t } = useTranslation();
-  const accessibilityLabel = useManagedLabel(agent.name);
+  const baseAccessibilityLabel = useManagedLabel(agent.name);
+  const isCloud = agent.source?.kind === 'team';
+  const accessibilityLabel = isCloud
+    ? `${baseAccessibilityLabel}, ${t('teamAgent.cloudExecution')}`
+    : baseAccessibilityLabel;
+  const subtitle =
+    agent.modelName ??
+    agent.groupName ??
+    (agent.configuration !== 'unknown' ? t('agent.model.none') : undefined);
 
   return (
     <View className="min-w-0 flex-row items-center gap-2">
@@ -156,7 +205,7 @@ function AgentPickerRowView({
         accessibilityRole="radio"
         accessibilityState={{ checked: selected }}
         className="min-w-0 flex-1 flex-row items-center gap-3 rounded-xl py-1 active:opacity-60"
-        onPress={() => onSelect(agent.id)}
+        onPress={() => onSelect(agent)}
       >
         <AgentAvatar
           avatar={agent.avatar}
@@ -166,19 +215,25 @@ function AgentPickerRowView({
           uri={agent.avatarUri}
         />
         <View className="min-w-0 flex-1 gap-0.5">
-          <View className="min-w-0 flex-row items-center gap-2">
-            <Text className="shrink font-semibold text-base text-foreground">{agent.name}</Text>
+          <View className="min-w-0 flex-row items-center gap-1.5">
+            <Text
+              className="min-w-0 shrink font-semibold text-base text-foreground"
+              numberOfLines={1}
+            >
+              {agent.name}
+            </Text>
+            {isCloud ? <CloudMark /> : null}
             <ManagedMark />
           </View>
-          {agent.modelName || agent.configuration !== 'unknown' ? (
+          {subtitle ? (
             <Text className="text-muted-foreground text-xs" numberOfLines={1}>
-              {agent.modelName ?? t('agent.model.none')}
+              {subtitle}
             </Text>
           ) : null}
         </View>
         {selected ? <CheckIcon className="size-5 shrink-0 text-foreground" /> : null}
       </Pressable>
-      {onEdit ? (
+      {onEdit && !isCloud ? (
         <Pressable
           accessibilityLabel={`${t('common.edit')}: ${agent.name}`}
           accessibilityRole="button"

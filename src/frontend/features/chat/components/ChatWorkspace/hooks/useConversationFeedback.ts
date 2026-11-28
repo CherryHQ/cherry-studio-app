@@ -16,7 +16,7 @@ export function useConversationFeedback({
   sessionId,
   snapshot,
 }: {
-  executionSource: 'local' | 'desktop';
+  executionSource: 'local' | 'desktop' | 'team';
   messages: readonly MessageListItem[];
   sessionId?: string;
   snapshot: ConversationSnapshot;

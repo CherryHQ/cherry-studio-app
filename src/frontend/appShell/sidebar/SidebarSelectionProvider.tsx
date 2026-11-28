@@ -217,6 +217,7 @@ function createSelectionStore() {
         // Desktop catalogs currently expose no delete action. Never open transcripts to obtain one.
         if (
           source.ref.kind !== 'local' ||
+          session.ref.source.kind !== 'local' ||
           source.state.getSnapshot().availability.state !== 'enabled' ||
           source.catalog.previewSession?.(session.ref).remove?.availability.state !== 'enabled'
         )

@@ -29,9 +29,9 @@ export type NavRouteSpec = {
  */
 export const NAV_ROUTE_MANIFEST = {
   chat: {
-    exactRootPathnames: ['/', '/remote'],
+    exactRootPathnames: ['/', '/remote', '/team'],
     href: '/',
-    pathPrefixes: ['/', '/remote', '/scheduled-tasks'],
+    pathPrefixes: ['/', '/remote', '/team', '/scheduled-tasks'],
     stackRoute: '(chat)',
     titleKey: 'navigation.chat',
   },

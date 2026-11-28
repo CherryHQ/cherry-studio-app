@@ -13,6 +13,7 @@ import {
   useStartNewChat,
 } from '@/frontend/appShell/navigation/chat';
 import { AgentAvatar } from '@/frontend/components/Avatar';
+import { CloudMark } from '@/frontend/components/CloudMark';
 import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
 import type { Agent } from '@/shared/data/types/agent';
 
@@ -69,13 +70,17 @@ export function MainHeaderAgentLabel({
   onPress,
 }: {
   onPress?: () => void;
-  agent: Pick<Agent, 'name'> & Partial<Pick<Agent, 'avatar' | 'avatarUri'>> & { emoji?: string };
+  agent: Pick<Agent, 'name'> &
+    Partial<Pick<Agent, 'avatar' | 'avatarUri'>> & { emoji?: string; isCloud?: boolean };
 }) {
+  const { t } = useTranslation();
   const Container = onPress ? Pressable : View;
   return (
     <Container
       accessible
-      accessibilityLabel={agent.name}
+      accessibilityLabel={
+        agent.isCloud ? `${agent.name}, ${t('teamAgent.cloudExecution')}` : agent.name
+      }
       accessibilityRole={onPress ? 'button' : 'text'}
       onPress={onPress}
       hitSlop={onPress ? 8 : undefined}
@@ -89,14 +94,17 @@ export function MainHeaderAgentLabel({
         size={24}
         uri={agent.avatarUri}
       />
-      <Text
-        className="min-w-0 shrink font-medium text-base text-foreground"
-        ellipsizeMode="tail"
-        maxFontSizeMultiplier={1.2}
-        numberOfLines={1}
-      >
-        {agent.name}
-      </Text>
+      <View className="min-w-0 shrink flex-row items-center gap-1.5">
+        <Text
+          className="min-w-0 shrink font-medium text-base text-foreground"
+          ellipsizeMode="tail"
+          maxFontSizeMultiplier={1.2}
+          numberOfLines={1}
+        >
+          {agent.name}
+        </Text>
+        {agent.isCloud ? <CloudMark /> : null}
+      </View>
     </Container>
   );
 }

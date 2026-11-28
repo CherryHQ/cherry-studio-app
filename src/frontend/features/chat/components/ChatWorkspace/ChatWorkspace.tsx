@@ -37,7 +37,7 @@ import { getTimestampMessageIds } from './messageTimestamps';
 import { MessageTranslationProvider } from './translation/MessageTranslationProvider';
 
 type ChatWorkspaceProps = {
-  executionSource: 'local' | 'desktop';
+  executionSource: 'local' | 'desktop' | 'team';
   onQuoteTargetRestored?: (target: { dataKey: string; messageId: string }) => void;
   onQuoteWindowReady?: () => void;
   onQuoteTakeover?: () => void;

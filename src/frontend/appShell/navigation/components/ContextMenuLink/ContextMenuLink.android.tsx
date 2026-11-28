@@ -10,10 +10,10 @@ type AccessibilityChildProps = {
   onAccessibilityAction?: (event: AccessibilityActionEvent) => void;
 };
 
-export function ContextMenuLink({ children, href, items }: ContextMenuLinkProps) {
+export function ContextMenuLink({ children, href, items, replace }: ContextMenuLinkProps) {
   return (
     <ContextMenu items={items}>
-      <Link asChild href={href}>
+      <Link asChild href={href} replace={replace}>
         {withContextMenuAccessibility(children, items)}
       </Link>
     </ContextMenu>

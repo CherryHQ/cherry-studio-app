@@ -42,37 +42,90 @@ const mockDrawerSelection = jest.fn((): { registerList: (...args: unknown[]) => 
   throw new Error('The destination list must not require drawer selection');
 });
 
-jest.mock('@/frontend/appShell/conversation', () => ({
-  useConversationAgents: () => ({
-    data: {},
-    items: [mockAgent],
-    isPending: false,
-    isSuccess: true,
-  }),
-  useConversationSessions: (...args: unknown[]) => mockSessions(...args),
-  useConversationSessionChildren: (...args: unknown[]) => mockChildren(...args),
-  useConversationSessionPath: (...args: unknown[]) => mockPath(...args),
-  useConversationSource: () =>
-    mockSource ?? {
-      scope: 'local-scope',
-      ref: { kind: 'local' },
-      catalog: { listSessionChildren: jest.fn() },
-    },
-  useConversationPreview: (ref: ConversationSummary['ref']) => mockPreview(ref),
-  useConversationAgentStatus: () => undefined,
-  useConversationSourceState: () => ({ availability: { state: 'enabled' } }),
+const mockCloseDrawer = jest.fn();
+const mockOpenLocal = jest.fn();
+const mockOpenTeam = jest.fn();
+let mockTeamOverlay: {
+  source: ConversationSource;
+  agents: readonly AgentSummary[];
+  sessions: readonly ConversationSummary[];
+  selectedSessionId?: string;
+} | null = null;
+let mockChatSource: {
+  source: 'local' | 'remote' | 'team';
+  openLocal: jest.Mock;
+  openTeam: jest.Mock;
+} = {
+  source: 'local',
+  openLocal: mockOpenLocal,
+  openTeam: mockOpenTeam,
+};
+
+jest.mock('@/frontend/appShell/conversation', () => {
+  const {
+    createContext,
+    createElement: h,
+    useContext,
+  } = jest.requireActual<typeof import('react')>('react');
+  const ScopeContext = createContext<ConversationSource | null>(null);
+  return {
+    ConversationSourceScope: ({
+      value,
+      children,
+    }: {
+      value: ConversationSource;
+      children: ReactNode;
+    }) => h(ScopeContext.Provider, { value }, children),
+    useConversationAgents: () => ({
+      data: {},
+      items: [mockAgent],
+      isPending: false,
+      isSuccess: true,
+    }),
+    useConversationSessions: (...args: unknown[]) => mockSessions(...args),
+    useConversationSessionChildren: (...args: unknown[]) => mockChildren(...args),
+    useConversationSessionPath: (...args: unknown[]) => mockPath(...args),
+    useConversationSource: () =>
+      useContext(ScopeContext) ??
+      mockSource ?? {
+        scope: 'local-scope',
+        ref: { kind: 'local' },
+        catalog: { listSessionChildren: jest.fn() },
+      },
+    useConversationPreview: (ref: ConversationSummary['ref']) => mockPreview(ref),
+    useConversationAgentStatus: () => undefined,
+    useConversationSourceState: () => ({ availability: { state: 'enabled' } }),
+  };
+});
+jest.mock('@/frontend/appShell/conversation/team', () => ({
+  useOptionalTeamCatalogOverlay: () => mockTeamOverlay,
 }));
 jest.mock('@/frontend/appShell/navigation/chat', () => ({
   useConversationTarget: () => ({ sessionId: mockSelectedSessionId }),
+  useOptionalChatSource: () => mockChatSource,
   conversationHref: (ref: ConversationSummary['ref']) => ({
-    pathname: '/',
-    params: { sessionId: ref.sessionId },
+    pathname: ref.source.kind === 'team' ? '/team' : '/',
+    params:
+      ref.source.kind === 'team'
+        ? { bindingId: ref.source.bindingId, sessionId: ref.sessionId }
+        : { sessionId: ref.sessionId },
   }),
 }));
-jest.mock('@/frontend/appShell/navigation', () => ({
-  ContextMenuLink: ({ children }: { children: ReactNode }) => children,
-  useFocusedBackPress: jest.fn(),
-}));
+jest.mock('@/frontend/appShell/navigation', () => {
+  const { createElement: h } = jest.requireActual<typeof import('react')>('react');
+  return {
+    ContextMenuLink: ({
+      children,
+      href,
+      replace,
+    }: {
+      children: ReactNode;
+      href?: unknown;
+      replace?: boolean;
+    }) => h('ContextMenuLink', { href, replace }, children),
+    useFocusedBackPress: jest.fn(),
+  };
+});
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('@/frontend/data/hooks', () => ({
   usePreference: () => [mockIsSessionTreeEnabled, jest.fn()],
@@ -85,7 +138,7 @@ jest.mock('../../hooks/useSidebarPresence', () => ({
   useSidebarPresence: () => mockSidebarPresence,
 }));
 jest.mock('../../context', () => ({
-  useSidebarActions: () => ({ closeDrawer: jest.fn() }),
+  useSidebarActions: () => ({ closeDrawer: mockCloseDrawer }),
 }));
 jest.mock('@/frontend/components/Avatar', () => ({ AgentAvatar: () => null }));
 jest.mock('@/frontend/components/ConversationStatus', () => ({ ConversationStatus: () => null }));
@@ -170,6 +223,8 @@ beforeEach(() => {
   mockSidebarPresence = 'open';
   mockIsSessionTreeEnabled = true;
   mockSource = undefined;
+  mockTeamOverlay = null;
+  mockChatSource = { source: 'local', openLocal: mockOpenLocal, openTeam: mockOpenTeam };
   mockUseSelectionProvider = false;
   mockSelectionStore = undefined;
   mockPath.mockReturnValue({ items: [] });
@@ -282,7 +337,7 @@ it.each(['sessions', 'agents'] as const)(
       <SidebarConversationList mode={mode} showLoading registerEndReachedHandler={jest.fn()} />
     );
     act(() => renderer.update(sidebar()));
-    if (mode === 'agents') press('sidebar-agent-agent-1');
+    if (mode === 'agents') press('sidebar-agent-expand-agent-1');
 
     expect(mockSessions).toHaveBeenLastCalledWith(
       mode === 'agents' ? mockAgent.ref : undefined,
@@ -420,17 +475,102 @@ it('retains the existing per-Agent pagination in the destination list', () => {
   expect(onSelect).not.toHaveBeenCalled();
 });
 
-it('keeps the ordinary sidebar Agent row as full-row expansion', () => {
+it('splits phone Agent row into navigation on tap and expansion on chevron tap, while keeping desktop full-row expansion', () => {
   mockDrawerSelection.mockReturnValue({ registerList: () => () => {} });
   act(() => {
     renderer.update(
       <SidebarConversationList mode="agents" showLoading registerEndReachedHandler={jest.fn()} />,
     );
   });
-  expect(renderer.root.findAllByProps({ testID: 'share-agent-expand-agent-1' })).toHaveLength(0);
   press('sidebar-agent-agent-1');
+  expect(mockCloseDrawer).toHaveBeenCalledTimes(1);
+  expect(mockOpenLocal).toHaveBeenCalledWith({ kind: 'draft', agentId: 'agent-1' });
+  expect(renderer.root.findAllByProps({ testID: 'sidebar-session-session-1' })).toHaveLength(0);
+
+  press('sidebar-agent-expand-agent-1');
   expect(renderer.root.findByProps({ testID: 'sidebar-session-session-1' })).toBeDefined();
   expect(onSelect).not.toHaveBeenCalled();
+
+  mockSource = {
+    scope: 'desktop-scope' as ConversationSource['scope'],
+    ref: { kind: 'desktop', connectionId: 'pc-1' },
+    catalog: {
+      listAgents: jest.fn(),
+      listSessions: jest.fn(),
+    },
+    state: {
+      getSnapshot: () => ({ availability: { state: 'enabled' as const } }),
+      subscribe: () => () => {},
+    },
+    dispose() {},
+  };
+  act(() => {
+    renderer.update(
+      <SidebarConversationList mode="agents" showLoading registerEndReachedHandler={jest.fn()} />,
+    );
+  });
+  expect(renderer.root.findAllByProps({ testID: 'sidebar-agent-expand-agent-1' })).toHaveLength(0);
+  press('sidebar-agent-agent-1');
+  expect(renderer.root.findByProps({ testID: 'sidebar-session-session-1' })).toBeDefined();
+});
+
+it('merges overlaid team agents and sessions with CloudMark, local-only selection, and cross-route replace', () => {
+  const registerList = jest.fn(() => () => {});
+  mockDrawerSelection.mockReturnValue({ registerList });
+  const teamSource = {
+    scope: 'team-scope' as ConversationSource['scope'],
+    ref: { kind: 'team', bindingId: 'binding-1' } as const,
+    catalog: { listAgents: jest.fn(), listSessions: jest.fn() },
+    state: {
+      getSnapshot: () => ({ availability: { state: 'enabled' as const } }),
+      subscribe: () => () => {},
+    },
+    dispose() {},
+  };
+  const teamAgent: AgentSummary = {
+    id: 'team-agent-1',
+    ref: 'team:team-agent-1' as AgentSummary['ref'],
+    source: { kind: 'team', bindingId: 'binding-1' },
+    name: 'Cloud Researcher',
+    configuration: 'unknown',
+  };
+  const teamSession: ConversationSummary = {
+    ref: { source: { kind: 'team', bindingId: 'binding-1' }, sessionId: 'team-session-1' },
+    agentId: 'team-agent-1',
+    title: 'Quarterly research',
+    updatedAt: '2026-11-27T12:00:00Z',
+  };
+  mockTeamOverlay = {
+    source: teamSource,
+    agents: [teamAgent],
+    sessions: [teamSession],
+  };
+
+  act(() => {
+    renderer.update(
+      <SidebarConversationList mode="agents" showLoading registerEndReachedHandler={jest.fn()} />,
+    );
+  });
+  expect(
+    renderer.root.findAllByProps({ testID: 'cloud-execution-mark' }, { deep: false }),
+  ).toHaveLength(1);
+  press('sidebar-agent-team-agent-1');
+  expect(mockCloseDrawer).toHaveBeenCalledTimes(1);
+  expect(mockOpenTeam).toHaveBeenCalledWith({ bindingId: 'binding-1', agentId: 'team-agent-1' });
+  press('sidebar-agent-expand-team-agent-1');
+  expect(mockSessions).toHaveBeenLastCalledWith(teamAgent.ref, true, { includeBranches: false });
+
+  act(() => {
+    renderer.update(
+      <SidebarConversationList mode="sessions" showLoading registerEndReachedHandler={jest.fn()} />,
+    );
+  });
+  expect(renderer.root.findByProps({ testID: 'sidebar-session-team-session-1' })).toBeDefined();
+  expect(registerList).toHaveBeenLastCalledWith('local-scope:', expect.anything(), [mockSession]);
+  const links = renderer.root.findAllByType('ContextMenuLink' as never);
+  expect(links).toHaveLength(2);
+  expect(links[0].props.replace).toBe(true);
+  expect(links[1].props.replace).toBe(false);
 });
 
 it('updates a registered list without unregistering it until the list unmounts', () => {

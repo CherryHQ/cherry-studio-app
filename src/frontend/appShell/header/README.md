@@ -4,8 +4,9 @@ This module owns Expo Router header adapters used by the app screens.
 
 ## Public Interface
 
-- `RouteHeader`, `RouteHeaderProvider`, `MainHeader`, `MainHeaderView`, `HeaderToolbarAction`, `HeaderActionGroup`,
-  `HeaderChrome`, `HeaderIconButton`, and `headerScreenOptions` are exported from `index.ts`.
+- `RouteHeader`, `RouteHeaderProvider`, `MainHeader`, `MainHeaderView`, `UnifiedAgentPicker`,
+  `HeaderToolbarAction`, `HeaderActionGroup`, `HeaderChrome`, `HeaderIconButton`, and
+  `headerScreenOptions` are exported from `index.ts`.
 - Screens import from `@/frontend/appShell/header`. Shared forms may use the public
   `@/frontend/appShell/header/RouteHeader` sub-entry to avoid loading `MainHeader` and its Agent
   editor dependency.
@@ -71,19 +72,18 @@ This module owns Expo Router header adapters used by the app screens.
   Android draws a borderless translucent card tint over the header's existing blur,
   in the flexible space between the action groups. The capsule reuses that blur without another
   blur view or sampling target; Android versions below 12 retain the translucent material fallback.
-  Long names truncate at the end. In local chat the capsule opens the shared auto-saving Agent
-  editor as a handle-only sheet. An independent `bot` button with a compact `chevron-down` opens the
-  Agent picker with its title, per-row management edit action, and fixed Create footer. The picker is also shared
-  with SSH. Remote catalogs omit management callbacks and stay selection-only. Selecting the
-  current Agent only closes the picker.
+  Long names truncate at the end, and cloud Team Agents show a neutral `CloudMark` indicator beside the name (`isCloud`). In local chat the capsule opens the shared auto-saving Agent
+  editor as a handle-only sheet; in Team chat the capsule opens the readonly `TeamAgentDetailSheet` without an extra info button in the trailing toolbar. An independent `bot` button with a compact `chevron-down` (`MainHeaderAgentSwitch`) is always available across widths for local and Team chats and opens `UnifiedAgentPicker`, merging local and overlaid Team Agents into `AgentPickerSheet` with live search (`SearchField`), per-row edit actions for local Agents only, and fixed Create footer. The picker is also shared
+  with SSH. Remote and Team entries omit local management callbacks and stay selection-only, while source-aware selection distinguishes local vs Team Agents cleanly. Selecting the
+  current Agent in its current source only closes the picker.
   Switching within a draft preserves text and attachments,
   while switching from an existing Session opens a draft for that Agent. The upper-right new-chat
   action always starts a blank draft with the current Agent, including from an unsent draft.
   Remote capsules retain their catalog picker and selection behavior. The sheet owns presentation and pagination controls, while
-  callers own navigation and source observation. Unknown remote model metadata is not shown as an
+  callers own navigation and source observation. Unknown remote/team model metadata is not shown as an
   unconfigured model.
 
-`MainHeader` supplies local Agent data to `MainHeaderView`; the remote chat supplies PC Agent data
+`MainHeader` supplies local Agent data to `MainHeaderView`; Team chat supplies cloud Team Agent data via `MainHeaderView`; and remote chat supplies PC Agent data
 to the same view. The source adapters do not duplicate platform chrome.
 
 On iOS 26 and later, every native header renders icon and menu actions that carry a `nativeIcon`

@@ -215,10 +215,11 @@ function SidebarContent({
         router.dismissTo(href);
       } else {
         returnToChat();
-        router.navigate(href);
+        if (source === 'team') router.replace(href);
+        else router.navigate(href);
       }
     },
-    [drawer, isOnSettings, returnToChat, router],
+    [drawer, isOnSettings, returnToChat, router, source],
   );
   const openSessionSearch = useSessionSearch(searchRequest, openSearchResult);
 
@@ -231,7 +232,7 @@ function SidebarContent({
       prepareExternalNavigation: waitForClose,
       returnToChat,
       openSearch:
-        source === 'local'
+        source !== 'remote'
           ? () => {
               cancelPending();
               // A wide window searches in the column, beside the chat its results open.
@@ -274,7 +275,9 @@ function SidebarContent({
 
   return (
     <SidebarActionsContext value={actions}>
-      <SidebarSelectionProvider scope={`${source}:${remoteTarget.connectionId ?? ''}:${viewMode}`}>
+      <SidebarSelectionProvider
+        scope={`${source === 'remote' ? `remote:${remoteTarget.connectionId ?? ''}` : 'phone'}:${viewMode}`}
+      >
         {/* A fold at the column's trailing edge stays empty. */}
         <View
           accessibilityElementsHidden={isColumnHidden}

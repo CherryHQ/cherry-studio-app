@@ -21,7 +21,10 @@ export type AgentRef = Opaque<'conversation-agent'>;
 export type WorkspaceRef = Opaque<'conversation-workspace'>;
 export type CatalogCursor = Opaque<'conversation-catalog-cursor'>;
 
-export type ConversationSourceRef = { kind: 'local' } | { kind: 'desktop'; connectionId: string };
+export type ConversationSourceRef =
+  | { kind: 'local' }
+  | { kind: 'desktop'; connectionId: string }
+  | { kind: 'team'; bindingId: string };
 export type ConversationRef = { source: ConversationSourceRef; sessionId: string };
 export type Readable<T> = { getSnapshot(): T; subscribe(listener: () => void): () => void };
 export type ConversationFailure = {
@@ -240,7 +243,9 @@ export type AgentSummary = {
   /** Stable source-local address for navigation; never a grant or capability. */
   id: string;
   ref: AgentRef;
+  source?: ConversationSourceRef;
   name: string;
+  groupName?: string;
   configuration: 'available' | 'unavailable' | 'unknown';
   modelName?: string | null;
   emoji?: string;

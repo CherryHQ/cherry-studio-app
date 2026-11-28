@@ -45,7 +45,7 @@ export function AgentAvatar({
       {source ? (
         <Avatar.Image
           accessibilityIgnoresInvertColors
-          cachePolicy="memory-disk"
+          cachePolicy={uri?.startsWith('data:') ? 'memory' : 'memory-disk'}
           contentFit="cover"
           recyclingKey={uri || avatar}
           source={source}

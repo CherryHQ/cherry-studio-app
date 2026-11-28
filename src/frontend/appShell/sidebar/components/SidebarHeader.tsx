@@ -128,7 +128,7 @@ function SidebarDeviceTitle() {
       ? connections.find((connection) => connection.id === remoteTarget.connectionId)
       : undefined;
   const remoteDesktop = useUuRemoteAction(prepareExternalNavigation);
-  const name = current?.name ?? brand;
+  const name = source === 'remote' ? (current?.name ?? brand) : brand;
   const [width, setWidth] = useState(0);
   const frame = (content: ReactNode) => (
     <View
@@ -142,7 +142,7 @@ function SidebarDeviceTitle() {
   const items: MenuItem[] = [
     {
       id: 'device-local',
-      checked: source === 'local',
+      checked: source !== 'remote',
       label: brand,
       onPress: () => {
         returnToChat();
@@ -170,14 +170,18 @@ function SidebarDeviceTitle() {
           },
         ]
       : []),
-    {
-      id: 'manage-devices',
-      label: t('navigation.manageDevices'),
-      onPress: () => {
-        closeDrawer();
-        router.push('/devices');
-      },
-    },
+    ...(connections.length
+      ? [
+          {
+            id: 'manage-devices',
+            label: t('navigation.manageDevices'),
+            onPress: () => {
+              closeDrawer();
+              router.push('/devices');
+            },
+          },
+        ]
+      : []),
   ];
   return frame(
     <ActionMenu items={disabled ? [] : items}>

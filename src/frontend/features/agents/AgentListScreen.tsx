@@ -6,6 +6,7 @@ import {
   ScrollInteractionBoundary,
   SelectionIndicator,
   Sortable,
+  Tabs,
   useAlert,
   useSortableScrollController,
   useToast,
@@ -17,7 +18,7 @@ import {
   type LegendListRenderItemProps,
 } from '@legendapp/list/react-native';
 import { useRouter } from 'expo-router';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   type AccessibilityProps,
@@ -28,8 +29,10 @@ import {
   type ViewProps,
 } from 'react-native';
 
+import { useTeamAgentState } from '@/frontend/appShell/conversation/team';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
-import { chatRouteParams } from '@/frontend/appShell/navigation/chat';
+import { chatRouteParams, teamChatHref, useChatSource } from '@/frontend/appShell/navigation/chat';
+import { useOptionalNavigationShellActions } from '@/frontend/appShell/navigationShell/state';
 import { AgentAvatar } from '@/frontend/components/Avatar';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/InlineSearch';
 import {
@@ -54,6 +57,8 @@ import { reorderLocally } from '@/frontend/data/utils/reorder';
 import { useAgentMutations, useAgentsApi } from '@/frontend/hooks/agent';
 import { agentPolicy } from '@/shared/data/managedPolicy';
 import type { Agent } from '@/shared/data/types/agent';
+
+import { TeamAgentListSection } from './TeamAgentListSection';
 
 const agentSelectionScope = 'agents';
 // A 40pt avatar, its 12pt vertical padding, and the hairline separator.
@@ -80,6 +85,12 @@ function AgentListScreenBody() {
   const { alert } = useAlert();
   const { toast } = useToast();
   const scroll = useSortableScrollController<LegendListRef>();
+  const { state: teamState } = useTeamAgentState();
+  const { openTeam, source: chatSource } = useChatSource();
+  const shellActions = useOptionalNavigationShellActions();
+  const hasTeam = Boolean(teamState.context);
+  const [selectedTab, setSelectedTab] = useState<'local' | 'team'>('local');
+  const activeTab = hasTeam ? selectedTab : 'local';
   const { agents, error, isLoading, refetch } = useAgentsApi();
   const { deleteAgents } = useAgentMutations();
   const { enterEditing, exitEditing, toggleId } = useSelectionActions();
@@ -204,12 +215,30 @@ function AgentListScreenBody() {
   );
   const openAgentChat = useCallback(
     (agentId: string) => {
-      router.navigate({
-        pathname: '/',
+      const href = {
+        pathname: '/' as const,
         params: chatRouteParams({ agentId, kind: 'draft' }),
-      });
+      };
+      if (shellActions && chatSource !== 'local') {
+        shellActions.navigateToDestination('chat');
+        router.replace(href);
+        return;
+      }
+      router.navigate(href);
     },
-    [router],
+    [chatSource, router, shellActions],
+  );
+  const openTeamAgentChat = useCallback(
+    (agentId: string) => {
+      if (!teamState.context) return;
+      if (shellActions) {
+        shellActions.navigateToDestination('chat');
+        openTeam({ bindingId: teamState.context.bindingId, agentId });
+      } else {
+        router.navigate(teamChatHref({ bindingId: teamState.context.bindingId, agentId }));
+      }
+    },
+    [openTeam, router, shellActions, teamState.context],
   );
   const listExtraData = useMemo<AgentListExtraData>(
     () => ({
@@ -286,8 +315,12 @@ function AgentListScreenBody() {
   return (
     <>
       <RouteHeader
-        rightActions={rightActions}
-        selection={isEditing ? { onExit: exitEditing, selectedCount: selectedIds.size } : undefined}
+        rightActions={activeTab === 'local' ? rightActions : undefined}
+        selection={
+          activeTab === 'local' && isEditing
+            ? { onExit: exitEditing, selectedCount: selectedIds.size }
+            : undefined
+        }
         title={t('agent.list.title')}
       />
       <View className="flex-1">
@@ -296,44 +329,75 @@ function AgentListScreenBody() {
             <InlineSearch onChangeText={setQuery} value={query} />
           </View>
         )}
-        <Sortable.Root scrollController={scroll.controller} testID="agent-list-sortable">
-          {({ isDragging }) => (
-            <ScrollInteractionBoundary>
-              {(scrollHandlers) => (
-                <>
-                  {canReorderAgents ? (
-                    <Sortable.Group
-                      estimatedItemHeight={AGENT_ROW_ESTIMATED_HEIGHT}
-                      groupId="agents"
-                      itemIds={agentIds}
-                      onReorder={({ fromIndex, toIndex }) => handleReorderAgent(fromIndex, toIndex)}
-                    />
-                  ) : null}
-                  <LegendList
-                    {...scrollHandlers}
-                    alwaysBounceVertical={false}
-                    contentContainerStyle={listContentStyle}
-                    contentInsetAdjustmentBehavior="automatic"
-                    data={listedAgents}
-                    estimatedItemSize={AGENT_ROW_ESTIMATED_HEIGHT}
-                    extraData={listExtraData}
-                    keyExtractor={agentKeyExtractor}
-                    ListEmptyComponent={listEmpty}
-                    maintainVisibleContentPosition={false}
-                    onScroll={scroll.onScroll}
-                    recycleItems
-                    ref={scroll.setRef}
-                    renderItem={renderAgentItem}
-                    scrollEnabled={!isDragging}
-                    showsVerticalScrollIndicator={false}
-                    style={styles.list}
-                  />
-                </>
+        {hasTeam && !isEditing ? (
+          <View className="mx-auto w-full max-w-[720px] px-4 pt-2 pb-2">
+            <Tabs
+              accessibilityLabel={t('agent.list.title')}
+              items={[
+                { label: t('agent.list.myAgents'), testID: 'agents-tab-local', value: 'local' },
+                { label: t('teamAgent.title'), testID: 'agents-tab-team', value: 'team' },
+              ]}
+              layout="hug"
+              onValueChange={(next) => {
+                if (isEditing) exitEditing();
+                setSelectedTab(next);
+              }}
+              value={activeTab}
+              variant="pill"
+            />
+          </View>
+        ) : null}
+        {activeTab === 'team' ? (
+          <TeamAgentListSection
+            bottomInset={bottomInset}
+            isFiltering={isFiltering}
+            onSelectAgent={openTeamAgentChat}
+            query={query}
+          />
+        ) : (
+          <>
+            <Sortable.Root scrollController={scroll.controller} testID="agent-list-sortable">
+              {({ isDragging }) => (
+                <ScrollInteractionBoundary>
+                  {(scrollHandlers) => (
+                    <>
+                      {canReorderAgents ? (
+                        <Sortable.Group
+                          estimatedItemHeight={AGENT_ROW_ESTIMATED_HEIGHT}
+                          groupId="agents"
+                          itemIds={agentIds}
+                          onReorder={({ fromIndex, toIndex }) =>
+                            handleReorderAgent(fromIndex, toIndex)
+                          }
+                        />
+                      ) : null}
+                      <LegendList
+                        {...scrollHandlers}
+                        alwaysBounceVertical={false}
+                        contentContainerStyle={listContentStyle}
+                        contentInsetAdjustmentBehavior="automatic"
+                        data={listedAgents}
+                        estimatedItemSize={AGENT_ROW_ESTIMATED_HEIGHT}
+                        extraData={listExtraData}
+                        keyExtractor={agentKeyExtractor}
+                        ListEmptyComponent={listEmpty}
+                        maintainVisibleContentPosition={false}
+                        onScroll={scroll.onScroll}
+                        recycleItems
+                        ref={scroll.setRef}
+                        renderItem={renderAgentItem}
+                        scrollEnabled={!isDragging}
+                        showsVerticalScrollIndicator={false}
+                        style={styles.list}
+                      />
+                    </>
+                  )}
+                </ScrollInteractionBoundary>
               )}
-            </ScrollInteractionBoundary>
-          )}
-        </Sortable.Root>
-        <SelectionControls scope={agentSelectionScope} />
+            </Sortable.Root>
+            <SelectionControls scope={agentSelectionScope} />
+          </>
+        )}
       </View>
     </>
   );

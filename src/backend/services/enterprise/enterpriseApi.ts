@@ -53,11 +53,12 @@ function sessionRefusalInterceptor(session: EnterpriseSession): HttpInterceptor 
   };
 }
 
-export function createEnterpriseApi(options: {
+/** Shared authenticated REST transport; callers pass a captured enterprise session. */
+export function createEnterpriseRequest(options: {
   /** Normalized service address, including any deployment API prefix. */
   baseUrl: string;
   session: EnterpriseSession;
-}): EnterpriseApi {
+}) {
   const { session } = options;
   const client = createHttpClient({
     baseUrl: options.baseUrl,
@@ -82,6 +83,14 @@ export function createEnterpriseApi(options: {
       return send<T>(input);
     }
   };
+  return request;
+}
+
+export function createEnterpriseApi(options: {
+  baseUrl: string;
+  session: EnterpriseSession;
+}): EnterpriseApi {
+  const request = createEnterpriseRequest(options);
   return {
     async getUser(signal) {
       const response = await request<unknown>({
