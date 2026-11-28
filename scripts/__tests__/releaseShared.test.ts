@@ -8,6 +8,7 @@ import {
   parseReleaseTag,
   redactSecretsInStream,
   sanitizeDiagnostic,
+  sanitizeReleaseResult,
   sanitizeSecrets,
 } from '../release/shared';
 
@@ -97,4 +98,27 @@ describe('release shared helpers', () => {
     expect(gitcodeSrc).not.toMatch(/releaseLocalBuild/);
     expect(localBuildSrc).not.toMatch(/uploadIosSymbols/);
   });
+});
+
+it('keeps recovery JSON complete and SHA-256 integrity while redacting nested diagnostics', () => {
+  const sha256 = 'abcd'.repeat(16);
+  const value = {
+    sha256,
+    archiveDir: '/srv/releases/ios',
+    symbolVerification: {
+      manifestSha256: sha256,
+      records: Array.from({ length: 200 }, (_, id) => ({ id, sha256 })),
+      message: 'token=secret-value ' + 'x'.repeat(3000),
+    },
+    receipt: { message: 'token=another-secret' },
+  };
+  const output = JSON.stringify(sanitizeReleaseResult(value, {}), null, 2);
+  const parsed = JSON.parse(output);
+  expect(output.length).toBeGreaterThan(2000);
+  expect(parsed.sha256).toBe(sha256);
+  expect(parsed.symbolVerification.manifestSha256).toBe(sha256);
+  expect(parsed.symbolVerification.records).toHaveLength(200);
+  expect(output).not.toContain('secret-value');
+  expect(output).not.toContain('another-secret');
+  expect(parsed.symbolVerification.message.length).toBeLessThanOrEqual(2000);
 });

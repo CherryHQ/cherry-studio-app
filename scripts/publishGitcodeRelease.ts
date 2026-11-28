@@ -3,6 +3,7 @@ import { appendFileSync, existsSync, openAsBlob, readFileSync, statSync } from '
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
+import { requireCliPath, requireSafeId } from './cliInput';
 import { SHA_RE, fileEvidence, parseReleaseTag, sanitizeSecrets } from './release/shared';
 
 const DEFAULT_API_URL = 'https://api.gitcode.com/api/v5';
@@ -701,6 +702,8 @@ async function main() {
       },
       strict: true,
     });
+    const summaryPath =
+      values.summary === undefined ? undefined : requireCliPath(values.summary, '--summary');
 
     if (!values.tag || !values.commit || !values['archive-dir'] || !values['artifact-name']) {
       throw new Error(
@@ -711,16 +714,19 @@ async function main() {
     const result = await stageGitcodeRelease({
       tag: values.tag,
       commitSha: values.commit,
-      archiveDir: values['archive-dir'],
+      archiveDir: requireCliPath(values['archive-dir'], '--archive-dir'),
       artifactName: values['artifact-name'],
       releaseName: values.name,
-      buildId: values['build-id'],
+      buildId:
+        values['build-id'] === undefined
+          ? undefined
+          : requireSafeId(values['build-id'], '--build-id'),
       nativeBuildVersion: values['native-build-version'],
     });
 
-    if (values.summary) {
+    if (summaryPath) {
       appendFileSync(
-        values.summary,
+        summaryPath,
         `GitCode Staged Release (${result.releaseStatus}): ${result.releaseUrl}\n`,
       );
     }
@@ -740,6 +746,8 @@ async function main() {
       },
       strict: true,
     });
+    const summaryPath =
+      values.summary === undefined ? undefined : requireCliPath(values.summary, '--summary');
 
     if (!values.tag || !values['notes-file']) {
       throw new Error('Missing required flags for publish: --tag, --notes-file.');
@@ -747,14 +755,14 @@ async function main() {
 
     const result = await publishGitcodeRelease({
       tag: values.tag,
-      notesText: readFileSync(resolve(values['notes-file']), 'utf8'),
+      notesText: readFileSync(requireCliPath(values['notes-file'], '--notes-file'), 'utf8'),
       artifactName: values['artifact-name'],
       releaseName: values.name,
     });
 
-    if (values.summary) {
+    if (summaryPath) {
       appendFileSync(
-        values.summary,
+        summaryPath,
         `GitCode Release (${result.releaseStatus}): ${result.releaseUrl}\n`,
       );
     }

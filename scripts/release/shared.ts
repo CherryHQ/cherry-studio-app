@@ -133,3 +133,24 @@ export async function fileEvidence(
   checkDeadline();
   return { size: statSync(filePath).size, sha256: hash.digest('hex') };
 }
+
+/** Redact individual values without truncating JSON or masking integrity hashes. */
+export function sanitizeReleaseResult(
+  value: unknown,
+  env: Record<string, string | undefined> = process.env,
+  key = '',
+): unknown {
+  if (typeof value === 'string') {
+    if (/token|password|secret|authorization|api[-_]?key/i.test(key)) return '[redacted]';
+    return /message|error|warning|diagnostic|stdout|stderr|detail/i.test(key)
+      ? sanitizeDiagnostic(value, env)
+      : redactSecretsInStream(value, [], env);
+  }
+  if (Array.isArray(value)) return value.map((item) => sanitizeReleaseResult(item, env, key));
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([name, item]) => [name, sanitizeReleaseResult(item, env, name)]),
+    );
+  }
+  return value;
+}
