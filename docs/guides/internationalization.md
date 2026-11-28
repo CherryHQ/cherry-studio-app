@@ -130,9 +130,10 @@ registry, all required translations, and any native/template coverage claims tog
 ## Validation Ownership
 
 The focused regressions are `src/shared/utils/__tests__/languages.test.ts`,
-`scripts/__tests__/i18nCatalog.test.ts`, and the settings/i18n behavior suites. Tooling tests under
-`scripts/__tests__` are excluded from the remote application suite by `PRCI`; run them explicitly
-when authorized. Follow [Testing And CI](./testing-and-ci.md).
+`scripts/__tests__/i18nCatalog.test.ts`, and the settings/i18n behavior suites. Run those locally
+(or via `pnpm test:changed` when editing `scripts/i18n*`); remote PR CI runs `i18n:check` on static
+changes and covers test suites in nightly and release full runs. Follow
+[Testing And CI](./testing-and-ci.md).
 
 Device acceptance should cover manual/system mode, a system-language change, a failed preference
 write, rapid changes, Traditional Chinese script matching, plural counts, long translated labels,
