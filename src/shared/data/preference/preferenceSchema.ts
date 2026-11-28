@@ -21,6 +21,7 @@ import {
   type AssistantMessageToolbarConfig,
   DEFAULT_ASSISTANT_MESSAGE_TOOLBAR_CONFIG,
 } from '@/shared/data/types/assistantMessageToolbar';
+import type { DesktopDispatchLastTarget } from '@/shared/data/types/desktopDispatchTool';
 import type {
   WebSearchCompressionMethod,
   WebSearchProviderId,
@@ -109,8 +110,9 @@ export interface PreferenceSchema {
   'chat.input.enter_to_send': boolean;
   'chat.deepseek.safety_check': boolean;
 
+  'desktop.dispatch.last_target': DesktopDispatchLastTarget | null;
+
   'feature.paintings.default_model_id': string | null;
-  'feature.quick_assistant.model_id': string | null;
   'feature.translate.model_id': string | null;
   /** Null disables voice input and keeps the composer's send action. */
   'feature.voice.dictation_engine': VoiceEngineId | null;
@@ -134,11 +136,9 @@ export interface PreferenceSchema {
 
   'agent.session_naming.enabled': boolean;
   'agent.session_naming.model_id': string | null;
-  'agent.session_naming.prompt': string;
 
   'ui.chat.assistant_toolbar_actions': AssistantMessageToolbarConfig;
   'ui.font_size_step': FontSizeStep;
-  'ui.library.view_mode': 'grid' | 'list';
   'ui.navigation.pinned_tabs': NavigationPinTabId[];
   /** The user hid the sidebar a wide window would otherwise keep beside the content. */
   'ui.sidebar.collapsed': boolean;
@@ -179,8 +179,9 @@ export const PreferenceDefaults = {
   'chat.web_search.provider_overrides': {},
   'chat.input.enter_to_send': false,
 
+  'desktop.dispatch.last_target': null,
+
   'feature.paintings.default_model_id': null,
-  'feature.quick_assistant.model_id': null,
   'feature.translate.model_id': null,
   'chat.deepseek.safety_check': false,
   'feature.voice.dictation_engine': null,
@@ -198,11 +199,9 @@ export const PreferenceDefaults = {
 
   'agent.session_naming.enabled': true,
   'agent.session_naming.model_id': null,
-  'agent.session_naming.prompt': '',
 
   'ui.chat.assistant_toolbar_actions': DEFAULT_ASSISTANT_MESSAGE_TOOLBAR_CONFIG,
   'ui.font_size_step': 0,
-  'ui.library.view_mode': 'grid',
   'ui.navigation.pinned_tabs': ['agents'],
   'ui.sidebar.collapsed': false,
   'ui.sidebar.recent_view_mode': 'sessions',
@@ -227,7 +226,6 @@ export const INHERITABLE_PREFERENCE_KEYS = [
   'file.export.watermark_enabled',
   'ui.chat.assistant_toolbar_actions',
   'ui.font_size_step',
-  'ui.library.view_mode',
   'ui.navigation.pinned_tabs',
   'ui.sidebar.collapsed',
   'ui.sidebar.recent_view_mode',
@@ -250,6 +248,7 @@ export const DEVICE_LOCAL_PREFERENCE_KEYS = [
   'app.user.id',
   'chat.background_reply.enabled',
   'chat.completion_notifications.enabled',
+  'desktop.dispatch.last_target',
   // Engine support and system voices differ per device.
   'feature.voice.dictation_engine',
   'feature.voice.speech_engine',

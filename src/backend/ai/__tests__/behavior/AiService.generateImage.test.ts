@@ -75,6 +75,89 @@ describe('AiService.generateImage AI SDK contract', () => {
     );
   });
 
+  test.each([
+    ['MiniMax-H3-Image', 'api.minimax.io'],
+    ['MiniMax-H3-Image-Highspeed', 'api.minimax.cn'],
+  ])('uses the H3 generation protocol for %s on %s', async (modelId, host) => {
+    const fixture = createContractFixture({
+      capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+      modelId,
+      modelOverrides: { endpointTypes: [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION] },
+      providerOverrides: {
+        id: host === 'api.minimax.cn' ? 'minimax' : 'minimax-global',
+        presetProviderId: 'minimax',
+        endpointConfigs: {
+          [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+            adapterFamily: 'openai-compatible',
+            baseUrl:
+              host === 'api.minimax.cn'
+                ? 'https://api.minimaxi.com/v1/'
+                : 'https://api.minimax.io/v1/',
+          },
+        },
+      },
+    });
+    const fetch = jest.spyOn(globalThis, 'fetch');
+    const useBase64 = host === 'api.minimax.cn';
+    const imageUrl = 'https://cdn.example.com/generated.png';
+    const png =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2B8AAAAASUVORK5CYII=';
+    fetch.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: [
+            useBase64 ? { b64_json: png } : { url: imageUrl },
+            { error: { code: '1027', message: 'Image withheld' } },
+          ],
+          usage: { input_tokens: 1, output_tokens: 2, total_tokens: 3 },
+        }),
+        { status: 200 },
+      ),
+    );
+    if (!useBase64) {
+      fetch.mockResolvedValueOnce(
+        new Response(
+          Uint8Array.from(atob(png), (c) => c.charCodeAt(0)),
+          {
+            headers: { 'Content-Type': 'image/png' },
+          },
+        ),
+      );
+    }
+    const request = {
+      mode: 'generate' as const,
+      uniqueModelId: fixture.model.id,
+      prompt: 'Paint a cherry tree.',
+      requestOptions: { maxRetries: 2 },
+      paramValues: {
+        numImages: 2,
+        size: '1024x1024',
+        aspectRatio: '1:1',
+        ...(useBase64 && { outputFormat: 'base64' }),
+        addWatermark: false,
+        promptEnhancement: true,
+      },
+    };
+    const service = new AiService(fixture.services);
+    await expect(service.generateImage(request)).resolves.toMatchObject({
+      images: [{ base64: png, mediaType: 'image/png' }],
+    });
+    expect(fetch.mock.calls[0][0]).toBe(`https://${host}/v1/images/generations`);
+    expect(JSON.parse(fetch.mock.calls[0][1]!.body as string)).toEqual({
+      model: modelId,
+      prompt: request.prompt,
+      n: 2,
+      size: '1024x1024',
+      ...(useBase64 && { response_format: 'b64_json' }),
+      disable_prompt_enhanced: false,
+      ...(host === 'api.minimax.cn' && { aigc_watermark: false }),
+    });
+    if (!useBase64) expect(fetch.mock.calls[1][0]).toBe(imageUrl);
+    fetch.mockClear().mockRejectedValue(new TypeError('Connection lost'));
+    await expect(service.generateImage(request)).rejects.toBeInstanceOf(AiRequestError);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   test('maps input data URLs into image-edit files without using HTTP', async () => {
     const fixture = imageFixture();
     const doGenerate = jest.fn(async (_options: ImageModelV3CallOptions) => imageResult(1));

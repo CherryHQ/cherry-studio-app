@@ -41,6 +41,7 @@ import { raceAbort } from '../runtime';
 import type {
   AgentRuntime,
   RuntimeContextCheckpoint,
+  RuntimeMcpNamespace,
   RuntimeModelPreflight,
   RuntimeTool,
   RuntimeWebTools,
@@ -113,7 +114,8 @@ export type TurnPreparationDependencies = {
     | 'loadRuntimeTurnContext'
     | 'loadSkillActivations'
     | 'loadWorkflowLoads'
-  >;
+  > &
+    Partial<Pick<AgentSessionStore, 'loadDispatchedDesktopSessions'>>;
   systemCapabilities: SystemCapabilitySource;
   webTools?(): Promise<RuntimeWebTools>;
 };
@@ -143,12 +145,19 @@ export type TurnPlan = {
   runtimeContentAttachments: RuntimeAttachmentContents;
   sessionTitle: string;
   tools: readonly RuntimeTool[];
+  mcpNamespaces: readonly RuntimeMcpNamespace[];
   webTools?: RuntimeWebTools;
   pluginGuides: readonly PluginGuideSnapshot[];
   /** Plugin guides loaded earlier in the Session whose connection is still in this turn. */
   workflowInstructions: readonly { key: string; text: string }[];
   /** The Skills usable in this turn, with their pinned revisions. */
   skills: TurnSkillPlan;
+  /** Sources whose transient discovery failure removed tools from `tools`. */
+  toolDiscoveryFailures?: {
+    mcpCapabilitiesAll?: boolean;
+    mcpServerIds: ReadonlySet<string>;
+    systemCapabilitiesAll: boolean;
+  };
   toolDiscoveryWarnings: readonly string[];
   /** The user message parts to reserve, projected from the canonical input. */
   userParts: AgentMessagePart[];
@@ -204,7 +213,11 @@ function createTurnUsageAttribution(
  * message the new question follows (null for a first question); omitted, the
  * Session's selected leaf. A multi-model answer limits its tools to reads.
  */
-export type TurnScope = { through?: string | null; readOnlyTools?: boolean };
+export type TurnScope = {
+  through?: string | null;
+  readOnlyTools?: boolean;
+  recovering?: boolean;
+};
 
 export async function prepareTurn(
   dependencies: TurnPreparationDependencies,
@@ -359,6 +372,10 @@ export async function prepareDurableTurn(
   scope: TurnScope = {},
   /** Recovery supplies the admitted identity; null must not inherit the current binding. */
   workspaceFolderId?: string | null,
+  options?: {
+    hasMessages?: boolean;
+    recovering?: boolean;
+  },
 ): Promise<TurnPlan> {
   const session = await raceAbort(dependencies.store.getSession(parsed.sessionId), signal);
   if (!session) fail('SESSION_NOT_FOUND', `Session does not exist: ${parsed.sessionId}`);
@@ -374,14 +391,17 @@ export async function prepareDurableTurn(
     agent,
     {
       anchorFound: true,
-      hasMessages: true,
+      hasMessages: options?.hasMessages ?? true,
       history: [],
       referencedFileEntryIds: [...referencedFileEntryIds],
     },
     null,
     dependencies.documentParserMode(),
     signal,
-    scope,
+    {
+      ...scope,
+      ...(options?.recovering ? { recovering: true } : {}),
+    },
   );
 }
 
@@ -513,6 +533,7 @@ export async function prepareResolvedTurn(
       runtimeContentAttachments: new Map(),
       sessionTitle: session.name,
       tools: [],
+      mcpNamespaces: [],
       pluginGuides: [],
       workflowInstructions: [],
       skills: EMPTY_TURN_SKILL_PLAN,
@@ -566,9 +587,13 @@ export async function prepareResolvedTurn(
   // resolution remains optional; configured MCP binding resolution fails closed.
   let systemTools: readonly RuntimeTool[] = [];
   let configuredTools: readonly RuntimeTool[] = [];
+  let mcpNamespaces: readonly RuntimeMcpNamespace[] = [];
   let skillTools: readonly RuntimeTool[] = [];
   let pluginGuides: TurnPlan['pluginGuides'] = [];
   let skills: TurnSkillPlan = EMPTY_TURN_SKILL_PLAN;
+  let systemCapabilitiesAll = false;
+  let mcpCapabilitiesAll = false;
+  const failedMcpServerIds = new Set<string>();
   const toolDiscoveryWarnings: string[] = [];
   // A multi-model answer runs beside others, so it never loads Skills or plugin workflows.
   const canUseSkills = canUseTools && !scope.readOnlyTools;
@@ -583,6 +608,14 @@ export async function prepareResolvedTurn(
         ),
       );
     try {
+      const dispatchedDesktopSessions = await raceAbort(
+        dependencies.store.loadDispatchedDesktopSessions?.(parsed.sessionId, scope.through) ?? [],
+        signal,
+      ).catch((error: unknown) => {
+        signal.throwIfAborted();
+        logger.warn('Failed to restore dispatched desktop sessions', error as Error);
+        return [];
+      });
       systemTools = await raceAbort(
         dependencies.systemCapabilities.getTools({
           sessionId: parsed.sessionId,
@@ -592,6 +625,7 @@ export async function prepareResolvedTurn(
           model: agent.model,
           acceptsImages: modelPreflight.inputModalities.includes('image'),
           resources,
+          dispatchedDesktopSessions,
           documentParserMode,
           resolveUsageAttribution: usageAttribution.resolve,
         }),
@@ -599,6 +633,7 @@ export async function prepareResolvedTurn(
       );
     } catch (error) {
       signal.throwIfAborted();
+      systemCapabilitiesAll = true;
       logger.warn('Failed to resolve system capabilities; continuing without them', error as Error);
     }
     try {
@@ -616,10 +651,21 @@ export async function prepareResolvedTurn(
         signal,
       );
       configuredTools = configured.tools;
+      mcpNamespaces = configured.mcpNamespaces ?? [];
+      for (const serverId of configured.unavailableServerIds ?? []) {
+        failedMcpServerIds.add(serverId);
+      }
       if (canUseSkills) pluginGuides = configured.pluginGuides;
-    } catch {
+    } catch (error) {
       signal.throwIfAborted();
-      fail('EXECUTION_UNAVAILABLE', 'The configured Agent tools are unavailable.');
+      if (!scope.recovering) {
+        fail('EXECUTION_UNAVAILABLE', 'The configured Agent tools are unavailable.');
+      }
+      mcpCapabilitiesAll = true;
+      logger.warn(
+        'Failed to resolve configured Agent tools during recovery; continuing without them',
+        error as Error,
+      );
     }
   }
   if (canUseSkills) {
@@ -788,12 +834,18 @@ export async function prepareResolvedTurn(
     runtimeContentAttachments,
     sessionTitle: session.name,
     tools,
+    mcpNamespaces,
     webTools,
     toolDiscoveryWarnings,
     userParts,
     pluginGuides,
     workflowInstructions,
     skills,
+    toolDiscoveryFailures: {
+      mcpCapabilitiesAll,
+      mcpServerIds: failedMcpServerIds,
+      systemCapabilitiesAll,
+    },
     usageAttribution,
   };
 }

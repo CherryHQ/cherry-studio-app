@@ -3,6 +3,7 @@ import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import {
   isAgentMutationToolPart,
+  isDesktopDispatchToolPart,
   isGeneratingImageToolPart,
   isProviderWebSearchToolPart,
   isToolMessagePart,
@@ -131,13 +132,14 @@ export function partitionMessageParts(
       return;
     }
 
-    // A question, a saved Agent, and an image being drawn are outcomes the
-    // reader acts on or waits for, not process.
+    // Keep questions, image progress, and actionable outcomes in the transcript.
     if (
       isToolMessagePart(part) &&
       (isUserQuestionToolPart(part) ||
         isGeneratingImageToolPart(part) ||
-        ((isAgentMutationToolPart(part) || isSkillAdaptationToolPart(part)) &&
+        ((isAgentMutationToolPart(part) ||
+          isSkillAdaptationToolPart(part) ||
+          isDesktopDispatchToolPart(part)) &&
           part.state === 'output-available'))
     ) {
       body.push({ index, kind: 'part', part });

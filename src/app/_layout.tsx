@@ -22,7 +22,6 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { withUniwind } from 'uniwind';
 
 import { AppBootstrapGate, AppBootstrapProvider, useAppBootstrapState } from '@/bootstrap';
-import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHandoff';
 import { AccountSessionGate, OrganizationLockAppearance } from '@/frontend/appShell/account';
 import { AppUpdateProvider } from '@/frontend/appShell/appUpdate';
 import { BackgroundActivityBridge } from '@/frontend/appShell/backgroundActivity';
@@ -38,7 +37,11 @@ import { PrivacyConsentGate } from '@/frontend/appShell/privacy';
 import { AppErrorBoundary } from '@/frontend/appShell/recovery';
 import { APP_SEARCH_TRANSITION_DURATION_MS } from '@/frontend/appShell/search';
 import { SshAuthenticationDialog } from '@/frontend/appShell/ssh';
-import { StartupCoordinator, StartupRouteReadyReporter } from '@/frontend/appShell/startup';
+import {
+  StartupChatInputMeasurement,
+  StartupCoordinator,
+  StartupRouteReadyReporter,
+} from '@/frontend/appShell/startup';
 import { SystemEntryBridge } from '@/frontend/appShell/systemEntry';
 import { UuRemoteCallbackBridge } from '@/frontend/appShell/uuRemote';
 import { MermaidRendererHost } from '@/frontend/components/MermaidDiagram';
@@ -48,8 +51,7 @@ import { LanguagePreferenceObserver } from '@/frontend/i18n';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
-// Hold the native surface until the matching React Native startup cover has
-// committed its first layout.
+// Hold the native launch screen until bootstrap and initial content are ready.
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 
 // The router integration has to be live before the first screen mounts, so this
@@ -91,7 +93,9 @@ function RootLayout() {
                                             <AccountSessionGate>
                                               <ConversationProvider>
                                                 <SystemEntryBridge>
-                                                  <RootStack />
+                                                  <StartupChatInputMeasurement>
+                                                    <RootStack />
+                                                  </StartupChatInputMeasurement>
                                                 </SystemEntryBridge>
                                               </ConversationProvider>
                                             </AccountSessionGate>
@@ -142,10 +146,7 @@ function BootstrapStartupCoordinator({ children }: PropsWithChildren) {
   const bootstrapState = useAppBootstrapState();
 
   return (
-    <StartupCoordinator
-      bootstrapReady={bootstrapState.status !== 'loading'}
-      onCoverPresented={reportStartupCoverPresented}
-    >
+    <StartupCoordinator bootstrapReady={bootstrapState.status !== 'loading'}>
       {children}
     </StartupCoordinator>
   );

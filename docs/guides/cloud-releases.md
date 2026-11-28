@@ -100,7 +100,7 @@ production bundle identifier in `app.json`. Set up its submission API key with
 for app identities and production environment requirements.
 
 `package.json` (`devDependencies["eas-cli"]`), `eas.json` (`cli.version`), and `scripts/publishUpdate.ts`
-(used by the OTA Update workflow) pin EAS CLI to `24.4.2`; update them together when upgrading it.
+(used by the OTA Update workflow) pin EAS CLI to `27.11.0`; update them together when upgrading it.
 
 Native releases now embed the EAS Update client. Channels are platform-specific:
 `production-apk` for public APKs, `production-google-play` for Play,

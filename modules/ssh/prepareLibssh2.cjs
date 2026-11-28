@@ -24,7 +24,7 @@ function prepareLibssh2(moduleRoot = __dirname) {
   try {
     const archive = join(temporary, 'libssh2.tar.gz');
     execFileSync(
-      'curl',
+      'curl', // NOSONAR trusted build tool resolved from PATH
       [
         '--fail',
         '--location',
@@ -52,10 +52,8 @@ function prepareLibssh2(moduleRoot = __dirname) {
     if (actual !== pin.archiveSha256) throw new Error('libssh2 archive SHA-256 mismatch');
     const extracted = join(temporary, 'source');
     mkdirSync(extracted);
-    execFileSync('tar', ['-xzf', archive, '--strip-components=1', '-C', extracted], {
-      stdio: 'inherit',
-      timeout: 30000,
-    });
+    // prettier-ignore
+    execFileSync('tar', ['-xzf', archive, '--strip-components=1', '-C', extracted], { stdio: 'inherit', timeout: 30000 }); // NOSONAR trusted build tool resolved from PATH
     for (const file of ['include/libssh2.h', 'src/libssh2_priv.h', 'COPYING'])
       if (!existsSync(join(extracted, file))) throw new Error(`libssh2 archive is missing ${file}`);
     try {

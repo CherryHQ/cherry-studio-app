@@ -20,32 +20,41 @@ const HEADER_FADE_END = 0.5;
 export function ChatScreenFrame({
   children,
   header: Header,
-}: PropsWithChildren<{
-  header: ComponentType<ChatHeaderProps>;
-}>) {
+  headerPlacement,
+  surface,
+}: ChatScreenFrameProps) {
   return (
     <ChatShareSelectionScope>
       <Composer.Expansion>
         <FullScreenLayerProvider>
-          <ChatScreenContent header={Header}>{children}</ChatScreenContent>
+          <ChatScreenContent header={Header} headerPlacement={headerPlacement} surface={surface}>
+            {children}
+          </ChatScreenContent>
         </FullScreenLayerProvider>
       </Composer.Expansion>
     </ChatShareSelectionScope>
   );
 }
 
+type ChatScreenFrameProps = PropsWithChildren<{
+  header: ComponentType<ChatHeaderProps>;
+  headerPlacement?: 'overlay' | 'inline';
+  surface?: 'default' | 'sheet';
+}>;
+
 function ChatScreenContent({
   children,
   header: Header,
-}: PropsWithChildren<{
-  header: ComponentType<ChatHeaderProps>;
-}>) {
+  headerPlacement = 'overlay',
+  surface = 'default',
+}: ChatScreenFrameProps) {
   const blurTarget = useRef<ViewInstance>(null);
   const expansion = useComposerExpansion();
   const isLayerPresented = useIsFullScreenLayerPresented();
   const isShareSelecting = useChatShareHeaderSelection() !== undefined;
   useHideFloatingDock(
-    Boolean(expansion?.state.isPresented || isLayerPresented || isShareSelecting),
+    surface !== 'sheet' &&
+      Boolean(expansion?.state.isPresented || isLayerPresented || isShareSelecting),
   );
   const layerProgress = useFullScreenLayerProgress();
   const headerFadeStyle = useAnimatedStyle(() => ({
@@ -58,12 +67,15 @@ function ChatScreenContent({
   }));
   return (
     <>
+      {headerPlacement === 'inline' ? <ChatHeader header={Header} blurTarget={blurTarget} /> : null}
       <BlurTargetView ref={blurTarget} style={{ flex: 1 }}>
-        <View className="flex-1 bg-chat-background">
+        <View
+          className={surface === 'sheet' ? 'flex-1 bg-transparent' : 'flex-1 bg-chat-background'}
+        >
           <ReadingContentFrame>{children}</ReadingContentFrame>
         </View>
       </BlurTargetView>
-      {Platform.OS === 'android' ? (
+      {headerPlacement === 'inline' ? null : Platform.OS === 'android' ? (
         // Android draws its header in the app, so it fades with the layer's motion on the UI
         // thread; removing it partway through would stall the motion and pop.
         <Animated.View

@@ -18,6 +18,8 @@ import {
   FakeRuntime,
   LANES_PER_SESSION,
   RuntimeCorruptLaneError,
+  RuntimeToolDiscoveryError,
+  RuntimeToolUnavailableError,
   laneKey,
   parseLaneKey,
   runtimeLane,
@@ -27,6 +29,8 @@ import {
   type RuntimeConversationSeed,
   type RuntimeDurableTurn,
   type RuntimeExecutionPorts,
+  type RuntimePendingApproval,
+  type RuntimePendingQuestion,
   type RuntimeError,
   type RuntimeSqlDatabase,
   type RuntimeTool,
@@ -336,6 +340,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
   };
   return {
     host,
+    ports,
     store,
     raw: harness.raw,
     seedFolder: harness.seedFolder,
@@ -527,6 +532,475 @@ describe.each([true, false])('screen-awake generation demand (port provided: %s)
     state.expectLeases(2, 1);
     await state.host.close();
     state.expectLeases(2, 2);
+  });
+
+  test('resolveTool throws RuntimeToolUnavailableError when the capability is absent from the rebuilt catalog', async () => {
+    const state = fixture({
+      tools: { getTools: async () => [] },
+    });
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    try {
+      await expect(
+        state
+          .execution()!
+          .resolveTool(
+            turn.identity,
+            { source: 'builtin', capabilityId: 'generate_image' },
+            new AbortController().signal,
+          ),
+      ).rejects.toBeInstanceOf(RuntimeToolUnavailableError);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('resolveTool throws a plain Error and clears cached preparation on transient MCP discovery failure, allowing recovery', async () => {
+    const mcpTool: RuntimeTool = {
+      ref: { source: 'mcp', serverId: 'srv-transient', rawToolName: 'search' },
+      providerName: 'mcp_srv_search',
+      displayName: 'Search',
+      description: 'Search records.',
+      inputSchema: { type: 'object' },
+      approval: 'ask',
+      execute: async () => ({ value: 'ok', artifacts: [] }),
+    };
+    let available = false;
+    const state = fixture({
+      runtimeTools: {
+        resolve: async () =>
+          available
+            ? { tools: [mcpTool], pluginGuides: [], unavailableServerIds: [] }
+            : { tools: [], pluginGuides: [], unavailableServerIds: ['srv-transient'] },
+      },
+    });
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    try {
+      const error = await state
+        .execution()!
+        .resolveTool(turn.identity, mcpTool.ref, new AbortController().signal)
+        .catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(RuntimeToolDiscoveryError);
+      expect(error).not.toBeInstanceOf(RuntimeToolUnavailableError);
+
+      available = true;
+      await expect(
+        state.execution()!.resolveTool(turn.identity, mcpTool.ref, new AbortController().signal),
+      ).resolves.toMatchObject({ providerName: mcpTool.providerName });
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('resolveTool distinguishes transient system-capability errors from recovery', async () => {
+    const builtinTool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'generate_image' },
+      providerName: 'generate_image',
+      displayName: 'Generate image',
+      description: 'Generate an image.',
+      inputSchema: { type: 'object' },
+      approval: 'ask',
+      execute: async () => ({ value: 'ok', artifacts: [] }),
+    };
+    let shouldThrow = true;
+    const state = fixture({
+      tools: {
+        getTools: async () => {
+          if (shouldThrow) throw new Error('DB busy');
+          return [builtinTool];
+        },
+      },
+    });
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    try {
+      const firstError = await state
+        .execution()!
+        .resolveTool(turn.identity, builtinTool.ref, new AbortController().signal)
+        .catch((caught: unknown) => caught);
+      expect(firstError).toBeInstanceOf(RuntimeToolDiscoveryError);
+      expect(firstError).not.toBeInstanceOf(RuntimeToolUnavailableError);
+
+      shouldThrow = false;
+      await expect(
+        state
+          .execution()!
+          .resolveTool(turn.identity, builtinTool.ref, new AbortController().signal),
+      ).resolves.toMatchObject({ providerName: 'generate_image' });
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test.each([
+    ['approve', true, 'approved'],
+    ['deny', true, 'denied'],
+    ['approve', false, 'cancelled'],
+  ] as const)(
+    'reconciles a restored approval when %s is delivered=%s',
+    async (decision, delivered, status) => {
+      const state = screenFixture();
+      const turn = await state.reserve('running');
+      const approval: RuntimePendingApproval = {
+        id: 'pi:10:save',
+        turnId: turn.identity.turnId,
+        requestId: turn.identity.requestId,
+        toolCallId: 'save',
+        toolRef: { source: 'builtin', capabilityId: 'write_file' },
+        providerName: 'write_file',
+        displayName: 'Write file',
+        input: {},
+        requestedAt: 123,
+      };
+      const originalObserve = state.conversations.observe;
+      state.conversations.observe = async (lane, listener) => {
+        const observation = await originalObserve(lane, listener);
+        return {
+          ...observation,
+          snapshot: { ...observation.snapshot, pendingApprovals: [approval] },
+        };
+      };
+      const respond = jest.fn(async () => {
+        state.listeners.get(state.sessionId)?.({ type: 'approvals.updated', approvals: [] });
+        return delivered;
+      });
+      state.conversations.respondApproval = respond;
+      await state.host.initialize();
+      const events: AgentEvent[] = [];
+      const observation = await state.host.observeSession(state.sessionId, (event) =>
+        events.push(event),
+      );
+      try {
+        expect(observation.snapshot.activeTurn?.status).toBe('awaiting-approval');
+        expect(observation.snapshot.pendingApprovals).toEqual([
+          expect.objectContaining({ id: approval.id, status: 'pending' }),
+        ]);
+        state.expectLeases(0, 0);
+        await settle();
+        expect(state.reply.setInteraction).toHaveBeenCalledWith(
+          expect.objectContaining({ kind: 'approval', id: approval.id }),
+        );
+        const response = state.host.respondApproval({
+          sessionId: state.sessionId,
+          turnId: approval.turnId,
+          approvalId: approval.id,
+          decision,
+        });
+        if (delivered) await response;
+        else await expect(response).rejects.toMatchObject({ view: { code: 'APPROVAL_NOT_FOUND' } });
+        expect(respond).toHaveBeenCalledWith(runtimeLane(state.sessionId), approval.id, decision);
+        expect(events.filter((event) => event.type === 'approval.resolved')).toEqual([
+          {
+            type: 'approval.resolved',
+            approval: expect.objectContaining({ id: approval.id, status }),
+          },
+        ]);
+        expect(events).toContainEqual(
+          expect.objectContaining({
+            type: 'turn.updated',
+            turn: expect.objectContaining({ status: 'running' }),
+          }),
+        );
+        state.expectLeases(1, 0);
+      } finally {
+        await observation.unsubscribe();
+        await state.host.close();
+      }
+    },
+  );
+
+  test('rejects an opposite concurrent approval decision instead of resolving both', async () => {
+    const state = screenFixture();
+    const turn = await state.reserve('running');
+    const approval: RuntimePendingApproval = {
+      id: 'pi:10:save',
+      turnId: turn.identity.turnId,
+      requestId: turn.identity.requestId,
+      toolCallId: 'save',
+      toolRef: { source: 'builtin', capabilityId: 'write_file' },
+      providerName: 'write_file',
+      displayName: 'Write file',
+      input: {},
+      requestedAt: 123,
+    };
+    const originalObserve = state.conversations.observe;
+    state.conversations.observe = async (lane, listener) => {
+      const observation = await originalObserve(lane, listener);
+      return {
+        ...observation,
+        snapshot: { ...observation.snapshot, pendingApprovals: [approval] },
+      };
+    };
+    let resolveRespond!: (delivered: boolean) => void;
+    const respond = jest.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveRespond = resolve;
+        }),
+    );
+    state.conversations.respondApproval = respond;
+    await state.host.initialize();
+    const observation = await state.host.observeSession(state.sessionId, () => undefined);
+    try {
+      await settle();
+      const first = state.host.respondApproval({
+        sessionId: state.sessionId,
+        turnId: approval.turnId,
+        approvalId: approval.id,
+        decision: 'approve',
+      });
+      await expect(
+        state.host.respondApproval({
+          sessionId: state.sessionId,
+          turnId: approval.turnId,
+          approvalId: approval.id,
+          decision: 'deny',
+        }),
+      ).rejects.toMatchObject({ view: { code: 'APPROVAL_NOT_FOUND' } });
+      expect(respond).toHaveBeenCalledTimes(1);
+      state.listeners.get(state.sessionId)?.({ type: 'approvals.updated', approvals: [] });
+      resolveRespond(true);
+      await expect(first).resolves.toBeUndefined();
+    } finally {
+      await observation.unsubscribe();
+      await state.host.close();
+    }
+  });
+
+  test('projects a durable question and validates answers before routing to its lane', async () => {
+    const state = screenFixture();
+    const turn = await state.reserve('running');
+    const question: RuntimePendingQuestion = {
+      turnId: turn.identity.turnId,
+      requestId: turn.identity.requestId,
+      toolCallId: 'choice',
+      question: {
+        questions: [{ id: 'choice', question: 'Which one?', selection: 'single', options: [] }],
+      },
+      requestedAt: 123,
+    };
+    const respond = jest.fn(async () => {
+      state.listeners.get(state.sessionId)?.({ type: 'question.updated', question: null });
+      return true;
+    });
+    state.conversations.respondQuestion = respond;
+    await state.host.initialize();
+    const events: AgentEvent[] = [];
+    const observation = await state.host.observeSession(state.sessionId, (event) =>
+      events.push(event),
+    );
+    try {
+      await settle();
+      state.listeners.get(state.sessionId)?.({ type: 'question.updated', question });
+      expect(events).toContainEqual({
+        type: 'question.updated',
+        question: {
+          turnId: question.turnId,
+          toolCallId: question.toolCallId,
+          question: question.question,
+        },
+      });
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'turn.updated',
+          turn: expect.objectContaining({ status: 'awaiting-input' }),
+        }),
+      );
+      expect(state.reply.setInteraction).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'question', id: question.toolCallId }),
+      );
+      state.expectLeases(1, 1);
+      const response = {
+        sessionId: state.sessionId,
+        turnId: question.turnId,
+        toolCallId: question.toolCallId,
+        answer: {
+          answers: [{ questionId: 'choice', selectedOptionIds: [], text: 'First', skipped: false }],
+        },
+      };
+      await expect(
+        state.host.respondQuestion({
+          ...response,
+          answer: { answers: [{ ...response.answer.answers[0]!, text: '' }] },
+        }),
+      ).rejects.toThrow('Invalid answer for this question.');
+      expect(respond).not.toHaveBeenCalled();
+      await state.host.respondQuestion(response);
+      expect(respond).toHaveBeenCalledWith(
+        runtimeLane(state.sessionId),
+        question.toolCallId,
+        response.answer,
+        question.turnId,
+      );
+      expect(events).toContainEqual({ type: 'question.updated', question: null });
+      state.expectLeases(2, 1);
+    } finally {
+      await observation.unsubscribe();
+      await state.host.close();
+    }
+  });
+
+  test('passes turnId into durable respondQuestion and rejects mismatched turns', async () => {
+    const state = screenFixture();
+    const turn = await state.reserve('running');
+    const question: RuntimePendingQuestion = {
+      turnId: turn.identity.turnId,
+      requestId: turn.identity.requestId,
+      toolCallId: 'choice',
+      question: {
+        questions: [{ id: 'choice', question: 'Which one?', selection: 'single', options: [] }],
+      },
+      requestedAt: 123,
+    };
+    const respond = jest.fn(async (_lane, _toolCallId, _answer, turnId?: string) => {
+      const matched = turnId === question.turnId;
+      if (matched)
+        state.listeners.get(state.sessionId)?.({ type: 'question.updated', question: null });
+      return matched;
+    });
+    state.conversations.respondQuestion = respond;
+    await state.host.initialize();
+    const observation = await state.host.observeSession(state.sessionId, () => undefined);
+    try {
+      await settle();
+      state.listeners.get(state.sessionId)?.({ type: 'question.updated', question });
+      const answer = {
+        answers: [{ questionId: 'choice', selectedOptionIds: [], text: 'First', skipped: false }],
+      };
+      await expect(
+        state.host.respondQuestion({
+          sessionId: state.sessionId,
+          turnId: `${question.turnId}-stale`,
+          toolCallId: question.toolCallId,
+          answer,
+        }),
+      ).rejects.toMatchObject({ view: { code: 'QUESTION_NOT_FOUND' } });
+      expect(respond).not.toHaveBeenCalled();
+
+      state.conversations.respondQuestion = jest.fn(async () => false);
+      await expect(
+        state.host.respondQuestion({
+          sessionId: state.sessionId,
+          turnId: question.turnId,
+          toolCallId: question.toolCallId,
+          answer,
+        }),
+      ).rejects.toMatchObject({ view: { code: 'QUESTION_NOT_FOUND' } });
+      expect(state.conversations.respondQuestion).toHaveBeenCalledWith(
+        runtimeLane(state.sessionId),
+        question.toolCallId,
+        answer,
+        question.turnId,
+      );
+    } finally {
+      await observation.unsubscribe();
+      await state.host.close();
+    }
+  });
+
+  test('shares single-question exclusion between durable questions and in-memory askUser callers', async () => {
+    let checkRuntimePending: () => Promise<boolean> = async () => false;
+    const state = screenFixture({
+      tools: { getTools: async ({ askUser }) => [createAskUserQuestionTool(askUser)] },
+    });
+    state.conversations.hasPendingQuestion = () => checkRuntimePending();
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    const events: AgentEvent[] = [];
+    const observation = await state.host.observeSession(state.sessionId, (event) =>
+      events.push(event),
+    );
+    const controller = new AbortController();
+    const askQuestion = {
+      questions: [
+        { id: 'choice', question: 'Which one?', selection: 'single' as const, options: [] },
+      ],
+    };
+    const durableQuestion: RuntimePendingQuestion = {
+      turnId: turn.identity.turnId,
+      requestId: turn.identity.requestId,
+      toolCallId: 'durable-q',
+      question: askQuestion,
+      requestedAt: 123,
+    };
+    try {
+      await settle();
+      const ports = state.execution()!;
+      expect(ports.hasPendingHostQuestion?.(turn.identity)).toBe(false);
+      const tool = await ports.resolveTool(
+        turn.identity,
+        { source: 'builtin', capabilityId: 'ask_user_question' },
+        controller.signal,
+      );
+
+      // (a) When a durable question is projected, an in-memory caller (e.g. adapt_skill) is rejected.
+      state.listeners.get(state.sessionId)?.({
+        type: 'question.updated',
+        question: durableQuestion,
+      });
+      await expect(
+        tool.execute({
+          turnId: turn.identity.turnId,
+          toolCallId: 'in-memory-q-1',
+          signal: controller.signal,
+          input: askQuestion,
+        }),
+      ).rejects.toThrow('Wait for the current question before asking another.');
+      expect(events.findLast((event) => event.type === 'question.updated')).toEqual({
+        type: 'question.updated',
+        question: {
+          turnId: durableQuestion.turnId,
+          toolCallId: durableQuestion.toolCallId,
+          question: durableQuestion.question,
+        },
+      });
+      state.listeners.get(state.sessionId)?.({ type: 'question.updated', question: null });
+
+      // (b) When runtime reports a parked question in-flight before projection, askUser claims then rejects,
+      //     and hasPendingHostQuestion stays true while claiming and while an in-memory question waits.
+      let releaseCheck!: (pending: boolean) => void;
+      checkRuntimePending = () =>
+        new Promise<boolean>((resolve) => {
+          releaseCheck = resolve;
+        });
+      const pendingRejection = tool.execute({
+        turnId: turn.identity.turnId,
+        toolCallId: 'in-memory-q-2',
+        signal: controller.signal,
+        input: askQuestion,
+      });
+      expect(ports.hasPendingHostQuestion?.(turn.identity)).toBe(true);
+      releaseCheck(true);
+      await expect(pendingRejection).rejects.toThrow(
+        'Wait for the current question before asking another.',
+      );
+      expect(ports.hasPendingHostQuestion?.(turn.identity)).toBe(false);
+
+      // An ordinary in-memory question sets hasPendingHostQuestion=true until answered.
+      checkRuntimePending = async () => false;
+      const activeInMemory = tool.execute({
+        turnId: turn.identity.turnId,
+        toolCallId: 'in-memory-q-3',
+        signal: controller.signal,
+        input: askQuestion,
+      });
+      await settle();
+      expect(ports.hasPendingHostQuestion?.(turn.identity)).toBe(true);
+      await state.host.respondQuestion({
+        sessionId: state.sessionId,
+        turnId: turn.identity.turnId,
+        toolCallId: 'in-memory-q-3',
+        answer: {
+          answers: [{ questionId: 'choice', selectedOptionIds: [], text: 'Ok', skipped: false }],
+        },
+      });
+      await activeInMemory;
+      expect(ports.hasPendingHostQuestion?.(turn.identity)).toBe(false);
+    } finally {
+      await observation.unsubscribe();
+      await state.host.close();
+    }
   });
 
   test('cancel suppresses late running deltas and a new successor restores demand', async () => {
@@ -1170,6 +1644,354 @@ describe('durable tool diagnostics', () => {
       }
     },
   );
+
+  test('keeps unchanged follow-ups admissible on legacy pre-1.6 busy MCP sessions', async () => {
+    let mcpTool: RuntimeTool = {
+      ref: { source: 'mcp', serverId: 'srv-legacy', rawToolName: 'search' },
+      providerName: 'mcp_search',
+      displayName: 'Search',
+      description: 'Search records',
+      inputSchema: { type: 'object' },
+      executionSettingsKey: 'remote:conn-a',
+      approval: 'auto',
+      effect: 'read',
+      execute: async () => ({ value: null, artifacts: [] }),
+    };
+    let mcpNamespaces = [
+      { serverId: 'srv-legacy', name: 'srv_legacy', description: 'Legacy MCP server' },
+      { serverId: 'srv-empty', name: 'srv_empty', description: 'Enabled server with zero tools' },
+    ];
+    let tools: RuntimeTool[] = [mcpTool];
+    const f = fixture({
+      runtimeTools: {
+        resolve: async () => ({ tools, pluginGuides: [], mcpNamespaces }),
+      },
+    });
+    await f.reserve('running');
+    const storedConfig: RuntimeConversationSeed['configuration'] = {
+      ...configuration,
+      instructions: buildAgentSystemPrompt({
+        agentInstructions: '',
+        appLanguage: 'zh-CN',
+        tools: [mcpTool],
+      }),
+      mcpNamespaces: undefined,
+      tools: [mcpTool],
+    };
+    const configSpy = jest.spyOn(f.conversations, 'configuration').mockResolvedValue(storedConfig);
+    await f.host.initialize();
+    const submit = () =>
+      f.host.submitMessage({
+        sessionId: f.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Next.' }],
+      });
+    try {
+      await expect(submit()).resolves.toMatchObject({ turnId: expect.any(String) });
+      expect(f.conversations.submit).toHaveBeenCalledTimes(1);
+
+      // Genuine configuration changes still trigger SESSION_BUSY on legacy sessions.
+      mcpTool = { ...mcpTool, approval: 'ask' };
+      tools = [mcpTool];
+      await expect(submit()).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+      expect(f.conversations.submit).toHaveBeenCalledTimes(1);
+
+      // New 1.6 sessions persist mcpNamespaces ([] or populated) and compare namespaces strictly.
+      mcpTool = { ...mcpTool, approval: 'auto' };
+      tools = [];
+      mcpNamespaces = [{ serverId: 'srv-added', name: 'srv_added', description: 'Added server' }];
+      configSpy.mockResolvedValue({
+        ...configuration,
+        instructions: buildAgentSystemPrompt({
+          agentInstructions: '',
+          appLanguage: 'zh-CN',
+          tools: [],
+        }),
+        mcpNamespaces: [],
+        tools: [],
+      });
+      await expect(submit()).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+      expect(f.conversations.submit).toHaveBeenCalledTimes(1);
+
+      tools = [mcpTool];
+      mcpNamespaces = [
+        { serverId: 'srv-legacy', name: 'srv_legacy', description: 'Legacy MCP server' },
+      ];
+      configSpy.mockResolvedValue({
+        ...configuration,
+        instructions: buildAgentSystemPrompt({
+          agentInstructions: '',
+          appLanguage: 'zh-CN',
+          tools: [mcpTool],
+        }),
+        mcpNamespaces,
+        tools: [{ ...mcpTool, executionSettingsKey: 'remote:conn-old' }],
+      });
+      await expect(submit()).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+      expect(f.conversations.submit).toHaveBeenCalledTimes(1);
+    } finally {
+      await f.host.close();
+    }
+  });
+
+  test('refuses queueing a follow-up when a tool effect changes during an active turn', async () => {
+    const mcpTool: RuntimeTool = {
+      ref: { source: 'mcp', serverId: 'srv-effect', rawToolName: 'query_or_mutate' },
+      providerName: 'mcp_query_or_mutate',
+      displayName: 'Query Or Mutate',
+      description: 'Remote tool.',
+      inputSchema: { type: 'object' },
+      executionSettingsKey: 'remote:conn-a',
+      approval: 'auto',
+      effect: 'read',
+      execute: async () => ({ value: null, artifacts: [] }),
+    };
+    const mcpNamespaces = [
+      { serverId: 'srv-effect', name: 'srv_effect', description: 'Effect MCP server' },
+    ];
+    let liveTools: RuntimeTool[] = [mcpTool];
+    const f = fixture({
+      runtimeTools: {
+        resolve: async () => ({ tools: liveTools, pluginGuides: [], mcpNamespaces }),
+      },
+    });
+    await f.reserve('running');
+    const storedConfig: RuntimeConversationSeed['configuration'] = {
+      ...configuration,
+      instructions: buildAgentSystemPrompt({
+        agentInstructions: '',
+        appLanguage: 'zh-CN',
+        tools: [mcpTool],
+      }),
+      mcpNamespaces,
+      tools: [mcpTool],
+    };
+    const configSpy = jest.spyOn(f.conversations, 'configuration').mockResolvedValue(storedConfig);
+    await f.host.initialize();
+    const submit = () =>
+      f.host.submitMessage({
+        sessionId: f.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Continue.' }],
+      });
+    try {
+      await expect(submit()).resolves.toMatchObject({ turnId: expect.any(String) });
+      expect(f.conversations.submit).toHaveBeenCalledTimes(1);
+
+      liveTools = [{ ...mcpTool, effect: undefined }];
+      await expect(submit()).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+      expect(f.conversations.submit).toHaveBeenCalledTimes(1);
+
+      liveTools = [{ ...mcpTool, effect: 'write' }];
+      await expect(submit()).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+      expect(f.conversations.submit).toHaveBeenCalledTimes(1);
+
+      liveTools = [mcpTool];
+      configSpy.mockResolvedValue({
+        ...storedConfig,
+        tools: [{ ...mcpTool, effect: undefined }],
+      });
+      await expect(submit()).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+      expect(f.conversations.submit).toHaveBeenCalledTimes(1);
+    } finally {
+      await f.host.close();
+    }
+  });
+
+  test('refreshes cached turn preparation on respondApproval so in-process MCP binding revocation blocks wakeup while keeping admitted files', async () => {
+    const mcpTool: RuntimeTool = {
+      ref: { source: 'mcp', serverId: 'srv-1', rawToolName: 'search' },
+      providerName: 'mcp_srv1_search',
+      displayName: 'Search',
+      description: 'Search records.',
+      inputSchema: { type: 'object' },
+      approval: 'ask',
+      execute: async () => ({ value: 'ok', artifacts: [] }),
+    };
+    let bound = true;
+    const resolveRuntimeTools = jest.fn(async () => ({
+      tools: bound ? [mcpTool] : [],
+      pluginGuides: [],
+      mcpNamespaces: [{ serverId: 'srv-1', name: 'srv_1', description: 'Server 1' }],
+      unavailableServerIds: [],
+    }));
+    const grantedId = uuid();
+    let capturedResources: { fileEntryIds: ReadonlySet<string> } | undefined;
+    const f = fixture({
+      runtimeTools: { resolve: resolveRuntimeTools },
+      tools: {
+        getTools: async ({ resources }) => {
+          capturedResources = resources;
+          return [];
+        },
+      },
+      files: {
+        resolveAvailable: async (ids) =>
+          ids.includes(grantedId)
+            ? new Map([
+                [
+                  grantedId,
+                  { fileEntryId: grantedId, name: 'spec.txt', mediaType: 'text/plain', size: 12 },
+                ],
+              ])
+            : new Map(),
+        readAsBytes: async () => undefined,
+        readDocumentText: async () => undefined,
+        readImageText: async () => undefined,
+        readAsDataUrl: async () => undefined,
+      },
+    });
+    const respond = jest.fn(async () => true);
+    f.conversations.respondApproval = respond;
+    await f.reserve('completed');
+    await f.host.initialize();
+    const submitted = await f.host.submitMessage({
+      sessionId: f.sessionId,
+      userMessageId: uuid(),
+      assistantMessageId: uuid(),
+      parts: [{ type: 'text', text: 'Run search' }],
+    });
+    const turn = f.copies.get(f.sessionId)!.turns.at(-1)!;
+    const approval: RuntimePendingApproval = {
+      id: 'pi:10:search',
+      turnId: submitted.turnId,
+      requestId: turn.identity.requestId,
+      toolCallId: 'search-call',
+      toolRef: mcpTool.ref,
+      providerName: mcpTool.providerName,
+      displayName: mcpTool.displayName,
+      input: {},
+      requestedAt: 123,
+    };
+    const observation = await f.host.observeSession(f.sessionId, () => undefined);
+    try {
+      f.listeners.get(f.sessionId)?.({ type: 'approvals.updated', approvals: [approval] });
+      await expect(
+        f.execution()!.resolveTool(turn.identity, mcpTool.ref, new AbortController().signal),
+      ).resolves.toMatchObject({ providerName: mcpTool.providerName });
+      expect(resolveRuntimeTools).toHaveBeenCalledTimes(1);
+
+      await f.execution()!.admitArtifacts(
+        turn.identity,
+        [
+          {
+            ref: { kind: 'managed-file', fileEntryId: grantedId },
+            name: 'spec.txt',
+            mediaType: 'text/plain',
+            kind: 'created',
+          },
+        ],
+        new AbortController().signal,
+      );
+      expect(capturedResources?.fileEntryIds.has(grantedId)).toBe(true);
+
+      // Revoke the Agent's MCP binding in-process before approving the parked call.
+      bound = false;
+      await f.host.respondApproval({
+        sessionId: f.sessionId,
+        turnId: submitted.turnId,
+        approvalId: approval.id,
+        decision: 'approve',
+      });
+
+      await expect(
+        f.execution()!.resolveTool(turn.identity, mcpTool.ref, new AbortController().signal),
+      ).rejects.toBeInstanceOf(RuntimeToolUnavailableError);
+      expect(resolveRuntimeTools).toHaveBeenCalledTimes(2);
+      expect(capturedResources?.fileEntryIds.has(grantedId)).toBe(true);
+    } finally {
+      await observation.unsubscribe();
+      await f.host.close();
+    }
+  });
+
+  test('respondApproval refresh exposes updated SSH tool approval and diagnostics grant on resolveTool', async () => {
+    let granted = false;
+    const f = fixture({
+      tools: {
+        getTools: async () => [
+          {
+            ref: { source: 'builtin', capabilityId: 'ssh_execute' },
+            providerName: 'ssh_execute',
+            displayName: 'SSH · host',
+            description: 'Run command.',
+            inputSchema: { type: 'object' },
+            approval: granted ? 'auto' : 'ask',
+            executionSettingsKey: JSON.stringify([
+              'prof-1',
+              'rev-1',
+              'sel-1',
+              granted ? 'diag-1' : null,
+            ]),
+            execute: async () => ({ value: null, artifacts: [] }),
+          },
+        ],
+      },
+    });
+    f.conversations.respondApproval = jest.fn(async () => true);
+    await f.reserve('completed');
+    await f.host.initialize();
+    const submitted = await f.host.submitMessage({
+      sessionId: f.sessionId,
+      userMessageId: uuid(),
+      assistantMessageId: uuid(),
+      parts: [{ type: 'text', text: 'Check host' }],
+    });
+    const turn = f.copies.get(f.sessionId)!.turns.at(-1)!;
+    const approval: RuntimePendingApproval = {
+      id: 'pi:10:ssh',
+      turnId: submitted.turnId,
+      requestId: turn.identity.requestId,
+      toolCallId: 'ssh-call',
+      toolRef: { source: 'builtin', capabilityId: 'ssh_execute' },
+      providerName: 'ssh_execute',
+      displayName: 'SSH · host',
+      input: { command: 'uname -a' },
+      requestedAt: 123,
+    };
+    const observation = await f.host.observeSession(f.sessionId, () => undefined);
+    try {
+      f.listeners.get(f.sessionId)?.({ type: 'approvals.updated', approvals: [approval] });
+      await expect(
+        f
+          .execution()!
+          .resolveTool(
+            turn.identity,
+            { source: 'builtin', capabilityId: 'ssh_execute' },
+            new AbortController().signal,
+          ),
+      ).resolves.toMatchObject({
+        approval: 'ask',
+        executionSettingsKey: JSON.stringify(['prof-1', 'rev-1', 'sel-1', null]),
+      });
+
+      granted = true;
+      await f.host.respondApproval({
+        sessionId: f.sessionId,
+        turnId: submitted.turnId,
+        approvalId: approval.id,
+        decision: 'approve',
+      });
+
+      await expect(
+        f
+          .execution()!
+          .resolveTool(
+            turn.identity,
+            { source: 'builtin', capabilityId: 'ssh_execute' },
+            new AbortController().signal,
+          ),
+      ).resolves.toMatchObject({
+        approval: 'auto',
+        executionSettingsKey: JSON.stringify(['prof-1', 'rev-1', 'sel-1', 'diag-1']),
+      });
+    } finally {
+      await observation.unsubscribe();
+      await f.host.close();
+    }
+  });
 
   test('publishes the recovered queue to observations installed before initialization', async () => {
     const f = fixture();
@@ -1975,6 +2797,10 @@ describe('durable tool diagnostics', () => {
           { name: 'result.csv', data: 'a,b', folderId: originalFolderId },
           signal,
         );
+        await state
+          .execution()!
+          .resolveTool(turn.identity, { source: 'builtin', capabilityId: 'missing' }, signal)
+          .catch(() => undefined);
         expect(getTools).toHaveBeenLastCalledWith(
           expect.objectContaining({ workspaceFolderId: originalFolderId }),
         );
@@ -5940,6 +6766,81 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test('preserves first-turn conversation summary auto-naming after respondApproval refreshes prepared plan', async () => {
+    const naming = {
+      drain: async () => {},
+      maybeRenameFromFirstUserMessage: jest.fn(async () => null),
+      maybeRenameFromConversationSummary: jest.fn(async () => null),
+    };
+    const state = fixture({
+      naming: () => naming,
+      tools: {
+        getTools: async () => [
+          {
+            ref: { source: 'builtin', capabilityId: 'echo_tool' },
+            providerName: 'echo_tool',
+            displayName: 'Echo',
+            description: 'Echo.',
+            inputSchema: { type: 'object' },
+            approval: 'ask',
+            execute: async () => ({ value: null, artifacts: [] }),
+          },
+        ],
+      },
+    });
+    state.conversations.respondApproval = jest.fn(async () => true);
+    await state.host.initialize();
+    let observation: Awaited<ReturnType<typeof state.host.observeSession>> | undefined;
+    try {
+      await state.host.startSession({
+        sessionId: state.sessionId,
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'First question in session' }],
+      });
+      observation = await state.host.observeSession(state.sessionId, () => undefined);
+      const turn = state.copies.get(state.sessionId)!.turns.at(-1)!;
+      const approval: RuntimePendingApproval = {
+        id: 'pi:10:echo',
+        turnId: turn.identity.turnId,
+        requestId: turn.identity.requestId,
+        toolCallId: 'echo-call',
+        toolRef: { source: 'builtin', capabilityId: 'echo_tool' },
+        providerName: 'echo_tool',
+        displayName: 'Echo',
+        input: {},
+        requestedAt: 123,
+      };
+      state.listeners.get(state.sessionId)?.({ type: 'approvals.updated', approvals: [approval] });
+      await state.host.respondApproval({
+        sessionId: state.sessionId,
+        turnId: turn.identity.turnId,
+        approvalId: approval.id,
+        decision: 'approve',
+      });
+      await state
+        .execution()!
+        .resolveTool(
+          turn.identity,
+          { source: 'builtin', capabilityId: 'echo_tool' },
+          new AbortController().signal,
+        );
+      state.emit({
+        ...turn,
+        status: 'completed',
+        answerBoundary: 'pi:done',
+        updatedAt: turn.updatedAt + 1,
+        parts: [{ id: 'answer', type: 'text', text: 'First answer', state: 'done' }],
+      });
+      await settle();
+      expect(naming.maybeRenameFromConversationSummary).toHaveBeenCalledTimes(1);
+    } finally {
+      await observation?.unsubscribe();
+      await state.host.close();
+    }
+  });
+
   test('manually renaming a new fork cancels its first-input naming trigger', async () => {
     const naming = {
       drain: async () => {},
@@ -6228,6 +7129,171 @@ describe('quoted requests through durable execution', () => {
       ).resolves.toBeUndefined();
     } finally {
       await state.host.close();
+    }
+  });
+
+  test('submitMessage on a native conversation rejects unavailable or unreadable selected Skills before submitting', async () => {
+    const skillS = '00000000-0000-4000-8000-000000000144';
+    const skillMissing = '00000000-0000-4000-8000-000000000145';
+    const scope: SkillTurnScope = {
+      entries: [
+        {
+          id: skillS,
+          name: 'skill-s',
+          description: 'Skill S',
+          invocation: { modelInvocable: true, userInvocable: true },
+          contentHash: 'hash-s-v1',
+          folderName: 'skill-s',
+          files: ['SKILL.md'],
+          limitations: { scripts: [], unavailableTools: [] },
+        },
+      ],
+      readInstructions: async () => null,
+      readFile: async () => null,
+    };
+    const state = fixture({ skills: { resolve: jest.fn(async () => scope) } });
+    await state.reserve('completed');
+    const loadRuntimeTurnContext = jest.spyOn(state.store, 'loadRuntimeTurnContext');
+    await state.host.initialize();
+    try {
+      await expect(
+        state.host.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          skillIds: [skillS],
+          parts: [
+            {
+              type: 'text',
+              text: 'skill-s run',
+              skillReferences: [{ type: 'skill', skillId: skillS, label: 'skill-s', offset: 0 }],
+            },
+          ],
+        }),
+      ).rejects.toMatchObject({ view: { code: 'EXECUTION_UNAVAILABLE' } });
+      await expect(
+        state.host.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          skillIds: [skillMissing],
+          parts: [
+            {
+              type: 'text',
+              text: 'missing-skill run',
+              skillReferences: [
+                { type: 'skill', skillId: skillMissing, label: 'missing-skill', offset: 0 },
+              ],
+            },
+          ],
+        }),
+      ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+      expect(loadRuntimeTurnContext).not.toHaveBeenCalled();
+      expect(state.conversations.submit).not.toHaveBeenCalled();
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('treats transient runtimeTools.resolve errors as RuntimeToolDiscoveryError during recovery while still failing new submissions', async () => {
+    const mcpRef = { source: 'mcp' as const, serverId: 'srv-db', rawToolName: 'query' };
+    const mcpTool: RuntimeTool = {
+      ref: mcpRef,
+      providerName: 'mcp_srv_query',
+      displayName: 'Query',
+      description: 'Query external records.',
+      inputSchema: { type: 'object' },
+      approval: 'ask',
+      execute: async () => ({ value: 'ok', artifacts: [] }),
+    };
+    const echoTool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'echo_tool' },
+      providerName: 'echo_tool',
+      displayName: 'Echo',
+      description: 'Echo.',
+      inputSchema: { type: 'object' },
+      approval: 'auto',
+      execute: async () => ({ value: 'echo', artifacts: [] }),
+    };
+    let failRuntimeTools = false;
+    const state = fixture({
+      tools: { getTools: async () => [echoTool] },
+      runtimeTools: {
+        resolve: async () => {
+          if (failRuntimeTools) throw new Error('SQLite busy reading mcp_servers');
+          return { tools: [mcpTool], pluginGuides: [], unavailableServerIds: [] };
+        },
+      },
+    });
+    await state.host.initialize();
+    const signal = new AbortController().signal;
+    try {
+      await state.host.startSession({
+        sessionId: state.sessionId,
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Run MCP call' }],
+      });
+    } finally {
+      await state.host.close();
+    }
+
+    failRuntimeTools = true;
+    let restartedExecution: RuntimeExecutionPorts | undefined;
+    const baseInit = state.conversations.initialize;
+    state.conversations.initialize = jest.fn(async (database, ports) => {
+      restartedExecution = ports;
+      return baseInit(database, ports);
+    });
+    const restartedHost = new DurableAgentHost(
+      state.store,
+      state.ports,
+      state.background,
+      state.conversations,
+    );
+    await restartedHost.initialize();
+    let restartedObs: Awaited<ReturnType<typeof restartedHost.observeSession>> | undefined;
+    try {
+      restartedObs = await restartedHost.observeSession(state.sessionId, () => undefined);
+      const turn = state.copies.get(state.sessionId)!.turns.at(-1)!;
+
+      // Built-in tools remain resolvable during transient configured-tool DB outage on reopen.
+      await expect(
+        restartedExecution!.resolveTool(turn.identity, echoTool.ref, signal),
+      ).resolves.toMatchObject({ providerName: 'echo_tool' });
+
+      // Parked MCP tools & load_workflow surface RuntimeToolDiscoveryError so parked approvals stay alive.
+      const mcpError = await restartedExecution!
+        .resolveTool(turn.identity, mcpRef, signal)
+        .catch((caught: unknown) => caught);
+      expect(mcpError).toBeInstanceOf(RuntimeToolDiscoveryError);
+
+      // Once runtimeTools recovers, the next resolveTool immediately rebuilds and returns the MCP tool.
+      failRuntimeTools = false;
+      await expect(
+        restartedExecution!.resolveTool(turn.identity, mcpRef, signal),
+      ).resolves.toMatchObject({ providerName: 'mcp_srv_query' });
+
+      // Strict new submissions (!recovering) still reject upfront when runtimeTools fails.
+      state.emit({
+        ...turn,
+        status: 'completed',
+        parts: [{ id: 'done-1', type: 'text', text: 'Done.', state: 'done' }],
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      failRuntimeTools = true;
+      await expect(
+        restartedHost.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'Next message' }],
+        }),
+      ).rejects.toMatchObject({ view: { code: 'EXECUTION_UNAVAILABLE' } });
+    } finally {
+      await restartedObs?.unsubscribe();
+      await restartedHost.close();
     }
   });
 });

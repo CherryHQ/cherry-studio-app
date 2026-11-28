@@ -29,6 +29,8 @@ import {
   AgentSessionSnapshotSchema,
   AgentStartSessionInputSchema,
   AgentSubmitMessageInputSchema,
+  AgentUserAnswersSchema,
+  validateUserAnswers,
   type AgentApprovalView,
   type AgentErrorView,
   type AgentEvent,
@@ -51,7 +53,7 @@ import { BackupError } from '@/shared/contracts/backup';
 import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isHealthToolRef } from '@/shared/data/types/builtInTool';
-import { FileEntryIdSchema } from '@/shared/data/types/file';
+import { FileEntryIdSchema, type FileEntryId } from '@/shared/data/types/file';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import type { PluginTextReference } from '@/shared/data/types/plugin';
 import type { SelectionTextReference } from '@/shared/data/types/selectionReference';
@@ -64,6 +66,8 @@ import { applyReplyEdits } from '@/shared/utils/assistantReply';
 import type { ManagedFileResolver } from '../resources/managedFileResolver';
 import {
   RuntimeCorruptLaneError,
+  RuntimeToolDiscoveryError,
+  RuntimeToolUnavailableError,
   laneKey,
   raceAbort,
   runtimeLane,
@@ -77,6 +81,8 @@ import {
   type RuntimeExecutionIdentity,
   type RuntimeExecutionPorts,
   type RuntimeJsonValue,
+  type RuntimePendingApproval,
+  type RuntimePendingQuestion,
   type RuntimeToolCall,
   type RuntimeToolRef,
   type RuntimeTool,
@@ -119,6 +125,7 @@ import { TurnUserQuestions } from './TurnUserQuestions';
 
 const logger = loggerService.withContext('DurableAgentHost');
 type Admission = { controller: AbortController; promise: Promise<unknown> };
+type ApprovalWait = NonNullable<RuntimeTurnTiming['approvals']>[number];
 /** Presentation state of one observed working copy. */
 type LiveSession = {
   lane: RuntimeLane;
@@ -138,14 +145,50 @@ type LiveSession = {
   turn: AgentTurnView | null;
   /** The newest answer this Host submitted to the copy: a hint, never the engine's tail. */
   lastAnswerId: string | null;
+  claimingQuestion: boolean;
   question: AgentPendingQuestion | null;
   questions: TurnUserQuestions;
   approvals: Map<
     string,
     { view: AgentApprovalView; resolve: (decision: 'approve' | 'deny') => void }
   >;
+  durableApprovals: Map<string, AgentApprovalView>;
+  durableApprovalRequests: Map<string, string>;
+  durableApprovalWaits: Map<string, ApprovalWait>;
+  durableApprovalResponses: Map<
+    string,
+    {
+      decision: 'approve' | 'deny';
+      delivered: Promise<boolean>;
+    }
+  >;
+  durableQuestion: AgentPendingQuestion | null;
 };
+
+function pendingApprovals(state: LiveSession): AgentApprovalView[] {
+  return [
+    ...state.durableApprovals.values(),
+    ...[...state.approvals.values()].map(({ view }) => view),
+  ];
+}
+
+function pendingQuestion(states: readonly LiveSession[]): AgentPendingQuestion | null {
+  for (const state of states) {
+    const question = state.durableQuestion ?? state.question;
+    if (question) return question;
+  }
+  return null;
+}
 type PreparedInput = { sessionId: string; turnId: string; plan: TurnPlan };
+
+function hasPlanToolDiscoveryFailure(plan: TurnPlan): boolean {
+  return Boolean(
+    plan.toolDiscoveryFailures &&
+    (plan.toolDiscoveryFailures.mcpCapabilitiesAll ||
+      plan.toolDiscoveryFailures.mcpServerIds.size > 0 ||
+      plan.toolDiscoveryFailures.systemCapabilitiesAll),
+  );
+}
 type ReplyTarget = LaneChoice & {
   plan: TurnPlan;
   input: Pick<AgentSubmitMessageInput, 'assistantMessageId'>;
@@ -168,6 +211,7 @@ export class DurableAgentHost implements AgentProtocol {
   private readonly recoveryFailures = new Set<string>();
   private readonly admissions = new Map<string, Admission>();
   private readonly prepared = new Map<string, PreparedInput>();
+  private readonly admittedArtifactFiles = new Map<string, Set<FileEntryId>>();
   /** Branch alternatives by {@link siblingKey}, refreshed when a sibling set changes. */
   private readonly branchSiblings = new Map<string, AgentMessageSibling[]>();
   /** Approval waits are app-observed; they join the turn's timing and its settled message. */
@@ -307,13 +351,22 @@ export class DurableAgentHost implements AgentProtocol {
     this.recoveryFailures.clear();
     const execution: RuntimeExecutionPorts = {
       scriptSandbox: this.ports.scriptSandbox?.(),
+      imageProcessor: this.ports.imageProcessor,
       writeToolOutput: this.ports.writeToolOutput
         ? async (identity, output, signal) => {
-            const { plan } = await this.prepareExecution(identity, signal);
-            return this.ports.writeToolOutput!(
-              { ...output, folderId: plan.workspaceFolderId ?? null },
-              signal,
-            );
+            this.assertSessionRecovered(identity.sessionId);
+            signal.throwIfAborted();
+            const key = executionKey(identity, identity.requestId);
+            const cached = this.prepared.get(key);
+            let folderId: string | null;
+            if (cached && cached.turnId === identity.turnId) {
+              folderId = cached.plan.workspaceFolderId ?? null;
+            } else {
+              const turn = await this.loadOwningTurn(identity);
+              signal.throwIfAborted();
+              folderId = DurableTurnMetadataSchema.parse(turn.metadata).workspaceFolderId ?? null;
+            }
+            return this.ports.writeToolOutput!({ ...output, folderId }, signal);
           }
         : undefined,
       onFailure: (error) => void this.recoverStorageFailure(error),
@@ -358,15 +411,38 @@ export class DurableAgentHost implements AgentProtocol {
       resolveTool: (identity, ref, signal) => this.resolveTool(identity, ref, signal),
       requestApproval: (identity, approval, signal) =>
         this.requestApproval(identity, approval, signal),
+      hasPendingHostQuestion: ({ sessionId }) =>
+        this.liveStates(sessionId).some(
+          (candidate) => candidate.question !== null || candidate.claimingQuestion,
+        ),
+      validateQuestionAnswer: (question, answer) => {
+        const parsed = AgentUserAnswersSchema.parse(answer);
+        validateUserAnswers(question, parsed);
+      },
       admitArtifacts: async (identity, artifacts, signal) => {
-        const prepared = await this.prepareExecution(identity, signal);
+        this.assertSessionRecovered(identity.sessionId);
+        signal.throwIfAborted();
+        const key = executionKey(identity, identity.requestId);
+        if (this.prepared.get(key)?.turnId !== identity.turnId) {
+          await this.loadOwningTurn(identity);
+          signal.throwIfAborted();
+        }
         const ids = artifacts.map((artifact) => FileEntryIdSchema.parse(artifact.ref.fileEntryId));
         const available = await raceAbort(this.ports.files.resolveAvailable(ids), signal);
+        let admitted = this.admittedArtifactFiles.get(key);
+        const currentPrepared = this.prepared.get(key);
         for (const artifact of artifacts) {
           const fact = available.get(artifact.ref.fileEntryId);
           if (!fact || fact.mediaType !== artifact.mediaType || fact.name !== artifact.name)
             throw new Error('A tool artifact has no matching managed file.');
-          prepared.plan.resources.grantFile(fact.fileEntryId);
+          if (!admitted) {
+            admitted = new Set<FileEntryId>();
+            this.admittedArtifactFiles.set(key, admitted);
+          }
+          admitted.add(fact.fileEntryId);
+          if (currentPrepared?.turnId === identity.turnId) {
+            currentPrepared.plan.resources.grantFile(fact.fileEntryId);
+          }
         }
       },
       recordUsage: async (identity, report) => {
@@ -378,19 +454,22 @@ export class DurableAgentHost implements AgentProtocol {
         const agentId = prepared?.plan.agent.id ?? session?.agentId;
         // Deleted owners are never reconstructed from the disposable execution log.
         if (!agentId) return;
-        const selected = identity.requestId
-          ? (
-              await this.conversations.history(identity, {
-                limit: 1,
-                requestIds: [identity.requestId],
-              })
-            ).turns[0]
-          : undefined;
+        let assistantMessageId: string | undefined;
+        if (identity.requestId) {
+          assistantMessageId = this.conversations.assistantMessageIdForRequest
+            ? await this.conversations.assistantMessageIdForRequest(identity, identity.requestId)
+            : (
+                await this.conversations.history(identity, {
+                  limit: 1,
+                  requestIds: [identity.requestId],
+                })
+              ).turns[0]?.assistantMessageId;
+        }
         if (!initialized) this.controller.signal.throwIfAborted();
         await this.ports.recordDurableUsage!(identity, report, {
           agentId,
           agentName: prepared?.plan.agent.name ?? null,
-          assistantMessageId: selected?.assistantMessageId ?? null,
+          assistantMessageId: assistantMessageId ?? null,
         });
       },
     };
@@ -503,6 +582,7 @@ export class DurableAgentHost implements AgentProtocol {
       this.live.clear();
       this.storedContextUsages.clear();
       this.prepared.clear();
+      this.admittedArtifactFiles.clear();
       this.preparing.clear();
       this.listeners.clear();
       this.executionLease?.release();
@@ -682,7 +762,9 @@ export class DurableAgentHost implements AgentProtocol {
         (state) =>
           state.active?.status === 'running' &&
           state.approvals.size === 0 &&
+          state.durableApprovals.size === 0 &&
           state.question === null &&
+          state.durableQuestion === null &&
           !this.screenSuppressedRequests.has(state.active.identity.requestId),
       );
     try {
@@ -724,6 +806,7 @@ export class DurableAgentHost implements AgentProtocol {
         for (const state of this.live.values()) state.background?.retire();
         this.live.clear();
         this.prepared.clear();
+        this.admittedArtifactFiles.clear();
         this.preparing.clear();
         this.executionLease?.release();
         this.executionLease = undefined;
@@ -1222,7 +1305,12 @@ export class DurableAgentHost implements AgentProtocol {
         const state = await this.attach(target.lane);
         signal.throwIfAborted();
         plan.usageAttribution.bindMessage({ id: assistant.id, kind: 'agent-session' });
-        this.prepared.set(executionKey(target.lane, requestId), { sessionId, turnId, plan });
+        const key = executionKey(target.lane, requestId);
+        if (!hasPlanToolDiscoveryFailure(plan)) {
+          this.prepared.set(key, { sessionId, turnId, plan });
+        } else {
+          this.prepared.delete(key);
+        }
         this.sessionExecutions.get(sessionId)?.lease.update?.({
           title: selected?.name || plan.agent.name,
           completedUnitCount: 1,
@@ -1370,7 +1458,7 @@ export class DurableAgentHost implements AgentProtocol {
     } else {
       if (this.isBusy(target.lane)) {
         const current = await this.conversations.configuration(target.lane);
-        if (configurationKey(current) !== configurationKey(configuration))
+        if (!sameConversationConfiguration(current, configuration))
           fail('SESSION_BUSY', 'Wait for the current turn before changing its configuration.');
       } else await this.conversations.configure(target.lane, configuration);
     }
@@ -1384,6 +1472,7 @@ export class DurableAgentHost implements AgentProtocol {
       tools: plan.imageGeneration
         ? [createImageRequestTool(plan.imageGeneration, plan.usageAttribution.resolve)]
         : plan.tools,
+      mcpNamespaces: plan.mcpNamespaces,
       ...(plan.webTools && !plan.imageGeneration ? { webTools: plan.webTools } : {}),
       initialInstructions:
         plan.agent.mode === 'standard'
@@ -1908,7 +1997,7 @@ export class DurableAgentHost implements AgentProtocol {
       const selectedBefore = (await this.requireSession(sessionId)).activeNodeId;
       const result = await this.conversations.steer(owner.lane, queued.identity.requestId);
       if (result.status === 'accepted') {
-        this.prepared.delete(executionKey(owner.lane, queued.identity.requestId));
+        this.clearPrepared(executionKey(owner.lane, queued.identity.requestId));
         // Persist native parent changes before another send chooses the selected branch.
         try {
           await this.syncInputParents(
@@ -1938,6 +2027,41 @@ export class DurableAgentHost implements AgentProtocol {
 
   async respondApproval(input: Parameters<AgentProtocol['respondApproval']>[0]) {
     const parsed = AgentRespondApprovalInputSchema.parse(input);
+    const durable = this.liveStates(parsed.sessionId).find(
+      (candidate) => candidate.durableApprovals.get(parsed.approvalId)?.turnId === parsed.turnId,
+    );
+    if (durable && this.conversations.respondApproval) {
+      const { approvalId, decision } = parsed;
+      const inFlight = durable.durableApprovalResponses.get(approvalId);
+      if (inFlight) {
+        if (inFlight.decision !== decision)
+          fail('APPROVAL_NOT_FOUND', 'The approval is no longer pending.');
+        if (!(await inFlight.delivered))
+          fail('APPROVAL_NOT_FOUND', 'The approval is no longer pending.');
+        return;
+      }
+      const requestId =
+        durable.durableApprovalRequests.get(approvalId) ??
+        (durable.active?.identity.turnId === parsed.turnId
+          ? durable.active.identity.requestId
+          : undefined);
+      if (requestId) this.prepared.delete(executionKey(durable.lane, requestId));
+      const respond = this.conversations.respondApproval.bind(this.conversations);
+      const response = {
+        decision,
+        delivered: Promise.resolve().then(() => respond(durable.lane, approvalId, decision)),
+      };
+      durable.durableApprovalResponses.set(approvalId, response);
+      let delivered = false;
+      try {
+        delivered = await response.delivered;
+        if (!delivered) fail('APPROVAL_NOT_FOUND', 'The approval is no longer pending.');
+      } finally {
+        if (!delivered && durable.durableApprovalResponses.get(approvalId) === response)
+          durable.durableApprovalResponses.delete(approvalId);
+      }
+      return;
+    }
     const state = this.liveStates(parsed.sessionId).find(
       (candidate) =>
         candidate.active?.identity.turnId === parsed.turnId &&
@@ -1945,11 +2069,32 @@ export class DurableAgentHost implements AgentProtocol {
     );
     const pending = state?.approvals.get(parsed.approvalId);
     if (!pending) fail('APPROVAL_NOT_FOUND', 'The approval is no longer pending.');
+    if (state?.active) {
+      this.prepared.delete(executionKey(state.lane, state.active.identity.requestId));
+    }
     pending.resolve(parsed.decision);
   }
 
   async respondQuestion(input: Parameters<AgentProtocol['respondQuestion']>[0]) {
     const parsed = AgentRespondQuestionSchema.parse(input);
+    if (this.conversations.respondQuestion) {
+      for (const state of this.liveStates(parsed.sessionId)) {
+        const question = state.durableQuestion;
+        if (question?.toolCallId !== parsed.toolCallId || question.turnId !== parsed.turnId)
+          continue;
+        validateUserAnswers(question.question, parsed.answer);
+        if (
+          !(await this.conversations.respondQuestion(
+            state.lane,
+            parsed.toolCallId,
+            parsed.answer,
+            parsed.turnId,
+          ))
+        )
+          fail('QUESTION_NOT_FOUND', 'The question is no longer pending.');
+        return;
+      }
+    }
     const state = this.liveStates(parsed.sessionId).find(
       (candidate) =>
         candidate.active?.identity.turnId === parsed.turnId &&
@@ -2030,12 +2175,10 @@ export class DurableAgentHost implements AgentProtocol {
       hasHistoryBeforeActiveTurn: state?.active
         ? DurableTurnMetadataSchema.parse(state.active.metadata).hasHistoryBeforeActiveTurn
         : null,
-      pendingQuestion: states.find((candidate) => candidate.question)?.question ?? null,
+      pendingQuestion: pendingQuestion(states),
       contextStatus: state?.contextStatus ?? null,
       contextUsages: this.contextUsages(sessionId),
-      pendingApprovals: states.flatMap((candidate) =>
-        [...candidate.approvals.values()].map((entry) => entry.view),
-      ),
+      pendingApprovals: states.flatMap(pendingApprovals),
     });
     const listeners = this.listeners.get(sessionId) ?? new Set();
     this.listeners.set(sessionId, listeners);
@@ -2096,36 +2239,49 @@ export class DurableAgentHost implements AgentProtocol {
     };
   }
 
+  private clearPrepared(key: string): void {
+    this.prepared.delete(key);
+    this.admittedArtifactFiles.delete(key);
+  }
+
+  private async loadOwningTurn(identity: RuntimeExecutionIdentity): Promise<RuntimeDurableTurn> {
+    const state = await this.attach(identity);
+    const turn =
+      state.active?.identity.requestId === identity.requestId
+        ? state.active
+        : (
+            await this.conversations.history(identity, {
+              limit: 1,
+              requestIds: [identity.requestId],
+            })
+          ).turns[0];
+    if (!turn || turn.identity.turnId !== identity.turnId)
+      throw new Error('The durable tool has no current owning input.');
+    return turn;
+  }
+
   private async prepareExecution(
     identity: RuntimeExecutionIdentity,
     signal: AbortSignal,
   ): Promise<PreparedInput> {
     this.assertSessionRecovered(identity.sessionId);
+    signal.throwIfAborted();
     const key = executionKey(identity, identity.requestId);
     const cached = this.prepared.get(key);
     if (cached) return cached;
     const existing = this.preparing.get(key);
     if (existing) return raceAbort(existing, signal);
+    const inheritedFiles = [...(this.admittedArtifactFiles.get(key) ?? [])];
     const operation = this.traceOperation(
       'ai.prepare',
       identity,
       async () => {
-        const state = await this.attach(identity);
-        const turn =
-          state.active?.identity.requestId === identity.requestId
-            ? state.active
-            : (
-                await this.conversations.history(identity, {
-                  limit: 1,
-                  requestIds: [identity.requestId],
-                })
-              ).turns[0];
-        if (!turn || turn.identity.turnId !== identity.turnId)
-          throw new Error('The durable tool has no current owning input.');
+        const turn = await this.loadOwningTurn(identity);
         const facts = DurableTurnMetadataSchema.parse(turn.metadata);
         const configuration = await this.conversations.configuration(identity);
         const { sessionId } = identity;
         const question = await this.store.getMessage(sessionId, turn.userMessageId);
+        const runtimeFiles = await this.conversations.resourceFileEntryIds(identity);
         const plan = await prepareDurableTurn(
           this.preparation,
           {
@@ -2140,26 +2296,37 @@ export class DurableAgentHost implements AgentProtocol {
               ? { imageGeneration: facts.inferenceSnapshot.imageGeneration }
               : {}),
           },
-          await this.conversations.resourceFileEntryIds(identity),
+          [...new Set([...runtimeFiles, ...inheritedFiles])],
           signal,
           { through: question?.parentId ?? null, readOnlyTools: facts.readOnlyTools === true },
           facts.workspaceFolderId,
+          {
+            hasMessages: facts.hasHistoryBeforeActiveTurn,
+            recovering: true,
+          },
         );
         plan.usageAttribution.bindMessage({ id: turn.assistantMessageId, kind: 'agent-session' });
         for (const part of turn.parts)
           if (part.type === 'file')
             plan.resources.grantFile(FileEntryIdSchema.parse(part.ref.fileEntryId));
+        for (const fileEntryId of this.admittedArtifactFiles.get(key) ?? []) {
+          plan.resources.grantFile(fileEntryId);
+        }
         const prepared = { sessionId, turnId: identity.turnId, plan };
-        this.prepared.set(key, prepared);
+        if (!hasPlanToolDiscoveryFailure(plan)) {
+          this.prepared.set(key, prepared);
+        } else {
+          this.prepared.delete(key);
+        }
         return prepared;
       },
       signal,
     );
     this.preparing.set(key, operation);
     try {
-      return await operation;
+      return await raceAbort(operation, signal);
     } finally {
-      this.preparing.delete(key);
+      if (this.preparing.get(key) === operation) this.preparing.delete(key);
     }
   }
 
@@ -2174,7 +2341,22 @@ export class DurableAgentHost implements AgentProtocol {
         ? [createImageRequestTool(plan.imageGeneration, plan.usageAttribution.resolve)]
         : plan.tools
     ).find((tool) => sameRef(tool.ref, ref));
-    if (!tool) throw new Error('This capability is no longer available for the owning input.');
+    if (!tool) {
+      const failures = plan.toolDiscoveryFailures;
+      const discoveryFailed =
+        !plan.imageGeneration &&
+        Boolean(
+          failures &&
+          (ref.source === 'mcp'
+            ? failures.mcpCapabilitiesAll || failures.mcpServerIds.has(ref.serverId)
+            : failures.systemCapabilitiesAll),
+        );
+      if (discoveryFailed) {
+        this.prepared.delete(executionKey(identity, identity.requestId));
+        throw new RuntimeToolDiscoveryError();
+      }
+      throw new RuntimeToolUnavailableError();
+    }
     return {
       ...tool,
       execute: async (call) => {
@@ -2254,11 +2436,16 @@ export class DurableAgentHost implements AgentProtocol {
    * of its running answers, not only those of the copy that holds it.
    */
   private updateBackgroundInteraction(sessionId: string): void {
-    const states = this.liveStates(sessionId).filter((candidate) => candidate.active);
-    const background = states.find((candidate) => candidate.background)?.background;
+    const states = this.liveStates(sessionId).filter(
+      (candidate) =>
+        candidate.active || candidate.durableApprovals.size || candidate.durableQuestion,
+    );
+    const background = states.find(
+      (candidate) => candidate.active && candidate.background,
+    )?.background;
     if (!background) return;
-    const approval = states.flatMap((candidate) => [...candidate.approvals.values()]).at(0)?.view;
-    const pending = states.find((candidate) => candidate.question)?.question;
+    const approval = states.flatMap(pendingApprovals).at(0);
+    const pending = pendingQuestion(states);
     if (approval) {
       background.setInteraction({
         kind: 'approval',
@@ -2303,10 +2490,37 @@ export class DurableAgentHost implements AgentProtocol {
     );
     if (!state) throw new Error('The question has no active owning input.');
     const { sessionId } = state.lane;
-    const response = state.questions.ask(question, call);
-    state.question = { turnId: call.turnId, toolCallId: call.toolCallId, question };
+    if (
+      this.liveStates(sessionId).some(
+        (candidate) =>
+          candidate.durableQuestion !== null ||
+          candidate.question !== null ||
+          candidate.claimingQuestion,
+      )
+    ) {
+      throw new Error('Wait for the current question before asking another.');
+    }
+    let response: ReturnType<TurnUserQuestions['ask']>;
+    state.claimingQuestion = true;
+    try {
+      if (this.conversations.hasPendingQuestion) {
+        for (const candidate of this.liveStates(sessionId)) {
+          if (await this.conversations.hasPendingQuestion(candidate.lane)) {
+            throw new Error('Wait for the current question before asking another.');
+          }
+        }
+      }
+      call.signal.throwIfAborted();
+      response = state.questions.ask(question, call);
+      state.question = { turnId: call.turnId, toolCallId: call.toolCallId, question };
+    } finally {
+      state.claimingQuestion = false;
+    }
     this.reconcileScreenAwake();
-    this.publish(sessionId, { type: 'question.updated', question: state.question });
+    this.publish(sessionId, {
+      type: 'question.updated',
+      question: pendingQuestion(this.liveStates(sessionId)),
+    });
     this.publishCurrentStatus(sessionId, state);
     this.updateBackgroundInteraction(sessionId);
     try {
@@ -2315,7 +2529,10 @@ export class DurableAgentHost implements AgentProtocol {
       state.question = null;
       this.reconcileScreenAwake();
       this.updateBackgroundInteraction(sessionId);
-      this.publish(sessionId, { type: 'question.updated', question: null });
+      this.publish(sessionId, {
+        type: 'question.updated',
+        question: pendingQuestion(this.liveStates(sessionId)),
+      });
       this.publishCurrentStatus(sessionId, state);
     }
   }
@@ -2457,7 +2674,7 @@ export class DurableAgentHost implements AgentProtocol {
         });
         signal?.throwIfAborted();
         for (const lane of sessionCopies.get(row.sessionId) ?? [])
-          this.prepared.delete(executionKey(lane, row.assistantMessageId));
+          this.clearPrepared(executionKey(lane, row.assistantMessageId));
         this.ports.durableStorage?.notifyTranscript(row.sessionId);
         logger.warn('Agent reservation recovered as interrupted', {
           sessionId: row.sessionId,
@@ -2524,7 +2741,7 @@ export class DurableAgentHost implements AgentProtocol {
         signal?.throwIfAborted();
         if (session) this.publish(sessionId, { type: 'session.updated', session });
       }
-      this.prepared.delete(executionKey(turn.identity, turn.identity.requestId));
+      this.clearPrepared(executionKey(turn.identity, turn.identity.requestId));
       return;
     }
     const { assistant, turn: view } = projectDurableHostTurn(turn);
@@ -2625,9 +2842,15 @@ export class DurableAgentHost implements AgentProtocol {
           backgroundCompleted: false,
           turn: null,
           lastAnswerId: null,
+          claimingQuestion: false,
           question: null,
           questions: new TurnUserQuestions(),
           approvals: new Map(),
+          durableApprovals: new Map(),
+          durableApprovalRequests: new Map(),
+          durableApprovalWaits: new Map(),
+          durableApprovalResponses: new Map(),
+          durableQuestion: null,
         };
         // The engine's exact watch is acquired before scheduling. App route listeners are independent.
         let installed = false;
@@ -2647,6 +2870,11 @@ export class DurableAgentHost implements AgentProtocol {
         state.contextUsage = observed.snapshot.contextUsage ?? null;
         state.unsubscribe = observed.unsubscribe;
         this.live.set(key, state);
+        this.updateDurableInteractions(
+          state,
+          observed.snapshot.pendingApprovals ?? [],
+          observed.snapshot.pendingQuestion ?? null,
+        );
         if (state.contextUsage) this.publishContextUsages(lane.sessionId);
         this.updateQueue(state, observed.snapshot.queue);
         if (state.active) this.present(state.active);
@@ -2703,6 +2931,11 @@ export class DurableAgentHost implements AgentProtocol {
     const previousRequestId = state.active?.identity.requestId;
     if (event.type === 'snapshot') {
       state.active = event.snapshot.activeTurn && this.timed(event.snapshot.activeTurn);
+      this.updateDurableInteractions(
+        state,
+        event.snapshot.pendingApprovals ?? [],
+        event.snapshot.pendingQuestion ?? null,
+      );
       this.updateQueue(state, event.snapshot.queue);
       state.contextStatus = event.snapshot.contextStatus ?? null;
       state.contextUsage = event.snapshot.contextUsage ?? null;
@@ -2717,6 +2950,10 @@ export class DurableAgentHost implements AgentProtocol {
       this.publishContextUsages(sessionId);
     } else if (event.type === 'queue.updated') {
       this.updateQueue(state, event.queue);
+    } else if (event.type === 'approvals.updated') {
+      this.updateDurableInteractions(state, event.approvals);
+    } else if (event.type === 'question.updated') {
+      this.updateDurableInteractions(state, undefined, event.question);
     } else {
       const turn = this.timed(event.turn);
       if (
@@ -2751,6 +2988,82 @@ export class DurableAgentHost implements AgentProtocol {
       this.sessionExecutions.get(sessionId)?.lease.update?.({ completedUnitCount: 2 });
     this.updateSessionExecution(sessionId);
     this.reconcileScreenAwake();
+  }
+
+  private updateDurableInteractions(
+    state: LiveSession,
+    approvals?: readonly RuntimePendingApproval[],
+    question?: RuntimePendingQuestion | null,
+  ) {
+    const { sessionId } = state.lane;
+    let changed = false;
+    if (approvals) {
+      const nextIds = new Set(approvals.map(({ id }) => id));
+      for (const [id, previous] of state.durableApprovals) {
+        if (nextIds.has(id)) continue;
+        changed = true;
+        state.durableApprovals.delete(id);
+        state.durableApprovalRequests.delete(id);
+        const wait = state.durableApprovalWaits.get(id);
+        if (wait) wait.completedAt = Date.now();
+        state.durableApprovalWaits.delete(id);
+        const response = state.durableApprovalResponses.get(id);
+        state.durableApprovalResponses.delete(id);
+        const publish = (status: AgentApprovalView['status']) =>
+          this.publish(sessionId, { type: 'approval.resolved', approval: { ...previous, status } });
+        // Pi may publish the removal while the signal delivery is still resolving.
+        if (response)
+          void response.delivered.then(
+            (delivered) =>
+              publish(
+                delivered ? (response.decision === 'approve' ? 'approved' : 'denied') : 'cancelled',
+              ),
+            () => publish('cancelled'),
+          );
+        else publish('cancelled');
+      }
+      for (const approval of approvals) {
+        const view = toAgentApprovalView({ ...approval, status: 'pending' }, sessionId);
+        const previous = state.durableApprovals.get(view.id);
+        state.durableApprovals.set(view.id, view);
+        state.durableApprovalRequests.set(view.id, approval.requestId);
+        if (previous) {
+          changed ||= JSON.stringify(previous) !== JSON.stringify(view);
+          continue;
+        }
+        changed = true;
+        const key = executionKey(state.lane, approval.requestId);
+        const waits = this.approvalWaits.get(key) ?? [];
+        const previousWait = waits.find((wait) => wait.approvalId === view.id);
+        const wait: ApprovalWait = previousWait ?? {
+          approvalId: view.id,
+          toolCallId: view.toolCallId,
+          toolName: view.displayName,
+          startedAt: approval.requestedAt,
+        };
+        state.durableApprovalWaits.set(view.id, wait);
+        if (!previousWait) this.approvalWaits.set(key, [...waits, wait]);
+        this.publish(sessionId, { type: 'approval.requested', approval: view });
+      }
+    }
+    if (question !== undefined) {
+      const next = question
+        ? { turnId: question.turnId, toolCallId: question.toolCallId, question: question.question }
+        : null;
+      if (JSON.stringify(state.durableQuestion) !== JSON.stringify(next)) {
+        changed = true;
+        state.durableQuestion = next;
+        this.publish(sessionId, {
+          type: 'question.updated',
+          question: pendingQuestion(this.liveStates(sessionId)),
+        });
+      }
+    }
+    if (!changed) return;
+    if (state.active) state.active = this.timed(state.active);
+    this.reconcileScreenAwake();
+    this.updateBackgroundInteraction(sessionId);
+    this.publishCurrentStatus(sessionId, state);
   }
 
   private timed(turn: RuntimeDurableTurn): RuntimeDurableTurn {
@@ -2834,6 +3147,13 @@ export class DurableAgentHost implements AgentProtocol {
             state.backgroundRequestId = turn.identity.requestId;
             state.backgroundCompleted = false;
             if (view.assistant) state.background.update(view.assistant);
+            if (
+              this.liveStates(sessionId).some(
+                (candidate) =>
+                  candidate.durableApprovals.size > 0 || candidate.durableQuestion !== null,
+              )
+            )
+              this.updateBackgroundInteraction(sessionId);
           })(),
         );
       if (view.assistant) state?.background?.update(view.assistant);
@@ -2847,7 +3167,7 @@ export class DurableAgentHost implements AgentProtocol {
         if (holder) holder.backgroundCompleted = true;
       }
       const prepared = this.prepared.get(executionKey(lane, turn.identity.requestId));
-      this.prepared.delete(executionKey(lane, turn.identity.requestId));
+      this.clearPrepared(executionKey(lane, turn.identity.requestId));
       this.approvalWaits.delete(executionKey(lane, turn.identity.requestId));
       // Only the first question's leading answer, or a fork's first new answer, names the Session.
       const isForkFirstAnswer = this.forksToName.get(sessionId) === turn.assistantMessageId;
@@ -2992,11 +3312,12 @@ export class DurableAgentHost implements AgentProtocol {
     if (turn.status !== 'running') return turn;
     return {
       ...turn,
-      status: state.question
-        ? 'awaiting-input'
-        : state.approvals.size
-          ? 'awaiting-approval'
-          : 'running',
+      status:
+        state.durableQuestion || state.question
+          ? 'awaiting-input'
+          : state.durableApprovals.size || state.approvals.size
+            ? 'awaiting-approval'
+            : 'running',
     };
   }
   private publishCurrentStatus(sessionId: string, state: LiveSession) {
@@ -3446,17 +3767,31 @@ function configurationKey(configuration: RuntimeConversationSeed['configuration'
       inputPreview: tool.inputPreview,
       executionSettingsKey: tool.executionSettingsKey,
       approval: tool.approval,
+      effect: tool.effect,
       failureGroup: tool.failureGroup,
       autoApprovalEligible: tool.autoApprovalEligible,
       deferred: tool.deferred,
     })),
     webTools: configuration.webTools,
+    mcpNamespaces: configuration.mcpNamespaces ?? [],
+    compaction: configuration.compaction,
   };
   return JSON.stringify(facts, (_key, value: unknown) =>
     value && typeof value === 'object' && !Array.isArray(value)
       ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)))
       : value,
   );
+}
+
+function sameConversationConfiguration(
+  current: RuntimeConversationSeed['configuration'],
+  next: RuntimeConversationSeed['configuration'],
+) {
+  if (configurationKey(current) === configurationKey(next)) return true;
+  // Pre-1.6 snapshots omitted mcpNamespaces even when MCP servers (including zero-tool ones)
+  // were active; 1.6 always persists mcpNamespaces ([] or populated) on new configurations.
+  if (current.mcpNamespaces !== undefined) return false;
+  return configurationKey(current) === configurationKey({ ...next, mcpNamespaces: undefined });
 }
 function sameRef(left: RuntimeToolRef, right: RuntimeToolRef) {
   return (

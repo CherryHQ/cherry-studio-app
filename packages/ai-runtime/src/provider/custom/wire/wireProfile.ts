@@ -227,6 +227,24 @@ export const MINIMAX_WIRE_PROFILE: WireProfile = {
   },
 };
 
+export const MINIMAX_H3_REGISTRATION: WireRegistration = {
+  passthrough: true,
+  profile: {
+    fields: {
+      outputFormat: {
+        contribute: (value): Record<string, JSONValue> => {
+          if (value === 'base64' || value === 'b64_json') return { response_format: 'b64_json' };
+          if (value === 'url') return { response_format: 'url' };
+          return { output_format: value as string };
+        },
+      },
+      outputCompression: { to: 'output_compression' },
+      addWatermark: { to: 'aigc_watermark' },
+      promptEnhancement: { to: 'disable_prompt_enhanced', map: (value) => !value },
+    },
+  },
+};
+
 /** A provider's engine registration: its body profile + delivery flags. */
 export interface WireRegistration {
   readonly profile: WireProfile;

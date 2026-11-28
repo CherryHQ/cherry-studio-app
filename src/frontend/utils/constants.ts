@@ -39,22 +39,6 @@ export const keyboardBottomOffset = 16;
 // systems that apply synchronously, which is exactly what `Uniwind.setTheme` is.
 export const themeTransition = { kind: 'fade', durationMs: 800 } as const;
 
-// Tuning knobs for the GitHub-style AI usage calendars.
-// Sizes and spring feel replicate the reference contribution-graph animation
-// 1:1 — adjust here, not in the AI usage components. The heat scale is not
-// here: it was GitHub's own two ladders of five hex, one per theme, and it now
-// comes from `--usage-level-*`, which `AiUsageCalendar` names.
-export const aiUsageCalendar = {
-  cellSize: 14,
-  cellGap: 3,
-  cellRadius: 2,
-  summaryCellGap: 2,
-  summaryFallbackCellSize: 10,
-  dimmedOpacity: 0.35,
-  sweepStepMs: 45, // per-diagonal delay of the bottom-left → top-right entrance wave
-  enterSpring: { mass: 1.1, damping: 13, stiffness: 150, overshootClamping: false },
-} as const;
-
 export const appSidebar = {
   // Finger travel before the open/close swipe commits. Chat content holds native
   // horizontal scroll surfaces (markdown tables, code blocks, math) that claim a

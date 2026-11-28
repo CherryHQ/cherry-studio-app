@@ -8,7 +8,10 @@ import {
   isImageTransportDescriptorSupported,
   splitImageParamValues,
 } from '@cherrystudio/ai-runtime/image';
-import type { AppProviderSettingsMap } from '@cherrystudio/ai-runtime/provider';
+import {
+  type AppProviderSettingsMap,
+  isMinimaxH3ImageModel,
+} from '@cherrystudio/ai-runtime/provider';
 import type { AiBaseRequest, ListModelsRequest } from '@cherrystudio/ai-runtime/runtime';
 import { createAiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
@@ -267,7 +270,10 @@ export class AiService extends BaseService {
         size: resolveImageRequestSize(structured.size) as `${number}x${number}` | undefined,
         aspectRatio: structured.aspectRatio as `${number}:${number}` | undefined,
         seed: structured.seed,
-        maxRetries: request.requestOptions?.maxRetries ?? 0,
+        maxRetries:
+          sdkConfig.providerId === 'minimax' && isMinimaxH3ImageModel(sdkConfig.modelId)
+            ? 0
+            : (request.requestOptions?.maxRetries ?? 0),
         abortSignal: signal,
         ...(Object.keys(imageProviderOptions).length > 0 && {
           providerOptions: imageProviderOptions,

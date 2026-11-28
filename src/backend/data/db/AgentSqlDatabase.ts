@@ -1,11 +1,13 @@
 import { File } from 'expo-file-system';
 import { openDatabaseAsync, type SQLiteBindValue, type SQLiteDatabase } from 'expo-sqlite';
+import { Platform } from 'react-native';
 
 import { databaseDirectory } from '@/backend/data/storage/storagePaths';
 
 import { captureDatabase } from './backupDatabase';
 
 export const AGENT_DATABASE_NAME = 'pi-agent.db';
+export const ANDROID_MAX_PAYLOAD_READ_BYTES = 8 * 1024 * 1024;
 const AGENT_DATABASE_FILES = ['', '-wal', '-shm'].map((suffix) => AGENT_DATABASE_NAME + suffix);
 
 /** Bytes of the Agent database and its SQLite sidecars in the active store. */
@@ -42,6 +44,11 @@ export class AgentSqlDatabase implements AgentSqlExecutor {
   private failure: Error | undefined;
 
   constructor(private readonly sqlite: SQLiteDatabase) {}
+
+  /** Cap Android multi-row payload reads so expo-sqlite does not fill the JVM heap at once. */
+  get maxPayloadReadBytes(): number | undefined {
+    return Platform.OS === 'android' ? ANDROID_MAX_PAYLOAD_READ_BYTES : undefined;
+  }
 
   static async open(
     options: { directory?: string; name?: string; journal?: 'wal' | 'preserve' } = {},

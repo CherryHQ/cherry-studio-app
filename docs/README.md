@@ -39,7 +39,7 @@ They are the source of truth for how the repository works today.
 | [Universal Package](./references/universal-package.md) | `@cherrystudio/universal` scope, admission criteria, and aliasing |
 | [Navigation And Insets](./references/navigation-and-insets.md) | Router structure, native gestures, sheets, safe areas, and edge-to-edge layout |
 | [Interaction And Gesture Arbitration](./references/interaction-and-gesture-arbitration.md) | Target contract for tap, long press, scroll, app-defined pan, and native text selection (`Status: design`) |
-| [Splash Screen And Startup Animation](./references/splash-screen-and-startup-animation.md) | Native launch constraints, animated handoff, and onboarding boundaries |
+| [Splash Screen And Startup Animation](./references/splash-screen-and-startup-animation.md) | Native launch surface, readiness gate, and onboarding boundaries |
 | [UI Components](./references/ui-components.md) | Interaction component ownership and platform enhancement rules |
 | [Expo UI Bottom Sheet Navigation](./references/expo-ui-bottom-sheet-navigation.md) | Sheet page transitions, physical stacking, and platform constraints |
 | [Design Spec](../DESIGN.md) | Visual and motion decisions: token sourcing, contrast, type scale, hierarchy, interaction motion, and literal-colour exemptions |

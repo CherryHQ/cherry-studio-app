@@ -22,10 +22,12 @@ type ChatTranscriptProps = Omit<
   ComponentProps<typeof MessageList>,
   'bottomAccessoryHeight' | 'contentTopInset' | 'visualBottomAccessoryHeight'
 > & {
+  contentTopInset?: number;
   hasOlderMessages?: boolean;
   hiddenUserTurnCount?: number;
   isLoadingMore: boolean;
   requiresInitialLayout: boolean;
+  surface?: 'default' | 'sheet';
   turnNavigator?: ChatTurnNavigator;
 };
 
@@ -37,7 +39,9 @@ export function ChatTranscript({
   requiresInitialLayout,
   isLoadingMore,
   onReady,
+  surface = 'default',
   turnNavigator,
+  contentTopInset: topInsetOverride,
   ...list
 }: ChatTranscriptProps) {
   const composer = useComposerExpansion();
@@ -67,7 +71,8 @@ export function ChatTranscript({
   const { top } = useSafeAreaInsets();
   const speechInset = useSpeechPlaybackInset();
   const contentTopInset =
-    resolveHeaderContentInset(headerHeight, top + mainHeaderRowHeight) + speechInset;
+    (topInsetOverride ?? resolveHeaderContentInset(headerHeight, top + mainHeaderRowHeight)) +
+    speechInset;
   const { isCoverVisible, markListLoaded } = useMessageListInitialRenderGate({
     renderGateKey: list.dataKey,
     requiresInitialHistoryLayout: requiresInitialLayout,
@@ -84,7 +89,11 @@ export function ChatTranscript({
     !composer?.state.isPresented,
   );
   return (
-    <View className="min-h-0 flex-1 bg-chat-background">
+    <View
+      className={
+        surface === 'sheet' ? 'min-h-0 flex-1 bg-transparent' : 'min-h-0 flex-1 bg-chat-background'
+      }
+    >
       <ChatOlderMessagesIndicator isLoading={isLoadingMore} />
       <ChatShareDragSelection
         listRef={listRef}
@@ -114,7 +123,7 @@ export function ChatTranscript({
           contentBottomInset={list.contentBottomInset}
           contentTopInset={contentTopInset}
           dockLift={dockLift}
-          keyboardOffset={list.keyboardOffset}
+          keyboardOffset={list.keyboardOffset ?? 0}
           navigator={turnNavigator}
           scrollProgress={scrollProgress}
           scrollToMessage={scrollToMessage}

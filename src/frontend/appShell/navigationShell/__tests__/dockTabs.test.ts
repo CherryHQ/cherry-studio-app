@@ -2,6 +2,7 @@ import {
   canPinTab,
   canUnpinTab,
   DEFAULT_PINNED_TABS,
+  hasDockPopoverActions,
   isRootNavPathname,
   isUnpinnedModuleRoot,
   normalizePinnedTabs,
@@ -10,6 +11,7 @@ import {
   resolveActiveDockTab,
   resolveCompactLeadingAction,
   resolveDockDragPreview,
+  resolveDockPopoverActions,
   resolveDockTabs,
   resolveMoreModules,
   resolveNavDestination,
@@ -58,6 +60,40 @@ describe('dockTabs', () => {
       'files',
     ]);
     expect(pinTab(['agents', 'files'], 'drawings', 1)).toEqual(['agents', 'drawings', 'files']);
+  });
+
+  test('resolves dock popover actions and hides empty dock popovers for required single tabs', () => {
+    expect(resolveDockPopoverActions(['agents'], 'agents')).toEqual({
+      canMoveLeft: false,
+      canMoveRight: false,
+      canUnpin: false,
+      currentIndex: 0,
+    });
+    expect(hasDockPopoverActions(['agents'], 'agents')).toBe(false);
+
+    expect(resolveDockPopoverActions(['agents', 'drawings'], 'agents')).toEqual({
+      canMoveLeft: false,
+      canMoveRight: true,
+      canUnpin: false,
+      currentIndex: 0,
+    });
+    expect(hasDockPopoverActions(['agents', 'drawings'], 'agents')).toBe(true);
+
+    expect(resolveDockPopoverActions(['agents', 'drawings'], 'drawings')).toEqual({
+      canMoveLeft: true,
+      canMoveRight: false,
+      canUnpin: true,
+      currentIndex: 1,
+    });
+    expect(hasDockPopoverActions(['agents', 'drawings'], 'drawings')).toBe(true);
+
+    expect(resolveDockPopoverActions(['agents'], 'drawings')).toEqual({
+      canMoveLeft: false,
+      canMoveRight: false,
+      canUnpin: false,
+      currentIndex: -1,
+    });
+    expect(hasDockPopoverActions(['agents'], 'drawings')).toBe(false);
   });
 
   test('resolves pathnames, active dock tab, and compact leading action', () => {

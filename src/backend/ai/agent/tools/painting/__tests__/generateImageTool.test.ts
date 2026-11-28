@@ -806,6 +806,22 @@ describe('createGenerateImageTool', () => {
 
     expect(tool.ref).toEqual({ source: 'builtin', capabilityId: 'generate_image' });
     expect(tool.approval).toBe('ask');
+    expect(tool.executionSettingsKey).toBe(MODEL.uniqueModelId);
+
+    const alternateId = createUniqueModelId('google', 'imagen-3');
+    const alternate = createGenerateImageTool(
+      createDependencies(),
+      {
+        uniqueModelId: alternateId,
+        model: { ...MODEL.model, id: alternateId, providerId: 'google', modelId: 'imagen-3' },
+      },
+      TURN_FILES,
+    );
+    expect(alternate.executionSettingsKey).toBe(alternateId);
+    expect(alternate.executionSettingsKey).not.toBe(tool.executionSettingsKey);
+
+    const unconfigured = createGenerateImageTool(createDependencies(), null, TURN_FILES);
+    expect(unconfigured.executionSettingsKey).toBeUndefined();
   });
 });
 

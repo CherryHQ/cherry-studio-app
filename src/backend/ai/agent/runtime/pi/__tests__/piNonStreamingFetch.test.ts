@@ -1311,7 +1311,8 @@ describe('Pi finite fetch', () => {
       expect(events.at(-1)?.type).toBe('done');
       expect(message.content).toEqual([{ type: 'text', text: 'Finite answer' }]);
       expect(wire[0]).toMatchObject({ choices: [{ delta: choice.message }] });
-      expect((wire[0] as typeof COMPLETION).choices[0].finish_reason).toBe(finishReason);
+      // OpenAI 7.59 normalizes omitted finish reasons to null in its stream iterator.
+      expect((wire[0] as typeof COMPLETION).choices[0].finish_reason).toBeNull();
     },
   );
 

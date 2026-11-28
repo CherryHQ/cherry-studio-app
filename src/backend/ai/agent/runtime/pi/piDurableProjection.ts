@@ -82,6 +82,17 @@ export const PiConfigurationSchema = z
       .default([]),
     options: RuntimeOptionsSchema,
     tools: z.array(PiToolBlueprintSchema),
+    mcpNamespaces: z
+      .array(
+        z.object({
+          serverId: z.string().min(1),
+          name: z.string().min(1),
+          description: z.string(),
+          instructions: z.string().optional(),
+        }),
+      )
+      .optional(),
+    compaction: z.object({ enabled: z.boolean().optional() }).optional(),
     webTools: z
       .object({
         modelTools: z.enum(['preferred', 'fallback', 'disabled']).optional(),
@@ -322,6 +333,7 @@ export function projectPiTurn(options: {
   fullReasoning?: boolean;
   inherited?: boolean;
   toolStates?: ReadonlyMap<string, 'running' | 'input-available' | 'interrupted'>;
+  approvalIds?: ReadonlyMap<string, string>;
   nestedTools?: ReadonlyMap<
     string,
     { parentCallId: string } & Omit<RuntimeToolProgress['calls'][number], 'id'>
@@ -426,6 +438,8 @@ export function projectPiTurn(options: {
       // A growing file body streams as a bounded preview instead of its full partial input.
       const inputPreview =
         streaming && target?.inputPreview ? toolInputPreview(target.inputPreview, args) : undefined;
+      const approvalId =
+        !streaming && options.active ? options.approvalIds?.get(block.id) : undefined;
       const part: Extract<RuntimeOutputPart, { type: 'tool' }> = {
         id,
         type: 'tool',
@@ -437,7 +451,10 @@ export function projectPiTurn(options: {
         displayName: target?.displayName ?? block.name,
         state: streaming
           ? 'input-streaming'
-          : (options.toolStates?.get(block.id) ?? 'input-available'),
+          : approvalId
+            ? 'awaiting-approval'
+            : (options.toolStates?.get(block.id) ?? 'input-available'),
+        ...(approvalId ? { approvalId } : {}),
         ...(inputPreview ? { inputPreview } : { input: RuntimeJsonValueSchema.parse(args) }),
       };
       parts.push(part);

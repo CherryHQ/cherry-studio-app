@@ -46,7 +46,8 @@ export type MessagePartToolGroupProps = {
   /** Runs before a reader-initiated inline disclosure toggle. */
   onDisclosureToggle?: () => void;
   state: 'complete' | 'running';
-  statusText?: string;
+  /** Static label or self-updating text leaf (e.g. a live elapsed counter). */
+  statusText?: ReactNode;
   statusTone?: MessagePartTone;
   testID?: string;
   title: string;

@@ -42,6 +42,7 @@ export {
 } from './ConversationSourceBoundary';
 export {
   useConversationAgents,
+  useResolvedConversationAgent,
   useConversationSessions,
   useConversationSessionChildren,
   useConversationSessionPath,

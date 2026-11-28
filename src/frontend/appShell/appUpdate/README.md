@@ -6,6 +6,7 @@ minimum. A missing key clears the last valid value. If the request fails, the ap
 valid minimum saved for this installation. With no known minimum, startup continues normally.
 
 Only an installed native version below the minimum opens the existing update dialog automatically.
+The `requiredUpdate` sub-entry exposes that confirmed decision to startup measurement.
 Tapping update looks up the current release and starts the usual store or APK flow. Returning from
 the store keeps the same dialog and target available. Android offers an exit action. On iOS the
 user can leave the app through the system. A published change to the minimum takes effect on the

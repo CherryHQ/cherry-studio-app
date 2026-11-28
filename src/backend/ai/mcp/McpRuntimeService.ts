@@ -632,6 +632,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     serverId: string,
     onUnavailable?: (warning: string) => void,
     signal?: AbortSignal,
+    onDiscoveryIncomplete?: () => void,
   ): Promise<McpExecutableToolDescriptor[]> {
     const server = await mcpServerService.getById(serverId);
     const sourceName =
@@ -653,6 +654,9 @@ export class McpRuntimeService extends BaseService implements McpModule {
       onUnavailable?.(
         `${sourceName}: tool discovery failed (${reason}). Check authorization and the service connection.`,
       );
+      if (!(error instanceof McpRuntimeToolError && !error.retryable)) {
+        onDiscoveryIncomplete?.();
+      }
       if (error instanceof McpRuntimeToolError) {
         throw error;
       }
@@ -663,12 +667,16 @@ export class McpRuntimeService extends BaseService implements McpModule {
       );
     }
     if (!this.isCurrentState(state)) {
+      onDiscoveryIncomplete?.();
       throw unavailableToolError();
     }
     const definitions = catalog.tools;
-    const connectionKey =
-      server.origin === 'builtin' ? undefined : await this.getConnectionKey(state);
+    const bindingKey = await this.getConnectionKey(state);
+    const connectionKey = server.origin === 'builtin' ? undefined : bindingKey;
     const disabledTools = new Set(server.disabledTools);
+    if (catalog.discoveryWarnings.length > 0) {
+      onDiscoveryIncomplete?.();
+    }
     for (const warning of catalog.discoveryWarnings) onUnavailable?.(warning);
     if (definitions.length === 0)
       onUnavailable?.(`${sourceName}: the service returned no available tools.`);
@@ -688,6 +696,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
         const readOnly = tool.annotations?.readOnlyHint === true;
         return [
           {
+            executionSettingsKey: bindingKey,
             ...(connectionKey ? { connectionKey } : {}),
             ...(resourceUri && connectionKey
               ? { app: { serverId: server.id, toolName: tool.name, resourceUri, connectionKey } }

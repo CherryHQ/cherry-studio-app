@@ -5,7 +5,20 @@ permissions:
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Check scope (full or incremental)
+        required: false
+        default: full
+        type: choice
+        options: [full, incremental]
   workflow_call:
+    inputs:
+      mode:
+        description: Check scope (full or incremental)
+        required: false
+        default: full
+        type: string
   pull_request:
     branches:
       - main
@@ -13,21 +26,69 @@ on:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
 
 jobs:
-  test:
+  plan:
     runs-on: ubuntu-latest
-    env:
-      PRCI: true
-    if: github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    outputs:
+      mode: ${{ steps.plan.outputs.mode }}
+      run_test: ${{ steps.plan.outputs.run_test }}
+      run_typecheck: ${{ steps.plan.outputs.run_typecheck }}
+      run_lint: ${{ steps.plan.outputs.run_lint }}
+      run_actionlint: ${{ steps.plan.outputs.run_actionlint }}
+      run_node_lint: ${{ steps.plan.outputs.run_node_lint }}
 
     steps:
       - name: Check out Git repository
         uses: actions/checkout@v5
+        with:
+          fetch-depth: ${{ (github.event_name == 'pull_request' || inputs.mode == 'incremental') && 2 || 1 }}
+          persist-credentials: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.19.0
+
+      - name: Compute change-aware CI plan
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HAS_FULL_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'ci:full') }}
+          INPUT_MODE: ${{ inputs.mode }}
+        run: |
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            if [[ "$HAS_FULL_LABEL" == "true" ]]; then
+              mode="full"
+            else
+              mode="incremental"
+            fi
+          else
+            mode="${INPUT_MODE:-full}"
+          fi
+
+          if [[ "$mode" == "full" ]]; then
+            node scripts/changedChecks.ts plan --full --github-outputs
+          else
+            node scripts/changedChecks.ts plan --base HEAD^1 --head HEAD --no-tests --github-outputs
+          fi
+
+  test:
+    needs: [plan]
+    runs-on: ubuntu-latest
+    if: needs.plan.outputs.run_test == 'true'
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: ${{ needs.plan.outputs.mode == 'full' && 1 || 2 }}
+          persist-credentials: false
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 12.2.1
 
@@ -41,20 +102,29 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Test
-        run: pnpm test
+        env:
+          PLAN_MODE: ${{ needs.plan.outputs.mode }}
+        run: |
+          if [[ "$PLAN_MODE" == "full" ]]; then
+            node scripts/changedChecks.ts test --full
+          else
+            node scripts/changedChecks.ts test --base HEAD^1 --head HEAD
+          fi
 
   typecheck:
+    needs: [plan]
     runs-on: ubuntu-latest
-    env:
-      PRCI: true
-    if: github.event.pull_request.draft == false
+    if: needs.plan.outputs.run_typecheck == 'true'
 
     steps:
       - name: Check out Git repository
         uses: actions/checkout@v5
+        with:
+          fetch-depth: ${{ needs.plan.outputs.mode == 'full' && 1 || 2 }}
+          persist-credentials: false
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 12.2.1
 
@@ -68,71 +138,94 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Type Check
-        run: pnpm typecheck
+        env:
+          PLAN_MODE: ${{ needs.plan.outputs.mode }}
+        run: |
+          if [[ "$PLAN_MODE" == "full" ]]; then
+            node scripts/changedChecks.ts typecheck --full
+          else
+            node scripts/changedChecks.ts typecheck --base HEAD^1 --head HEAD
+          fi
 
   lint:
+    needs: [plan]
     runs-on: ubuntu-latest
-    env:
-      PRCI: true
-    if: github.event.pull_request.draft == false
+    if: needs.plan.outputs.run_lint == 'true'
 
     steps:
       - name: Check out Git repository
         uses: actions/checkout@v5
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
         with:
-          version: 12.2.1
-
-      - name: Install Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24.19.0
-          cache: pnpm
-
-      - name: Install Dependencies
-        run: pnpm install --frozen-lockfile
+          fetch-depth: ${{ needs.plan.outputs.mode == 'full' && 1 || 2 }}
+          persist-credentials: false
 
       - name: Check GitHub Actions workflows
+        if: needs.plan.outputs.run_actionlint == 'true'
         uses: docker://rhysd/actionlint:1.7.12
         env:
           SHELLCHECK_OPTS: --severity=error
         with:
           args: -color
 
-      - name: Lint Check
-        run: pnpm lint
+      - name: Install pnpm
+        if: needs.plan.outputs.run_node_lint == 'true'
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 12.2.1
 
-      - name: Translation Check
-        run: pnpm i18n:check
+      - name: Install Node.js
+        if: needs.plan.outputs.run_node_lint == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.19.0
+          cache: pnpm
 
-      - name: UI Boundary Check
-        run: pnpm ui:check-boundaries
+      - name: Install Dependencies
+        if: needs.plan.outputs.run_node_lint == 'true'
+        run: pnpm install --frozen-lockfile
 
-      - name: AI Runtime Boundary Check
-        run: pnpm --filter @cherrystudio/ai-runtime check:boundaries
-
-      - name: Design Contract Check
-        run: pnpm design:check
-
-      - name: Format Check
-        run: pnpm format:check
-
-      - name: Documentation Link Check
-        run: pnpm docs:check-links
-
-      - name: Feature Map Check
-        run: pnpm verify:features
-
-      - name: Skill Check
-        run: pnpm skills:check
+      - name: Lint, Format & Specialized Checks
+        if: needs.plan.outputs.run_node_lint == 'true'
+        env:
+          PLAN_MODE: ${{ needs.plan.outputs.mode }}
+        run: |
+          if [[ "$PLAN_MODE" == "full" ]]; then
+            node scripts/changedChecks.ts lint --full
+          else
+            node scripts/changedChecks.ts lint --base HEAD^1 --head HEAD
+          fi
 
   ci:
     name: CI
-    needs: [test, typecheck, lint]
-    if: always() && github.event.pull_request.draft == false
+    needs: [plan, test, typecheck, lint]
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-latest
     steps:
-      - name: Require every check to succeed
-        run: test "${{ needs.test.result }}${{ needs.typecheck.result }}${{ needs.lint.result }}" = successsuccesssuccess
+      - name: Require every planned check to succeed
+        env:
+          PLAN_RESULT: ${{ needs.plan.result }}
+          RUN_TEST: ${{ needs.plan.outputs.run_test }}
+          TEST_RESULT: ${{ needs.test.result }}
+          RUN_TYPECHECK: ${{ needs.plan.outputs.run_typecheck }}
+          TYPECHECK_RESULT: ${{ needs.typecheck.result }}
+          RUN_LINT: ${{ needs.plan.outputs.run_lint }}
+          LINT_RESULT: ${{ needs.lint.result }}
+        run: |
+          test "$PLAN_RESULT" = success
+          verify_job() {
+            local name="$1" required="$2" result="$3"
+            if [[ "$required" == "true" ]]; then
+              if [[ "$result" != "success" ]]; then
+                echo "Planned job '$name' expected success, got: $result" >&2
+                exit 1
+              fi
+            else
+              case "$result" in
+                success|skipped) ;;
+                *) echo "Skipped job '$name' had unexpected result: $result" >&2; exit 1 ;;
+              esac
+            fi
+          }
+          verify_job test "$RUN_TEST" "$TEST_RESULT"
+          verify_job typecheck "$RUN_TYPECHECK" "$TYPECHECK_RESULT"
+          verify_job lint "$RUN_LINT" "$LINT_RESULT"

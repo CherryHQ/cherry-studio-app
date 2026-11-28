@@ -154,6 +154,28 @@ describe('MCP Runtime adapter', () => {
     );
   });
 
+  it('pins each MCP tool to a secret-free executionSettingsKey derived from its connection identity', () => {
+    const first = createTool(
+      { invoke: jest.fn() },
+      { endpointUrl: 'https://a.example/mcp?token=secret-a', connectionKey: 'remote:aaa' },
+    );
+    const second = createTool(
+      { invoke: jest.fn() },
+      { endpointUrl: 'https://b.example/mcp?token=secret-b', connectionKey: 'remote:bbb' },
+    );
+    const fallback = createTool(
+      { invoke: jest.fn() },
+      { endpointUrl: 'https://fallback.example/mcp?token=secret-c' },
+    );
+
+    expect(first.executionSettingsKey).toBe('remote:aaa');
+    expect(second.executionSettingsKey).toBe('remote:bbb');
+    expect(first.executionSettingsKey).not.toBe(second.executionSettingsKey);
+    expect(fallback.executionSettingsKey).toMatch(/^endpoint:/);
+    expect(fallback.executionSettingsKey).not.toContain('secret-c');
+    expect(fallback.executionSettingsKey).not.toContain('fallback.example');
+  });
+
   it('propagates cancellation and discards a late result', async () => {
     const { traces, records } = createTraceRecorder();
     let resolveInvocation!: (value: unknown) => void;

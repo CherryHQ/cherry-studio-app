@@ -1,58 +1,58 @@
 import FolderIcon from '@cherrystudio/app-icons/icons/folder';
-import {
-  BottomSheet,
-  Button,
-  Composer,
-  ContentState,
-  Section,
-  useToast,
-} from '@cherrystudio/ui/components';
+import { BottomSheet, Button, Composer, Section, useToast } from '@cherrystudio/ui/components';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import {
-  useConversationWorkspaces,
-  type AgentSummary,
   type ConversationRef,
+  type useConversationWorkspaces,
   type WorkspaceSummary,
 } from '@/frontend/appShell/conversation';
 import {
-  useConversationDraft,
   type DraftId,
   type RemoteConversationSession,
   type RemoteConversationSnapshot,
+  type useConversationDraft,
 } from '@/frontend/appShell/conversation/remote';
 import {
-  ComposerSurface,
-  ComposerMenu,
   ComposerAttachments,
+  ComposerSurface,
+  useComposerActions,
   useComposerPresentationActions,
   useComposerState,
-  useComposerActions,
 } from '@/frontend/components/Composer';
 import { useBackendModule } from '@/frontend/data';
 
 import { ChatInputAccessories, ChatInputSurface } from '../components/ChatInput';
 import { toAgentInputParts } from '../components/ChatInput/utils/agentInputParts';
 import { ConversationActionError, conversationFailureKey } from '../runtime/conversationFailure';
+import { RemoteComposerMenu, RemoteWorkspaceSheet } from './RemoteComposerMenu';
 import { restoreRemoteInput } from './restoreRemoteInput';
 import { UndeliveredMessageRow } from './UndeliveredMessageRow';
 import { useRemoteDraftPersistence } from './useRemoteDraftPersistence';
 
 export function RemoteComposer({
-  agent,
   session,
   snapshot,
   draftId,
   draftKey,
+  draft,
+  workspaces,
+  selectedWorkspace,
+  supportsAttachments,
+  onSelectWorkspace,
   onSessionCreated,
 }: {
-  agent?: AgentSummary;
   session?: RemoteConversationSession;
   snapshot: RemoteConversationSnapshot;
   draftId?: DraftId;
   draftKey: string;
+  draft: ReturnType<typeof useConversationDraft>;
+  workspaces: ReturnType<typeof useConversationWorkspaces>;
+  selectedWorkspace?: WorkspaceSummary;
+  supportsAttachments: boolean;
+  onSelectWorkspace: (workspace: WorkspaceSummary) => void;
   onSessionCreated?(ref: ConversationRef): boolean;
 }) {
   const { t } = useTranslation();
@@ -63,14 +63,8 @@ export function RemoteComposer({
   const { setDraft, addAttachments, setAttachments, subscribeAttachmentChanges } =
     useComposerActions();
   const { runInputReplacement } = useComposerPresentationActions();
-  const [workspace, setWorkspace] = useState<WorkspaceSummary>();
   const [choosingWorkspace, setChoosingWorkspace] = useState(false);
   const [choosingExecution, setChoosingExecution] = useState(false);
-  const workspaces = useConversationWorkspaces(agent?.ref);
-  const selectedWorkspace = existing
-    ? workspaces.items.find((item) => item.kind !== 'system' && item.id === snapshot.workspaceId)
-    : (workspaces.items.find((item) => item.ref === workspace?.ref) ??
-      (!workspace ? workspaces.items.find((item) => item.kind === 'system') : undefined));
   useEffect(() => {
     if (
       snapshot.workspaceKind !== 'system' &&
@@ -82,7 +76,6 @@ export function RemoteComposer({
     )
       void workspaces.fetchNextPage();
   }, [snapshot.workspaceId, snapshot.workspaceKind, selectedWorkspace, workspaces]);
-  const draft = useConversationDraft(agent?.ref, selectedWorkspace?.ref, draftId);
   const created = draft.state?.created;
   useEffect(() => {
     if (!session && created && onSessionCreated?.(created.conversation)) created.release();
@@ -92,13 +85,30 @@ export function RemoteComposer({
   const startAvailability = draft.state?.start.availability;
   const starting = startAvailability?.state === 'disabled' && startAvailability.reason === 'busy';
   const action = existing ? snapshot.actions.send : draft.state?.start;
-  const inputAllowsAttachments =
-    (existing ? snapshot.actions.inputPolicy : draft.state?.inputPolicy)?.attachments === true;
   const upload = existing ? snapshot.upload : draft.state?.upload;
   const preparation = existing
     ? snapshot.attachmentPreparation
     : draft.state?.attachmentPreparation;
-  const supportsAttachments = inputAllowsAttachments && Boolean(preparation);
+  const canChangeWorkspace = !existing && !starting && attachments.length === 0;
+  if (choosingWorkspace && !canChangeWorkspace) {
+    setChoosingWorkspace(false);
+  }
+  const showWorkspaceRow =
+    !existing || snapshot.workspaceKind === 'system' || Boolean(snapshot.workspaceId);
+  const hasMenuContent = supportsAttachments || showWorkspaceRow;
+  const workspaceValue =
+    snapshot.workspaceKind === 'system' || selectedWorkspace?.kind === 'system'
+      ? t('remoteAgent.systemWorkspace')
+      : (selectedWorkspace?.name ??
+        (workspaces.isLoading || workspaces.isFetchingNextPage
+          ? t('remoteAgent.loading')
+          : undefined));
+  const isWorkspaceRequired =
+    !existing &&
+    !workspaces.isLoading &&
+    !selectedWorkspace &&
+    startAvailability?.state === 'disabled' &&
+    startAvailability.reason === 'workspace-required';
   const restoreDraft = useEffectEvent(async (isCurrent: () => boolean) => {
     if (attachments.length || !preparation?.draft?.items.length) return;
     const restored = await restoreRemoteInput(
@@ -192,6 +202,18 @@ export function RemoteComposer({
             });
         }}
       />
+      {draft.error ? (
+        <View className="min-h-8 flex-row items-center gap-2 px-4">
+          <View className="size-2 rounded-full bg-destructive" />
+          <Text
+            accessibilityLiveRegion="polite"
+            className="min-w-0 flex-1 text-sm text-muted-foreground"
+            numberOfLines={1}
+          >
+            {t('remoteAgent.loadFailed')}
+          </Text>
+        </View>
+      ) : null}
       <ComposerSurface
         getSendErrorLabel={(error) =>
           error instanceof ConversationActionError
@@ -255,9 +277,11 @@ export function RemoteComposer({
             }}
           />
           {preparation?.draft?.items.some((item) => item.state === 'failed') ? (
-            <Button size="xs" variant="ghost" onPress={() => stageAttachments(attachments)}>
-              {t('common.retry')}
-            </Button>
+            <View className="flex-row items-center justify-end px-4">
+              <Button size="xs" variant="ghost" onPress={() => stageAttachments(attachments)}>
+                {t('common.retry')}
+              </Button>
+            </View>
           ) : null}
           {upload ? (
             <View className="flex-row items-center gap-2 px-4">
@@ -276,89 +300,74 @@ export function RemoteComposer({
           attachmentMode={supportsAttachments ? 'images' : 'text-only'}
           dictation
           streaming={canStop}
-          leadingAction={supportsAttachments ? <ComposerMenu /> : undefined}
+          leadingAction={
+            hasMenuContent ? (
+              <RemoteComposerMenu
+                attachmentsCount={attachments.length}
+                canChangeWorkspace={canChangeWorkspace}
+                enabled
+                onSelectWorkspace={onSelectWorkspace}
+                selectedWorkspace={selectedWorkspace}
+                showWorkspaceRow={showWorkspaceRow}
+                supportsAttachments={supportsAttachments}
+                workspaceValue={workspaceValue}
+                workspaces={workspaces}
+              />
+            ) : undefined
+          }
           secondaryAction={
-            <Composer.Pill
-              accessibilityLabel={t('remoteAgent.workspace')}
-              disabled={existing || starting || attachments.length > 0}
-              onPress={() => void runInputReplacement(() => setChoosingWorkspace(true))}
-              icon={<FolderIcon className="size-5 text-foreground" />}
-              testID="composer-workspace-button"
-            >
-              <Text
-                className="min-w-0 shrink font-semibold text-sm text-foreground"
-                numberOfLines={1}
+            isWorkspaceRequired ? (
+              <Composer.Pill
+                accessibilityLabel={t('remoteAgent.workspace')}
+                disabled={!canChangeWorkspace}
+                onPress={() => void runInputReplacement(() => setChoosingWorkspace(true))}
+                icon={<FolderIcon className="size-5 text-foreground" />}
+                testID="composer-workspace-button"
               >
-                {snapshot.workspaceKind === 'system' || selectedWorkspace?.kind === 'system'
-                  ? t('remoteAgent.systemWorkspace')
-                  : (selectedWorkspace?.name ?? t('remoteAgent.workspace'))}
-              </Text>
-            </Composer.Pill>
+                <Text
+                  className="min-w-0 shrink font-semibold text-sm text-foreground"
+                  numberOfLines={1}
+                >
+                  {t('remoteAgent.workspace')}
+                </Text>
+              </Composer.Pill>
+            ) : undefined
           }
         />
       </ComposerSurface>
-      {draft.error ? <ContentState.Error title={t('remoteAgent.loadFailed')} /> : null}
-      {choosingWorkspace && !existing ? (
-        <BottomSheet
-          open
+      {choosingWorkspace && canChangeWorkspace ? (
+        <RemoteWorkspaceSheet
+          disabled={starting}
           onClose={() => setChoosingWorkspace(false)}
-          title={t('remoteAgent.workspace')}
-          size="medium"
-        >
-          <ScrollView contentContainerClassName="px-4 pb-4">
-            <Section>
-              {workspaces.items.map((item) => (
-                <Section.RadioItem
-                  key={item.ref}
-                  label={item.kind === 'system' ? t('remoteAgent.systemWorkspace') : item.name}
-                  selected={selectedWorkspace?.ref === item.ref}
-                  disabled={starting}
-                  onPress={() => {
-                    setWorkspace(item);
-                    setChoosingWorkspace(false);
-                  }}
-                />
-              ))}
-            </Section>
-            {workspaces.isLoading ? <ContentState.Loading /> : null}
-            {workspaces.isError ? (
-              <ContentState.Error
-                title={t('remoteAgent.loadFailed')}
-                primaryAction={{
-                  children: t('common.retry'),
-                  onPress: () => void workspaces.refetch(),
-                }}
-              />
-            ) : null}
-            {workspaces.hasNextPage ? (
-              <Button
-                variant="ghost"
-                loading={workspaces.isFetchingNextPage}
-                onPress={() => void workspaces.fetchNextPage()}
-              >
-                {t('remoteAgent.loadMore')}
-              </Button>
-            ) : null}
-          </ScrollView>
-        </BottomSheet>
+          onSelect={(item) => {
+            onSelectWorkspace(item);
+            setChoosingWorkspace(false);
+          }}
+          open
+          presentation="default"
+          selectedWorkspace={selectedWorkspace}
+          workspaces={workspaces}
+        />
       ) : null}
       {choosingExecution ? (
         <BottomSheet
           open
           onClose={() => setChoosingExecution(false)}
           title={t('chat.input.action.stopGenerating')}
-          size="medium"
+          size="content"
         >
-          <Section>
-            {cancellations.map((execution, index) => (
-              <Section.Item
-                key={execution.id}
-                label={t('remoteAgent.stopExecution', { index: index + 1 })}
-                disabled={execution.cancel?.availability.state !== 'enabled'}
-                onPress={() => void stop(index)}
-              />
-            ))}
-          </Section>
+          <View className="px-4 pb-4">
+            <Section>
+              {cancellations.map((execution, index) => (
+                <Section.Item
+                  key={execution.id}
+                  label={t('remoteAgent.stopExecution', { index: index + 1 })}
+                  disabled={execution.cancel?.availability.state !== 'enabled'}
+                  onPress={() => void stop(index)}
+                />
+              ))}
+            </Section>
+          </View>
         </BottomSheet>
       ) : null}
     </>

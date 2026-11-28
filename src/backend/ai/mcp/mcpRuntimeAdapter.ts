@@ -28,6 +28,8 @@ const UTF8_ENCODER = new TextEncoder();
 
 export type McpExecutableToolDescriptor = {
   connectionKey?: string;
+  /** Secret-free settings fingerprint pinning durable approvals and recovery to one connection. */
+  executionSettingsKey?: string;
   app?: import('@/shared/contracts/mcpApp').McpAppReference;
   serverId: string;
   /** Bundled identity from the server record, never inferred from remote descriptions or names. */
@@ -236,11 +238,20 @@ export function createMcpRuntimeTools(
       generation: descriptor.generation,
       ...(descriptor.readOnlyHint ? { readOnlyHint: true } : {}),
     };
+    const executionSettingsKey =
+      descriptor.executionSettingsKey ??
+      descriptor.connectionKey ??
+      (descriptor.endpointUrl !== null
+        ? `endpoint:${fnv1a32(descriptor.endpointUrl).toString(36)}`
+        : descriptor.pluginId
+          ? `builtin:${descriptor.pluginId}`
+          : undefined);
 
     return {
       approval,
       description: descriptor.description,
       displayName: descriptor.displayName,
+      ...(executionSettingsKey ? { executionSettingsKey } : {}),
       execute: (call) =>
         executeMcpRuntimeTool({
           call,

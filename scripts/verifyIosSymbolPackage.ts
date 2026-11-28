@@ -16,6 +16,7 @@ import { basename, join, posix, relative, resolve } from 'node:path';
 
 import { gunzipSync, unzipSync } from 'fflate';
 
+import { requireCliPath, requireSafeId } from './cliInput';
 import {
   checked,
   requiredIosBundles,
@@ -583,8 +584,8 @@ async function verifyPackageArtifacts(
 
 if (basename(process.argv[1] ?? '') === 'verifyIosSymbolPackage.ts') {
   void verifyIosSymbolPackage({
-    archivePath: resolve(process.argv[2] ?? ''),
-    buildId: process.argv[3] ?? '',
+    archivePath: requireCliPath(process.argv[2] ?? '', 'archive path'),
+    buildId: requireSafeId(process.argv[3] ?? '', 'build id'),
     retryUpload: process.argv[4] === '--retry-upload',
   }).then(
     (result) => console.log(JSON.stringify(result, null, 2)),

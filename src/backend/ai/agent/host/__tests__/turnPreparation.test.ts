@@ -6,6 +6,7 @@ import type {
   AgentSubmitMessageInput,
 } from '@/shared/contracts/agent';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
+import type { DesktopDispatchSessionRef } from '@/shared/data/types/desktopDispatchTool';
 import { FileEntryIdSchema, type FileEntryId } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
@@ -537,6 +538,7 @@ describe('turn preparation', () => {
       model: OVERRIDE_MODEL,
       acceptsImages: true,
       resources: plan.resources,
+      dispatchedDesktopSessions: [],
       documentParserMode: 'anydoc',
       resolveUsageAttribution: plan.usageAttribution.resolve,
     });
@@ -739,6 +741,19 @@ describe('turn preparation', () => {
       { key: 'workflow:plugin:feishu-1', text: expect.stringContaining('Read before edits.') },
     ]);
     expect(harness.loadWorkflowLoads).toHaveBeenCalledWith(SESSION_ID, undefined);
+  });
+
+  test('restores dispatch receipts at the selected branch boundary for a turn', async () => {
+    const harness = createHarness();
+    const receipt = { connectionId: 'desktop', sessionId: 'remote' };
+    harness.loadDispatchedDesktopSessions.mockResolvedValueOnce([receipt]);
+    await prepareTurn(harness.dependencies, textInput(), new AbortController().signal, undefined, {
+      through: 'branch-anchor',
+    });
+    expect(harness.loadDispatchedDesktopSessions).toHaveBeenCalledWith(SESSION_ID, 'branch-anchor');
+    expect(harness.getSystemTools).toHaveBeenCalledWith(
+      expect.objectContaining({ dispatchedDesktopSessions: [receipt] }),
+    );
   });
 
   test.each(['preferred', 'fallback', 'disabled'] as const)(
@@ -1082,6 +1097,12 @@ function createHarness() {
     async (_sessionId: string): Promise<StoredSkillActivation[]> => [],
   );
   const loadWorkflowLoads = jest.fn(async (_sessionId: string): Promise<string[]> => []);
+  const loadDispatchedDesktopSessions = jest.fn(
+    async (
+      _sessionId: string,
+      _through?: string | null,
+    ): Promise<DesktopDispatchSessionRef[]> => [],
+  );
   const resolveAvailable = jest.fn(async (fileEntryIds: readonly FileEntryId[]) =>
     fileEntryIds.includes(FILE_ENTRY_ID) ? new Map([[FILE_ENTRY_ID, textFact]]) : new Map(),
   );
@@ -1140,6 +1161,7 @@ function createHarness() {
       loadRuntimeTurnContext,
       loadSkillActivations,
       loadWorkflowLoads,
+      loadDispatchedDesktopSessions,
     },
     systemCapabilities: { getTools: getSystemTools },
   };
@@ -1156,6 +1178,7 @@ function createHarness() {
     loadRuntimeTurnContext,
     loadSkillActivations,
     loadWorkflowLoads,
+    loadDispatchedDesktopSessions,
     preflightModel,
     resolveInferenceModel,
     resolveRuntimeTools,

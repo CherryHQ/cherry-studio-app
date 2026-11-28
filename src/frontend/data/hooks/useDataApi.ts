@@ -2,6 +2,7 @@ import {
   type InfiniteData,
   keepPreviousData,
   type QueryClient,
+  type UseQueryOptions,
   useQueryClient,
   useInfiniteQuery as useTanStackInfiniteQuery,
   useMutation as useTanStackMutation,
@@ -64,7 +65,7 @@ type RefreshOption<TPath extends ApiPath, TMethod extends MutationMethod> =
 function callerQueryOverrides(options?: {
   gcTime?: number;
   refetchOnMount?: boolean | 'always';
-  retry?: boolean | number;
+  retry?: UseQueryOptions['retry'];
   staleTime?: number;
 }) {
   return {
@@ -90,7 +91,7 @@ export function useQuery<TPath extends ApiPath>(
     refetchInterval?:
       | number
       | ((data: ResponseForPath<TPath, 'GET'> | undefined) => number | false);
-    retry?: boolean | number;
+    retry?: UseQueryOptions['retry'];
     staleTime?: number;
   },
 ) {
