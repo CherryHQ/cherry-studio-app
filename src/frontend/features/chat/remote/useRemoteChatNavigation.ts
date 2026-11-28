@@ -1,4 +1,4 @@
-import { useIsFocused, useRouter } from 'expo-router';
+import { useIsFocused, useNavigation } from 'expo-router';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { v7 as uuidv7 } from 'uuid';
 
@@ -11,7 +11,7 @@ export function useRemoteChatNavigation(
   target: RemoteChatTarget,
   source: Pick<RemoteConversationSource, 'hasSubmission'>,
 ) {
-  const router = useRouter();
+  const navigation = useNavigation<{ setParams(params: RemoteChatTarget): void }>();
   const isFocused = useIsFocused();
   const { openRemote } = useChatSource();
   const [initialDraftId] = useState(() => uuidv7());
@@ -35,8 +35,9 @@ export function useRemoteChatNavigation(
   // external-app callback can restore unsent input even after this process is reclaimed.
   useLayoutEffect(() => {
     const routeDraftId = target.sessionId ? undefined : draftId;
-    if (isFocused && target.draftId !== routeDraftId) router.setParams({ draftId: routeDraftId });
-  }, [draftId, isFocused, router, target.draftId, target.sessionId]);
+    if (isFocused && target.draftId !== routeDraftId)
+      navigation.setParams({ draftId: routeDraftId });
+  }, [draftId, isFocused, navigation, target.draftId, target.sessionId]);
 
   return {
     draftId,
@@ -56,7 +57,7 @@ export function useRemoteChatNavigation(
       if (origin.current !== identity) return false;
       setHandoff({ sessionId: ref.sessionId, key: identity });
       // Same route: replacing would remount the whole screen and flash it.
-      router.setParams({ sessionId: ref.sessionId, draftId: undefined });
+      navigation.setParams({ sessionId: ref.sessionId, draftId: undefined });
       return true;
     },
   };

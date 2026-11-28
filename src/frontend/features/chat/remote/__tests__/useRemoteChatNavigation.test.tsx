@@ -10,7 +10,7 @@ const mockOpen = jest.fn();
 const mockSetParams = jest.fn();
 let mockFocused = true;
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ setParams: mockSetParams }),
+  useNavigation: () => ({ setParams: mockSetParams }),
   useIsFocused: () => mockFocused,
 }));
 jest.mock('@/frontend/appShell/navigation/chat', () => ({
