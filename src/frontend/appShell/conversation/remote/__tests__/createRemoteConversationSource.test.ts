@@ -43,6 +43,7 @@ function fixture(scope = 'scope', binding = 'binding') {
     scope,
     draftScope: binding,
     getState: () => state,
+    getDispatch: () => undefined,
     subscribeState: (listener) => {
       states.add(listener);
       return () => {

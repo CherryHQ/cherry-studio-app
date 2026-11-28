@@ -10,10 +10,8 @@ import { useNavigationDockClearance } from '@/frontend/appShell/navigationShell/
 import { useComposerPresentationState } from '../context/ComposerProvider';
 import { getComposerExtraBottomOffset } from '../utils/composerDockOffset';
 
-type ComposerDockProps = Omit<CherryComposerDockProps, 'keyboardTracking'>;
-
 /** Connects CherryUI's dock motion to this composer's input lifecycle. */
-export function ComposerDock(props: ComposerDockProps) {
+export function ComposerDock(props: CherryComposerDockProps) {
   const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
   const { keyboardTracking } = useComposerPresentationState();
@@ -24,8 +22,8 @@ export function ComposerDock(props: ComposerDockProps) {
     <Composer.Dock
       collapseLabel={t('chat.input.action.collapseEditor')}
       extraBottomOffset={extraBottomOffset}
-      {...props}
       keyboardTracking={keyboardTracking}
+      {...props}
     />
   );
 }

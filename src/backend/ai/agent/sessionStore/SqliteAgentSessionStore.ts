@@ -46,6 +46,7 @@ import {
   type AgentMessageView,
   type AgentSessionView,
 } from '@/shared/contracts/agent';
+import type { DesktopDispatchSessionRef } from '@/shared/data/types/desktopDispatchTool';
 import { SkillActivationSchema } from '@/shared/data/types/skill';
 import { applyReplyEdits } from '@/shared/utils/assistantReply';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
@@ -1195,6 +1196,58 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       `,
     );
     return rows.flatMap(({ workflowId }) => (typeof workflowId === 'string' ? [workflowId] : []));
+  }
+
+  async loadDispatchedDesktopSessions(
+    sessionId: string,
+    through?: string | null,
+  ): Promise<DesktopDispatchSessionRef[]> {
+    const rows = await readSqliteRows<{
+      connectionId: unknown;
+      sessionId: unknown;
+      draftId: unknown;
+      operationId: unknown;
+    }>(
+      this.dbService.getSqlite(),
+      sql`
+        SELECT json_extract(part.value, '$.output.value.connectionId') AS "connectionId",
+          json_extract(part.value, '$.output.value.sessionId') AS "sessionId",
+          json_extract(part.value, '$.output.value.draftId') AS "draftId",
+          json_extract(part.value, '$.output.value.operationId') AS "operationId"
+        FROM agent_session_message AS message, json_each(json_extract(message.data, '$.parts')) AS part
+        WHERE message.session_id = ${sessionId} AND message.role = 'assistant'
+          AND message.id IN (${messagePathIdsSql(sessionId, through)})
+          AND json_extract(part.value, '$.type') IN ('dynamic-tool', 'tool-desktop_dispatch_task')
+          AND json_extract(part.value, '$.toolRef.source') = 'builtin'
+          AND json_extract(part.value, '$.toolRef.capabilityId') = 'desktop_dispatch_task'
+          AND json_extract(part.value, '$.state') = 'output-available'
+          AND json_type(part.value, '$.output.value.connectionId') = 'text'
+          AND json_extract(part.value, '$.output.value.localSessionId') = ${sessionId}
+        ORDER BY message.created_at, message.id, part.key
+      `,
+    );
+    const sessions = new Map<string, DesktopDispatchSessionRef>();
+    for (const { connectionId, sessionId, draftId, operationId } of rows) {
+      if (typeof connectionId !== 'string' || !connectionId.trim()) continue;
+      if (typeof sessionId === 'string' && sessionId.trim()) {
+        sessions.set(JSON.stringify([connectionId, 'session', sessionId]), {
+          connectionId,
+          sessionId,
+        });
+      } else if (
+        typeof draftId === 'string' &&
+        draftId.trim() &&
+        typeof operationId === 'string' &&
+        operationId.trim()
+      ) {
+        sessions.set(JSON.stringify([connectionId, 'draft', draftId, operationId]), {
+          connectionId,
+          draftId,
+          operationId,
+        });
+      }
+    }
+    return [...sessions.values()];
   }
 
   async getLatestContextCheckpoint(

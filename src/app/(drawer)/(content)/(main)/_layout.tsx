@@ -13,6 +13,7 @@ import {
   VerticalNavRail,
 } from '@/frontend/appShell/navigationShell';
 import { OverlaySidebarPresenceProvider } from '@/frontend/appShell/sidebar';
+import { RemoteSessionSheetHost } from '@/frontend/features/chat/remote';
 import { ChatProvider } from '@/frontend/features/chat/runtime';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
@@ -54,75 +55,77 @@ export default function MainStackLayout() {
       <ChatProvider>
         <RouteHeaderProvider rootAction="back">
           <View className="flex-1 bg-background">
-            <Stack
-              screenOptions={{
-                ...headerScreenOptions,
-                contentStyle: { backgroundColor },
-                headerStyle: getRootHeaderStyle(backgroundColor),
-                headerTransparent: isLiquidGlassAvailable,
-                headerTintColor: foregroundColor,
-              }}
-            >
-              <Stack.Screen
-                name={NAV_ROUTE_MANIFEST.chat.stackRoute}
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen
-                name={NAV_ROUTE_MANIFEST.agents.stackRoute}
-                options={moduleDestination('agents')}
-              />
-              <Stack.Screen
-                name={NAV_ROUTE_MANIFEST.drawings.stackRoute}
-                options={moduleDestination('drawings')}
-              />
-              <Stack.Screen
-                name={NAV_ROUTE_MANIFEST.plugins.stackRoute}
-                options={moduleDestination('plugins')}
-              />
-              <Stack.Screen
-                name={NAV_ROUTE_MANIFEST.marketplace.stackRoute}
-                options={moduleDestination('marketplace')}
-              />
-              <Stack.Screen
-                name={NAV_ROUTE_MANIFEST.files.stackRoute}
-                options={moduleDestination('files')}
-              />
-              <Stack.Screen
-                name={NAV_ROUTE_MANIFEST.devices.stackRoute}
-                options={moduleDestination('devices')}
-              />
-              <Stack.Screen
-                name={NAV_ROUTE_MANIFEST.more.stackRoute}
-                options={railOrPinnedDestination}
-              />
-              <Stack.Screen name="scheduled-tasks" options={railOrPinnedDestination} />
-              <Stack.Screen name="trash" />
-              <Stack.Screen
-                // Task notifications reuse their task; each new draft owns its own page.
-                getId={({ params }) => paintingRouteId(params)}
-                name="paintings/index"
-                options={{
-                  // Keep the full-bleed board's native canvas in sync with the app theme.
+            <RemoteSessionSheetHost>
+              <Stack
+                screenOptions={{
+                  ...headerScreenOptions,
                   contentStyle: { backgroundColor },
-                  headerStyle: { backgroundColor: 'transparent' },
-                  headerTransparent: true,
-                  title: '',
+                  headerStyle: getRootHeaderStyle(backgroundColor),
+                  headerTransparent: isLiquidGlassAvailable,
+                  headerTintColor: foregroundColor,
                 }}
-              />
-              {/* Released task links and viewer routes redirect into the board. */}
-              <Stack.Screen
-                name="paintings/[paintingId]"
-                options={{ contentStyle: { backgroundColor }, headerShown: false }}
-              />
-              <Stack.Screen
-                name="paintings/[paintingId]/conversation"
-                options={{ contentStyle: { backgroundColor }, headerShown: false }}
-              />
-            </Stack>
-            <FloatingNavDock />
-            <VerticalNavRail />
-            <NavPinPopover />
-            <FloatingDragOverlay />
+              >
+                <Stack.Screen
+                  name={NAV_ROUTE_MANIFEST.chat.stackRoute}
+                  options={{ headerShown: false }}
+                />
+                <Stack.Screen
+                  name={NAV_ROUTE_MANIFEST.agents.stackRoute}
+                  options={moduleDestination('agents')}
+                />
+                <Stack.Screen
+                  name={NAV_ROUTE_MANIFEST.drawings.stackRoute}
+                  options={moduleDestination('drawings')}
+                />
+                <Stack.Screen
+                  name={NAV_ROUTE_MANIFEST.plugins.stackRoute}
+                  options={moduleDestination('plugins')}
+                />
+                <Stack.Screen
+                  name={NAV_ROUTE_MANIFEST.marketplace.stackRoute}
+                  options={moduleDestination('marketplace')}
+                />
+                <Stack.Screen
+                  name={NAV_ROUTE_MANIFEST.files.stackRoute}
+                  options={moduleDestination('files')}
+                />
+                <Stack.Screen
+                  name={NAV_ROUTE_MANIFEST.devices.stackRoute}
+                  options={moduleDestination('devices')}
+                />
+                <Stack.Screen
+                  name={NAV_ROUTE_MANIFEST.more.stackRoute}
+                  options={railOrPinnedDestination}
+                />
+                <Stack.Screen name="scheduled-tasks" options={railOrPinnedDestination} />
+                <Stack.Screen name="trash" />
+                <Stack.Screen
+                  // Task notifications reuse their task; each new draft owns its own page.
+                  getId={({ params }) => paintingRouteId(params)}
+                  name="paintings/index"
+                  options={{
+                    // Keep the full-bleed board's native canvas in sync with the app theme.
+                    contentStyle: { backgroundColor },
+                    headerStyle: { backgroundColor: 'transparent' },
+                    headerTransparent: true,
+                    title: '',
+                  }}
+                />
+                {/* Released task links and viewer routes redirect into the board. */}
+                <Stack.Screen
+                  name="paintings/[paintingId]"
+                  options={{ contentStyle: { backgroundColor }, headerShown: false }}
+                />
+                <Stack.Screen
+                  name="paintings/[paintingId]/conversation"
+                  options={{ contentStyle: { backgroundColor }, headerShown: false }}
+                />
+              </Stack>
+              <FloatingNavDock />
+              <VerticalNavRail />
+              <NavPinPopover />
+              <FloatingDragOverlay />
+            </RemoteSessionSheetHost>
           </View>
         </RouteHeaderProvider>
       </ChatProvider>

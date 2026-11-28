@@ -77,15 +77,18 @@ jobs:
 
           commit="$(git rev-parse --short HEAD)"
           name="cherry-studio-$BUILD_TARGET-$commit"
+          if [[ "${GITHUB_RUN_ATTEMPT:-1}" != '1' ]]; then
+            name="$name-$GITHUB_RUN_ATTEMPT"
+          fi
           output_dir="$(mktemp -d "$RUNNER_TEMP/branch-build.XXXXXX")"
           output="$output_dir/$name.$extension"
           pnpm build:local --platform "$platform" --profile "$profile" --non-interactive --output "$output"
-          printf 'name=%s\npath=%s\n' "$name" "$output" >> "$GITHUB_OUTPUT"
+          printf 'path=%s\n' "$output" >> "$GITHUB_OUTPUT"
 
       - name: Upload package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: ${{ steps.build.outputs.name }}-${{ github.run_attempt }}
           path: ${{ steps.build.outputs.path }}
+          archive: false
           if-no-files-found: error
           retention-days: 7

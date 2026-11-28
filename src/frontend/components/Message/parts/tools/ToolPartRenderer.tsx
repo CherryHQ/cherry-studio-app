@@ -6,6 +6,7 @@ import { imageParamsAspectRatio } from '@/shared/utils/imageGenerationParams';
 
 import { PendingImagePart } from '../PendingImagePart';
 import { AgentManagementToolPart } from './AgentManagementToolPart';
+import { DesktopTaskPipPart } from './DesktopTaskPipPart';
 import { EditFileToolPart, isEditFileToolPart } from './EditFileToolPart';
 import { FileToolContent } from './FileToolContent';
 import { GenericToolPart } from './GenericToolPart';
@@ -18,6 +19,7 @@ import { SshToolPart } from './SshToolPart';
 import {
   getToolName,
   isAgentMutationToolPart,
+  isDesktopDispatchToolPart,
   isGeneratingImageToolPart,
   isProviderWebSearchToolPart,
   isUserQuestionToolPart,
@@ -40,6 +42,8 @@ type ToolPartRendererProps = {
 export function ToolPartRenderer({ messageId, messageParts, part }: ToolPartRendererProps) {
   const renderTool = useToolRenderer();
   if (renderTool) return renderTool(part);
+
+  if (isDesktopDispatchToolPart(part)) return <DesktopTaskPipPart part={part} />;
 
   if (
     ['load_skill', 'find_skills', 'install_skill', 'adapt_skill'].includes(getToolName(part) ?? '')

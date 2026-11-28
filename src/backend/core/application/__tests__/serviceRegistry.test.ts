@@ -197,6 +197,16 @@ describe('service registry', () => {
     expect(lease.release).toHaveBeenCalledTimes(1);
   });
 
+  test('injects the Gate desktop Agent runtime after existing Host dependencies', () => {
+    expect(getPhase(services.RemoteAgentRuntime)).toBe(Phase.Gate);
+    expect(getPhase(services.AgentHostDependencies)).toBe(Phase.PostReady);
+    expect(getDependencies(services.AgentHostDependencies).slice(10)).toEqual([
+      'SshRuntime',
+      'ScreenAwakeRuntime',
+      'RemoteAgentRuntime',
+    ]);
+  });
+
   test('declares the background policy of long-running and native-surface owners', () => {
     expect(getAppStatePolicy(services.ScreenAwakeRuntime)).toBe('foreground-only');
     expect(getAppStatePolicy(services.TraceStorageService)).toBe('continue');

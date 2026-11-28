@@ -42,6 +42,7 @@ import {
   type BuiltInToolDescriptor,
   BUILT_IN_TOOL_DESCRIPTORS,
 } from '@/shared/data/types/builtInTool';
+import type { DesktopDispatchSessionRef } from '@/shared/data/types/desktopDispatchTool';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 import type { WebSearchCapability } from '@/shared/data/types/webSearch';
@@ -55,6 +56,11 @@ import {
 } from './agentConfigurationTools';
 import { createAgentManagementTools, type AgentManagementData } from './agentManagementTools';
 import { type AskUserQuestion, createAskUserQuestionTool } from './askUserQuestionTool';
+import {
+  createDesktopDispatchTools,
+  isDispatchDevice,
+  type DesktopDispatchAccess,
+} from './desktopDispatchTools';
 import {
   createCalendarTools,
   createHealthTools,
@@ -121,6 +127,7 @@ export type SystemCapabilitySource = {
     model: RuntimeModel;
     acceptsImages: boolean;
     resources: TurnToolResources;
+    dispatchedDesktopSessions?: readonly DesktopDispatchSessionRef[];
     /** Attribution for provider calls a tool makes; read when the tool runs. */
     resolveUsageAttribution?: AiUsageAttributionResolver;
   }): Promise<readonly RuntimeTool[]>;
@@ -139,6 +146,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
     preference: PaintingToolDependencies['preference'];
     supportsToolCalling(model: RuntimeModel): Promise<boolean>;
     agentConfiguration?: AgentConfigurationAccess;
+    desktopDispatch?: DesktopDispatchAccess;
   };
 
 /**
@@ -151,6 +159,7 @@ export type SystemCapabilityServices = {
   mcpManagement?: McpManagementAccess;
   voice?: Pick<VoiceModule, 'getReadyTranscriptionEngine' | 'transcribeAudio'>;
   ssh?: SshToolAccess;
+  desktopDispatch?: DesktopDispatchAccess;
   ai: PaintingToolDependencies['ai'];
   model: Pick<ModelService, 'getById'>;
   preference: PaintingToolDependencies['preference'];
@@ -172,6 +181,7 @@ export function createSystemCapabilitySource(
       model,
       acceptsImages,
       resources,
+      dispatchedDesktopSessions,
       documentParserMode,
       resolveUsageAttribution,
     }) {
@@ -203,6 +213,28 @@ export function createSystemCapabilitySource(
       if (services.mcpManagement) {
         for (const tool of createMcpManagementTools(services.mcpManagement))
           catalog.set(tool.providerName, tool);
+      }
+      if (deps.desktopDispatch && sessionId) {
+        const devices = await deps.desktopDispatch.connections
+          .list()
+          .then(({ items }) => items.filter(isDispatchDevice))
+          .catch((error: unknown) => {
+            logger.warn(
+              'Desktop connection lookup failed; omitting desktop delegation',
+              error as Error,
+            );
+            return [];
+          });
+        if (devices.length) {
+          for (const tool of createDesktopDispatchTools(
+            deps.desktopDispatch,
+            fileAccess,
+            managedFileResolver,
+            dispatchedDesktopSessions ?? [],
+            { devices, availableFiles: resources.availableFiles, localSessionId: sessionId },
+          ))
+            catalog.set(tool.providerName, tool);
+        }
       }
       if (sessionId && services.ssh?.isAvailable()) {
         const target = await services.ssh.resolveAgentTarget(sessionId);
@@ -490,6 +522,7 @@ function resolveDependencies(
     skillLibrary: overrides.skillLibrary ?? agentGlobalSkillService,
     trash: overrides.trash ?? services.trash,
     agentConfiguration: overrides.agentConfiguration ?? services.agentConfiguration,
+    desktopDispatch: overrides.desktopDispatch ?? services.desktopDispatch,
     devicePermissions: overrides.devicePermissions ?? devicePermissions,
     jsSandbox: overrides.jsSandbox !== undefined ? overrides.jsSandbox : createJsSandbox(),
     painting: overrides.painting ?? productionPaintingDependencies(services),

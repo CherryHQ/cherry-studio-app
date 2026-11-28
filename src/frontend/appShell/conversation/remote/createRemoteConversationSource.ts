@@ -109,6 +109,8 @@ export function createRemoteConversationSource(
     ref,
     scope,
     state,
+    getDispatch: (...args) => (disposed ? undefined : remote.getDispatch(...args)),
+    subscribeDispatches: remote.subscribeOperations,
     hasSubmission: (draftId) =>
       remote.getStarts().some((start) => start.draftId === draftId && !isUndelivered(start)),
     tasks: {

@@ -51,12 +51,13 @@ type ChatWorkspaceProps = {
   assistantName?: string;
   isAssistantToolbarEnabled: boolean;
   contentBottomInset: number;
+  contentTopInset?: number;
   draftModelSetup?: ChatDraftModelSetup;
   /** Copied message inside this Session that closes the inherited prefix. */
   forkBoundaryMessageId?: string;
   /** Direct source Session named by the fork-origin divider. */
   forkedFromSessionId?: string;
-  keyboardOffset: number;
+  keyboardOffset: number | undefined;
   feedbackHintBottomOffset?: SharedValue<number>;
   messageWindow: ConversationHistoryView;
   /** History and live rows already reconciled by the source; the workspace only presents them. */
@@ -69,6 +70,7 @@ type ChatWorkspaceProps = {
   connectionId?: string;
   /** Translation is enabled only when its source can identify a stable message origin. */
   isTranslationEnabled?: boolean;
+  surface?: 'default' | 'sheet';
   renderUsage?: (message: MessageListItem) => ReactNode;
 };
 
@@ -88,6 +90,7 @@ export function ChatWorkspace({
   assistantEmoji,
   assistantName,
   contentBottomInset,
+  contentTopInset,
   draftModelSetup,
   forkBoundaryMessageId,
   forkedFromSessionId,
@@ -99,6 +102,7 @@ export function ChatWorkspace({
   connectionId,
   isTranslationEnabled = false,
   readingAidScope,
+  surface = 'default',
   renderUsage,
 }: ChatWorkspaceProps) {
   const { beginSelection } = useChatShareSelectionActions();
@@ -341,10 +345,12 @@ export function ChatWorkspace({
                   <ChatTranscript
                     onTargetRestored={onQuoteTargetRestored}
                     onReady={onQuoteWindowReady}
+                    surface={surface}
                     turnNavigator={editing ? undefined : turnNavigator}
                     requiresInitialLayout={requiresInitialHistoryLayout}
                     isLoadingMore={isLoadingOlder || isLoadingNewer}
                     contentBottomInset={contentBottomInset}
+                    contentTopInset={contentTopInset}
                     // A draft window has no Session yet and reports an empty key. Keying the
                     // first send by its pending Session keeps the list on one dataset across
                     // the draft-to-Session handoff instead of starting as a keyless list.
