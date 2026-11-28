@@ -109,6 +109,134 @@ index 06fa054e9..65a7504ec 100644
    auto tmp_fontSize = map.find("fontSize");
    if (tmp_fontSize != map.end()) {
      fromRawValue(context, tmp_fontSize->second, result.fontSize);
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/view/SelectionActionMode.kt b/android/src/main/java/com/swmansion/enriched/markdown/utils/text/view/SelectionActionMode.kt
+--- a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/view/SelectionActionMode.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/utils/text/view/SelectionActionMode.kt
+@@ -3,12 +3,14 @@
+ import android.content.ClipData
+ import android.content.ClipboardManager
+ import android.content.Context
++import android.os.TransactionTooLargeException
+ import android.text.Spannable
+ import android.view.ActionMode
+ import android.view.Menu
+ import android.view.MenuItem
+ import android.view.ViewParent
+ import android.widget.TextView
++import com.facebook.react.uimanager.UIManagerHelper
+ import com.swmansion.enriched.markdown.EnrichedMarkdown
+ import com.swmansion.enriched.markdown.EnrichedMarkdownText
+ import com.swmansion.enriched.markdown.spans.ImageSpan
+@@ -129,8 +131,11 @@
+ 
+       when (itemId) {
+         android.R.id.copy -> {
+-          textView.copyWithHTML()
+-          mode?.finish()
++          if (textView.copyWithHTML()) {
++            mode?.finish()
++          } else {
++            UIManagerHelper.getReactContext(textView).emitDeviceEvent("enrichedMarkdownClipboardWriteFailed")
++          }
+           return true
+         }
+ 
+@@ -165,12 +170,12 @@
+   }
+ 
+ /** Copies selection as both plain text and HTML with inline styles. */
+-private fun TextView.copyWithHTML() {
++private fun TextView.copyWithHTML(): Boolean {
+   val start = selectionStart
+   val end = selectionEnd
+-  if (start < 0 || end < 0 || start >= end) return
+-
+-  val spannable = text as? Spannable ?: return
++  if (start < 0 || end < 0 || start >= end) return true
++
++  val spannable = text as? Spannable ?: return true
+   val selectedText = spannable.subSequence(start, end)
+   val plainText = selectedText.toString()
+ 
+@@ -179,22 +184,34 @@
+       ?: findParentMarkdownStyle()
+   val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+ 
+-  if (styleConfig != null && selectedText is Spannable) {
++  val html = if (styleConfig != null && selectedText is Spannable) {
+     // Density values convert device pixels back to CSS pixels
+     val displayMetrics = context.resources.displayMetrics
+     val isRTL = context.resources.isLayoutRTL()
+-    val html =
+-      HTMLGenerator.generateHTML(
+-        selectedText,
+-        styleConfig,
+-        displayMetrics.scaledDensity,
+-        displayMetrics.density,
+-        isRTL,
+-      )
+-    clipboard.setPrimaryClip(ClipData.newHtmlText("EnrichedMarkdown", plainText, html))
+-  } else {
+-    clipboard.setPrimaryClip(ClipData.newPlainText("Text", plainText))
++    HTMLGenerator.generateHTML(
++      selectedText,
++      styleConfig,
++      displayMetrics.scaledDensity,
++      displayMetrics.density,
++      isRTL,
++    )
++  } else null
++  return copySelection(plainText, html, clipboard::setPrimaryClip)
++}
++
++internal fun copySelection(text: String, html: String?, write: (ClipData) -> Unit): Boolean {
++  fun tryWrite(clip: ClipData): Boolean {
++    try {
++      write(clip)
++      return true
++    } catch (error: Exception) {
++      if (generateSequence<Throwable>(error) { it.cause }.none { it is TransactionTooLargeException }) throw error
++      return false
++    }
+   }
++
++  if (html != null && tryWrite(ClipData.newHtmlText("EnrichedMarkdown", text, html))) return true
++  return tryWrite(ClipData.newPlainText("Text", text))
+ }
+ 
+ private fun TextView.copyMarkdownToClipboard() {
+diff --git a/android/src/test/java/com/swmansion/enriched/markdown/utils/text/view/ClipboardSelectionTest.kt b/android/src/test/java/com/swmansion/enriched/markdown/utils/text/view/ClipboardSelectionTest.kt
+new file mode 100644
+--- /dev/null
++++ b/android/src/test/java/com/swmansion/enriched/markdown/utils/text/view/ClipboardSelectionTest.kt
+@@ -0,0 +1,27 @@
++package com.swmansion.enriched.markdown.utils.text.view
++
++import android.os.TransactionTooLargeException
++import org.junit.Assert.*
++import org.junit.Test
++import org.junit.runner.RunWith
++import org.robolectric.RobolectricTestRunner
++import org.robolectric.annotation.Config
++
++@RunWith(RobolectricTestRunner::class)
++@Config(sdk = [35])
++class ClipboardSelectionTest {
++  @Test fun retriesRejectedHtmlWithTheFullPlainText() {
++    val formats = mutableListOf<String?>()
++    assertTrue(copySelection("full selection", "<b>full selection</b>") { clip ->
++      val item = clip.getItemAt(0)
++      assertEquals("full selection", item.text.toString())
++      formats.add(item.htmlText)
++      if (item.htmlText != null) throw RuntimeException(TransactionTooLargeException())
++    })
++    assertEquals(listOf("<b>full selection</b>", null), formats)
++  }
++
++  @Test fun reportsFailureWhenNeitherRepresentationFits() {
++    assertFalse(copySelection("text", "<b>text</b>") { throw TransactionTooLargeException() })
++  }
++}
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
 --- a/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/input/EnrichedMarkdownTextInputView.kt

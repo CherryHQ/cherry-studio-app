@@ -1,3 +1,4 @@
+export { MarkdownClipboardFeedback } from './MarkdownClipboardFeedback';
 export { useDocumentExport } from './useDocumentExport';
 export {
   claimShareRequest,

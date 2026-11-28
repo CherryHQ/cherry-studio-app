@@ -235,3 +235,12 @@ describe('native Markdown streaming work patch', () => {
     expect(streamingPatch).not.toContain('+    streamingAnimation = false');
   });
 });
+
+test('ships the Android rich-text clipboard fallback in the selected-text copy action', () => {
+  const selection = readFileSync(
+    'node_modules/react-native-enriched-markdown/android/src/main/java/com/swmansion/enriched/markdown/utils/text/view/SelectionActionMode.kt',
+    'utf8',
+  );
+  expect(selection).toContain('if (textView.copyWithHTML())');
+  expect(selection).toContain('return copySelection(plainText, html, clipboard::setPrimaryClip)');
+});

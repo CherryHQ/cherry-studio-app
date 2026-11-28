@@ -41,6 +41,7 @@ import { configureReporting, wrapReportingRoot } from '@/frontend/appShell/obser
 import { PrivacyConsentGate } from '@/frontend/appShell/privacy';
 import { AppErrorBoundary } from '@/frontend/appShell/recovery';
 import { APP_SEARCH_TRANSITION_DURATION_MS } from '@/frontend/appShell/search';
+import { MarkdownClipboardFeedback } from '@/frontend/appShell/sharing';
 import { SshAuthenticationDialog } from '@/frontend/appShell/ssh';
 import {
   StartupChatInputMeasurement,
@@ -91,6 +92,7 @@ function RootLayout() {
                                         <BackgroundActivityBridge />
                                         <CloudAmdReturnBridge />
                                         <LanguagePreferenceObserver />
+                                        <MarkdownClipboardFeedback />
                                         <UuRemoteCallbackBridge />
                                         {/* Before the navigator, so opaque screens cover the renderer page. */}
                                         <MermaidRendererHost />
