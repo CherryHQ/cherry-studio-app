@@ -112,11 +112,12 @@ index 06fa054e9..65a7504ec 100644
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/view/SelectionActionMode.kt b/android/src/main/java/com/swmansion/enriched/markdown/utils/text/view/SelectionActionMode.kt
 --- a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/view/SelectionActionMode.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/utils/text/view/SelectionActionMode.kt
-@@ -3,12 +3,17 @@
+@@ -3,12 +3,18 @@
  import android.content.ClipData
  import android.content.ClipboardManager
  import android.content.Context
 +import android.os.Build
++import android.os.DeadObjectException
 +import android.os.Parcel
 +import android.os.Parcelable
 +import android.os.TransactionTooLargeException
@@ -130,7 +131,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/vi
  import com.swmansion.enriched.markdown.EnrichedMarkdown
  import com.swmansion.enriched.markdown.EnrichedMarkdownText
  import com.swmansion.enriched.markdown.spans.ImageSpan
-@@ -127,24 +132,19 @@
+@@ -127,24 +133,19 @@
      ): Boolean {
        val itemId = item?.itemId ?: return false
  
@@ -166,13 +167,16 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/vi
        }
  
        val customItems = getCustomItemTexts()
-@@ -164,43 +164,78 @@
+@@ -164,43 +165,81 @@
      override fun onDestroyActionMode(mode: ActionMode?) {}
    }
  
 +// Binder shares a 1 MiB transaction buffer across requests. A smaller clip can still
 +// fail under contention, so the actual clipboard write handles that case too.
 +private const val MAX_CLIP_BYTES = 1024 * 1024
++
++internal fun Throwable.isClipboardTransferFailure(): Boolean =
++  generateSequence(this) { it.cause }.any { it is TransactionTooLargeException || it is DeadObjectException }
 +
 +private fun ClipboardManager.trySetClip(clip: ClipData): Boolean {
 +  val parcel = Parcel.obtain()
@@ -188,7 +192,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/vi
 +    setPrimaryClip(clip)
 +    return true
 +  } catch (error: Exception) {
-+    if (generateSequence<Throwable>(error) { it.cause }.none { it is TransactionTooLargeException }) throw error
++    if (!error.isClipboardTransferFailure()) throw error
 +    return false
 +  }
 +}
@@ -276,7 +280,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/vi
  }
  
  /** Returns remote image URLs (http/https only) from the current selection. */
-@@ -216,12 +251,10 @@
+@@ -216,12 +255,10 @@
      .filter { it.startsWith("http://") || it.startsWith("https://") }
  }
  
@@ -296,12 +300,14 @@ diff --git a/android/src/test/java/com/swmansion/enriched/markdown/utils/text/vi
 new file mode 100644
 --- /dev/null
 +++ b/android/src/test/java/com/swmansion/enriched/markdown/utils/text/view/ClipboardSelectionTest.kt
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,67 @@
 +package com.swmansion.enriched.markdown.utils.text.view
 +
 +import android.content.ClipData
 +import android.content.ClipboardManager
 +import android.content.Context
++import android.os.DeadObjectException
++import android.os.TransactionTooLargeException
 +import android.widget.TextView
 +import org.junit.Assert.*
 +import org.junit.Test
@@ -316,6 +322,12 @@ new file mode 100644
 +  private val context: Context = RuntimeEnvironment.getApplication()
 +  private val view = TextView(context)
 +  private val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
++
++  @Test fun recognizesBothBinderFailuresWithoutSwallowingUnrelatedErrors() {
++    assertTrue(RuntimeException(DeadObjectException()).isClipboardTransferFailure())
++    assertTrue(RuntimeException(TransactionTooLargeException()).isClipboardTransferFailure())
++    assertFalse(SecurityException().isClipboardTransferFailure())
++  }
 +
 +  @Test fun copiesBothRepresentationsWhenTheyFit() {
 +    assertTrue(view.copySelection("Text", "hello") { "<b>hello</b>" })
