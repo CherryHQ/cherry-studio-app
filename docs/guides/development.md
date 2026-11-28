@@ -73,6 +73,7 @@ block leaves when upstream ships an equivalent.
 | Inline math beside CJK text, resolved before emphasis (shared md4c) | Bug fix | #1837 | md4c requires whitespace or punctuation around `$` and resolves it in the emphasis pass; remark-math, used by Cherry Studio desktop, does neither | Upstream md4c delimits math at CJK neighbours and keeps math spans literal |
 | iOS asynchronous clipboard paste keeping Markdown | Bug fix | #1467, #1476 | Not fixed in 1.1.1 | Upstream reads the clipboard asynchronously |
 | Table scrolling | Bug fix | #606 | Not upstream | Upstream scrolls wide tables |
+| Android table touches cancel the pending drawer swipe | Bug fix | #1914 | 1.1.1 leaves the drawer eligible on touch-down | Upstream reserves drags starting on the table grid while allowing the parent list to scroll vertically |
 | iOS code text drawn only around the visible window | Bug fix | #1530 | Not fixed in 1.1.1; a full-size backing store leaves a code block of a few thousand lines blank | Upstream draws long code blocks without a full-size backing store |
 | Native soft-keyboard submit and Send label on iOS and Android, plus hardware Return on iOS | Product feature | #1573, #1591, #1879 | Not upstream | Upstream supplies a submit event that preserves IME composition and explicit newlines |
 | Native input custom edit actions at the caret and selection | Product feature | #1573, #1591 | 1.1.1 limits custom actions to nonempty selections | Upstream exposes custom actions in both insertion and selection menus |
