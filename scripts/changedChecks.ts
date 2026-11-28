@@ -339,6 +339,14 @@ export const NON_IMPORT_APP_RULES: readonly NonImportMappingRule[] = [
     tests: ['src/frontend/appShell/observability/__tests__/configureObserve.test.ts'],
   },
   {
+    description: 'expo-linking patch',
+    matches: (filePath) => filePath.startsWith('patches/expo-linking@'),
+    tests: [
+      'scripts/__tests__/expoLinkingPatch.test.ts',
+      'src/bootstrap/profile/__tests__/installationAccount.test.ts',
+    ],
+  },
+  {
     description: 'expo-observe patch',
     matches: (filePath) => filePath.startsWith('patches/expo-observe@'),
     tests: ['src/frontend/appShell/observability/__tests__/observeNativePatch.test.ts'],

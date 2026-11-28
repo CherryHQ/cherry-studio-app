@@ -10,6 +10,10 @@ const mockBridge = jest.fn();
 const mockRequest = jest.fn();
 const mockStore = new Map<string, string>();
 const mockError = jest.fn();
+const mockConsumeUrl = jest.fn<Promise<void>, [string]>();
+const mockReload = jest.fn(async () => {});
+const mockLegacyClear = jest.fn();
+let mockHasConsumption = true;
 let mockScheme: string | undefined;
 let mockOrigin: unknown;
 let mockActive: { identity: null | { issuer: string } } = { identity: null };
@@ -18,7 +22,16 @@ jest.mock('@cherryinternal/accounts-portal/client', () => ({
   createAccountsPortal: (options: unknown) => mockCreatePortal(options),
 }));
 jest.mock('@logger', () => ({ loggerService: { withContext: () => ({ error: mockError }) } }));
-jest.mock('expo', () => ({ reloadAppAsync: jest.fn() }));
+jest.mock('expo', () => ({
+  reloadAppAsync: () => mockReload(),
+  requireOptionalNativeModule: (name: string) =>
+    name === 'ExpoLinking'
+      ? {
+          consumeURL: mockHasConsumption ? (url: string) => mockConsumeUrl(url) : undefined,
+          clearInitialURL: mockLegacyClear,
+        }
+      : null,
+}));
 jest.mock('expo-constants', () => ({
   __esModule: true,
   default: {
@@ -27,7 +40,7 @@ jest.mock('expo-constants', () => ({
     },
   },
 }));
-jest.mock('expo-crypto', () => ({}));
+jest.mock('expo-crypto', () => ({ randomUUID: () => 'opaque-ticket' }));
 jest.mock('expo-secure-store', () => ({
   getItem: (key: string) => mockStore.get(key) ?? null,
   setItem: (key: string, value: string) => mockStore.set(key, value),
@@ -80,11 +93,47 @@ function launch() {
 beforeEach(() => {
   jest.clearAllMocks();
   mockStore.clear();
+  mockHasConsumption = true;
+  mockConsumeUrl.mockReset().mockResolvedValue(undefined);
   mockScheme = 'cherrystudio-preview';
   mockOrigin = 'https://config.test';
   mockActive = { identity: null };
   mockCreatePortal.mockImplementation((opts) => ({ ready: Promise.resolve(), ...opts }));
   mockRequest.mockReset().mockImplementation(async () => ({ status: 200, data: result() }));
+});
+
+test('a private-profile reload waits for a cold account callback discarded before the page mounted', async () => {
+  const cold = 'cherrystudio-preview://auth/callback?code=discarded';
+  const other = 'cherrystudio-preview://oauth/callback?code=provider';
+  const native = Promise.withResolvers<void>();
+  mockConsumeUrl.mockReturnValueOnce(native.promise);
+  jest.isolateModules(() => {
+    const { routeAccountCallback } = jest.requireActual<
+      typeof import('@/frontend/appShell/account/nativeIntent')
+    >('@/frontend/appShell/account/nativeIntent');
+    const { installationAccount } =
+      jest.requireActual<typeof import('../installationAccount')>('../installationAccount');
+    installationAccount();
+    routeAccountCallback(cold, cold);
+    expect(routeAccountCallback(other, other)).toBe(other);
+  });
+  const account = mockCreateRuntime.mock.lastCall![0] as AccountRuntimeOptions;
+  const reload = account.reload();
+  expect(mockConsumeUrl.mock.calls).toEqual([[cold]]);
+  expect(mockReload).not.toHaveBeenCalled();
+  native.resolve();
+  await reload;
+  expect(mockReload).toHaveBeenCalledTimes(1);
+  expect(mockLegacyClear).not.toHaveBeenCalled();
+});
+
+test('an older native binary never clears the latest URL without comparing it', async () => {
+  mockHasConsumption = false;
+  const account = launch();
+  await account.retireCallbackUrl?.('cherrystudio-preview://auth/callback?code=old');
+  await account.reload();
+  expect(mockLegacyClear).not.toHaveBeenCalled();
+  expect(mockReload).toHaveBeenCalledTimes(1);
 });
 
 test.each(['cherrystudio', 'cherrystudio-dev', 'cherrystudio-preview'])(

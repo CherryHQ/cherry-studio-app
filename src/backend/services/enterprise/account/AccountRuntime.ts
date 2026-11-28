@@ -78,7 +78,7 @@ export interface AccountRuntimeOptions {
     delete(profileId: string): Promise<void>;
   };
   openBrowser(url: string, redirectUri: string): Promise<string | null>;
-  consumeLaunchUrl?(url: string): Promise<void>;
+  retireCallbackUrl?(url: string): Promise<void>;
   /** Restarts JavaScript so the selected profile's stores open from scratch. */
   reload(): Promise<void>;
 }
@@ -298,12 +298,12 @@ export class AccountRuntime implements AccountModule {
         },
       });
       const session = await completion.finally(async () => {
-        if (!this.options.consumeLaunchUrl || !isAccountCallbackUrl(url, this.options.redirectUri))
+        if (!this.options.retireCallbackUrl || !isAccountCallbackUrl(url, this.options.redirectUri))
           return;
         try {
-          await this.options.consumeLaunchUrl(url);
+          await this.options.retireCallbackUrl(url);
         } catch {
-          logger.warn('Could not retire the handled account launch URL');
+          logger.warn('Could not retire the handled account callback URL');
         }
       });
       if (session._tag !== 'signedIn' || !session.profile || !target)

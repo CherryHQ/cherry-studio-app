@@ -1,9 +1,11 @@
+import { loggerService } from '@logger';
 import Constants from 'expo-constants';
 import { randomUUID } from 'expo-crypto';
-import { clearInitialURL, getLinkingURL } from 'expo-linking';
 
 import { isAccountCallbackUrl, type AccountModule } from '@/shared/contracts/account';
 import { resolveNativeCallbackUrl } from '@/shared/utils/nativeCallbackUrl';
+
+import { retireNativeUrl } from '../../../../modules/system-integration/linking';
 
 type Delivery = {
   id: string;
@@ -14,7 +16,15 @@ type Delivery = {
 let staged: Delivery | undefined;
 
 export function discardAccountCallback() {
+  const abandoned = staged;
   staged = undefined;
+  for (const url of abandoned?.urls ?? []) {
+    void retireNativeUrl(url).catch(() => {
+      loggerService
+        .withContext('AccountCallback')
+        .warn('Could not retire an abandoned account URL');
+    });
+  }
 }
 
 /** Keep the original URLs in memory while native routing opens a credential-free page. */
@@ -26,7 +36,7 @@ export function routeAccountCallback(path: string, destination: string | null): 
     )
   ) {
     // A warm callback handled in place leaves the account route and its delivery intact.
-    if (destination !== null) staged = undefined;
+    if (destination !== null) discardAccountCallback();
     return destination;
   }
   if (!staged || staged.result !== undefined) staged = { id: randomUUID(), urls: [] };
@@ -59,7 +69,6 @@ export function claimAccountCallback(
   for (const url of batch.urls.splice(0)) {
     const delivery = account.receiveRedirect(url);
     if (!delivery) continue;
-    if (getLinkingURL() === url) clearInitialURL();
     result = keepSuccessfulAccountResult(result, delivery);
   }
   batch.result =

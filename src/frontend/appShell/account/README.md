@@ -16,7 +16,8 @@ data profile. Navigation never treats a community guest as an expired enterprise
   the callback page with an opaque delivery ID. A warm return handled in place can replace the
   operating system's last URL while the queued account delivery waits for its page. Once claimed,
   the page passes the original URLs to the account runtime. A replacement navigation or new sign-in
-  discards an abandoned delivery.
+  discards an abandoned delivery. The native main queue retires exact matches in the system
+  link stores before a profile reload.
 - Both the live browser result and `useAccountCallback` dismiss to the same target. This removes
   login and callback pages together, or replaces a standalone cold entry when its target is absent.
   The last target remains until another attempt replaces it, so duplicate delivery has the same

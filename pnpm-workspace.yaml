@@ -119,6 +119,7 @@ patchedDependencies:
   react-native@0.88.1: patches/react-native@0.88.1.patch
   expo-widgets@58.0.26: patches/expo-widgets@58.0.26.patch
   react-native-streamdown@0.2.0: patches/react-native-streamdown@0.2.0.patch
+  expo-linking@58.0.15: patches/expo-linking@58.0.15.patch
   expo-observe@58.0.17: patches/expo-observe@58.0.17.patch
   react-native-anydoc@0.4.1: patches/react-native-anydoc@0.4.1.patch
   drizzle-orm@0.45.2: patches/drizzle-orm@0.45.2.patch

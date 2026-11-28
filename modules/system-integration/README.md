@@ -29,11 +29,9 @@ state.
 iOS uses `group.<bundle-id>.system-integration`. Shared files use complete file protection and are
 excluded from backup. Android uses `noBackupFilesDir`.
 
-Android can deliver the original Activity URL again after a JavaScript reload. The account
-owner awaits `consumeLaunchUrl` after the SDK handles a callback and before it opens a different
-data profile. On the main thread this clears only an exact matching launch URI. Later links,
-intent flags, extras and MIME type stay available to their respective consumers. This native
-method requires an updated Android binary.
+The linking adapter tracks acknowledgements from the patched Expo Linking module. The
+account owner uses it to retire exact URLs on the native main queue and to await outstanding
+acknowledgements before reloading into another profile.
 
 ## Acceptance
 

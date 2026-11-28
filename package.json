@@ -15,6 +15,7 @@
       "android": {
         "buildFromSource": [
           "expo-app-metrics",
+          "expo-linking",
           "expo-observe"
         ]
       }

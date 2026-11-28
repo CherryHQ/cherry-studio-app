@@ -219,16 +219,16 @@ describe('AccountRuntime', () => {
     const { options } = setup(signedIn('enterprise'));
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
-    const consumeLaunchUrl = jest.fn(async () => {
+    const retireCallbackUrl = jest.fn(async () => {
       entered.resolve();
       await release.promise;
     });
-    const runtime = new AccountRuntime({ ...options, consumeLaunchUrl });
+    const runtime = new AccountRuntime({ ...options, retireCallbackUrl });
     const callback = 'cb://?code=cold';
     const result = runtime.receiveRedirect(callback);
     await entered.promise;
     expect(options.portal.completeSignIn).toHaveBeenCalledTimes(1);
-    expect(consumeLaunchUrl).toHaveBeenCalledWith(callback);
+    expect(retireCallbackUrl).toHaveBeenCalledWith(callback);
     expect(options.reload).not.toHaveBeenCalled();
     release.resolve();
     await expect(result).resolves.toBe(false);
@@ -240,10 +240,10 @@ describe('AccountRuntime', () => {
     const failure = Object.assign(new Error('wrong callback'), { unmatchedCallback: true });
     options.openBrowser.mockResolvedValueOnce('cb://other?code=other');
     options.portal.completeSignIn.mockRejectedValueOnce(failure);
-    const consumeLaunchUrl = jest.fn(async () => {});
-    const runtime = new AccountRuntime({ ...options, consumeLaunchUrl });
+    const retireCallbackUrl = jest.fn(async () => {});
+    const runtime = new AccountRuntime({ ...options, retireCallbackUrl });
     await expect(runtime.signIn()).rejects.toBe(failure);
-    expect(consumeLaunchUrl).not.toHaveBeenCalled();
+    expect(retireCallbackUrl).not.toHaveBeenCalled();
   });
 
   it('admits the current browser callback after a stale deep link fails, including during validation', async () => {
