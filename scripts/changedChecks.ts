@@ -190,11 +190,6 @@ export const NON_IMPORT_AI_RUNTIME_RULES: readonly NonImportMappingRule[] = [
 
 export const NON_IMPORT_APP_RULES: readonly NonImportMappingRule[] = [
   {
-    description: 'accounts-portal patch',
-    matches: (filePath) => filePath.startsWith('patches/@cherryinternal__accounts-portal@'),
-    tests: ['scripts/__tests__/accountsPortalIdentityTokens.test.ts'],
-  },
-  {
     description: 'react-native-enriched-markdown patch',
     matches: (filePath) => filePath.startsWith('patches/react-native-enriched-markdown@'),
     tests: [
@@ -337,14 +332,6 @@ export const NON_IMPORT_APP_RULES: readonly NonImportMappingRule[] = [
     description: 'expo-app-metrics patch',
     matches: (filePath) => filePath.startsWith('patches/expo-app-metrics@'),
     tests: ['src/frontend/appShell/observability/__tests__/configureObserve.test.ts'],
-  },
-  {
-    description: 'expo-linking patch',
-    matches: (filePath) => filePath.startsWith('patches/expo-linking@'),
-    tests: [
-      'scripts/__tests__/expoLinkingPatch.test.ts',
-      'src/bootstrap/profile/__tests__/installationAccount.test.ts',
-    ],
   },
   {
     description: 'expo-observe patch',

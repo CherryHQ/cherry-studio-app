@@ -48,14 +48,6 @@ clean install.
   itself changes or that stay unique, not at the top of a file or between two functions.
   `scripts/__tests__/patchReapplication.test.ts` checks each registered patch.
 
-### Expo Linking callback consumption
-
-The Expo Linking 58.0.15 patch adds a main-queue `consumeURL` method for Apple and Android.
-It compares the original URL with the module's latest delivery and also with Android's Activity
-launch intent. The account owner registers every claimed or browser-delivered account URL before SDK processing.
-Profile reloads retire queued callbacks and drain outstanding native acknowledgements. Android links the patched source through
-`expo.autolinking.android.buildFromSource`. A new native binary is required on both platforms.
-
 ### Enriched Markdown Patch
 
 `patches/react-native-enriched-markdown@1.1.1.patch` is the app's largest dependency patch: 87

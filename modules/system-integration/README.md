@@ -29,10 +29,6 @@ state.
 iOS uses `group.<bundle-id>.system-integration`. Shared files use complete file protection and are
 excluded from backup. Android uses `noBackupFilesDir`.
 
-The linking adapter tracks acknowledgements from the patched Expo Linking module. The
-account owner uses it to retire exact URLs on the native main queue and to await outstanding
-acknowledgements before reloading into another profile.
-
 ## Acceptance
 
 Before release, authorize and perform native builds and device checks for cold and warm share

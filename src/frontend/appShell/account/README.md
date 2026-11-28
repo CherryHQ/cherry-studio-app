@@ -12,15 +12,6 @@ data profile. Navigation never treats a community guest as an expired enterprise
 - `useAccountSignInForm` records the entry's validated return target before authentication. The
   existing profile-scoped persistent UI cache holds only that href, never credentials or callback
   codes. Onboarding supplies `/onboarding`; organization switching records its profile settings page.
-- Native routing stages the original account callback URLs in memory before bootstrap and opens
-  the callback page with an opaque delivery ID. A warm return handled in place can replace the
-  operating system's last URL while the queued account delivery waits for its page. A cold
-  batch also checks the latest native URL at claim time, covering an account return received before
-  the router subscribed to events. Warm and discarded tickets never recover links from that cache. Once claimed,
-  the page passes the original URLs to the account runtime. A replacement navigation or new sign-in
-  discards an abandoned delivery. The native main queue retires exact matches in the system
-  link stores. A profile switch also retires any unmounted account deliveries and waits for
-  the acknowledgements before restarting JavaScript.
 - Both the live browser result and `useAccountCallback` dismiss to the same target. This removes
   login and callback pages together, or replaces a standalone cold entry when its target is absent.
   The last target remains until another attempt replaces it, so duplicate delivery has the same

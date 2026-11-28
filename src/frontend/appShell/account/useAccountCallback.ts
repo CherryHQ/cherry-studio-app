@@ -1,21 +1,17 @@
-import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
+import { clearInitialURL, useLinkingURL } from 'expo-linking';
+import { type Href, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 
 import { usePreference } from '@/frontend/data';
 
 import { getAccountReturnTo } from './accountNavigation';
 import { accountSignInHref } from './accountRoute';
-import {
-  claimAccountCallback,
-  hasQueuedAccountCallback,
-  takeAccountCallbackPresentation,
-} from './nativeIntent';
 import { useAccount } from './useAccount';
 import { useAccountErrorReporter } from './useAccountErrorReporter';
 
 /** Browser and cold-start completions end at the same profile-scoped entry target. */
 export function useAccountCallback() {
-  const { delivery } = useLocalSearchParams<{ delivery?: string }>();
+  const url = useLinkingURL();
   const { account } = useAccount();
   const router = useRouter();
   const reportError = useAccountErrorReporter('AccountCallback');
@@ -27,26 +23,22 @@ export function useAccountCallback() {
         : '/settings/profile',
     ),
   );
-  const completion = useRef<{ delivery?: string; result: Promise<boolean> } | null>(null);
+  const completion = useRef<Promise<boolean> | null>(null);
 
   useEffect(() => {
-    if (!completion.current || completion.current.delivery !== delivery) {
-      const result = claimAccountCallback(delivery, account, completion.current?.result ?? null);
-      if (result) completion.current = { delivery, result };
-    }
     if (!completion.current) {
-      if (!hasQueuedAccountCallback()) router.dismissTo(returnTo as Href);
-      return;
+      if (!url) return;
+      // Clear before activation so a profile reload cannot redeem the callback again.
+      clearInitialURL();
+      completion.current = account.receiveRedirect(url);
     }
-    const claimed = completion.current;
     let active = true;
-    void claimed.result.then(
+    void completion.current.then(
       (stayed) => {
-        if (active && takeAccountCallbackPresentation(claimed.delivery) && stayed)
-          router.dismissTo(returnTo as Href);
+        if (active && stayed) router.dismissTo(returnTo as Href);
       },
       (error: unknown) => {
-        if (!active || !takeAccountCallbackPresentation(claimed.delivery)) return;
+        if (!active) return;
         reportError(error, 'account.callback');
         const state = account.getState();
         router.dismissTo(
@@ -59,5 +51,5 @@ export function useAccountCallback() {
     return () => {
       active = false;
     };
-  }, [delivery, account, router, reportError, returnTo]);
+  }, [url, account, router, reportError, returnTo]);
 }
