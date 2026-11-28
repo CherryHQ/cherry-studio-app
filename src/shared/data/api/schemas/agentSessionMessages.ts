@@ -95,7 +95,27 @@ export type AgentSessionTurns = {
   items: { id: string; preview: string }[];
 };
 
+export type AgentSessionResourceDispatch = {
+  messageId: string;
+  toolCallId: string;
+  input: unknown;
+  output: unknown;
+};
+
+export type AgentSessionResourceFile = { fileEntryId: string };
+
+export type AgentSessionResources = {
+  dispatches: AgentSessionResourceDispatch[];
+  files: AgentSessionResourceFile[];
+};
+
 export type AgentSessionMessageSchemas = {
+  '/agent-sessions/:sessionId/messages/resources': {
+    GET: {
+      params: { sessionId: string };
+      response: AgentSessionResources;
+    };
+  };
   '/agent-sessions/:sessionId/messages/transcript': {
     GET: {
       params: { sessionId: string };

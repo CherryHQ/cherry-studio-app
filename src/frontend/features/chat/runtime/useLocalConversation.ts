@@ -5,6 +5,7 @@ import type {
   ConversationMessage,
   ConversationSnapshot,
 } from '@/frontend/appShell/conversation';
+import type { MessageListItem } from '@/frontend/components/Message';
 import { useApiClient, useBackendModule } from '@/frontend/data';
 import { useSshTarget } from '@/frontend/hooks/ssh';
 import type { AgentContextUsage } from '@/shared/contracts/agent';
@@ -37,6 +38,7 @@ export function useLocalConversation(input: {
 }): {
   snapshot: ConversationSnapshot;
   messages: readonly ConversationMessage[];
+  liveResourceMessages: readonly MessageListItem[];
   messageWindow: ConversationHistoryView;
   contextUsages?: readonly AgentContextUsage[];
 } {
@@ -117,6 +119,14 @@ export function useLocalConversation(input: {
     if (window.hasNewerMessages) return historyMessages;
     return branchMessages.map((message) => projector.message(message, state));
   }, [projector, branchMessages, historyMessages, state, window.hasNewerMessages]);
+  // The drawer follows the selected live branch even while the transcript shows an older page.
+  const liveResourceMessages = useMemo(() => {
+    if (!projector || !state.liveMessages.length) return [];
+    const liveIds = new Set(state.liveMessages.map(({ id }) => id));
+    return branchMessages
+      .filter(({ id, role }) => role === 'assistant' && liveIds.has(id))
+      .map((message) => projector.message(message, state).display);
+  }, [branchMessages, projector, state]);
   const citationReader = useMemo(
     () => (sessionId ? createLocalCitationReader(apiClient, sessionId) : undefined),
     [apiClient, sessionId],
@@ -137,6 +147,7 @@ export function useLocalConversation(input: {
   return {
     snapshot,
     messages,
+    liveResourceMessages,
     messageWindow,
     contextUsages: state.status === 'ready' ? state.contextUsages : undefined,
   };

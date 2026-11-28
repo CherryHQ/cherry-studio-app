@@ -5,6 +5,9 @@ import type { ChatTurnNavigator } from '../chatTurns';
 
 let mockHeaderHeight = 0;
 let mockSpeechPlaybackInset = 0;
+let mockIsSelecting = false;
+let mockCoverVisible = false;
+let mockComposerPresented = false;
 const mockList = jest.fn((_props: { contentTopInset: number }) => null);
 const mockTurnDirectory = jest.fn(
   (_props: { navigator: ChatTurnNavigator; scrollProgress: unknown; turnCount?: number }) => null,
@@ -17,7 +20,25 @@ jest.mock('react-native-reanimated', () => ({
   useSharedValue: <T,>(initial: T) => ({ get: () => initial, set: jest.fn(), value: initial }),
 }));
 
-jest.mock('@cherrystudio/ui/components', () => ({ useComposerExpansion: () => null }));
+jest.mock('@cherrystudio/ui/components', () => ({
+  useComposerExpansion: () =>
+    mockComposerPresented ? { meta: {}, state: { isPresented: true } } : null,
+}));
+
+jest.mock('../../../share/ChatShareDragSelection', () => ({
+  ChatShareDragSelection: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+jest.mock('../../../share/chatShareSelection', () => ({
+  ...jest.requireActual('../../../share/chatShareSelection'),
+  useIsChatShareSelecting: () => mockIsSelecting,
+}));
+
+jest.mock('../components/ChatArtifactsDrawer', () => {
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
+  return { ChatArtifactsDrawer: () => React.createElement(View, { testID: 'artifacts-drawer' }) };
+});
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 0 }),
@@ -49,7 +70,10 @@ jest.mock('../components/ChatOlderMessagesIndicator', () => ({
 }));
 
 jest.mock('../hooks/useMessageListInitialRenderGate', () => ({
-  useMessageListInitialRenderGate: () => ({ isCoverVisible: false, markListLoaded: jest.fn() }),
+  useMessageListInitialRenderGate: () => ({
+    isCoverVisible: mockCoverVisible,
+    markListLoaded: jest.fn(),
+  }),
 }));
 
 describe('ChatTranscript', () => {
@@ -58,6 +82,9 @@ describe('ChatTranscript', () => {
   beforeEach(() => {
     mockHeaderHeight = 0;
     mockSpeechPlaybackInset = 0;
+    mockIsSelecting = false;
+    mockCoverVisible = false;
+    mockComposerPresented = false;
     mockList.mockClear();
     mockTurnDirectory.mockClear();
   });
@@ -65,6 +92,36 @@ describe('ChatTranscript', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+  });
+
+  test('mounts the resource drawer only for a session with an unobstructed transcript', () => {
+    const drawer = () =>
+      renderer!.root.findAll(
+        (node) => typeof node.type === 'string' && node.props.testID === 'artifacts-drawer',
+      );
+    act(() => {
+      renderer = create(transcript());
+    });
+    expect(drawer()).toHaveLength(0);
+
+    const element = () => transcript({ artifactsSessionId: 's1' });
+    act(() => renderer!.update(element()));
+    expect(drawer()).toHaveLength(1);
+
+    mockIsSelecting = true;
+    act(() => renderer!.update(element()));
+    expect(drawer()).toHaveLength(0);
+    mockIsSelecting = false;
+    mockCoverVisible = true;
+    act(() => renderer!.update(element()));
+    expect(drawer()).toHaveLength(0);
+    mockCoverVisible = false;
+    mockComposerPresented = true;
+    act(() => renderer!.update(element()));
+    expect(drawer()).toHaveLength(0);
+    mockComposerPresented = false;
+    act(() => renderer!.update(element()));
+    expect(drawer()).toHaveLength(1);
   });
 
   test('keeps the transcript under the header while a layer hides it', () => {

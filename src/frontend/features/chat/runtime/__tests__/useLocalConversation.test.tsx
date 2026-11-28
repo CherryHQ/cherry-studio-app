@@ -126,9 +126,11 @@ it('excludes live rows from an older search window and projects nothing without 
     renderer = create(<Probe sessionId="session" />);
   });
   expect(result.messages.map((row) => row.key)).toEqual(['older']);
+  expect(result.liveResourceMessages.map((row) => row.id)).toEqual(['live']);
   act(() => renderer.update(<Probe />));
   expect(result.messages).toEqual([]);
   expect(result.snapshot.liveMessages).toEqual([]);
+  expect(result.liveResourceMessages).toEqual([]);
   expect(mockReconcile).toHaveBeenCalledTimes(1);
 });
 

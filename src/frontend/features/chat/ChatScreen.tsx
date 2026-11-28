@@ -162,11 +162,12 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     sessionId,
     target.kind === 'session' ? target.messageRequestId : undefined,
   );
-  const { snapshot, messages, messageWindow, contextUsages } = useLocalConversation({
-    sessionId,
-    title: session.data?.name,
-    navigation: quoteNavigation.navigation ?? (target.kind === 'session' ? target : undefined),
-  });
+  const { snapshot, messages, messageWindow, contextUsages, liveResourceMessages } =
+    useLocalConversation({
+      sessionId,
+      title: session.data?.name,
+      navigation: quoteNavigation.navigation ?? (target.kind === 'session' ? target : undefined),
+    });
   // With several answers to the last question, the next message continues the one shown.
   const continuesShownAnswer =
     !messageWindow.hasNewerMessages &&
@@ -363,6 +364,8 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                           assistantAvatarUri={agent.agent?.avatarUri}
                           assistantName={agent.agent?.name}
                           isAssistantToolbarEnabled={!isPreview && Boolean(sessionId)}
+                          isArtifactsDrawerEnabled={!isPreview && Boolean(sessionId)}
+                          artifactsMessages={liveResourceMessages}
                           contentBottomInset={contentBottomInset}
                           draftModelSetup={
                             hasComposer && target.kind === 'draft' && agent.agent

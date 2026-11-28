@@ -16,13 +16,18 @@ import { alias } from 'drizzle-orm/sqlite-core';
 import { application } from '@/backend/core/application/Application';
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import { agentSessionMessageTable, agentSessionTable, agentTable } from '@/backend/data/db/schemas';
-import type { AgentMessageSibling, AgentMessageView } from '@/shared/contracts/agent';
+import {
+  type AgentMessageSibling,
+  type AgentMessageView,
+  AgentToolResultSchema,
+} from '@/shared/contracts/agent';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import {
   AGENT_SESSION_MESSAGES_DEFAULT_LIMIT,
   AgentTranscriptSelectionSchema,
   type AgentTranscriptSelection,
   type AgentSessionMessagePage,
+  type AgentSessionResources,
   type AgentSessionTurns,
   type ListAgentSessionMessagesQueryParams,
   ListAgentSessionMessagesQuerySchema,
@@ -38,6 +43,10 @@ import {
   CONVERSATION_TURN_PREVIEW_LENGTH,
   formatConversationTurnPreview,
 } from '@/shared/utils/conversationTurnPreview';
+import {
+  buildDesktopTaskPipViewModel,
+  desktopTaskPipTargetKey,
+} from '@/shared/utils/desktopTaskPipModel';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
@@ -207,6 +216,68 @@ export class AgentSessionMessageService {
         rows.flatMap(({ message }) => (message && message.role !== 'system' ? [message] : [])),
       ),
     };
+  }
+
+  /** Read the selected path and all its resources in one SQLite snapshot. */
+  async readResources(sessionId: string): Promise<AgentSessionResources> {
+    const rows = await this.db.values<
+      [
+        messageId: string | null,
+        toolCallId: string | null,
+        inputJson: string | null,
+        outputJson: string | null,
+        fileEntryId: string | null,
+      ]
+    >(sql`
+      WITH assistant_parts AS (
+        SELECT message.id AS message_id, path.distance, CAST(part.key AS INTEGER) AS part_index,
+          CASE WHEN part.type = 'object' THEN part.value ELSE '{}' END AS body
+        FROM (${messagePathRowsSql(sessionId)}) AS path
+        JOIN agent_session_message AS message ON message.id = path.id AND message.role = 'assistant'
+        JOIN json_each(CASE WHEN json_valid(message.data) THEN message.data ELSE '{}' END, '$.parts') AS part
+      )
+      SELECT resource.message_id, resource.tool_call_id, resource.input, resource.output, resource.file_entry_id
+      FROM agent_session AS session
+      LEFT JOIN (
+        SELECT message_id, distance, part_index, json_extract(body, '$.toolCallId') AS tool_call_id,
+          body -> '$.input' AS input, body -> '$.output' AS output, NULL AS file_entry_id
+        FROM assistant_parts
+        WHERE json_extract(body, '$.type') IN ('dynamic-tool', 'tool-desktop_dispatch_task')
+          AND json_extract(body, '$.toolRef.source') = 'builtin'
+          AND json_extract(body, '$.toolRef.capabilityId') = 'desktop_dispatch_task'
+          AND json_extract(body, '$.state') = 'output-available'
+          AND json_type(body, '$.toolCallId') = 'text'
+        UNION ALL
+        SELECT message_id, distance, part_index, NULL, NULL, NULL, file_entry.id
+        FROM assistant_parts
+        JOIN file_entry ON file_entry.id = json_extract(body, '$.fileEntryId')
+          AND file_entry.deleted_at IS NULL
+        WHERE json_extract(body, '$.type') = 'file'
+          AND json_type(body, '$.fileEntryId') = 'text'
+          AND (json_extract(body, '$.purpose') IS NULL OR json_extract(body, '$.purpose') = 'artifact')
+      ) AS resource ON 1 = 1
+      WHERE session.id = ${sessionId}
+      ORDER BY resource.distance ASC, resource.part_index DESC, resource.message_id DESC
+    `);
+    if (!rows.length) throw DataApiErrorFactory.notFound('AgentSession', sessionId);
+
+    const dispatches: AgentSessionResources['dispatches'] = [];
+    const fileIds = new Set<string>();
+    const dispatchKeys = new Set<string>();
+    for (const [messageId, toolCallId, inputJson, outputJson, fileEntryId] of rows) {
+      if (fileEntryId !== null) fileIds.add(fileEntryId);
+      if (messageId === null || toolCallId === null) continue;
+
+      const input: unknown = inputJson === null ? undefined : JSON.parse(inputJson);
+      const rawOutput: unknown = outputJson === null ? undefined : JSON.parse(outputJson);
+      const parsed = AgentToolResultSchema.safeParse(rawOutput);
+      const output = parsed.success ? parsed.data.value : rawOutput;
+      const key = desktopTaskPipTargetKey(buildDesktopTaskPipViewModel({ input, output }));
+      if (!key || dispatchKeys.has(key)) continue;
+      dispatchKeys.add(key);
+      dispatches.push({ messageId, toolCallId, input, output });
+    }
+    return { dispatches, files: [...fileIds].map((fileEntryId) => ({ fileEntryId })) };
   }
 
   async readTurns(sessionId: string): Promise<AgentSessionTurns> {

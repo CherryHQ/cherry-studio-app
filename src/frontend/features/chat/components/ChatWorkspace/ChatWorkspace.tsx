@@ -50,6 +50,8 @@ type ChatWorkspaceProps = {
   assistantEmoji?: string;
   assistantName?: string;
   isAssistantToolbarEnabled: boolean;
+  isArtifactsDrawerEnabled?: boolean;
+  artifactsMessages?: readonly MessageListItem[];
   contentBottomInset: number;
   contentTopInset?: number;
   draftModelSetup?: ChatDraftModelSetup;
@@ -98,6 +100,8 @@ export function ChatWorkspace({
   feedbackHintBottomOffset,
   messageWindow,
   isAssistantToolbarEnabled,
+  isArtifactsDrawerEnabled,
+  artifactsMessages,
   sessionId,
   connectionId,
   isTranslationEnabled = false,
@@ -343,6 +347,14 @@ export function ChatWorkspace({
               <MessageFailureReportProvider onReport={reportMessage}>
                 <ExpandedAnswerProvider messages={listMessages} renderUsage={renderUsage}>
                   <ChatTranscript
+                    artifactsMessages={artifactsMessages}
+                    artifactsSessionId={
+                      executionSource === 'local' &&
+                      surface === 'default' &&
+                      isArtifactsDrawerEnabled
+                        ? sessionId
+                        : undefined
+                    }
                     onTargetRestored={onQuoteTargetRestored}
                     onReady={onQuoteWindowReady}
                     surface={surface}

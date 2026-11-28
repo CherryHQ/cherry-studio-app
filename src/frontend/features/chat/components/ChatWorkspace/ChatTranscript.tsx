@@ -8,11 +8,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { mainHeaderRowHeight } from '@/frontend/appShell/header';
 import { resolveHeaderContentInset } from '@/frontend/appShell/navigation';
 import { useSpeechPlaybackInset } from '@/frontend/appShell/speechPlayback';
-import { MessageList, type MessageListHandle } from '@/frontend/components/Message';
+import {
+  MessageList,
+  type MessageListHandle,
+  type MessageListItem,
+} from '@/frontend/components/Message';
 
 import { ChatShareDragSelection } from '../../share/ChatShareDragSelection';
 import { useChatShareFooterHeight, useIsChatShareSelecting } from '../../share/chatShareSelection';
 import type { ChatTurnNavigator } from './chatTurns';
+import { ChatArtifactsDrawer } from './components/ChatArtifactsDrawer';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
 import { ChatTurnDirectory, MAX_TRIGGER_TICKS } from './components/ChatTurnDirectory';
@@ -22,6 +27,8 @@ type ChatTranscriptProps = Omit<
   ComponentProps<typeof MessageList>,
   'bottomAccessoryHeight' | 'contentTopInset' | 'visualBottomAccessoryHeight'
 > & {
+  artifactsMessages?: readonly MessageListItem[];
+  artifactsSessionId?: string;
   contentTopInset?: number;
   hasOlderMessages?: boolean;
   hiddenUserTurnCount?: number;
@@ -34,6 +41,8 @@ type ChatTranscriptProps = Omit<
 const SELECTION_ROW_INSETS = { horizontal: 8, user: 0, assistant: 0 };
 
 export function ChatTranscript({
+  artifactsMessages,
+  artifactsSessionId,
   hasOlderMessages = false,
   hiddenUserTurnCount = 0,
   requiresInitialLayout,
@@ -81,12 +90,11 @@ export function ChatTranscript({
   for (const message of list.messages) {
     if (message.role === 'user') userTurnCount += 1;
   }
+  const showTranscriptOverlays = !isSelecting && !isCoverVisible && !composer?.state.isPresented;
   const showTurnDirectory = Boolean(
+    showTranscriptOverlays &&
     turnNavigator &&
-    (userTurnCount >= 2 || hasOlderMessages || list.hasNewerMessages) &&
-    !isSelecting &&
-    !isCoverVisible &&
-    !composer?.state.isPresented,
+    (userTurnCount >= 2 || hasOlderMessages || list.hasNewerMessages),
   );
   return (
     <View
@@ -116,6 +124,19 @@ export function ChatTranscript({
           }}
         />
       </ChatShareDragSelection>
+      {artifactsSessionId && showTranscriptOverlays ? (
+        <ChatArtifactsDrawer
+          key={artifactsSessionId}
+          bottomAccessoryHeight={liveDockHeight ?? bottomAccessoryHeight}
+          contentBottomInset={list.contentBottomInset}
+          contentTopInset={contentTopInset}
+          dockLift={dockLift}
+          hasTurnDirectory={showTurnDirectory}
+          keyboardOffset={list.keyboardOffset ?? 0}
+          messages={artifactsMessages ?? list.messages}
+          sessionId={artifactsSessionId}
+        />
+      ) : null}
       {showTurnDirectory && turnNavigator ? (
         <ChatTurnDirectory
           key={turnNavigator.scope}
