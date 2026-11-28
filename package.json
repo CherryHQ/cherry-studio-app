@@ -281,6 +281,7 @@
     "@types/ws": "^8.18.1",
     "babel-plugin-inline-import": "^3.0.0",
     "babel-preset-expo": "~58.0.20",
+    "detect-libc": "2.1.2",
     "drizzle-kit": "^0.31.10",
     "eas-cli": "27.11.0",
     "eas-cli-local-build-plugin": "27.11.0",

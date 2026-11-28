@@ -19,6 +19,7 @@ test('Git hooks still run after the installing worktree and its dependencies are
   const linked = join(root, 'linked');
   const env = {
     ...Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_'))),
+    NODE_ENV: process.env.NODE_ENV,
     GIT_CONFIG_NOSYSTEM: '1',
     GIT_CONFIG_GLOBAL: join(root, 'gitconfig'),
     NODE_PATH: '',
@@ -32,6 +33,8 @@ test('Git hooks still run after the installing worktree and its dependencies are
   try {
     mkdirSync(repo);
     git('init', '--quiet', '--template=');
+    git('config', 'user.name', 'Test');
+    git('config', 'user.email', 'test@example.com');
     writeFileSync(
       join(repo, '.pre-commit-config.yaml'),
       `default_install_hook_types: [pre-commit, post-checkout, post-merge]
@@ -47,7 +50,7 @@ repos:
 `,
     );
     git('add', '.pre-commit-config.yaml');
-    git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'fixture');
+    git('commit', '-qm', 'fixture');
     git('worktree', 'add', '--quiet', '--detach', linked);
 
     // Give this worktree a real, disposable copy of pnpm's prek package and its native dependency.
@@ -58,10 +61,27 @@ repos:
         recursive: true,
       });
     }
+    const libcPackage = dirname(realpathSync(fromProject.resolve('detect-libc/package.json')));
+    cpSync(libcPackage, join(linked, 'node_modules', 'detect-libc'), { recursive: true });
     mkdirSync(join(linked, 'scripts'));
     cpSync(resolve('scripts/installGitHooks.ts'), join(linked, 'scripts', 'installGitHooks.ts'));
     const { prepare } = fromProject('./package.json').scripts;
     execSync(prepare, { cwd: linked, env, stdio: 'pipe' });
+
+    // Older branches can reuse the installed runner via the stock npm launcher's PREK_BINARY.
+    const preCommit = join(repo, '.git', 'hooks', 'pre-commit');
+    const installedHook = readFileSync(preCommit, 'utf8');
+    const sharedBinary = installedHook.match(/^PREK="(.+)"$/m)?.[1];
+    expect(sharedBinary).toContain('cherry-prek');
+    execFileSync(
+      process.execPath,
+      [join(linked, 'node_modules/@j178/prek/bin/prek.js'), 'install'],
+      {
+        cwd: linked,
+        env: { ...env, PREK_BINARY: sharedBinary },
+      },
+    );
+    expect(readFileSync(preCommit, 'utf8')).toBe(installedHook);
     git('worktree', 'remove', '--force', linked);
 
     // A global prek or Node installation must not mask a broken runner.
@@ -70,7 +90,7 @@ repos:
     for (const name of ['node', 'prek']) {
       writeFileSync(join(bin, name), '#!/bin/sh\nexit 99\n', { mode: 0o755 });
     }
-    execFileSync('git', ['hook', 'run', 'pre-commit'], {
+    execFileSync('git', ['commit', '--allow-empty', '-qm', 'exercise shared hook'], {
       cwd: repo,
       env: { ...env, PATH: [bin, process.env.PATH].join(delimiter) },
     });
