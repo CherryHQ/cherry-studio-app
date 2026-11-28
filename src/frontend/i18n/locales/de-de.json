@@ -1874,6 +1874,7 @@
   "remoteAgent.uploadVerificationFailed": "Die Datei kann nicht überprüft werden. Versuchen Sie es erneut.",
   "remoteAgent.uploadVerifying": "Datei wird überprüft…",
   "remoteAgent.workspace": "PC-Arbeitsbereich auswählen",
+  "remoteAgent.workspaceLabel": "PC-Arbeitsbereich",
   "remoteTasks.agent": "Agent",
   "remoteTasks.emptyDescription": "Erstelle geplante Aufgaben auf deinem Desktop, um ihre Unterhaltungen hier anzusehen.",
   "remoteTasks.emptyTitle": "Keine geplanten Aufgaben",

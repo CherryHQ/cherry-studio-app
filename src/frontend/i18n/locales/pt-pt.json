@@ -1892,6 +1892,7 @@
   "remoteAgent.uploadVerificationFailed": "Não foi possível verificar o ficheiro. Tente novamente.",
   "remoteAgent.uploadVerifying": "A verificar o ficheiro…",
   "remoteAgent.workspace": "Escolher uma área de trabalho do PC",
+  "remoteAgent.workspaceLabel": "Área de trabalho do PC",
   "remoteTasks.agent": "Agente",
   "remoteTasks.emptyDescription": "Crie tarefas agendadas no computador para consultar as respetivas conversas aqui.",
   "remoteTasks.emptyTitle": "Sem tarefas agendadas",

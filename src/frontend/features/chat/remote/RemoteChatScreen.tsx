@@ -6,10 +6,10 @@ import { Keyboard, View, type ViewInstance } from 'react-native';
 
 import { useBackgroundTaskNotifications } from '@/frontend/appShell/backgroundActivity';
 import {
+  type AgentSummary,
   ConversationSourceBoundary,
   type useConversationAgents,
   useResolvedConversationAgent,
-  type AgentSummary,
 } from '@/frontend/appShell/conversation';
 import {
   useConversation,
@@ -72,9 +72,13 @@ function RemoteChatUnavailable({ state }: { state: 'loading' | 'error' | 'unpair
     </ChatScreenFrame>
   );
 }
-function UnresolvedRemoteHeader({ blurTarget }: { blurTarget: RefObject<ViewInstance | null> }) {
+function UnresolvedRemoteHeader(props: {
+  blurTarget: RefObject<ViewInstance | null>;
+  hidden?: boolean;
+  selection?: { selectedCount: number; onExit(): void };
+}) {
   const { startRemoteChat } = useChatSource();
-  return <MainHeaderView blurTarget={blurTarget} onNewChat={() => startRemoteChat()} />;
+  return <MainHeaderView {...props} onNewChat={() => startRemoteChat()} />;
 }
 
 const HeaderContext = createContext<{

@@ -1874,6 +1874,7 @@
   "remoteAgent.uploadVerificationFailed": "Δεν είναι δυνατή η επαλήθευση του αρχείου. Δοκιμάστε ξανά.",
   "remoteAgent.uploadVerifying": "Επαλήθευση αρχείου…",
   "remoteAgent.workspace": "Επιλέξτε χώρο εργασίας PC",
+  "remoteAgent.workspaceLabel": "Χώρος εργασίας PC",
   "remoteTasks.agent": "Πράκτορας",
   "remoteTasks.emptyDescription": "Δημιουργήστε προγραμματισμένες εργασίες στον υπολογιστή σας για να δείτε τις συνομιλίες τους εδώ.",
   "remoteTasks.emptyTitle": "Δεν υπάρχουν προγραμματισμένες εργασίες",

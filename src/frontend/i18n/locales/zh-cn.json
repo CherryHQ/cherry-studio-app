@@ -1856,6 +1856,7 @@
   "remoteAgent.uploadVerificationFailed": "无法校验文件，请重试。",
   "remoteAgent.uploadVerifying": "正在校验文件…",
   "remoteAgent.workspace": "选择 PC 工作区",
+  "remoteAgent.workspaceLabel": "PC 工作区",
   "remoteTasks.agent": "智能体",
   "remoteTasks.emptyDescription": "在桌面端创建定时任务后，可在这里查看它们的会话。",
   "remoteTasks.emptyTitle": "暂无定时任务",
