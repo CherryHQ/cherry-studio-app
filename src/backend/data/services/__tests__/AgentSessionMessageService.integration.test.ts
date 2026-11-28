@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
+import type { DesktopDispatchResult } from '@/shared/data/types/desktopDispatchTool';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import { agentSessionMessageService } from '../AgentSessionMessageService';
@@ -170,6 +171,149 @@ describe('AgentSessionMessageService persistence', () => {
     expect(turns).toEqual({
       activeNodeId: 'answer',
       items: [{ id: 'question', preview: 'Question' }],
+    });
+  });
+
+  test('reads and deduplicates resources along the selected parent chain across message pages', async () => {
+    for (const [index, id] of ['root', 'older', 'question', 'newer', 'alternate'].entries()) {
+      insertMessage(sqlite, {
+        id,
+        createdAt: index,
+        text: id,
+        role: id === 'root' || id === 'question' ? 'user' : 'assistant',
+      });
+    }
+    const insertFile = sqlite.prepare(`
+      INSERT INTO file_entry (id, filename, media_type, size, created_at, updated_at, deleted_at)
+      VALUES (?, 'report.pdf', 'application/pdf', 40, 1, 1, ?)
+    `);
+    for (const id of [
+      'legacy',
+      'first',
+      'last',
+      'other-branch',
+      'user-file',
+      'input-file',
+      'deleted',
+    ]) {
+      insertFile.run(id, id === 'deleted' ? 2 : null);
+    }
+    const write = sqlite.prepare('UPDATE agent_session_message SET data = ? WHERE id = ?');
+    write.run(
+      JSON.stringify({
+        parts: [resourceFile('user-file', 'input-attachment'), resourceFile('user-file')],
+      }),
+      'root',
+    );
+    write.run(
+      JSON.stringify({
+        parts: [
+          resourceFile('legacy'),
+          resourceFile('last', 'artifact'),
+          resourceDispatch('older-duplicate', { sessionId: 'remote-session' }),
+          resourceDispatch('older-remote', { sessionId: 'older-session' }),
+          resourceDispatch('draft-old', {
+            status: 'pending_confirmation',
+            draftId: 'draft',
+            operationId: 'op',
+          }),
+        ],
+      }),
+      'older',
+    );
+    write.run(
+      JSON.stringify({
+        parts: [
+          resourceFile('first', 'artifact'),
+          resourceDispatch('same-message-duplicate', { sessionId: 'remote-session' }),
+          resourceFile('deleted', 'artifact'),
+          resourceFile('input-file', 'input-attachment'),
+          resourceFile('missing-entry', 'artifact'),
+          resourceDispatch('draft-new', {
+            status: 'pending_confirmation',
+            draftId: 'draft',
+            operationId: 'op',
+          }),
+          resourceDispatch('draft-other-op', {
+            status: 'pending_confirmation',
+            draftId: 'draft',
+            operationId: 'other-op',
+          }),
+          resourceDispatch('not-openable', { status: 'desktop_offline' }),
+          {
+            ...resourceDispatch('not-builtin', { sessionId: 'wrong-source' }),
+            toolRef: { source: 'mcp', capabilityId: 'desktop_dispatch_task' },
+          },
+          {
+            ...resourceDispatch('not-completed', { sessionId: 'wrong-state' }),
+            state: 'input-available',
+          },
+          'an unexpected scalar part',
+          resourceFile('last', 'artifact'),
+          {
+            ...resourceDispatch('newest', { sessionId: 'remote-session' }),
+            type: 'tool-desktop_dispatch_task',
+          },
+        ],
+      }),
+      'newer',
+    );
+    write.run(
+      JSON.stringify({
+        parts: [
+          resourceFile('other-branch', 'artifact'),
+          resourceDispatch('other-branch-dispatch', { sessionId: 'other-session' }),
+        ],
+      }),
+      'alternate',
+    );
+    sqlite.exec(`
+      UPDATE agent_session_message SET parent_id = 'question' WHERE id = 'alternate';
+      UPDATE agent_session_message SET created_at = 999 WHERE id = 'older';
+      UPDATE agent_session SET active_node_id = 'newer' WHERE id = 'session-1';
+    `);
+
+    const firstPage = await agentSessionMessageService.listByCursor('session-1', { limit: 1 });
+    expect(firstPage.items.map(({ id }) => id)).toEqual(['newer']);
+    const resources = await agentSessionMessageService.readResources('session-1');
+    expect(resources.files).toEqual(
+      ['last', 'first', 'legacy'].map((fileEntryId) => ({ fileEntryId })),
+    );
+    expect(
+      resources.dispatches.map(({ messageId, toolCallId }) => [messageId, toolCallId]),
+    ).toEqual([
+      ['newer', 'newest'],
+      ['newer', 'draft-other-op'],
+      ['newer', 'draft-new'],
+      ['older', 'older-remote'],
+    ]);
+    expect(resources.dispatches[0]).toMatchObject({
+      input: { title: 'newest' },
+      output: { sessionId: 'remote-session', title: 'newest' },
+    });
+
+    sqlite.exec("UPDATE agent_session SET active_node_id = 'alternate' WHERE id = 'session-1'");
+    const alternate = await agentSessionMessageService.readResources('session-1');
+    expect(alternate.files.map(({ fileEntryId }) => fileEntryId)).toEqual([
+      'other-branch',
+      'last',
+      'legacy',
+    ]);
+    expect(alternate.dispatches.map(({ toolCallId }) => toolCallId)).toEqual([
+      'other-branch-dispatch',
+      'draft-old',
+      'older-remote',
+      'older-duplicate',
+    ]);
+  });
+
+  test('distinguishes an empty resource list from a missing session', async () => {
+    await expect(agentSessionMessageService.readResources('session-1')).resolves.toEqual({
+      dispatches: [],
+      files: [],
+    });
+    await expect(agentSessionMessageService.readResources('missing')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
     });
   });
 
@@ -754,4 +898,33 @@ function linkLinearTranscript(database: DatabaseSync): void {
       ORDER BY created_at DESC, id DESC LIMIT 1
     );
   `);
+}
+
+function resourceFile(fileEntryId: string, purpose?: 'input-attachment' | 'artifact') {
+  return { id: fileEntryId, type: 'file', fileEntryId, mediaType: 'application/pdf', purpose };
+}
+
+function resourceDispatch(toolCallId: string, target: Partial<DesktopDispatchResult>) {
+  const value: DesktopDispatchResult = {
+    status: 'dispatched',
+    connectionId: 'desktop',
+    connectionName: 'Desktop',
+    agentId: 'agent',
+    agentName: 'Agent',
+    workspace: { kind: 'system' },
+    workspaceName: 'System',
+    title: toolCallId,
+    promptPreview: 'Prepare report',
+    attachments: [],
+    ...target,
+  };
+  return {
+    id: toolCallId,
+    type: 'dynamic-tool',
+    toolCallId,
+    toolRef: { source: 'builtin', capabilityId: 'desktop_dispatch_task' },
+    state: 'output-available',
+    input: { title: toolCallId },
+    output: { value, artifacts: [] },
+  };
 }

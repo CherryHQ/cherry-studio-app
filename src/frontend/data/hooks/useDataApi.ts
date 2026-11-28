@@ -83,6 +83,8 @@ export function useQuery<TPath extends ApiPath>(
     /** Keep the previous key's data on screen while the new key loads. */
     keepPreviousData?: boolean;
     query?: QueryParamsForPath<TPath, 'GET'>;
+    /** Group a related read under the same invalidation path. */
+    queryKey?: DataApiQueryKey;
     /**
      * Poll while mounted. A function form receives the latest data and returns
      * the next delay, or `false` to stop (e.g. once a job reaches a terminal
@@ -110,7 +112,7 @@ export function useQuery<TPath extends ApiPath>(
       dataApi.get(resolvedPath as ConcreteApiPaths, {
         query: query as QueryParamsForPath<ConcreteApiPaths, 'GET'>,
       }) as Promise<ResponseForPath<TPath, 'GET'>>,
-    queryKey: buildQueryKey(resolvedPath, query),
+    queryKey: options?.queryKey ?? buildQueryKey(resolvedPath, query),
     ...(refetchInterval === undefined
       ? {}
       : {

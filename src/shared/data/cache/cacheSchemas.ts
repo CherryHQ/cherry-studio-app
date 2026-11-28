@@ -84,12 +84,15 @@ export type BackendCacheSchema = {
 // Persist Cache Schemas
 // ============================================================================
 
+export type ChatArtifactsHandleDock = Readonly<{ side: 'left' | 'right'; yRatio: number }> | null;
+
 /**
  * Persist cache schema (fixed keys only, no TTL). Values MUST be
  * JSON-serializable (no Date/Map/Set/undefined) and defaults must not be
  * `undefined` — the backing store round-trips every value through JSON.
  */
 export type PersistCacheSchema = {
+  'chat.artifacts_handle_dock': ChatArtifactsHandleDock;
   /** Origin of the last sign-in attempt, retained for cold and duplicate callback delivery. */
   'account.sign_in.return_to': string | null;
   'cloud.model_login_return': string | null;
@@ -109,6 +112,7 @@ export type PersistCacheSchema = {
 };
 
 export const DefaultPersistCache: PersistCacheSchema = {
+  'chat.artifacts_handle_dock': null,
   'account.sign_in.return_to': null,
   'cloud.model_login_return': null,
   'skills.translations': {},

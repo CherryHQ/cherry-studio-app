@@ -453,3 +453,6 @@ result metadata; navigation opens the current record, so a later-deleted Agent f
 destination's ordinary unavailable state. `ContextMenuExclusion` keeps name selection and the chat
 button separate from the message context menu; the shared button retains native press cancellation.
 Agent list/read calls remain in the execution disclosure.
+
+The `desktopTaskPip` sub-entry exposes pure dispatch projections and part guards for callers
+that do not need the native message UI or subscriptions.

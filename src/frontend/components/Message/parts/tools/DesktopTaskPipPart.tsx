@@ -9,7 +9,7 @@ import {
 } from '@cherrystudio/ui/components';
 import { haptics } from '@cherrystudio/ui/haptics';
 import { pressMotion } from '@cherrystudio/ui/motion';
-import { use, useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { use, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 import Animated, {
@@ -22,21 +22,15 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { OpenRemoteSessionSheetContext } from '@/frontend/appShell/navigation/chat';
-import { useBackendModule } from '@/frontend/data';
 
+import {
+  DESKTOP_TASK_PIP_STATUS_KEYS,
+  useLiveRemoteSessionPreview,
+  useRecoveredRemoteDispatch,
+} from './desktopTaskPipHooks';
 import { buildDesktopTaskPipViewModel, type DesktopTaskPipViewModel } from './desktopTaskPipModel';
 import { GenericToolPart } from './GenericToolPart';
 import type { ToolMessagePart } from './toolPartState';
-
-const STATUS_KEYS = {
-  running: 'desktopDispatch.pip.status.running',
-  'awaiting-approval': 'desktopDispatch.pip.status.awaiting-approval',
-  completed: 'desktopDispatch.pip.status.completed',
-  failed: 'desktopDispatch.pip.status.failed',
-  offline: 'desktopDispatch.pip.status.offline',
-  'pending-confirm': 'desktopDispatch.pip.status.pending-confirm',
-  dispatched: 'desktopDispatch.pip.status.dispatched',
-} as const satisfies Record<DesktopTaskPipViewModel['state'], string>;
 
 const CARD_BASE_CLASS = 'gap-1 overflow-hidden rounded-2xl border border-border px-3.5 py-3';
 const CARD_STYLE = { borderCurve: 'continuous' } as const;
@@ -49,51 +43,6 @@ export function DesktopTaskPipPart({ part }: { part: ToolMessagePart }) {
   ) : (
     <GenericToolPart part={part} />
   );
-}
-
-function useLivePreview(connectionId: string | undefined, sessionId: string | undefined) {
-  const remoteAgent = useBackendModule('remoteAgent');
-  const subscribe = useCallback(
-    (listener: () => void) =>
-      (connectionId &&
-        sessionId &&
-        remoteAgent?.subscribeLiveSession?.(connectionId, sessionId, listener)) ||
-      (() => {}),
-    [connectionId, sessionId, remoteAgent],
-  );
-  const getSnapshot = useCallback(
-    () =>
-      connectionId && sessionId
-        ? remoteAgent?.peekLiveSession?.(connectionId, sessionId)
-        : undefined,
-    [connectionId, sessionId, remoteAgent],
-  );
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-}
-
-function useRecoveredDispatch(
-  connectionId: string | undefined,
-  draftId: string | undefined,
-  operationId: string | undefined,
-) {
-  const remoteAgent = useBackendModule('remoteAgent');
-  const subscribe = useCallback(
-    (listener: () => void) =>
-      (connectionId &&
-        draftId &&
-        operationId &&
-        remoteAgent?.subscribeDispatches?.(connectionId, listener)) ||
-      (() => {}),
-    [connectionId, draftId, operationId, remoteAgent],
-  );
-  const getSnapshot = useCallback(
-    () =>
-      connectionId && draftId && operationId
-        ? remoteAgent?.peekDispatch?.(connectionId, draftId, operationId)
-        : undefined,
-    [connectionId, draftId, operationId, remoteAgent],
-  );
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 function DispatchRowStatus({
@@ -162,13 +111,13 @@ function DesktopTaskPip({ input, output }: { input: unknown; output: unknown }) 
 
   const receipt = useMemo(() => buildDesktopTaskPipViewModel({ input, output }), [input, output]);
   const { connectionId, agentId, draftId, operationId } = receipt;
-  const recoveredDispatch = useRecoveredDispatch(
+  const recoveredDispatch = useRecoveredRemoteDispatch(
     receipt.state === 'pending-confirm' && !receipt.sessionId ? connectionId : undefined,
     draftId,
     operationId,
   );
   const sessionId = receipt.sessionId ?? recoveredDispatch?.sessionId;
-  const livePreview = useLivePreview(connectionId, sessionId);
+  const livePreview = useLiveRemoteSessionPreview(connectionId, sessionId);
   const view =
     recoveredDispatch || livePreview
       ? buildDesktopTaskPipViewModel({ input, output, livePreview, recoveredDispatch })
@@ -176,7 +125,7 @@ function DesktopTaskPip({ input, output }: { input: unknown; output: unknown }) 
 
   const title = view.title ?? t('desktopDispatch.tool.dispatchTask');
   const connection = view.connectionName ?? t('desktopDispatch.pip.desktop');
-  const status = t(STATUS_KEYS[view.state]);
+  const status = t(DESKTOP_TASK_PIP_STATUS_KEYS[view.state]);
   const awaitingApproval = view.state === 'awaiting-approval';
   const workspace =
     view.workspaceKind === 'system'

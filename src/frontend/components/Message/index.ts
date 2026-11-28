@@ -12,6 +12,18 @@ export { useMessageProcessTitle } from './parts/ProcessGroupPart';
 export { ToolGroupPart } from './parts/tools/ToolGroupPart';
 export { ReadOnlyToolContent } from './parts/tools/ReadOnlyToolContent';
 export { ToolRendererProvider } from './parts/tools/ToolRendererContext';
+export {
+  buildDesktopTaskPipViewModel,
+  isDesktopDispatchToolPart,
+  isToolMessagePart,
+  type DesktopTaskPipViewModel,
+} from './desktopTaskPip';
+export {
+  DESKTOP_TASK_PIP_STATUS_KEYS,
+  useDesktopTaskPipViews,
+  useLiveRemoteSessionPreview,
+  useRecoveredRemoteDispatch,
+} from './parts/tools/desktopTaskPipHooks';
 export type { ToolMessagePart } from './parts/tools/toolPartState';
 export {
   ToolInputPreviewProvider,
