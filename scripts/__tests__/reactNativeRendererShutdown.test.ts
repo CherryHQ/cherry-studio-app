@@ -13,8 +13,10 @@ test('keeps the iOS renderer scheduler until JS cleanup and removes its observer
     /__block RCTScheduler \*scheduler = _surfacePresenter\.scheduler;\s*\[_surfacePresenter suspend\];/,
   );
   const [mainQueue, jsCleanup] = teardown.split('[self->_jsThreadManager dispatchToJSThread:^{');
-  expect(mainQueue).toContain('[scheduler stopObservingLayoutAnimations];');
-  expect(jsCleanup).toMatch(/scheduler = nil;\s*self->_reactInstance = nullptr;/);
+  expect(mainQueue.trim()).toBe('[scheduler stopObservingLayoutAnimations];');
+  expect(jsCleanup.split('}];', 1)[0]).toMatch(
+    /scheduler = nil;\s*self->_reactInstance = nullptr;/,
+  );
   const scheduler = readFileSync(join(root, 'React/Fabric/RCTScheduler.mm'), 'utf8');
   expect(scheduler).toMatch(
     /- \(void\)stopObservingLayoutAnimations\s*\{\s*RCTAssertMainQueue\(\);\s*_uiRunLoopObserver\.reset\(\);/,
