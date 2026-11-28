@@ -1,12 +1,17 @@
 import { GENERATE_IMAGE_TOOL_NAME } from '@cherrystudio/universal/ai/builtinTools';
 
-import type { AgentToolInputPreview, AgentToolProgress } from '@/shared/contracts/agent';
+import type {
+  AgentMessageToolRef,
+  AgentToolInputPreview,
+  AgentToolProgress,
+} from '@/shared/contracts/agent';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 export type ToolMessagePart = Extract<
   CherryMessagePart,
   { type: 'dynamic-tool' | `tool-${string}` }
 > & {
+  toolRef?: AgentMessageToolRef;
   inputPreview?: AgentToolInputPreview;
   /** Host-issued Apps linkage from the canonical tool result, never remote result JSON. */
   mcpApp?: import('@/shared/contracts/mcpApp').McpAppReference;
@@ -69,6 +74,15 @@ export function isUserQuestionToolPart(part: ToolMessagePart) {
 /** Local edits must be visible even when the completed process disclosure is closed. */
 export function isSkillAdaptationToolPart(part: ToolMessagePart) {
   return getToolName(part) === 'adapt_skill';
+}
+
+export function isDesktopDispatchToolPart(part: ToolMessagePart): boolean {
+  if (part.toolRef) {
+    return (
+      part.toolRef.source === 'builtin' && part.toolRef.capabilityId === 'desktop_dispatch_task'
+    );
+  }
+  return getCherryToolType(part) === 'builtin' && getToolName(part) === 'desktop_dispatch_task';
 }
 
 /**

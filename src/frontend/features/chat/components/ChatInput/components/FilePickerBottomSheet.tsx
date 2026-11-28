@@ -17,6 +17,8 @@ import type { FileEntryId } from '@/shared/data/types/file';
 import { FilePickerList } from './FilePickerList';
 
 type FilePickerBottomSheetProps = {
+  allowCreateFolder?: boolean;
+  maxAttachments?: number;
   onClose: () => void;
   onClosed?: () => void;
   onSelect: () => void;
@@ -27,6 +29,8 @@ type FilePickerBottomSheetProps = {
 
 /** Selection belongs to the sheet, so collapsing or recycling a folder never drops its files. */
 export function FilePickerBottomSheet({
+  allowCreateFolder = true,
+  maxAttachments,
   onClose,
   onClosed,
   onSelect,
@@ -50,21 +54,38 @@ export function FilePickerBottomSheet({
     (attachment) => !attachedIds.has(attachment.fileEntryId),
   );
   const selectedIds = new Set(selection.keys());
+  const remainingSlots =
+    maxAttachments === undefined ? undefined : Math.max(0, maxAttachments - attachments.length);
+  const isLimitReached =
+    remainingSlots !== undefined && selectedAttachments.length >= remainingSlots;
 
   function toggleFile({ entry, uri }: ResolvedFileEntry) {
     if (!uri || attachedIds.has(entry.id)) return;
     const attachment = createReadyAttachmentDraft({ entry, uri }, `file-entry:${entry.id}`);
     setSelection((current) => {
       const next = new Map(current);
-      if (next.has(entry.id)) next.delete(entry.id);
-      else next.set(entry.id, attachment);
+      if (next.has(entry.id)) {
+        next.delete(entry.id);
+        return next;
+      }
+      if (remainingSlots !== undefined) {
+        const nextSelectedCount = [...next.values()].filter(
+          (item) => !attachedIds.has(item.fileEntryId),
+        ).length;
+        if (nextSelectedCount >= remainingSlots) return current;
+      }
+      next.set(entry.id, attachment);
       return next;
     });
   }
 
   function addSelectedFiles() {
-    if (selectedAttachments.length === 0) return;
-    addAttachments(selectedAttachments);
+    const filesToAdd =
+      remainingSlots === undefined
+        ? selectedAttachments
+        : selectedAttachments.slice(0, remainingSlots);
+    if (filesToAdd.length === 0) return;
+    addAttachments(filesToAdd);
     onSelect();
   }
 
@@ -72,25 +93,29 @@ export function FilePickerBottomSheet({
     <BottomSheet
       onClosed={onClosed}
       footer={
-        <View className="flex-row gap-3">
-          <View className="flex-1">
-            <Button
-              disabled={isCreating}
-              onPress={requestCreate}
-              testID="file-picker-create-folder"
-              variant="secondary"
-            >
-              {t('library.folders.create')}
-            </Button>
+        allowCreateFolder || selectedAttachments.length > 0 ? (
+          <View className="flex-row gap-3">
+            {allowCreateFolder ? (
+              <View className="flex-1">
+                <Button
+                  disabled={isCreating}
+                  onPress={requestCreate}
+                  testID="file-picker-create-folder"
+                  variant="secondary"
+                >
+                  {t('library.folders.create')}
+                </Button>
+              </View>
+            ) : null}
+            {selectedAttachments.length > 0 ? (
+              <View className="flex-1">
+                <Button onPress={addSelectedFiles} testID="file-picker-add">
+                  {t('chat.filePicker.addSelected', { count: selectedAttachments.length })}
+                </Button>
+              </View>
+            ) : null}
           </View>
-          {selectedAttachments.length > 0 ? (
-            <View className="flex-1">
-              <Button onPress={addSelectedFiles} testID="file-picker-add">
-                {t('chat.filePicker.addSelected', { count: selectedAttachments.length })}
-              </Button>
-            </View>
-          ) : null}
-        </View>
+        ) : undefined
       }
       onClose={onClose}
       open={open}
@@ -104,7 +129,9 @@ export function FilePickerBottomSheet({
       <View className="px-5">
         <Pressable
           accessibilityRole="button"
-          className="min-h-14 flex-row items-center gap-4 py-2 active:opacity-60"
+          accessibilityState={{ disabled: remainingSlots === 0 }}
+          className="min-h-14 flex-row items-center gap-4 py-2 active:opacity-60 disabled:opacity-40"
+          disabled={remainingSlots === 0}
           onPress={onUpload}
           testID="file-picker-upload"
         >
@@ -123,7 +150,12 @@ export function FilePickerBottomSheet({
           {t('chat.filePicker.recent')}
         </Text>
       </View>
-      <FilePickerList attachedIds={attachedIds} onToggle={toggleFile} selectedIds={selectedIds} />
+      <FilePickerList
+        attachedIds={attachedIds}
+        isSelectionLimitReached={isLimitReached}
+        onToggle={toggleFile}
+        selectedIds={selectedIds}
+      />
     </BottomSheet>
   );
 }

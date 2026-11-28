@@ -31,6 +31,7 @@ import { agentGlobalSkillService } from '@/backend/data/services/AgentGlobalSkil
 import { agentService } from '@/backend/data/services/AgentService';
 import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
 import { aiUsageRecordService } from '@/backend/data/services/AiUsageRecordService';
+import { desktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import { modelService } from '@/backend/data/services/ModelService';
@@ -41,8 +42,10 @@ import type { BackgroundActivityEnvironment } from '@/backend/services/backgroun
 import { fileContent } from '@/backend/services/file/fileContent';
 import { createInternalEntryWithPreview } from '@/backend/services/file/filePreviewStorage';
 import { createInternalEntry, discardInternalEntries } from '@/backend/services/file/fileStorage';
+import { createNativeModelImageProcessor } from '@/backend/services/file/modelImageProcessor';
 import { createJsSandbox } from '@/backend/services/jsSandbox';
 import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import type { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
 import type { ScreenAwakeRuntime } from '@/backend/services/screenAwake';
 import { skillStorage } from '@/backend/services/skill';
 import type { SshRuntime } from '@/backend/services/ssh';
@@ -56,7 +59,7 @@ import { imageMediaTypeFromExtension } from '@/shared/utils/imageFileTypes';
 import { resolveAppLanguage } from '@/shared/utils/languages';
 
 import { managedFileResolver } from '../resources/managedFileResolver';
-import type { RuntimeTextGenerator, RuntimeWebTools } from '../runtime';
+import type { RuntimeImageProcessor, RuntimeTextGenerator, RuntimeWebTools } from '../runtime';
 import type { AgentSessionStore } from '../sessionStore/AgentSessionStore';
 import {
   createSystemCapabilitySource,
@@ -90,8 +93,11 @@ const logger = loggerService.withContext('AgentHostDependencies');
   'BackgroundActivityEnvironment',
   'SshRuntime',
   'ScreenAwakeRuntime',
+  'RemoteAgentRuntime',
 ])
 export class AgentHostDependencies extends BaseService implements MobileAgentHostPorts {
+  readonly imageProcessor: RuntimeImageProcessor = createNativeModelImageProcessor();
+
   shouldRecoverStorage() {
     return Platform.OS === 'android' && AppState.currentState === 'active';
   }
@@ -222,6 +228,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     private readonly screenAwake: Pick<ScreenAwakeRuntime, 'acquire'> = {
       acquire: () => ({ release() {} }),
     },
+    private readonly remoteAgent?: RemoteAgentRuntime,
   ) {
     super();
     this.imageGeneration = createAgentImageGeneration({
@@ -280,6 +287,16 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       webSearch: this.webSearchService,
       trash: this.trash,
       ssh: this.ssh,
+      desktopDispatch: this.remoteAgent && {
+        connections: desktopConnectionService,
+        remoteAgent: this.remoteAgent,
+        preference: this.preferenceService,
+        createTextArtifact: (input, signal) =>
+          fileContent.createTextEntry(
+            { ...input, provenance: 'generated', aiOperation: 'generate' },
+            signal,
+          ),
+      },
       mcpManagement: {
         servers: mcpServerService,
         mutations: createMcpServerMutations({

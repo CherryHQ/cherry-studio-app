@@ -21,6 +21,7 @@ import {
   type AssistantMessageToolbarConfig,
   DEFAULT_ASSISTANT_MESSAGE_TOOLBAR_CONFIG,
 } from '@/shared/data/types/assistantMessageToolbar';
+import type { DesktopDispatchLastTarget } from '@/shared/data/types/desktopDispatchTool';
 import type {
   WebSearchCompressionMethod,
   WebSearchProviderId,
@@ -109,6 +110,8 @@ export interface PreferenceSchema {
   'chat.input.enter_to_send': boolean;
   'chat.deepseek.safety_check': boolean;
 
+  'desktop.dispatch.last_target': DesktopDispatchLastTarget | null;
+
   'feature.paintings.default_model_id': string | null;
   'feature.translate.model_id': string | null;
   /** Null disables voice input and keeps the composer's send action. */
@@ -175,6 +178,8 @@ export const PreferenceDefaults = {
   'chat.web_search.model_tools': 'preferred',
   'chat.web_search.provider_overrides': {},
   'chat.input.enter_to_send': false,
+
+  'desktop.dispatch.last_target': null,
 
   'feature.paintings.default_model_id': null,
   'feature.translate.model_id': null,
@@ -243,6 +248,7 @@ export const DEVICE_LOCAL_PREFERENCE_KEYS = [
   'app.user.id',
   'chat.background_reply.enabled',
   'chat.completion_notifications.enabled',
+  'desktop.dispatch.last_target',
   // Engine support and system voices differ per device.
   'feature.voice.dictation_engine',
   'feature.voice.speech_engine',

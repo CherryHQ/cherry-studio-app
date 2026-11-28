@@ -7,7 +7,8 @@ import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 import { clampMcpToolApproval } from '@/shared/utils/agentToolApproval';
 
-import type { RuntimeTool } from '../runtime';
+import type { RuntimeMcpNamespace, RuntimeTool } from '../runtime';
+import { LOAD_WORKFLOW_TOOL_NAME } from './workflowTool';
 
 type AgentToolBindingResolver = {
   list(agentId: string): Promise<{ items: AgentToolBinding[] }>;
@@ -23,6 +24,7 @@ type McpRuntimeToolCapability = {
     serverId: string,
     onUnavailable?: (warning: string) => void,
     signal?: AbortSignal,
+    onDiscoveryIncomplete?: () => void,
   ): Promise<McpExecutableToolDescriptor[]>;
 };
 
@@ -35,6 +37,8 @@ export type AgentRuntimeToolResolver = {
   ): Promise<{
     tools: RuntimeTool[];
     pluginGuides: readonly PluginGuideSnapshot[];
+    mcpNamespaces?: readonly RuntimeMcpNamespace[];
+    unavailableServerIds?: readonly string[];
   }>;
 };
 
@@ -62,7 +66,12 @@ export function createAgentRuntimeToolResolver(input: {
           server.isEnabled && (server.origin === 'builtin' || boundServerIds.has(server.id)),
       );
       if (servers.length === 0) {
-        return { tools: [], pluginGuides: [] };
+        return {
+          tools: [],
+          pluginGuides: [],
+          mcpNamespaces: [],
+          unavailableServerIds: [],
+        };
       }
       const pluginIds = new Set(
         servers.filter((server) => server.origin === 'builtin').map((server) => server.id),
@@ -72,27 +81,41 @@ export function createAgentRuntimeToolResolver(input: {
       const catalogs = await Promise.all(
         servers.map(async ({ id: serverId, name }) => {
           let reported = false;
+          let discoveryIncomplete = false;
           try {
-            return await mcpRuntime.listExecutableToolDescriptors(
+            const descriptors = await mcpRuntime.listExecutableToolDescriptors(
               serverId,
               (warning) => {
                 reported = true;
                 onUnavailable?.(warning);
               },
               signal,
+              () => {
+                discoveryIncomplete = true;
+              },
             );
-          } catch {
+            return {
+              descriptors,
+              disconnected: discoveryIncomplete && descriptors.length === 0,
+              discoveryIncomplete,
+            };
+          } catch (error) {
             signal?.throwIfAborted();
             if (!reported) {
               onUnavailable?.(
                 `${name}: configured tools could not be loaded. Check the service connection and authorization.`,
               );
             }
-            return [];
+            const incomplete = discoveryIncomplete || !isNonRetryableUnavailableError(error);
+            return {
+              descriptors: [],
+              disconnected: incomplete,
+              discoveryIncomplete: incomplete,
+            };
           }
         }),
       );
-      const descriptors = catalogs.flat();
+      const descriptors = catalogs.flatMap(({ descriptors }) => descriptors);
       const resolutions = await Promise.all(
         descriptors.map(async (descriptor) => ({
           descriptor,
@@ -128,6 +151,37 @@ export function createAgentRuntimeToolResolver(input: {
         },
       );
 
+      const pluginGuides = resolveBuiltInPluginGuides(
+        selections.map(({ descriptor }) => descriptor),
+      );
+      const guidesByServer = new Map(pluginGuides.map((guide) => [guide.serverId, guide]));
+      const usedNames = new Set(['mcp']); // Reserved for tools without a matching server namespace.
+      const mcpNamespaces = servers.map((server, index): RuntimeMcpNamespace => {
+        const label = server.name.replace(/\s+/g, ' ').trim();
+        const base =
+          namespaceSlug(label) || `mcp_${namespaceSlug(server.id).slice(0, 8) || 'server'}`;
+        let name = base;
+        for (let suffix = 2; usedNames.has(name); suffix++) name = `${base}_${suffix}`;
+        usedNames.add(name);
+        const origin = server.origin === 'builtin' ? 'built-in plugin' : 'remote endpoint';
+        const availability = catalogs[index]!.disconnected
+          ? ' (currently disconnected or unavailable)'
+          : '';
+        const guide = guidesByServer.get(server.id);
+        return {
+          serverId: server.id,
+          name,
+          description: `MCP server "${label}" (${origin})${availability}.`,
+          ...(guide
+            ? {
+                instructions: `Load workflow "plugin:${server.id}" with ${LOAD_WORKFLOW_TOOL_NAME} in a separate tool round before calling tools in this namespace.`,
+              }
+            : {}),
+        };
+      });
+      const unavailableServerIds = servers
+        .filter((_server, index) => catalogs[index]!.discoveryIncomplete)
+        .map((server) => server.id);
       return {
         tools: mcpRuntime.createRuntimeTools(
           selections.map((selection) => ({
@@ -141,8 +195,32 @@ export function createAgentRuntimeToolResolver(input: {
             },
           })),
         ),
-        pluginGuides: resolveBuiltInPluginGuides(selections.map(({ descriptor }) => descriptor)),
+        pluginGuides,
+        mcpNamespaces,
+        unavailableServerIds,
       };
     },
   };
+}
+
+function namespaceSlug(value: string): string {
+  const slug =
+    value
+      .toLowerCase()
+      .match(/[a-z0-9]+/g)
+      ?.join('_') ?? '';
+  if (!slug) return '';
+  // Code Mode normalizes leading digits to '_', which could collide across numbered servers.
+  return /^[0-9]/.test(slug) ? `mcp_${slug}` : slug;
+}
+
+function isNonRetryableUnavailableError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'mcp_tool_unavailable' &&
+    'retryable' in error &&
+    error.retryable === false
+  );
 }

@@ -475,6 +475,62 @@ describe('listTools', () => {
       [server.id]: { state: 'error', lastError: warning, toolCount: 1 },
     });
   });
+
+  it('invokes onDiscoveryIncomplete only for incomplete/retryable failures, not clean empty or disabled servers', async () => {
+    const pluginServer: McpServer = {
+      ...makeServer({ id: 'feishu-partial' }),
+      origin: 'builtin',
+      endpointUrl: null,
+      headers: undefined,
+      builtinId: 'feishu',
+      authorizationId: 'grant-1',
+      name: '飞书',
+    };
+    const emptyRemote = makeServer({ id: 'remote-empty' });
+    const disabledRemote = makeServer({ id: 'disabled-srv', isEnabled: false });
+    const { service } = makeService([pluginServer, emptyRemote, disabledRemote]);
+
+    // 1) Partial plugin discovery warnings -> calls onDiscoveryIncomplete
+    mockCreateMCPClient.mockResolvedValueOnce({
+      ...makeClient(makeRawTools(['calendar_get_primary'])),
+      discoveryWarnings: ['Feishu document tools could not be loaded (network).'],
+    });
+    const incompletePartial = jest.fn();
+    await service.listExecutableToolDescriptors(
+      pluginServer.id,
+      undefined,
+      undefined,
+      incompletePartial,
+    );
+    expect(incompletePartial).toHaveBeenCalledTimes(1);
+
+    // 2) Clean empty remote catalog -> reports onUnavailable but NOT onDiscoveryIncomplete
+    mockCreateMCPClient.mockResolvedValueOnce(makeClient([]));
+    const onUnavailableEmpty = jest.fn();
+    const incompleteEmpty = jest.fn();
+    await expect(
+      service.listExecutableToolDescriptors(
+        emptyRemote.id,
+        onUnavailableEmpty,
+        undefined,
+        incompleteEmpty,
+      ),
+    ).resolves.toEqual([]);
+    expect(onUnavailableEmpty).toHaveBeenCalledWith(expect.stringContaining('no available tools'));
+    expect(incompleteEmpty).not.toHaveBeenCalled();
+
+    // 3) Disabled server -> rejects non-retryable without calling onDiscoveryIncomplete
+    const incompleteDisabled = jest.fn();
+    await expect(
+      service.listExecutableToolDescriptors(
+        disabledRemote.id,
+        undefined,
+        undefined,
+        incompleteDisabled,
+      ),
+    ).rejects.toMatchObject({ code: 'mcp_tool_unavailable', retryable: false });
+    expect(incompleteDisabled).not.toHaveBeenCalled();
+  });
   it('retains connection failures even when tool preparation never admits a conversation turn', async () => {
     const { traces, records } = createTraceRecorder();
     const failure = Object.assign(new Error('private endpoint and credential'), {
@@ -646,6 +702,7 @@ describe('Runtime tool adapter', () => {
         description: 'ServerOne: Search issues',
         displayName: 'Issue Search',
         endpointUrl: server.endpointUrl,
+        executionSettingsKey: expect.stringMatching(/^remote:[a-f0-9]{64}$/),
         generation: expect.any(Number),
         inputSchema: {
           properties: { query: { minLength: 1, type: 'string' } },

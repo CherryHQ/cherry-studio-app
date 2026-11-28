@@ -40,6 +40,70 @@ describe('createSystemCapabilitySource', () => {
     jest.restoreAllMocks();
   });
 
+  test('gates desktop delegation on local paired Agent grants without dialing', async () => {
+    const open = jest.fn();
+    const list = jest.fn<
+      ReturnType<NonNullable<SystemCapabilityServices['desktopDispatch']>['connections']['list']>,
+      []
+    >();
+    const device = {
+      id: 'pc',
+      name: 'Work',
+      defaultName: 'Desktop',
+      alias: 'Work',
+      configuredEndpoints: [],
+      lastFetchedAt: null,
+    };
+    const options: Parameters<typeof resolve>[1] = {
+      sessionId: 'conversation',
+      desktopDispatch: {
+        connections: { list, getById: jest.fn() },
+        remoteAgent: { open },
+        preference: { get: jest.fn(), set: jest.fn() },
+        createTextArtifact: jest.fn(),
+      },
+    };
+    list.mockResolvedValueOnce({
+      items: [
+        { ...device, status: 'paired', capabilities: ['configuration'] },
+        { ...device, status: 'needs-repair', capabilities: ['agent'] },
+      ],
+      total: 2,
+    });
+    expect(
+      (await resolve({}, options)).filter(({ providerName }) =>
+        providerName.startsWith('desktop_'),
+      ),
+    ).toEqual([]);
+
+    list.mockResolvedValueOnce({
+      items: [{ ...device, status: 'paired', capabilities: ['agent'] }],
+      total: 1,
+    });
+    const desktop = (await resolve({}, options)).filter(({ providerName }) =>
+      providerName.startsWith('desktop_'),
+    );
+    expect(
+      desktop.map(({ providerName, approval, effect, deferred }) => [
+        providerName,
+        approval,
+        effect,
+        deferred,
+      ]),
+    ).toEqual([
+      ['desktop_list_devices', 'auto', 'read', true],
+      ['desktop_list_agents', 'auto', 'read', true],
+      ['desktop_list_workspaces', 'auto', 'read', true],
+      ['desktop_dispatch_task', 'ask', 'write', true],
+      ['desktop_read_session', 'auto', 'read', true],
+    ]);
+    expect(
+      desktop.find(({ providerName }) => providerName === 'desktop_dispatch_task')
+        ?.autoApprovalEligible,
+    ).toBe(false);
+    expect(open).not.toHaveBeenCalled();
+  });
+
   test.each([null, 'sensevoice', 'deepseek'] as const)(
     'offers the available transcription engine: %s',
     async (engine) => {
@@ -957,6 +1021,7 @@ async function resolve(
     documentParserMode?: DocumentParserMode;
     acceptsImages?: boolean;
     agentConfiguration?: SystemCapabilityServices['agentConfiguration'];
+    desktopDispatch?: SystemCapabilityServices['desktopDispatch'];
   } = {},
 ): Promise<readonly RuntimeTool[]> {
   const source = createSystemCapabilitySource(

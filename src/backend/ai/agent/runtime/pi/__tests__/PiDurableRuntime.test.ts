@@ -1,4 +1,4 @@
-import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+import { BACKGROUND_CONTEXT, type Context } from '@earendil-works/chord/context';
 import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
 import { createModels } from '@earendil-works/pi-ai/models';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
@@ -21,8 +21,11 @@ import {
   ToolTask,
   UserEntry,
   type ConversationId,
+  type CommitOptions,
+  type SubmissionId,
   type TaskGraphNode,
   type TaskId,
+  type Tx,
 } from '@earendil-works/pi-durable';
 
 import { hasRunnablePiTasks, PiDurableRuntime } from '../PiDurableRuntime';
@@ -51,6 +54,38 @@ const seed = {
     },
   ],
 };
+
+async function traceSubmissionReads(runtime: PiDurableRuntime, action: () => Promise<void>) {
+  const conversation = (await runtime.conversation(seed.sessionId))!;
+  const resolveConversation = jest.spyOn(runtime, 'conversation').mockResolvedValue(conversation);
+  const commit = conversation.commit.bind(conversation);
+  const reads: SubmissionId[] = [];
+  const traced = jest
+    .spyOn(conversation, 'commit')
+    .mockImplementation(
+      <T>(change: (tx: Tx) => T | Promise<T>, context: Context, options?: CommitOptions) =>
+        commit(
+          async (tx) => {
+            const submission = jest.spyOn(tx, 'submission');
+            try {
+              return await change(tx);
+            } finally {
+              reads.push(...submission.mock.calls.map(([id]) => id));
+              submission.mockRestore();
+            }
+          },
+          context,
+          options,
+        ),
+    );
+  try {
+    await action();
+    return reads;
+  } finally {
+    traced.mockRestore();
+    resolveConversation.mockRestore();
+  }
+}
 
 test('execution protection follows runnable work, including due sleeps and cancellation', () => {
   const task: TaskGraphNode = {
@@ -201,7 +236,11 @@ describe('PiDurableRuntime identity and handoff', () => {
           parentMessageId: 'waiting-answer',
         },
       ]);
-      expect(await runtime.withdrawInput(seed.sessionId, 'waiting')).toBe('aborted');
+      const last = (await runtime.inputRecord(seed.sessionId, 'last'))!;
+      const reads = await traceSubmissionReads(runtime, async () => {
+        expect(await runtime.withdrawInput(seed.sessionId, 'waiting')).toBe('aborted');
+      });
+      expect(reads).toContain(last.id);
       expect(
         await runtime.submissionMetadata((await runtime.inputRecord(seed.sessionId, 'last'))!),
       ).toMatchObject({
@@ -381,32 +420,47 @@ describe('PiDurableRuntime identity and handoff', () => {
         live.run = { taskId, inputs: [], turns: 0 };
       }, BACKGROUND_CONTEXT);
       for (const [id, parent] of [
+        ['active', null],
         ['first', 'active-answer'],
         ['second', 'first-answer'],
-      ]) {
+      ] as const) {
         await runtime.submit(
           seed.sessionId,
-          { type: 'input', requestId: id!, content: id!, whenBusy: 'followUp' },
+          { type: 'input', requestId: id, content: id, whenBusy: 'followUp' },
           {
-            requestId: id!,
+            requestId: id,
             userMessageId: `${id}-user`,
             assistantMessageId: `${id}-answer`,
-            metadata: { parentMessageId: parent! },
+            metadata: { parentMessageId: parent },
           },
           { userMessageId: `${id}-user`, assistantMessageId: `${id}-answer` },
         );
       }
+      const active = (await runtime.inputRecord(seed.sessionId, 'active'))!;
+      const first = (await runtime.inputRecord(seed.sessionId, 'first'))!;
+      await conversation.commit(async (tx) => {
+        const entry = await tx.appendEntry(UserEntry, conversation.id, {
+          model: [{ role: 'user', content: 'active', timestamp: 1 }],
+        });
+        tx.placeSubmission(active.id, entry.id);
+        (await tx.doc(LiveDoc, conversation.id)).run!.inputs.push(active.id);
+        const inbox = await tx.doc(InboxDoc, conversation.id);
+        inbox.items = inbox.items.filter(({ id }) => id !== active.id);
+      }, BACKGROUND_CONTEXT);
       const original = await runtime.inputRecord(seed.sessionId, 'second');
       expect(original?.status).toBe('queued');
-      await expect(
-        Promise.all([
-          runtime.steerInput(seed.sessionId, 'second'),
-          runtime.steerInput(seed.sessionId, 'second'),
-        ]),
-      ).resolves.toEqual([
-        expect.objectContaining({ status: 'accepted' }),
-        expect.objectContaining({ status: 'accepted' }),
-      ]);
+      const reads = await traceSubmissionReads(runtime, async () => {
+        await expect(
+          Promise.all([
+            runtime.steerInput(seed.sessionId, 'second'),
+            runtime.steerInput(seed.sessionId, 'second'),
+          ]),
+        ).resolves.toEqual([
+          expect.objectContaining({ status: 'accepted' }),
+          expect.objectContaining({ status: 'accepted' }),
+        ]);
+      });
+      expect(reads).toEqual(expect.arrayContaining([first.id, original!.id, active.id]));
       const replacement = await runtime.inputRecord(seed.sessionId, 'second:steer');
       expect(replacement?.status).toBe('queued');
       expect(await runtime.inputRecord(seed.sessionId, 'second')).toMatchObject({
@@ -756,16 +810,16 @@ describe('PiDurableRuntime identity and handoff', () => {
     }
   });
 
-  test.each(['provider', 'hook'])('settles failed compaction (%s)', async (source) => {
+  test.each(['provider', 'hook', 'disabled'])('blocking compaction (%s)', async (source) => {
     const configuration = options();
-    if (source === 'hook') {
+    const beforeCompact = jest.fn(() => ({
+      kind: 'failure' as const,
+      failure: 'Compaction provider failed',
+    }));
+    if (source !== 'provider') {
       configuration.registry.install({
         name: 'test.summary-failure',
-        hooks: [
-          hook(CompactionTask, {
-            beforeCompact: () => ({ kind: 'failure', failure: 'Compaction provider failed' }),
-          }),
-        ],
+        hooks: [hook(CompactionTask, { beforeCompact })],
       });
     }
     const model: Model<Api> = {
@@ -787,7 +841,19 @@ describe('PiDurableRuntime identity and handoff', () => {
       errorMessage: 'Compaction provider failed',
     });
     const generate = jest.spyOn(configuration.models, 'streamSimple').mockImplementation(() => {
-      throw new Error('A failed blocking compaction must not send oversized context');
+      if (source !== 'disabled')
+        throw new Error('A failed blocking compaction must not send oversized context');
+      const stream = new AssistantMessageEventStream();
+      stream.push({
+        type: 'done',
+        reason: 'stop',
+        message: {
+          ...emptyAssistantMessage(model),
+          content: [{ type: 'text', text: 'Answered' }],
+        },
+      });
+      stream.end();
+      return stream;
     });
     const harness = await Harness.open(
       new MemoryStorage(),
@@ -800,6 +866,7 @@ describe('PiDurableRuntime identity and handoff', () => {
             reserveTokens: 32,
             keepRecentTokens: 1,
             backgroundTokens: 0,
+            modelOverrides: { [`${model.provider}/${model.id}`]: { enabled: true } },
           },
           retry: { enabled: false },
         },
@@ -810,7 +877,10 @@ describe('PiDurableRuntime identity and handoff', () => {
       const conversation = await harness.createConversation(
         {
           ownership: { kind: 'ownerless' },
-          agent: { model: { provider: model.provider, modelId: model.id } },
+          agent: {
+            model: { provider: model.provider, modelId: model.id },
+            ...(source === 'disabled' ? { compaction: { enabled: false } } : {}),
+          },
           init: async (tx, conversationId) => {
             await tx.appendEntry(UserEntry, conversationId, {
               model: [{ role: 'user', content: 'Old context '.repeat(200), timestamp: 1 }],
@@ -839,15 +909,20 @@ describe('PiDurableRuntime identity and handoff', () => {
       harness.resume();
       await harness.waitForIdle(BACKGROUND_CONTEXT);
       for (const submission of [first, second]) {
-        expect(await submission.status(BACKGROUND_CONTEXT)).toMatchObject({
-          status: 'unanswered',
-          reason: 'model_error',
-          detail: expect.stringContaining('Compaction provider failed'),
-          entry: expect.any(Number),
-        });
+        expect(await submission.status(BACKGROUND_CONTEXT)).toMatchObject(
+          source === 'disabled'
+            ? { status: 'done' }
+            : {
+                status: 'unanswered',
+                reason: 'model_error',
+                detail: expect.stringContaining('Compaction provider failed'),
+                entry: expect.any(Number),
+              },
+        );
       }
-      expect(summarize).toHaveBeenCalledTimes(source === 'hook' ? 0 : 2);
-      expect(generate).not.toHaveBeenCalled();
+      expect(beforeCompact).toHaveBeenCalledTimes(source === 'hook' ? 2 : 0);
+      expect(summarize).toHaveBeenCalledTimes(source === 'provider' ? 2 : 0);
+      expect(generate).toHaveBeenCalledTimes(source === 'disabled' ? 2 : 0);
       expect((await harness.inspect(BACKGROUND_CONTEXT)).submissions).toEqual([]);
     } finally {
       await harness.close(BACKGROUND_CONTEXT);

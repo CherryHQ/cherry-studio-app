@@ -22,6 +22,41 @@ function mcpTool(): RuntimeTool {
 }
 
 describe('buildAgentSystemPrompt', () => {
+  test('adds consent and scoped handoff instructions only for the built-in dispatch capability', () => {
+    const context = { agentInstructions: '', appLanguage: 'en-US' } as const;
+    const prompt = buildAgentSystemPrompt({ ...context, tools: [tool('desktop_dispatch_task')] });
+    expect(prompt).toContain('## Desktop Agent Delegation');
+    expect(prompt).toContain('Wait for the user to agree before dialing');
+    expect(prompt).toContain(
+      '`desktop_list_devices`, then `desktop_list_agents` and `desktop_list_workspaces`',
+    );
+    expect(prompt).toContain('`ask_user_question`');
+    expect(prompt).toContain('keep helping in this local conversation');
+    expect(prompt).toContain('dispatched by this local conversation');
+    expect(prompt).toContain('request approval in the mobile app through `desktop_dispatch_task`');
+    expect(prompt).toContain(
+      '`dispatched` means the desktop accepted the task and dispatch approval is complete',
+    );
+    expect(prompt).toContain('finish your turn without calling `desktop_read_session`');
+    expect(prompt).toContain('single point-in-time snapshot');
+    expect(prompt).toContain('never poll in a loop');
+    expect(prompt).toContain(
+      "`pending_confirmation` means the desktop's acceptance is still unconfirmed",
+    );
+    expect(prompt).toContain('Check the original dispatch before considering another');
+    expect(prompt).toContain(
+      'Report a separate remote interaction approval only when the readback reports a pending interaction via `pendingApprovalTitle`',
+    );
+    expect(
+      buildAgentSystemPrompt({
+        ...context,
+        tools: [
+          tool('desktop_read_session'),
+          { ...mcpTool(), providerName: 'desktop_dispatch_task' },
+        ],
+      }),
+    ).not.toContain('## Desktop Agent Delegation');
+  });
   test('minimal mode keeps chat context and custom instructions without capability guidance', () => {
     const prompt = buildAgentSystemPrompt({
       mode: 'minimal',

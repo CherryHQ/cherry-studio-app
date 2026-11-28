@@ -1,5 +1,5 @@
 import SettingsIcon from '@cherrystudio/app-icons/icons/settings';
-import { TextAnimation } from '@cherrystudio/ui/components';
+import { Surface, TextAnimation } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -158,72 +158,72 @@ function ProfileButtonContent({
     .join('; ');
 
   return (
-    <Pressable
-      accessibilityLabel={t('navigation.settings')}
-      accessibilityRole="button"
-      accessibilityState={{ disabled, selected }}
-      accessibilityValue={{ text: accessibilityValue }}
-      disabled={disabled}
-      onPress={onPress}
-      style={{ flex: 1 }}
-      testID="sidebar-settings"
-    >
-      {({ pressed }) => (
-        <View
-          className={cn(
-            'flex-row items-center gap-3 rounded-3xl bg-secondary px-2 py-1',
-            pressed && 'opacity-60',
-          )}
-          style={{ minHeight: appSidebar.dockHeight }}
+    <View className="flex-1">
+      <Surface interactive shape="pill">
+        <Pressable
+          accessibilityLabel={t('navigation.settings')}
+          accessibilityRole="button"
+          accessibilityState={{ disabled, selected }}
+          accessibilityValue={{ text: accessibilityValue }}
+          disabled={disabled}
+          onPress={onPress}
+          testID="sidebar-settings"
         >
-          {planName ? (
-            <SidebarAvatarRing active={active} ratio={quota?.ratio}>
-              {avatar}
-            </SidebarAvatarRing>
-          ) : (
-            avatar
-          )}
-          <View className="min-w-0 flex-1">
-            <Text className="font-semibold text-base text-sidebar-foreground" numberOfLines={1}>
-              {displayName}
-            </Text>
-            {planName ? (
-              <View testID="sidebar-plan-badge">
-                {rotating ? (
-                  <TextAnimation.Rotating
-                    className="w-full"
-                    direction={index === 0 ? 'down' : 'up'}
-                    numberOfLines={1}
-                    text={quotaText ?? planName}
-                    textClassName="text-xs text-muted-foreground tabular-nums"
-                  />
-                ) : (
-                  <View className="flex-row items-center gap-1">
-                    <Text className="shrink text-xs text-muted-foreground" numberOfLines={1}>
-                      {planName}
-                    </Text>
-                    {quota ? (
-                      <Text className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                        {quota.percent}
-                      </Text>
-                    ) : null}
+          {({ pressed }) => (
+            <View
+              className={cn('flex-row items-center gap-3 px-2 py-1', pressed && 'opacity-60')}
+              style={{ minHeight: appSidebar.dockHeight }}
+            >
+              {planName ? (
+                <SidebarAvatarRing active={active} ratio={quota?.ratio}>
+                  {avatar}
+                </SidebarAvatarRing>
+              ) : (
+                avatar
+              )}
+              <View className="min-w-0 flex-1">
+                <Text className="font-semibold text-base text-sidebar-foreground" numberOfLines={1}>
+                  {displayName}
+                </Text>
+                {planName ? (
+                  <View testID="sidebar-plan-badge">
+                    {rotating ? (
+                      <TextAnimation.Rotating
+                        className="w-full"
+                        direction={index === 0 ? 'down' : 'up'}
+                        numberOfLines={1}
+                        text={quotaText ?? planName}
+                        textClassName="text-xs text-muted-foreground tabular-nums"
+                      />
+                    ) : (
+                      <View className="flex-row items-center gap-1">
+                        <Text className="shrink text-xs text-muted-foreground" numberOfLines={1}>
+                          {planName}
+                        </Text>
+                        {quota ? (
+                          <Text className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                            {quota.percent}
+                          </Text>
+                        ) : null}
+                      </View>
+                    )}
                   </View>
-                )}
+                ) : null}
               </View>
-            ) : null}
-          </View>
-          <View
-            className={cn(
-              'size-10 shrink-0 items-center justify-center rounded-full',
-              selected ? 'bg-sidebar-foreground' : 'bg-secondary',
-            )}
-          >
-            <SettingsIcon
-              className={cn('size-5', selected ? 'text-background' : 'text-sidebar-foreground')}
-            />
-          </View>
-        </View>
-      )}
-    </Pressable>
+              <View
+                className={cn(
+                  'size-10 shrink-0 items-center justify-center rounded-full',
+                  selected && 'bg-sidebar-foreground',
+                )}
+              >
+                <SettingsIcon
+                  className={cn('size-5', selected ? 'text-background' : 'text-sidebar-foreground')}
+                />
+              </View>
+            </View>
+          )}
+        </Pressable>
+      </Surface>
+    </View>
   );
 }

@@ -95,6 +95,7 @@ describe('Pi React Native patches', () => {
       '@earendil-works/pi-durable',
       '@earendil-works/pi-durable/storage/sqlite',
       '@earendil-works/pi-durable/codemode',
+      '@earendil-works/pi-durable/images/fit',
       '@earendil-works/pi-durable/tool-search',
       '@earendil-works/pi-codemode/native',
       '@earendil-works/pi-ai/api/anthropic-messages',

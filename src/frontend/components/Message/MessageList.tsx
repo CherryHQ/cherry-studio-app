@@ -85,8 +85,11 @@ export function MessageList({
     onReturnToLatest,
   });
   const { height: keyboardHeight, progress: keyboardProgress } = useReanimatedKeyboardAnimation();
+  const freezeKeyboardLayout = useSharedValue(true);
   const keyboardLift = useDerivedValue(() =>
-    Math.max(0, -keyboardHeight.get() - keyboardProgress.get() * keyboardOffset),
+    keyboardOffset === undefined
+      ? 0
+      : Math.max(0, -keyboardHeight.get() - keyboardProgress.get() * keyboardOffset),
   );
   const scrollButtonBottom = useDerivedValue(
     () =>
@@ -300,6 +303,7 @@ export function MessageList({
                 estimatedItemSize={300}
                 estimatedHeaderSize={contentTopInset}
                 extraData={listExtraData}
+                freeze={keyboardOffset === undefined ? freezeKeyboardLayout : undefined}
                 getItemType={getMessageRowType}
                 keyExtractor={messageKeyExtractor}
                 keyboardDismissMode="none"

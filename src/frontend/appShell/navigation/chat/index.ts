@@ -22,5 +22,6 @@ export {
   type RemoteChatTarget,
   type RemoteChatRouteParams,
 } from './remoteChatRoute';
+export { OpenRemoteSessionSheetContext, type RemoteSessionSheetTarget } from './remoteSessionSheet';
 
 export { conversationHref, useConversationTarget } from './conversationRoute';

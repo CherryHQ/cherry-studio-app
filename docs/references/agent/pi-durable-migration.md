@@ -21,12 +21,9 @@ directly, replacing Mobile's 2.23.0 override. The Anthropic Vertex SDK stays at 
   the runtime commits its display metadata before calling `conversation.submit(draft, context)`.
   Turning a queued follow-up into a steer uses `conversation.admit(tx, draft)` in the commit that
   reorders the inbox, updates the display metadata and settles the superseded submission.
-- Code Mode gets its `mcp` namespace from a lane-local `Extension.namespace`. The configured
-  tool's MCP reference determines membership. Shared hooks still authorize both MCP and built-in
-  calls. Restoring a conversation selects the MCP extension before unfinished work resumes while
-  retaining the stored deferred-tool selection and loaded instructions. An already-started script on
-  the same runtime version uses its persisted discovery data on replay; an unsettled script started
-  on `1.5.0` (such as `v0.6.3`) settles as a sandbox-fingerprint error on resume under `1.6.1`
+- An already-started Code Mode script on the same runtime version uses its persisted discovery
+  data on replay. An unsettled script started on `1.5.0` (such as `v0.6.3`) settles as a
+  sandbox-fingerprint error on resume under `1.6.1`
   because upstream `pi-codemode@1.5.1` ([#11901](https://github.com/earendil-works/pi/issues/11901))
   updated `PRELUDE_SOURCE` (`NaN`/`Infinity` formatting), changing the native driver fingerprint
   (`30ea2e35` -> `befb5789`), matching upstream `pi-codemode`'s `PRELUDE_HASH` deterministic replay
@@ -41,8 +38,7 @@ directly, replacing Mobile's 2.23.0 override. The Anthropic Vertex SDK stays at 
   Parked nested tool rows display as pending. Pi's recorded tool duration covers the whole task
   through result settlement, including parks and restart time for records with a start timestamp.
   Cherry projects start time from the stored completion timestamp and duration. Older results
-  keep their recorded duration. Mobile has no direct consumers of `Wrap`, `onYield`, `SignalState`,
-  `HookTask` or the raw `Storage.commit()` result. Pi's storage adapters own the new tagged result.
+  keep their recorded duration. Pi's storage adapters own the tagged `Storage.commit()` result.
 - Chord moved the JSON, context and watch APIs out of its root entry. Mobile imports the owning
   subpaths, and Jest resolves their published ESM files, including Pi AI's new
   `session-resources` entry used by the Harness.
@@ -70,6 +66,78 @@ owns the file. Rebuild from Cherry history after the downgrade. Preserve unsettl
 recovery. The upgrade does not delete them automatically.
 
 See [Validation Status](#validation-status) for the gates run on this upgrade.
+
+### Integrated Pi Durable APIs
+
+1. **Durable approval gates.** The `beforeTool` hook checks current Cherry policy and the specific
+   call's arguments before Pi records unsafe execution intent. When approval is required, Cherry
+   records the pending task and Pi parks it on `ToolApprovalSignal`. Every MCP tool binds its
+   `executionSettingsKey` (derived from the server's secret-free connection key or endpoint) into
+   the offered blueprint and persisted approval signal, so changing an MCP endpoint or credentials
+   across recovery blocks the stale approval. On reopen, the hook fails closed whenever a parked
+   call is disabled or changes its `approval` policy (including relaxing `ask` to `auto`) or its
+   `executionSettingsKey` (when defined on the offered template), clearing stale pending entries;
+   when recovery hits a transient `RuntimeToolDiscoveryError`, parked approvals stay intact and the
+   tool retries with bounded backoff. An already persisted denial on `ToolApprovalSignal`, or a
+   denial or cancellation while waiting, clears any stale pending entry and settles the call
+   without executing the capability.
+   The same gate applies to nested Code Mode tool calls: the parent Code Mode task
+   waits until active non-sleeping siblings finish so `Promise.race` / `Promise.all` proceed without
+   blocking, parks on `ToolPark` (`wait`) once only sleeping children remain, and enforces the
+   script's original `timeout_ms` deadline across child sleep gates so expired approvals cannot run
+   post-deadline writes.
+2. **Durable `ask_user_question`.** The tool rechecks capability availability and policy before
+   parking, stores the question, and parks on `UserQuestionAnswerSignal` using `ToolPark`. The Host
+   restores the prompt from Pi's pending record and validates the answer against the stored
+   question before signaling the task. After wake, the same call returns the answer to the model.
+   Its idempotent `cancel()` clears the pending question when a user stops a parked call. An
+   ordinary shutdown preserves unanswered questions for the next launch.
+3. **Model-facing tool images.** The Host supplies `createNativeModelImageProcessor` to
+   `@earendil-works/pi-durable/images/fit`. Mobile inspects image headers before native decode,
+   omits unsupported, multi-image, or non-upright containers that native decoding would misread or
+   drop frames from (such as HEIC/AVIF/APNG and animated GIF/WebP), decodes supported still images
+   with Expo ImageManipulator, keeps supported upright images byte-for-byte within Pi's pixel and
+   base64 limits, and resizes or converts images that exceed the limits, carry non-upright JPEG
+   EXIF orientation, or need a model-supported format (single-frame GIFs and BMPs can be converted
+   within the model limits). Pi adds a diagnostic for resized, converted, or omitted images.
+   The fitting hook runs after Cherry's tool hooks and before Pi commits model-visible output.
+   Nested tool results and managed output files retain their original bytes.
+4. **Per-server MCP namespaces.** Turn preparation snapshots one `Extension.namespace` per
+   enabled plugin connection or bound remote server. The executable catalog's server IDs decide
+   tool membership. Code Mode lists the short description even when discovery fails and the
+   namespace is empty. While `## Plugin Guides` keeps each bundled plugin's short always-included
+   overview per `builtInMcp`, `describeNamespace()` exposes the connection-specific `load_workflow`
+   workflow-ID instruction on demand without duplicating that overview. The existing workflow loader
+   and authorization hooks still govern tool use.
+   Recovery reinstalls extensions from the stored snapshot before work resumes and retains loaded
+   tools and instructions. Older snapshots without per-server metadata keep the shared
+   `cherry.mcp` extension.
+5. **Conversation compaction policy.** `configure({ compaction })` persists the override in
+   `pi.agent`, where Pi applies it during automatic compaction decisions and inherits it at
+   forks. Image-generation working copies force `enabled: false` because their scheduler does
+   not send language-model history. An explicit conversation disable takes precedence over the
+   harness model override. Language conversations use the model policy by default.
+6. **Transactional submission reads.** `Tx.submission(id)` resolves the queued successors and
+   the latest placed input inside the same Pi commit that withdraws a queued input or promotes
+   it to a steer. Pi's transaction reads and writes the parent chain with the inbox and
+   submission updates, so a concurrent boundary or promotion cannot make the Host repair the
+   chain from a stale UI snapshot.
+
+### Deferred Pi Durable APIs
+
+- **`SubmissionDraft.notify` and `executeTool(..., { wait: false })`.** A submission can notify a
+  waiting task in its settlement commit, and a nonblocking tool call returns a child task
+  handle the parent can park on. These are foundations for subagents. Mobile needs a product
+  contract for child ownership, cancellation, transcript and usage attribution, and permission
+  inheritance before admitting independently scheduled child work. Code Mode keeps its
+  existing nested-call lifecycle.
+- **`afterTools` and `onYield` `HookTask`.** These hooks can schedule work at tool-round or
+  generation boundaries. Mobile already projects Pi's durable tool and turn results to Cherry.
+  A boundary task would need a defined user-visible purpose and ownership for failure, replay,
+  and cancellation when a turn yields, stops, or finishes.
+- **`SubmissionDraft.onAbort: "keep"`.** Pi can retain an input queued by a sender that cannot
+  withdraw it, such as another agent. Mobile's queue holds user follow-ups. Conversation Stop
+  withdraws that queue so a later message cannot revive stopped inputs.
 
 ## Pi 1.5.0 Upgrade
 
@@ -361,8 +429,9 @@ context to include background compaction that completed after the answer. There 
 replay: the Pi working copy itself keeps signed content between launches, and Cherry keeps only the
 transcript. The pre-Pi MMKV replay cache is cleared once when the Host dependencies become ready.
 
-Mobile starts background compaction at 80% of the default input budget, following ordinary Desktop
-chat. The budget takes the lower of the model's independent input limit and its context window after
+For language conversations with automatic compaction enabled, Mobile starts background compaction
+at 80% of the default input budget, following ordinary Desktop chat. The budget takes the lower
+of the model's independent input limit and its context window after
 the default reply reservation and safety margin. Pi runs blocking compaction above that budget
 when it finds older context to summarize.
 The compaction hook uses AI Core's bounded summarizer with the conversation's Pi model and
@@ -700,7 +769,22 @@ Three platform hunks were retired after checking the pristine 1.4.0 packages:
 
 ## Validation Status
 
-Local validation on the final tree passed `pnpm typecheck`, `pnpm lint` (0 warnings, 0 errors across
+Following the final runtime and test simplifications, `pnpm typecheck`, `pnpm lint` (0 warnings,
+0 errors across `oxlint`, `expo lint`, and workspace `eslint`), `pnpm format:check` (4,076 files),
+`pnpm docs:check-links` (355 Markdown files), and the targeted Jest run across
+`src/backend/ai/agent/runtime/pi`, `DurableAgentHost.test.ts`, and `McpRuntimeService.test.ts`
+passed **45 / 45 suites (1,641 / 1,641 tests)**. Immediately prior to that final 9-line
+denial-precedence adjustment in `piDurableTools.ts` and test cleanup in those 3 suites,
+`pnpm test:packages` (`@cherrystudio/ai-runtime`) passed **63 / 63 files (589 / 589 tests)** and
+the broad `--runInBand` Jest sweep across Agent, MCP, `services/file`, `data/profile`,
+`services/chat`, `features/agent`, `architectureBoundaries.test.ts`, and `metroResolution.test.ts`
+passed **133 / 136 suites (3,056 / 3,063 tests)** (the 3 failing suites were fixed and re-verified
+to passing in the 45-suite run above; the remaining 91 suites and `packages/` were not separately
+re-run after that final `piDurableTools.ts` tweak). Native image tests use mocked Expo resources;
+real-device verification of the native iOS/Android Expo `ImageManipulator` codecs remains
+`device-pending`.
+
+The preceding dependency upgrade passed `pnpm typecheck`, `pnpm lint` (0 warnings, 0 errors across
 `oxlint`, `expo lint`, and workspace `eslint`), `pnpm format:check`, `pnpm docs:check-links`, and
 46 Jest suites (1,527 tests: 43 suites under `src/backend/ai/agent/runtime/pi/__tests__/`, plus
 `src/backend/data/db/__tests__/AgentSqlDatabase.test.ts`,

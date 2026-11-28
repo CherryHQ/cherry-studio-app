@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import { ScrollView, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { DESKTOP_DISPATCH_MAX_TEXT_LENGTH } from '@/shared/data/types/desktopDispatchTool';
+
 import { type PendingToolApproval, ToolApprovalSheet } from '../ToolApprovalSheet';
 
 jest.mock('react-i18next', () => ({
@@ -37,14 +39,40 @@ jest.mock('@cherrystudio/ui/components', () => {
   }
   MockButton.Label = MockText;
 
-  function MockSection({ children, footer }: { children?: ReactNode; footer?: string }) {
+  function MockSection({
+    children,
+    footer,
+    title,
+  }: {
+    children?: ReactNode;
+    footer?: string;
+    title?: string;
+  }) {
     return (
       <MockView>
+        <MockText>{title}</MockText>
         <MockText>{footer}</MockText>
         {children}
       </MockView>
     );
   }
+  MockSection.Item = function MockItem({
+    children,
+    description,
+    label,
+  }: {
+    children?: ReactNode;
+    description?: ReactNode;
+    label?: ReactNode;
+  }) {
+    return (
+      <MockView>
+        <MockText>{label}</MockText>
+        <MockText>{description}</MockText>
+        {children}
+      </MockView>
+    );
+  };
   MockSection.SwitchItem = function MockSwitchItem(props: object) {
     return <MockView {...props} />;
   };
@@ -236,6 +264,74 @@ describe('ToolApprovalSheet', () => {
     expect(renderedTexts()).toContain(JSON.stringify(input));
     await press('skills.create.name');
     expect(onRespond).toHaveBeenCalledWith({ approvalId: 'approval-1', approved: true });
+  });
+
+  test('shows desktop dispatch details and discloses the full arguments on request', async () => {
+    const text = 'A long brief. '.repeat(3_000);
+    const input = {
+      connectionId: 'desktop-1',
+      connectionName: 'Studio Desktop',
+      agentId: 'agent-1',
+      agentName: 'Research',
+      workspace: { kind: 'registered', id: 'reports' },
+      workspaceName: 'Reports',
+      title: 'Summarize the report',
+      text,
+      textCharLength: text.length,
+      attachments: [
+        {
+          fileEntryId: '00000000-0000-7000-8000-000000000001',
+          name: 'report.pdf',
+          mediaType: 'application/pdf',
+        },
+      ],
+    };
+    const { onRespond } = render({
+      approvals: [makeApproval({ toolName: 'desktop_dispatch_task', input })],
+    });
+
+    expect(text.length).toBeGreaterThan(DESKTOP_DISPATCH_MAX_TEXT_LENGTH);
+    expect(renderer.root.findByType(BottomSheet).props.size).toBe('large');
+    expect(renderedTexts()).toEqual(
+      expect.arrayContaining([
+        input.connectionName,
+        input.agentName,
+        input.workspaceName,
+        input.title,
+        `desktopDispatch.approval.characterCount ${JSON.stringify({ count: text.length })}`,
+        'desktopDispatch.approval.spillHint {"extension":".md"}',
+        'report.pdf',
+      ]),
+    );
+    const preview = renderedTexts().find((value) => value.startsWith('A long brief.'));
+    expect(preview).toMatch(/…$/);
+    expect(preview!.length).toBeLessThan(text.length);
+    expect(renderedTexts()).not.toContain(JSON.stringify(input));
+
+    await press('desktopDispatch.approval.showDetails');
+    expect(renderedTexts()).toContain(JSON.stringify(input));
+    await press('desktopDispatch.approval.confirm');
+    expect(onRespond).toHaveBeenCalledWith({ approvalId: 'approval-1', approved: true });
+  });
+
+  test('localizes the default workspace in a desktop dispatch approval', () => {
+    const text = 'Summarize findings';
+    const input = {
+      connectionId: 'desktop-1',
+      connectionName: 'Studio Desktop',
+      agentId: 'agent-1',
+      agentName: 'Research',
+      workspace: { kind: 'system' },
+      workspaceName: 'System default',
+      title: 'Summarize the report',
+      text,
+      textCharLength: text.length,
+      attachments: [],
+    };
+    render({ approvals: [makeApproval({ toolName: 'desktop_dispatch_task', input })] });
+
+    expect(renderedTexts()).toContain('desktopDispatch.workspace.systemDefault');
+    expect(renderedTexts()).not.toContain(input.workspaceName);
   });
 
   test('explains skill installation and lets cancellation deny that exact call', async () => {

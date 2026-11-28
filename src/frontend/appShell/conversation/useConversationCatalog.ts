@@ -101,6 +101,21 @@ export function useConversationAgents(enabled = true) {
   const { catalog } = useConversationSource();
   return useCatalog(['agents'], catalog.listAgents, enabled);
 }
+
+export function useResolvedConversationAgent(agentId?: string, fallbackToFirst = true) {
+  const agents = useConversationAgents();
+  const { fetchNextPage, hasNextPage, isFetching, isError, items } = agents;
+  const agent = agentId
+    ? items.find((item) => item.id === agentId)
+    : fallbackToFirst
+      ? items[0]
+      : undefined;
+  useEffect(() => {
+    if (agentId && !agent && hasNextPage && !isFetching && !isError)
+      void fetchNextPage({ cancelRefetch: false });
+  }, [agentId, agent, fetchNextPage, hasNextPage, isFetching, isError]);
+  return { agent, agents };
+}
 export function useConversationSessions(
   agent?: AgentRef,
   enabled = true,

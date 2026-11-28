@@ -1,4 +1,4 @@
-export type { RemoteCommand, RemoteStartOperation } from './views';
+export type { RemoteCommand, RemoteDispatchReceipt, RemoteStartOperation } from './views';
 export type { RemoteAgentModule, RemoteAgentSource, RemoteHistoryIndexItem } from './module';
 export type { RemoteTaskQueries, RemoteTaskTrigger, RemoteTaskView } from './tasks';
 export type {
@@ -8,6 +8,7 @@ export type {
   RemoteWorkspaceSelection,
   RemoteStartInput,
   RemoteSourceState,
+  RemoteSessionLivePreview,
   RemoteSessionView,
   RemoteSessionReadPreview,
   RemoteResource,

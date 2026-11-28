@@ -14,6 +14,7 @@ import { JsonValueSchema } from '@/shared/contracts/agent';
 import type {
   RemoteAttachment,
   RemoteCommand,
+  RemoteDispatchReceipt,
   RemoteStartInput,
   RemoteStartOperation,
 } from '@/shared/contracts/remoteAgent';
@@ -51,9 +52,11 @@ const StartSchema = z
   .object({
     id: z.string(),
     draftId: z.string(),
+    dispatch: z.literal(true).optional(),
     agentId: z.string(),
     workspaceId: z.string().optional(),
     workspace: workspaceSelectionSchema.optional(),
+    title: z.string().max(4096).optional(),
     text: z.string(),
     attachments: z.array(AttachmentSchema).optional(),
     createId: z.string(),
@@ -68,13 +71,23 @@ const StartSchema = z
     errorMessage: z.string().max(512).optional(),
   })
   .refine((entry) => (entry.workspaceId !== undefined) !== (entry.workspace !== undefined));
+const DispatchReceiptSchema = z.object({
+  id: z.string(),
+  draftId: z.string(),
+  status: z.enum(['applied', 'rejected', 'interrupted']),
+  sessionId: z.string().optional(),
+  executionId: z.string().optional(),
+  error: z.string().optional(),
+});
 const JournalSchema = z.object({
   version: z.literal(3),
   records: z.array(RecordSchema),
   starts: z.array(StartSchema),
+  dispatches: z.record(z.string(), DispatchReceiptSchema).optional(),
 });
 type StartEntry = z.infer<typeof StartSchema>;
 type RecordEntry = z.infer<typeof RecordSchema>;
+type DispatchReceipts = Record<string, z.infer<typeof DispatchReceiptSchema>>;
 const isUncertain = (entry: RecordEntry) =>
   entry.action.status === 'confirming' || entry.action.status === 'accepted';
 
@@ -83,6 +96,7 @@ function projectAction(entry: RecordEntry): RemoteCommand {
   return {
     ...action,
     status: isUncertain(entry) ? 'pending' : (action.status as RemoteCommand['status']),
+    ...(receipt?.executionId ? { executionId: receipt.executionId } : {}),
     ...(receipt?.error ? { errorMessage: receipt.error.message } : {}),
     ...(action.kind === 'respond' && typeof params.interactionId === 'string'
       ? { interactionId: params.interactionId }
@@ -100,16 +114,38 @@ function handOff(start: StartEntry, records: RecordEntry[]) {
 }
 
 function projectStart(
-  { createId, sendId, ...view }: StartEntry,
+  { createId, sendId, dispatch: _dispatch, ...view }: StartEntry,
   records: RecordEntry[],
 ): RemoteStartOperation {
-  const record =
-    records.find((entry) => entry.action.id === sendId) ??
-    records.find((entry) => entry.action.id === createId);
+  const send = records.find((entry) => entry.action.id === sendId);
+  const record = send ?? records.find((entry) => entry.action.id === createId);
   const errorMessage =
     view.errorMessage ??
     (record?.receipt?.error?.reason === view.error ? record?.receipt?.error?.message : undefined);
-  return { ...view, ...(errorMessage ? { errorMessage } : {}) };
+  const executionId = send?.receipt?.executionId;
+  return {
+    ...view,
+    ...(executionId ? { executionId } : {}),
+    ...(errorMessage ? { errorMessage } : {}),
+  };
+}
+
+function projectDispatch({
+  id,
+  draftId,
+  status,
+  sessionId,
+  executionId,
+  error,
+}: RemoteStartOperation) {
+  return {
+    id,
+    draftId,
+    status,
+    ...(sessionId !== undefined ? { sessionId } : {}),
+    ...(executionId !== undefined ? { executionId } : {}),
+    ...(error !== undefined ? { error } : {}),
+  };
 }
 
 /** The journal is unreleased state; a record this build cannot read is evidence of nothing. */
@@ -133,9 +169,11 @@ export class RemoteAgentActions {
   private records: RecordEntry[];
   private starts: StartEntry[];
   private startSnapshot: readonly RemoteStartOperation[];
+  private dispatches: DispatchReceipts;
+  private pendingDispatches = new Map<string, RemoteDispatchReceipt>();
   private readonly starting = new Map<string, Promise<RemoteStartOperation>>();
   private snapshot: readonly RemoteCommand[];
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Set<(settledDispatch?: RemoteDispatchReceipt) => void>();
   private readonly running = new Map<string, Promise<void>>();
   constructor(
     private readonly binding: string,
@@ -151,14 +189,21 @@ export class RemoteAgentActions {
   ) {
     const parsed = readJournal(journal, binding);
     this.records = parsed?.records ?? [];
+    this.dispatches = parsed?.dispatches ?? {};
     this.starts = [];
     // After a restart no route is left to hand a created Session to.
-    for (const start of parsed?.starts ?? [])
-      if (start.sessionId && start.status !== 'pending')
+    for (const start of parsed?.starts ?? []) {
+      // Titled starts in the pre-receipt journal were desktop tool handoffs.
+      if (start.dispatch || start.title) this.starts.push({ ...start, dispatch: true });
+      else if (start.sessionId && start.status !== 'pending')
         this.records = handOff(start, this.records);
       else this.starts.push(start);
+    }
     this.startSnapshot = this.starts.map((entry) => projectStart(entry, this.records));
     this.snapshot = this.records.map(projectAction);
+    this.indexPendingDispatches();
+    for (const start of this.starts)
+      if (start.dispatch && start.status !== 'pending') this.updateStart(start);
   }
   stop() {
     this.stopped = true;
@@ -168,6 +213,19 @@ export class RemoteAgentActions {
   }
   get = () => this.snapshot;
   getStarts = () => this.startSnapshot;
+  getDispatch = (draftId: string, operationId?: string): RemoteDispatchReceipt | undefined => {
+    const receipt =
+      this.pendingDispatches.get(draftId) ??
+      (Object.hasOwn(this.dispatches, draftId) ? this.dispatches[draftId] : undefined);
+    return receipt && (!operationId || receipt.id === operationId) ? receipt : undefined;
+  };
+  private indexPendingDispatches() {
+    this.pendingDispatches = new Map(
+      this.starts.flatMap((start) =>
+        start.dispatch ? [[start.draftId, projectDispatch(start)]] : [],
+      ),
+    );
+  }
   admittedAttachmentDrafts(): ReadonlySet<string> {
     return new Set([
       ...this.starts.flatMap((entry) =>
@@ -184,20 +242,27 @@ export class RemoteAgentActions {
       }),
     ]);
   }
-  subscribe = (listener: () => void) => {
+  subscribe = (listener: (settledDispatch?: RemoteDispatchReceipt) => void) => {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   };
-  private commit(records: RecordEntry[], starts = this.starts) {
+  private commit(
+    records: RecordEntry[],
+    starts = this.starts,
+    dispatches = this.dispatches,
+    settledDispatch?: RemoteDispatchReceipt,
+  ) {
     if (this.stopped) return;
-    if (records.length || starts.length)
-      this.journal.write(this.binding, JSON.stringify({ version: 3, records, starts }));
+    if (records.length || starts.length || Object.keys(dispatches).length)
+      this.journal.write(this.binding, JSON.stringify({ version: 3, records, starts, dispatches }));
     else this.journal.remove(this.binding);
     this.records = records;
     this.starts = starts;
+    this.dispatches = dispatches;
     this.startSnapshot = starts.map((entry) => projectStart(entry, records));
+    this.indexPendingDispatches();
     this.snapshot = records.map(projectAction);
-    for (const listener of this.listeners) listener();
+    for (const listener of this.listeners) listener(settledDispatch);
   }
   async create(
     kind: RemoteCommand['kind'],
@@ -289,16 +354,19 @@ export class RemoteAgentActions {
   cancelUpload(id: string): SavedUpload[] | undefined {
     const pending = this.pendingUploads().find((entry) => entry.id === id);
     if (!pending) return undefined;
-    this.commit(
-      this.records.map((entry) =>
-        entry.action.id === id
-          ? { ...entry, action: { ...entry.action, status: 'rejected', error: 'UPLOAD_CANCELLED' } }
-          : entry,
-      ),
-      this.starts.map((entry) =>
-        entry.id === id ? { ...entry, status: 'rejected', error: 'UPLOAD_CANCELLED' } : entry,
-      ),
-    );
+    const start = this.starts.find((entry) => entry.id === id);
+    if (start) this.updateStart({ ...start, status: 'rejected', error: 'UPLOAD_CANCELLED' });
+    else
+      this.commit(
+        this.records.map((entry) =>
+          entry.action.id === id
+            ? {
+                ...entry,
+                action: { ...entry.action, status: 'rejected', error: 'UPLOAD_CANCELLED' },
+              }
+            : entry,
+        ),
+      );
     this.changed();
     return pending.uploads;
   }
@@ -341,10 +409,15 @@ export class RemoteAgentActions {
     },
   ): Promise<RemoteStartOperation> {
     if (this.stopped) throw new RemoteAgentError('CLOSED');
+    if (input.dispatch && Object.hasOwn(this.dispatches, input.draftId))
+      return { ...input, ...this.dispatches[input.draftId]! };
     let entry = this.starts.find((item) => item.draftId === input.draftId);
+    if (entry && entry.dispatch !== input.dispatch)
+      throw new RemoteAgentError('IDEMPOTENCY_CONFLICT');
     // A draft keeps one start: submitting again replaces one that failed before creating a Session.
     if (
       entry &&
+      !entry.dispatch &&
       !entry.sessionId &&
       (entry.status === 'rejected' || entry.status === 'interrupted')
     ) {
@@ -353,12 +426,14 @@ export class RemoteAgentActions {
     }
     if (
       entry &&
+      !entry.dispatch &&
       (entry.agentId !== input.agentId ||
         entry.workspaceId !== input.workspaceId ||
         entry.workspace?.kind !== input.workspace?.kind ||
         (entry.workspace?.kind === 'registered' &&
           input.workspace?.kind === 'registered' &&
           entry.workspace.id !== input.workspace.id) ||
+        (entry.title ?? undefined) !== (input.title ?? undefined) ||
         entry.text !== input.text ||
         JSON.stringify(entry.attachments ?? []) !== JSON.stringify(input.attachments ?? []))
     )
@@ -409,6 +484,17 @@ export class RemoteAgentActions {
   }
   private updateStart(entry: StartEntry, records = this.records) {
     const view = projectStart(entry, records);
+    if (entry.dispatch && entry.status !== 'pending') {
+      const receipt = { ...projectDispatch(view), status: entry.status };
+      // Keep the outcome and forget both commands in one journal write.
+      this.commit(
+        records.filter(({ action }) => action.id !== entry.createId && action.id !== entry.sendId),
+        this.starts.filter(({ id }) => id !== entry.id),
+        { ...this.dispatches, [entry.draftId]: receipt },
+        receipt,
+      );
+      return view;
+    }
     this.commit(
       records,
       this.starts.map((item) => (item.id === entry.id ? entry : item)),
@@ -457,6 +543,7 @@ export class RemoteAgentActions {
       if (!entry.sessionId) {
         const created = await this.startCommand(entry.createId, 'create', 'agent.sessions.create', {
           agentId: entry.agentId,
+          ...(entry.title ? { title: entry.title } : {}),
           ...(entry.workspace?.kind === 'system'
             ? { workspace: entry.workspace }
             : { workspaceId: entry.workspace?.id ?? entry.workspaceId! }),
@@ -500,8 +587,10 @@ export class RemoteAgentActions {
       if (!this.stopped) return this.finishStart(entry, sent, true);
     } catch (error) {
       const current = this.starts.find((value) => value.id === entry.id);
-      if (!current || current.status !== 'pending')
-        return current ? projectStart(current, this.records) : settled;
+      if (!current || current.status !== 'pending') {
+        const archived = entry.dispatch ? this.getDispatch(entry.draftId, entry.id) : undefined;
+        return current ? projectStart(current, this.records) : { ...settled, ...archived };
+      }
       if (
         error instanceof RemoteAgentError &&
         !error.retryable &&
@@ -513,7 +602,9 @@ export class RemoteAgentActions {
         // The Session exists but its first send was never recorded; record it so the input stays
         // with that Session after the handoff.
         const unsent =
-          entry.sessionId && !this.records.some((record) => record.action.id === entry.sendId)
+          !entry.dispatch &&
+          entry.sessionId &&
+          !this.records.some((record) => record.action.id === entry.sendId)
             ? [
                 {
                   action: {

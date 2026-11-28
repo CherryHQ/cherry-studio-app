@@ -83,7 +83,8 @@ export type MessageListProps = {
   initialScrollTarget?: 'end' | { messageId: string };
   /** The loaded window ends before the current conversation's live edge. */
   hasNewerMessages?: boolean;
-  keyboardOffset: number;
+  /** Omit when the parent resizes the viewport to avoid the keyboard. */
+  keyboardOffset?: number;
   /** Use 'always' when an outer press target owns background dismissal. */
   keyboardShouldPersistTaps?: ScrollViewProps['keyboardShouldPersistTaps'];
   messages: readonly MessageListItem[];
