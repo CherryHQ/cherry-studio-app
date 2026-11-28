@@ -15,7 +15,10 @@ import {
 } from '@/backend/services/enterprise';
 import { createFetchBridge } from '@/backend/services/http';
 import { nativeCallbackUrl } from '@/backend/utils/oauth';
-import { discardAccountCallback } from '@/frontend/appShell/account/nativeIntent';
+import {
+  discardAccountCallback,
+  hasQueuedAccountCallback,
+} from '@/frontend/appShell/account/nativeIntent';
 import { AccountError, type AccountSessionContext } from '@/shared/contracts/account';
 import { getActiveProfile } from '@/shared/data/activeProfile';
 import { sha256HexOfText } from '@/shared/utils/sha256';
@@ -146,6 +149,7 @@ function createAccount(): AccountRuntime {
       const result = await WebBrowser.openAuthSessionAsync(url, callbackUrl);
       return result.type === 'success' ? result.url : null;
     },
+    isCallbackQueued: hasQueuedAccountCallback,
     retireCallbackUrl: retireNativeUrl,
     reload: () =>
       reloadAfterNativeUrlRetirements(discardAccountCallback, () =>

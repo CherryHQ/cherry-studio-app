@@ -58,8 +58,10 @@ export function takeAccountCallbackPresentation(id: string | undefined): boolean
   return true;
 }
 
-export function hasQueuedAccountCallback(): boolean {
-  return Boolean(staged && staged.result === undefined);
+export function hasQueuedAccountCallback(url?: string): boolean {
+  return Boolean(
+    staged && staged.result === undefined && (url === undefined || staged.urls.includes(url)),
+  );
 }
 
 function keepSuccessfulAccountResult(

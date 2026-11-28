@@ -295,6 +295,22 @@ describe('AccountRuntime', () => {
     ]);
   });
 
+  it('leaves a browser rejection to its queued callback page before that page mounts', async () => {
+    const { options } = setup(signedIn('cloud'));
+    const url = 'cb://?error=access_denied';
+    const error = new AccountError('rejected');
+    const runtime = new AccountRuntime({
+      ...options,
+      isCallbackQueued: (queued) => queued === url,
+    });
+    options.openBrowser.mockResolvedValueOnce(url);
+    options.portal.completeSignIn.mockRejectedValueOnce(error);
+
+    await expect(runtime.signIn()).resolves.toBe(false);
+    await expect(runtime.receiveRedirect(url)).rejects.toBe(error);
+    expect(options.portal.completeSignIn).toHaveBeenCalledTimes(1);
+  });
+
   it('registers a routed URL for retirement while the SDK is persisting a live registration', async () => {
     const { options } = setup(signedIn('cloud'));
     const retireCallbackUrl = jest.fn(async (_url: string) => {});

@@ -5,7 +5,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { redirectSystemPath as redirectUuRemoteSystemPath } from '@/frontend/appShell/uuRemote/nativeIntent';
 import type { PreferenceSchema } from '@/shared/data/preference';
 
-import { routeAccountCallback } from '../nativeIntent';
+import { hasQueuedAccountCallback, routeAccountCallback } from '../nativeIntent';
 import { useAccountCallback } from '../useAccountCallback';
 
 const accountUrl = 'cherrystudio://auth/callback?code=one-use';
@@ -81,7 +81,10 @@ it('returns to the saved caller after a rerender, exchanging the staged account 
       finish = resolve;
     }),
   );
+  expect(hasQueuedAccountCallback(accountUrl)).toBe(true);
+  expect(hasQueuedAccountCallback('cherrystudio://auth/callback?code=other')).toBe(false);
   render();
+  expect(hasQueuedAccountCallback(accountUrl)).toBe(false);
   expect(mockRetireNativeUrl).not.toHaveBeenCalled();
   render();
   await act(async () => finish(true));

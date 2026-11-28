@@ -78,6 +78,7 @@ export interface AccountRuntimeOptions {
     delete(profileId: string): Promise<void>;
   };
   openBrowser(url: string, redirectUri: string): Promise<string | null>;
+  isCallbackQueued?(url: string): boolean;
   retireCallbackUrl?(url: string): Promise<void>;
   /** Restarts JavaScript so the selected profile's stores open from scratch. */
   reload(): Promise<void>;
@@ -208,10 +209,13 @@ export class AccountRuntime implements AccountModule {
       return result ? this.finishRedirect(attempt, result) : null;
     });
     attempt.browser = browser;
+    // Native routing can own the same result before the callback page mounts and claims it.
+    const routeOwnsResult = () =>
+      attempt.routed || (attempt.callback && this.options.isCallbackQueued?.(attempt.callback.url));
     try {
-      return (await browser) === true && !attempt.routed;
+      return (await browser) === true && !routeOwnsResult();
     } catch (error) {
-      if (attempt.routed) return false;
+      if (routeOwnsResult()) return false;
       throw error;
     } finally {
       delete attempt.registration;
