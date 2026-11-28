@@ -2,7 +2,12 @@ import * as z from 'zod';
 
 import type { PluginGuideSnapshot } from '@/backend/services/builtInMcp';
 
-import type { RuntimeTool, RuntimeToolResult } from '../runtime';
+import {
+  RuntimeToolDiscoveryError,
+  type RuntimeJsonValue,
+  type RuntimeTool,
+  type RuntimeToolResult,
+} from '../runtime';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
 
 export const LOAD_WORKFLOW_TOOL_NAME = 'load_workflow';
@@ -54,6 +59,7 @@ export function requireLoadedWorkflows(
           ...tool,
           requiredInstructions: {
             key: workflow.instructions.key,
+            text: workflow.instructions.text,
             refusal: `Call ${LOAD_WORKFLOW_TOOL_NAME} with workflow_id "${workflow.id}" and read the supplied instructions before using this connection's tools.`,
           },
         }
@@ -62,8 +68,20 @@ export function requireLoadedWorkflows(
 }
 
 /** Reuse trusted tool instruction sections; the model result contains a receipt, not a second body. */
-export function createLoadWorkflowTool(workflows: readonly PluginWorkflow[]): RuntimeTool {
+export function createLoadWorkflowTool(
+  workflows: readonly PluginWorkflow[],
+  unavailableWorkflowIds?: ReadonlySet<string>,
+): RuntimeTool {
   const catalog = new Map(workflows.map((workflow) => [workflow.id, workflow]));
+  const missingWorkflowIds = unavailableWorkflowIds
+    ? new Set([...unavailableWorkflowIds].filter((id) => !catalog.has(id)))
+    : undefined;
+  const assertWorkflowAvailable = (input: RuntimeJsonValue) => {
+    const parsed = inputSchema.safeParse(input);
+    if (parsed.success && missingWorkflowIds?.has(parsed.data.workflow_id)) {
+      throw new RuntimeToolDiscoveryError();
+    }
+  };
   return {
     ref: { source: 'builtin', capabilityId: LOAD_WORKFLOW_TOOL_NAME },
     providerName: LOAD_WORKFLOW_TOOL_NAME,
@@ -72,8 +90,10 @@ export function createLoadWorkflowTool(workflows: readonly PluginWorkflow[]): Ru
       'Load a plugin connection guide from the current Plugin Guides catalog before using its tools. Complete instructions enter system context and stay there for later turns; the reply is only a receipt. Finish this tool round and read those instructions before planning dependent calls; do not combine loading and plugin actions in one script or parallel round. Loading grants no tools, permissions or approval.',
     inputSchema: toRuntimeInputSchema(inputSchema),
     approval: 'auto',
+    ...(missingWorkflowIds?.size ? { assertInputAvailable: assertWorkflowAvailable } : {}),
     async execute({ input, signal }): Promise<RuntimeToolResult> {
       signal.throwIfAborted();
+      assertWorkflowAvailable(input);
       const { workflow_id: id } = inputSchema.parse(input);
       const workflow = catalog.get(id);
       if (!workflow) {

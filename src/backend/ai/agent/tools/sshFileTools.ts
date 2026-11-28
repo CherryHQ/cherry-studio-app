@@ -86,7 +86,12 @@ export function createSshFileTools(
         const parsed = schema.safeParse(input);
         return !parsed.success || !grantedSshReadPath(target, operation, parsed.data.path);
       },
-      executionSettingsKey: fileGrant?.id,
+      executionSettingsKey: JSON.stringify([
+        profile.id,
+        profile.revision,
+        target.selectionId,
+        fileGrant?.id ?? null,
+      ]),
       autoApprovalEligible: false,
       effect: operation === 'list' || operation === 'read' ? 'read' : 'write',
       failureGroup: `ssh:${profile.id}`,

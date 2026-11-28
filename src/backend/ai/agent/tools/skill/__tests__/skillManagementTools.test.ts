@@ -106,10 +106,23 @@ describe('conversation Skill installation', () => {
 
   it('installs for the current Agent and activates the accepted revision immediately', async () => {
     const f = fixture();
-    expect(await run(f.tools, 'install_skill', { url: candidate.source.url! })).toMatchObject({
+    const installTool = f.tools.find((item) => item.providerName === 'install_skill')!;
+    const installResult = await installTool.execute({
+      input: { url: candidate.source.url! },
+      signal,
+      toolCallId: 'install',
+      turnId: 'turn-1',
+    });
+    expect(installResult.value).toMatchObject({
+      status: 'installed',
+      contentHash: installed.contentHash,
+      availableThisTurn: true,
+    });
+    expect(installResult.modelValue).toMatchObject({
       status: 'installed',
       availableThisTurn: true,
     });
+    expect(installResult.modelValue).not.toHaveProperty('contentHash');
     expect(f.workflow.install).toHaveBeenCalledWith(
       { candidateId: 'issued', agentIds: ['agent'] },
       signal,
@@ -170,5 +183,40 @@ describe('conversation Skill installation', () => {
     expect(
       fixture(true).tools.find((tool) => tool.providerName === 'install_skill')!.approval,
     ).toBe('auto');
+  });
+
+  it('reports availableThisTurn: false without refreshing scope when include is omitted', async () => {
+    const resolve = jest.fn(async () => checked);
+    const tools = createSkillManagementTools({
+      workflow: {
+        search: jest.fn(async () => []),
+        resolve: jest.fn(async () => [candidate]),
+        install: jest.fn(async () => installed),
+      },
+      source: { resolve },
+      context: { agentId: 'agent' },
+      installIntent: true,
+    });
+    const installTool = tools.find((item) => item.providerName === 'install_skill')!;
+    const result = await installTool.execute({
+      input: { url: candidate.source.url! },
+      signal,
+      toolCallId: 'install',
+      turnId: 'turn-1',
+    });
+    expect(result.value).toMatchObject({
+      status: 'installed',
+      skill_id: installed.id,
+      contentHash: installed.contentHash,
+      availableThisTurn: false,
+      next: expect.stringContaining('not available for automatic loading in this turn'),
+    });
+    expect(result.modelValue).toMatchObject({
+      status: 'installed',
+      skill_id: installed.id,
+      availableThisTurn: false,
+    });
+    expect(result.modelValue).not.toHaveProperty('contentHash');
+    expect(resolve).not.toHaveBeenCalled();
   });
 });

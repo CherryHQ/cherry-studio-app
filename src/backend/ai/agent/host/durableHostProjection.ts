@@ -28,6 +28,10 @@ export const DurableTurnMetadataSchema = z.object({
   readOnlyTools: z.boolean().optional(),
   /** The question's parent in the message tree, so live rows can be placed on a branch. */
   parentMessageId: z.string().nullable().optional(),
+  /** Admitted Skill revisions pinned for the duration of this turn across suspends and restarts. */
+  pinnedSkillRevisions: z
+    .array(z.object({ skillId: z.string().min(1), contentHash: z.string().min(1) }))
+    .optional(),
 });
 
 /** The desktop-aligned message timing: wall clock, tool execution, and approval waits. */

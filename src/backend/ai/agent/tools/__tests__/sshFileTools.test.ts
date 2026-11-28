@@ -157,3 +157,43 @@ test('read access covers one directory listing and only checked files in that di
   jest.spyOn(Date, 'now').mockReturnValueOnce(granted.grant!.expiresAt);
   expect(read.requiresApproval!({ path: 'app.log' })).toBe(true);
 });
+
+test('binds file tool executionSettingsKey to the SSH profile, revision, selection, and file grant', () => {
+  const baseKey = createSshFileTools(ssh, 'session', target, access())[0]!.executionSettingsKey;
+  expect(baseKey).toBe(JSON.stringify(['connection', 'revision', 'selection', null]));
+  expect(
+    createSshFileTools(
+      ssh,
+      'session',
+      { ...target, profile: { ...profile, id: 'other' } },
+      access(),
+    )[0]!.executionSettingsKey,
+  ).not.toBe(baseKey);
+  expect(
+    createSshFileTools(
+      ssh,
+      'session',
+      { ...target, profile: { ...profile, revision: 'rev-2' } },
+      access(),
+    )[0]!.executionSettingsKey,
+  ).not.toBe(baseKey);
+  expect(
+    createSshFileTools(ssh, 'session', { ...target, selectionId: 'selection-2' }, access())[0]!
+      .executionSettingsKey,
+  ).not.toBe(baseKey);
+  expect(
+    createSshFileTools(
+      ssh,
+      'session',
+      {
+        ...target,
+        grant: {
+          scope: { directory: '/srv/project', files: ['app.log'] },
+          id: 'file-grant',
+          expiresAt: Date.now() + 60000,
+        },
+      },
+      access(),
+    )[0]!.executionSettingsKey,
+  ).toBe(JSON.stringify(['connection', 'revision', 'selection', 'file-grant']));
+});

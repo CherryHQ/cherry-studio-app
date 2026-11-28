@@ -1,11 +1,21 @@
 import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
-import { CompactionEntry, ResetEntry, UserEntry } from '@earendil-works/pi-durable';
+import {
+  CompactionEntry,
+  ResetEntry,
+  ToolResultEntry,
+  UserEntry,
+  type EntryDraft,
+} from '@earendil-works/pi-durable';
 
 import { formatMessageQuote } from '../../../host/turnRuntimeInput';
 import type { RuntimeExecutionRequest } from '../../types';
 import { PI_CONTEXT_CHECKPOINT_KIND } from '../piLegacyCheckpoint';
 import { emptyAssistantMessage } from '../piStreamEvents';
-import { createPiContextCheckpoint, createWorkingPiEntries } from '../piWorkingHistory';
+import {
+  createPiContextCheckpoint,
+  createWorkingPiEntries,
+  fitWorkingPiEntries,
+} from '../piWorkingHistory';
 
 const model: Model<Api> = {
   id: 'model',
@@ -145,4 +155,123 @@ test('checkpoint reconstruction leaves already-materialized quote envelopes byte
   const entries = createWorkingPiEntries(input, model);
   expect(entries[1]?.model?.[0]).toMatchObject({ content: text });
   expect(JSON.stringify(entries).match(/> Snapshot/g)).toHaveLength(1);
+});
+
+describe('fitWorkingPiEntries', () => {
+  const pngBase64 = 'ZmFrZS1wbmctYnl0ZXM=';
+  const rawEntry = (mimeType = 'image/png', data = pngBase64): EntryDraft => ({
+    kind: ToolResultEntry.kind,
+    model: [
+      {
+        role: 'toolResult',
+        toolCallId: 'c1',
+        toolName: 'mcp_chart',
+        content: [
+          { type: 'text', text: 'Chart' },
+          { type: 'image', data, mimeType },
+        ],
+        isError: false,
+        timestamp: 1,
+      },
+    ],
+    data: { diagnostics: [] },
+  });
+
+  test('resizes historical ToolResultEntry images using model limits and appends info diagnostics', async () => {
+    const prepare = jest.fn(async () => ({
+      data: 'AQID',
+      mimeType: 'image/jpeg',
+      convertedFrom: 'image/png',
+      resized: { from: { width: 1600, height: 1200 }, to: { width: 800, height: 600 } },
+    }));
+    const customModel: Model<Api> = {
+      ...model,
+      input: ['text', 'image'],
+      inputLimits: { images: { resize: { maxWidth: 800, maxHeight: 600, maxBytes: 1024 } } },
+    };
+    const userEntry: EntryDraft = {
+      kind: UserEntry.kind,
+      model: [{ role: 'user', content: 'Look', timestamp: 0 }],
+    };
+
+    const fitted = await fitWorkingPiEntries(
+      [userEntry, rawEntry()],
+      customModel,
+      { prepare },
+      new AbortController().signal,
+    );
+
+    expect(prepare).toHaveBeenCalledWith(expect.any(Uint8Array), 'image/png', {
+      maxWidth: 800,
+      maxHeight: 600,
+      maxBytes: 1024,
+    });
+    expect(fitted[0]).toBe(userEntry);
+    expect(fitted[1]).toEqual({
+      kind: ToolResultEntry.kind,
+      model: [
+        {
+          role: 'toolResult',
+          toolCallId: 'c1',
+          toolName: 'mcp_chart',
+          content: [
+            { type: 'text', text: 'Chart' },
+            { type: 'image', data: 'AQID', mimeType: 'image/jpeg' },
+            {
+              type: 'text',
+              text: '<harness>\n[info] Converted from image/png to image/jpeg. Resized from 1600x1200 to 800x600. Multiply coordinates by 2.00 to map them to the original.\n</harness>',
+            },
+          ],
+          isError: false,
+          timestamp: 1,
+        },
+      ],
+      data: {
+        diagnostics: [
+          {
+            severity: 'info',
+            code: 'image',
+            message:
+              'Converted from image/png to image/jpeg. Resized from 1600x1200 to 800x600. Multiply coordinates by 2.00 to map them to the original.',
+          },
+        ],
+      },
+    });
+  });
+
+  test('omits unpreparable historical images and leaves unchanged entries intact', async () => {
+    const omitted = await fitWorkingPiEntries([rawEntry('image/webp')], model, {
+      prepare: async () => undefined,
+    });
+    expect(omitted[0]).toMatchObject({
+      kind: ToolResultEntry.kind,
+      model: [
+        {
+          role: 'toolResult',
+          content: [
+            { type: 'text', text: 'Chart' },
+            {
+              type: 'text',
+              text: '<harness>\n[info] An image (image/webp) cannot be prepared for the model and was left out.\n</harness>',
+            },
+          ],
+        },
+      ],
+      data: {
+        diagnostics: [
+          {
+            severity: 'info',
+            code: 'image',
+            message: 'An image (image/webp) cannot be prepared for the model and was left out.',
+          },
+        ],
+      },
+    });
+
+    const entry = rawEntry('image/png', pngBase64);
+    const unchanged = await fitWorkingPiEntries([entry], model, {
+      prepare: async () => ({ data: pngBase64, mimeType: 'image/png' }),
+    });
+    expect(unchanged[0]).toBe(entry);
+  });
 });

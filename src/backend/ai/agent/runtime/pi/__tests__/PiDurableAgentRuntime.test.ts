@@ -1,3 +1,8 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { Api, AssistantMessage, Model, TranscriptContext } from '@earendil-works/pi-ai';
@@ -18,10 +23,20 @@ import {
   SystemEntry,
   UserEntry,
   type JsonObject,
+  type ConversationId,
+  type Storage,
+  type TaskId,
 } from '@earendil-works/pi-durable';
+import { SqliteStorage } from '@earendil-works/pi-durable/storage/sqlite';
 import { ZodError } from 'zod';
 
-import { AgentProtocolError } from '@/shared/contracts/agent';
+import {
+  AgentProtocolError,
+  AgentUserAnswersSchema,
+  validateUserAnswers,
+  type AgentUserAnswers,
+  type AgentUserQuestions,
+} from '@/shared/contracts/agent';
 import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
@@ -31,6 +46,7 @@ import {
 } from '../../../host/agentSystemPrompt';
 import type { SkillTurnEntry, SkillTurnScope } from '../../../host/skillScope';
 import { formatMessageQuote, toRuntimeHistory } from '../../../host/turnRuntimeInput';
+import { createAskUserQuestionTool } from '../../../tools/askUserQuestionTool';
 import { createSkillTools } from '../../../tools/skill/skillTools';
 import { createLoadWorkflowTool, getPluginWorkflows } from '../../../tools/workflowTool';
 import type {
@@ -38,7 +54,12 @@ import type {
   RuntimeDurableSubmission,
   RuntimeExecutionPorts,
   RuntimeLane,
+  RuntimeDurableTurn,
+  RuntimePendingApproval,
+  RuntimePendingQuestion,
   RuntimeSqlDatabase,
+  RuntimeSqlExecutor,
+  RuntimeSqlValue,
 } from '../../durableTypes';
 import { RuntimeCorruptLaneError, runtimeLane } from '../../durableTypes';
 import type { RuntimeTool } from '../../types';
@@ -47,6 +68,7 @@ import { PiDurableAgentRuntime } from '../PiDurableAgentRuntime';
 import { piSubmissionMetadata, piToolBlueprint } from '../piDurableProjection';
 import { PiDurableRuntime } from '../PiDurableRuntime';
 import type { PiRuntimeDependencies, PiStreamFn } from '../piModelTypes';
+import { PiPendingApprovalsDoc, PiPendingQuestionsDoc } from '../piPendingInteractions';
 import { emptyAssistantMessage, providerErrorEvent } from '../piStreamEvents';
 import { withPiStreamIdleTimeout } from '../piStreamIdleTimeout';
 import { PiToolBudget } from '../piToolBudget';
@@ -127,6 +149,10 @@ function fixture() {
       throw new Error('No tools.');
     }),
     requestApproval: jest.fn(async () => 'deny' as const),
+    validateQuestionAnswer: (question, answer) => {
+      const parsed = AgentUserAnswersSchema.parse(answer);
+      validateUserAnswers(question, parsed);
+    },
     admitArtifacts: jest.fn(async () => undefined),
     recordUsage: jest.fn(async () => undefined),
   };
@@ -214,7 +240,1322 @@ async function submitAndWait(
   }
 }
 
+function openSqlite(path: string): RuntimeSqlDatabase {
+  const raw = new DatabaseSync(path);
+  const executor: RuntimeSqlExecutor = {
+    async exec(sql) {
+      raw.exec(sql);
+    },
+    async run(sql, ...params) {
+      raw.prepare(sql).run(...params);
+    },
+    async runCounted(sql, ...params) {
+      return Number(raw.prepare(sql).run(...params).changes);
+    },
+    async get<Row extends object>(sql: string, ...params: RuntimeSqlValue[]) {
+      return raw.prepare(sql).get(...params) as Row | undefined;
+    },
+    async all<Row extends object>(sql: string, ...params: RuntimeSqlValue[]) {
+      return raw.prepare(sql).all(...params) as Row[];
+    },
+  };
+  return {
+    ...executor,
+    async transaction(callback) {
+      raw.exec('BEGIN IMMEDIATE');
+      try {
+        const result = await callback(executor);
+        raw.exec('COMMIT');
+        return result;
+      } catch (error) {
+        raw.exec('ROLLBACK');
+        throw error;
+      }
+    },
+    async close() {
+      raw.close();
+    },
+  };
+}
+
+describe('durable human interactions', () => {
+  let directory: string;
+  beforeEach(async () => {
+    directory = await mkdtemp(join(tmpdir(), 'cherry-pi-interactions-'));
+  });
+  afterEach(async () => {
+    await rm(directory, { recursive: true, force: true });
+  });
+
+  const question: AgentUserQuestions = {
+    questions: [
+      {
+        id: 'format',
+        question: 'Which format?',
+        selection: 'single',
+        options: [{ id: 'text', label: 'Plain text' }],
+      },
+    ],
+  };
+  const answer: AgentUserAnswers = {
+    answers: [{ questionId: 'format', selectedOptionIds: ['text'], text: '', skipped: false }],
+  };
+
+  async function start(tool: RuntimeTool, args: JsonObject, parallelQuestion = false) {
+    const state = fixture();
+    const resolveModel = state.dependencies.resolveModel;
+    state.ports.resolveTool = jest.fn(async () => tool);
+    state.dependencies.resolveModel = async (...values) => ({
+      ...(await resolveModel(...values)),
+      streamFn: (_model, context) => {
+        state.requests.push(context);
+        const first = state.requests.length === 1;
+        const reason = first ? 'toolUse' : 'stop';
+        const calls = (parallelQuestion ? ['interaction', 'second'] : ['interaction']).map(
+          (id) => ({ type: 'toolCall' as const, id, name: tool.providerName, arguments: args }),
+        );
+        const stream = new AssistantMessageEventStream();
+        stream.push({
+          type: 'done',
+          reason,
+          message: {
+            ...emptyAssistantMessage(wire),
+            stopReason: reason,
+            content: first ? calls : [{ type: 'text', text: 'Done.' }],
+          },
+        });
+        stream.end();
+        return stream;
+      },
+    });
+    let storage!: Storage;
+    const create = () =>
+      new PiDurableAgentRuntime(state.dependencies, async (database) => {
+        storage = await SqliteStorage.open(database);
+        return storage;
+      });
+    const initialize = (runtime: PiDurableAgentRuntime) =>
+      runtime.initialize(openSqlite(join(directory, 'pi.sqlite')), state.ports);
+    const runtime = create();
+    await initialize(runtime);
+    await runtime.ensureConversation({
+      ...seed,
+      configuration: { ...seed.configuration, tools: [tool] },
+    });
+    return {
+      ...state,
+      create,
+      initialize,
+      runtime,
+      getStorage: () => storage,
+    };
+  }
+
+  async function observe(runtime: PiDurableAgentRuntime) {
+    const approval = deferred<RuntimePendingApproval>();
+    const pendingQuestion = deferred<RuntimePendingQuestion>();
+    const terminal = deferred<RuntimeDurableTurn>();
+    const events: RuntimeConversationEvent[] = [];
+    const observation = await runtime.observe(lane, (event) => {
+      events.push(event);
+      if (event.type === 'approvals.updated' && event.approvals[0])
+        approval.resolve(event.approvals[0]);
+      if (event.type === 'question.updated' && event.question)
+        pendingQuestion.resolve(event.question);
+      if (event.type === 'turn.updated' && !['running', 'queued'].includes(event.turn.status))
+        terminal.resolve(event.turn);
+    });
+    return { ...observation, events, approval, pendingQuestion, terminal };
+  }
+
+  async function waitForIdle(runtime: PiDurableAgentRuntime) {
+    const idle = deferred<void>();
+    const work = await runtime.watchWork((active) => {
+      if (!active) idle.resolve();
+    });
+    try {
+      if (work.active) await idle.promise;
+    } finally {
+      await work.unsubscribe();
+    }
+    const stable = await runtime.watchWork(() => {});
+    await stable.unsubscribe();
+    expect(stable.active).toBe(false);
+  }
+
+  async function expectCleared(storage: Storage, conversationId: ConversationId, kind: string) {
+    const record = await storage.findDocument(
+      { scope: { kind: 'conversation', conversationId }, kind },
+      'current',
+      BACKGROUND_CONTEXT,
+    );
+    expect(record).toBeDefined();
+    expect((await storage.document(record!.id, 'current', BACKGROUND_CONTEXT))?.value).toEqual({
+      items: {},
+    });
+  }
+
+  test.each(['reopen and approve', 'deny', 'abort'] as const)(
+    'parks before intent, then can %s',
+    async (action) => {
+      const execute = jest.fn(async () => ({ value: { saved: true }, artifacts: [] }));
+      const state = await start(
+        {
+          ref: { source: 'builtin', capabilityId: 'write_file' },
+          providerName: 'write_file',
+          displayName: 'Write file',
+          description: 'Save a file.',
+          inputSchema: { type: 'object', properties: {} },
+          approval: 'ask',
+          approvalInput: () => ({ target: 'bound directory' }),
+          execute,
+        },
+        {},
+      );
+      let runtime = state.runtime;
+      let observed = await observe(runtime);
+      try {
+        await runtime.submit(lane, input('gate'));
+        const approval = await observed.approval.promise;
+        expect(approval).toMatchObject({
+          toolCallId: 'interaction',
+          turnId: 'turn-gate',
+          requestId: 'gate',
+          input: { target: 'bound directory' },
+        });
+        await waitForIdle(runtime);
+        expect(execute).not.toHaveBeenCalled();
+        expect(state.ports.requestApproval).not.toHaveBeenCalled();
+        const task = (await state
+          .getStorage()
+          .task(Number(approval.id.split(':')[1]) as TaskId, BACKGROUND_CONTEXT))!;
+        expect(task.state).toMatchObject({ status: 'sleeping', checkpoint: { phase: 'call' } });
+        const pending = await runtime.observe(lane, () => {});
+        await pending.unsubscribe();
+        expect(pending.snapshot.activeTurn?.parts).toContainEqual(
+          expect.objectContaining({ state: 'awaiting-approval', approvalId: approval.id }),
+        );
+
+        if (action === 'reopen and approve') {
+          await observed.unsubscribe();
+          await runtime.close();
+          runtime = state.create();
+          await state.initialize(runtime);
+          observed = await observe(runtime);
+          expect(observed.snapshot.pendingApprovals).toEqual([approval]);
+          expect(observed.snapshot.activeTurn?.status).toBe('running');
+          const gateRechecked = deferred<void>();
+          const resolveTool = state.ports.resolveTool;
+          state.ports.resolveTool = async (...args) => {
+            gateRechecked.resolve();
+            return resolveTool(...args);
+          };
+          runtime.resume();
+          // Pi reruns the gate after opening. Wait for that invocation before checking its new sleep.
+          await gateRechecked.promise;
+          await waitForIdle(runtime);
+          const restored = await state.getStorage().task(task.id, BACKGROUND_CONTEXT);
+          expect(restored?.restarts ?? 0).toBe(0);
+          expect(await runtime.respondApproval(lane, approval.id, 'approve')).toBe(true);
+        } else if (action === 'deny') {
+          expect(await runtime.respondApproval(lane, approval.id, 'deny')).toBe(true);
+        } else {
+          await runtime.abort(lane);
+        }
+
+        const turn = await observed.terminal.promise;
+        expect(turn.status).toBe(action === 'abort' ? 'cancelled' : 'completed');
+        expect(execute).toHaveBeenCalledTimes(action === 'reopen and approve' ? 1 : 0);
+        if (action === 'deny')
+          expect(turn.parts).toContainEqual(
+            expect.objectContaining({ type: 'tool', state: 'denied' }),
+          );
+        expect(observed.events.findLast((event) => event.type === 'approvals.updated')).toEqual({
+          type: 'approvals.updated',
+          approvals: [],
+        });
+        await expectCleared(
+          state.getStorage(),
+          task.conversationId,
+          PiPendingApprovalsDoc.definition.kind,
+        );
+        expect(await runtime.respondApproval(lane, approval.id, 'approve')).toBe(false);
+      } finally {
+        await observed.unsubscribe();
+        await runtime.close();
+      }
+    },
+  );
+
+  test.each(['reopen and answer', 'abort', 'reject a second live question'] as const)(
+    'parks a question, then can %s',
+    async (action) => {
+      const fallback = jest.fn(async () => answer);
+      const state = await start(
+        createAskUserQuestionTool(fallback),
+        question,
+        action === 'reject a second live question',
+      );
+      let runtime = state.runtime;
+      let observed = await observe(runtime);
+      try {
+        await runtime.submit(lane, input('question'));
+        const pending = await observed.pendingQuestion.promise;
+        expect(pending).toMatchObject({ requestId: 'question', turnId: 'turn-question', question });
+        await waitForIdle(runtime);
+        const {
+          items: [task],
+        } = await state
+          .getStorage()
+          .scanTasks({ kind: 'pi.tool', status: 'sleeping' }, 2, undefined, BACKGROUND_CONTEXT);
+        expect(task?.state).toMatchObject({
+          status: 'sleeping',
+          checkpoint: { phase: 'parked', checkpoint: { question } },
+        });
+
+        if (action === 'reopen and answer') {
+          await observed.unsubscribe();
+          await runtime.close();
+          runtime = state.create();
+          await state.initialize(runtime);
+          observed = await observe(runtime);
+          expect(observed.snapshot.pendingQuestion).toEqual(pending);
+          expect(observed.snapshot.activeTurn?.status).toBe('running');
+          runtime.resume();
+          await waitForIdle(runtime);
+          const restored = await state.getStorage().task(task!.id, BACKGROUND_CONTEXT);
+          expect(restored?.restarts ?? 0).toBe(0);
+          await expect(
+            runtime.respondQuestion(lane, pending.toolCallId, { answers: [] }),
+          ).rejects.toBeInstanceOf(ZodError);
+          await expect(
+            runtime.respondQuestion(lane, pending.toolCallId, {
+              answers: [{ ...answer.answers[0]!, selectedOptionIds: ['missing'] }],
+            }),
+          ).rejects.toThrow('Invalid answer for this question.');
+          expect((await state.getStorage().task(task!.id, BACKGROUND_CONTEXT))?.state.status).toBe(
+            'sleeping',
+          );
+        }
+        expect(
+          await runtime.respondQuestion(
+            lane,
+            pending.toolCallId,
+            answer,
+            `${pending.turnId}:stale`,
+          ),
+        ).toBe(false);
+        if (action === 'abort') await runtime.abort(lane);
+        else
+          expect(
+            await runtime.respondQuestion(lane, pending.toolCallId, answer, pending.turnId),
+          ).toBe(true);
+
+        const turn = await observed.terminal.promise;
+        expect(turn.status).toBe(action === 'abort' ? 'cancelled' : 'completed');
+        expect(fallback).not.toHaveBeenCalled();
+        if (action !== 'abort') {
+          const part = turn.parts.find(
+            (item) => item.type === 'tool' && item.toolCallId === pending.toolCallId,
+          );
+          expect(part?.type === 'tool' && part.output).toEqual({
+            value: {
+              ...answer,
+              selectedOptions: [{ questionId: 'format', options: question.questions[0]!.options }],
+            },
+            artifacts: [],
+          });
+        }
+        if (action === 'reject a second live question') {
+          expect(turn.parts).toContainEqual(
+            expect.objectContaining({
+              type: 'tool',
+              state: 'error',
+              error: expect.objectContaining({
+                message: 'Wait for the current question before asking another.',
+              }),
+            }),
+          );
+        }
+        expect(observed.events.findLast((event) => event.type === 'question.updated')).toEqual({
+          type: 'question.updated',
+          question: null,
+        });
+        await expectCleared(
+          state.getStorage(),
+          task!.conversationId,
+          PiPendingQuestionsDoc.definition.kind,
+        );
+        expect(await runtime.respondQuestion(lane, pending.toolCallId, answer)).toBe(false);
+      } finally {
+        await observed.unsubscribe();
+        await runtime.close();
+      }
+    },
+  );
+
+  test('clears pending approval atomically with signal delivery across crash before wake runs', async () => {
+    const execute = jest.fn(async () => ({ value: { saved: true }, artifacts: [] }));
+    const state = await start(
+      {
+        ref: { source: 'builtin', capabilityId: 'write_file' },
+        providerName: 'write_file',
+        displayName: 'Write file',
+        description: 'Save a file.',
+        inputSchema: { type: 'object', properties: {} },
+        approval: 'ask',
+        execute,
+      },
+      {},
+    );
+    let runtime = state.runtime;
+    let observed = await observe(runtime);
+    try {
+      await runtime.submit(lane, input('atomic-gate'));
+      const approval = await observed.approval.promise;
+      await waitForIdle(runtime);
+      const taskId = Number(approval.id.split(':')[1]) as TaskId;
+      await observed.unsubscribe();
+      await runtime.close();
+
+      // Reopen with scheduling paused so signal delivery persists before any wake invocation runs.
+      runtime = state.create();
+      await state.initialize(runtime);
+      observed = await observe(runtime);
+      expect(observed.snapshot.pendingApprovals).toEqual([approval]);
+      expect(await runtime.respondApproval(lane, approval.id, 'approve')).toBe(true);
+      await observed.unsubscribe();
+      await runtime.close();
+      expect(execute).not.toHaveBeenCalled();
+
+      runtime = state.create();
+      await state.initialize(runtime);
+      observed = await observe(runtime);
+      expect(observed.snapshot.pendingApprovals).toEqual([]);
+      expect((await state.getStorage().task(taskId, BACKGROUND_CONTEXT))?.state.status).toBe(
+        'sleeping',
+      );
+      expect(await runtime.respondApproval(lane, approval.id, 'deny')).toBe(false);
+      runtime.resume();
+      const turn = await observed.terminal.promise;
+      expect(turn.status).toBe('completed');
+      expect(execute).toHaveBeenCalledTimes(1);
+    } finally {
+      await observed.unsubscribe();
+      await runtime.close();
+    }
+  });
+
+  test('honors a persisted denial across reopen even when the resolved tool policy becomes auto', async () => {
+    let resolvedApproval: 'ask' | 'auto' = 'ask';
+    const execute = jest.fn(async () => ({ value: { saved: true }, artifacts: [] }));
+    const tool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'write_file' },
+      providerName: 'write_file',
+      displayName: 'Write file',
+      description: 'Save a file.',
+      inputSchema: { type: 'object', properties: {} },
+      approval: 'ask',
+      execute,
+    };
+    const state = await start(tool, {});
+    state.ports.resolveTool = jest.fn(async () => ({ ...tool, approval: resolvedApproval }));
+    let runtime = state.runtime;
+    let observed = await observe(runtime);
+    try {
+      await runtime.submit(lane, input('deny-before-auto'));
+      const approval = await observed.approval.promise;
+      await waitForIdle(runtime);
+      const taskId = Number(approval.id.split(':')[1]) as TaskId;
+      const conversationId = (await state.getStorage().task(taskId, BACKGROUND_CONTEXT))!
+        .conversationId;
+      await observed.unsubscribe();
+      await runtime.close();
+
+      // Reopen paused and persist the denial before wake runs.
+      runtime = state.create();
+      await state.initialize(runtime);
+      observed = await observe(runtime);
+      expect(await runtime.respondApproval(lane, approval.id, 'deny')).toBe(true);
+      await observed.unsubscribe();
+      await runtime.close();
+
+      // Policy switches to auto before reopen; the already-persisted denial must still block execution.
+      resolvedApproval = 'auto';
+      runtime = state.create();
+      await state.initialize(runtime);
+      observed = await observe(runtime);
+      expect(observed.snapshot.pendingApprovals).toEqual([]);
+      runtime.resume();
+      const turn = await observed.terminal.promise;
+      expect(turn.status).toBe('completed');
+      expect(execute).not.toHaveBeenCalled();
+      expect(turn.parts).toContainEqual(
+        expect.objectContaining({
+          type: 'tool',
+          toolCallId: approval.toolCallId,
+          state: 'denied',
+          output: expect.objectContaining({
+            value: {
+              status: 'denied',
+              reason: 'Tool call blocked: The user denied this tool call.',
+            },
+          }),
+        }),
+      );
+      await expectCleared(
+        state.getStorage(),
+        conversationId,
+        PiPendingApprovalsDoc.definition.kind,
+      );
+    } finally {
+      await observed.unsubscribe();
+      await runtime.close();
+    }
+  });
+
+  test('honors a concurrent denial delivered before auto-approve clears the pending approval', async () => {
+    let resolvedApproval: 'ask' | 'auto' = 'ask';
+    const execute = jest.fn(async () => ({ value: { saved: true }, artifacts: [] }));
+    const tool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'write_file' },
+      providerName: 'write_file',
+      displayName: 'Write file',
+      description: 'Save a file.',
+      inputSchema: { type: 'object', properties: {} },
+      approval: 'ask',
+      execute,
+    };
+    const state = await start(tool, {});
+    state.ports.resolveTool = jest.fn(async () => ({ ...tool, approval: resolvedApproval }));
+    const opened = jest.spyOn(PiDurableRuntime, 'open');
+    let runtime = state.runtime;
+    let observed = await observe(runtime);
+    try {
+      await runtime.submit(lane, input('concurrent-deny-before-auto'));
+      const approval = await observed.approval.promise;
+      await waitForIdle(runtime);
+      const taskId = Number(approval.id.split(':')[1]) as TaskId;
+      const conversationId = (await state.getStorage().task(taskId, BACKGROUND_CONTEXT))!
+        .conversationId;
+      await observed.unsubscribe();
+      await runtime.close();
+
+      resolvedApproval = 'auto';
+      runtime = state.create();
+      await state.initialize(runtime);
+      const engine = await opened.mock.results.at(-1)!.value;
+      const originalCommit = engine.commit.bind(engine);
+      let raced = false;
+      jest.spyOn(engine, 'commit').mockImplementation(async (change, context) => {
+        if (!raced) {
+          raced = true;
+          expect(await runtime.respondApproval(lane, approval.id, 'deny')).toBe(true);
+        }
+        return originalCommit(change, context);
+      });
+      observed = await observe(runtime);
+      runtime.resume();
+      const turn = await observed.terminal.promise;
+      expect(raced).toBe(true);
+      expect(turn.status).toBe('completed');
+      expect(execute).not.toHaveBeenCalled();
+      expect(turn.parts).toContainEqual(
+        expect.objectContaining({
+          type: 'tool',
+          toolCallId: approval.toolCallId,
+          state: 'denied',
+          output: expect.objectContaining({
+            value: {
+              status: 'denied',
+              reason: 'Tool call blocked: The user denied this tool call.',
+            },
+          }),
+        }),
+      );
+      await expectCleared(
+        state.getStorage(),
+        conversationId,
+        PiPendingApprovalsDoc.definition.kind,
+      );
+    } finally {
+      opened.mockRestore();
+      await observed.unsubscribe();
+      await runtime.close();
+    }
+  });
+
+  test.each(['approve', 'deny'] as const)(
+    'does not re-surface a pending approval when %s commits concurrently with recovery beforeTool',
+    async (decision) => {
+      const execute = jest.fn(async () => ({ value: { saved: true }, artifacts: [] }));
+      const tool: RuntimeTool = {
+        ref: { source: 'builtin', capabilityId: 'write_file' },
+        providerName: 'write_file',
+        displayName: 'Write file',
+        description: 'Save a file.',
+        inputSchema: { type: 'object', properties: {} },
+        approval: 'ask',
+        execute,
+      };
+      const state = await start(tool, {});
+      const opened = jest.spyOn(PiDurableRuntime, 'open');
+      let runtime = state.runtime;
+      let observed = await observe(runtime);
+      try {
+        await runtime.submit(lane, input(`concurrent-${decision}-recovery`));
+        const approval = await observed.approval.promise;
+        await waitForIdle(runtime);
+        const taskId = Number(approval.id.split(':')[1]) as TaskId;
+        const conversationId = (await state.getStorage().task(taskId, BACKGROUND_CONTEXT))!
+          .conversationId;
+        await observed.unsubscribe();
+        await runtime.close();
+
+        runtime = state.create();
+        await state.initialize(runtime);
+        const engine = await opened.mock.results.at(-1)!.value;
+        const originalCommit = engine.commit.bind(engine);
+        let raced = false;
+        let pendingAfterRaceCommit: unknown;
+        jest.spyOn(engine, 'commit').mockImplementation(async (change, context) => {
+          if (!raced) {
+            raced = true;
+            expect(await runtime.respondApproval(lane, approval.id, decision)).toBe(true);
+            const result = await originalCommit(change, context);
+            pendingAfterRaceCommit = await engine.snapshotDocument(
+              PiPendingApprovalsDoc,
+              conversationId,
+            );
+            return result;
+          }
+          return originalCommit(change, context);
+        });
+        observed = await observe(runtime);
+        runtime.resume();
+        const turn = await observed.terminal.promise;
+        expect(raced).toBe(true);
+        expect(pendingAfterRaceCommit).toEqual({ items: {} });
+        expect(turn.status).toBe('completed');
+        expect(execute).toHaveBeenCalledTimes(decision === 'approve' ? 1 : 0);
+        expect(
+          observed.events.some(
+            (event) => event.type === 'approvals.updated' && event.approvals.length > 0,
+          ),
+        ).toBe(false);
+        await expectCleared(
+          state.getStorage(),
+          conversationId,
+          PiPendingApprovalsDoc.definition.kind,
+        );
+      } finally {
+        opened.mockRestore();
+        await observed.unsubscribe();
+        await runtime.close();
+      }
+    },
+  );
+
+  test('blocks a recovered MCP tool approval when the connection executionSettingsKey changes before wake', async () => {
+    const execute = jest.fn(async () => ({ value: { ok: true }, artifacts: [] }));
+    const mcpTool: RuntimeTool = {
+      ref: { source: 'mcp', serverId: 'srv-1', rawToolName: 'search' },
+      providerName: 'mcp_search_1234567',
+      displayName: 'Search',
+      description: 'Search endpoint A.',
+      inputSchema: { type: 'object', properties: {} },
+      executionSettingsKey: 'remote:conn-a',
+      approval: 'ask',
+      execute,
+    };
+    const state = await start(mcpTool, {});
+    const baseResolveModel = state.dependencies.resolveModel;
+    state.dependencies.resolveModel = async (...values) => ({
+      ...(await baseResolveModel(...values)),
+      streamFn: (_model, context) => {
+        state.requests.push(context);
+        const step = state.requests.length;
+        const reason = step <= 2 ? 'toolUse' : 'stop';
+        const content =
+          step === 1
+            ? [
+                {
+                  type: 'toolCall' as const,
+                  id: 'find',
+                  name: 'tool_search',
+                  arguments: { query: 'Search' },
+                },
+              ]
+            : step === 2
+              ? [
+                  {
+                    type: 'toolCall' as const,
+                    id: 'interaction',
+                    name: mcpTool.providerName,
+                    arguments: {},
+                  },
+                ]
+              : [{ type: 'text' as const, text: 'Done.' }];
+        const stream = new AssistantMessageEventStream();
+        stream.push({
+          type: 'done',
+          reason,
+          message: { ...emptyAssistantMessage(wire), stopReason: reason, content },
+        });
+        stream.end();
+        return stream;
+      },
+    });
+    let currentKey = 'remote:conn-a';
+    state.ports.resolveTool = jest.fn(async (_identity, ref) => {
+      if (ref.source !== 'mcp') throw new Error('Unexpected builtin tool.');
+      return { ...mcpTool, executionSettingsKey: currentKey };
+    });
+    let runtime = state.runtime;
+    let observed = await observe(runtime);
+    try {
+      await runtime.submit(lane, input('mcp-conn-change'));
+      const approval = await observed.approval.promise;
+      await waitForIdle(runtime);
+      const taskId = Number(approval.id.split(':')[1]) as TaskId;
+      const conversationId = (await state.getStorage().task(taskId, BACKGROUND_CONTEXT))!
+        .conversationId;
+      await observed.unsubscribe();
+      await runtime.close();
+
+      runtime = state.create();
+      await state.initialize(runtime);
+      observed = await observe(runtime);
+      expect(await runtime.respondApproval(lane, approval.id, 'approve')).toBe(true);
+      await observed.unsubscribe();
+      await runtime.close();
+
+      // Connection configuration changed before wake executes the approved call.
+      currentKey = 'remote:conn-b';
+      runtime = state.create();
+      await state.initialize(runtime);
+      observed = await observe(runtime);
+      runtime.resume();
+      const turn = await observed.terminal.promise;
+      expect(turn.status).toBe('completed');
+      expect(execute).not.toHaveBeenCalled();
+      expect(turn.parts).toContainEqual(
+        expect.objectContaining({
+          type: 'tool',
+          toolCallId: approval.toolCallId,
+          state: 'denied',
+          output: expect.objectContaining({
+            value: {
+              status: 'denied',
+              reason: expect.stringContaining('Tool settings changed'),
+            },
+          }),
+        }),
+      );
+      await expectCleared(
+        state.getStorage(),
+        conversationId,
+        PiPendingApprovalsDoc.definition.kind,
+      );
+    } finally {
+      await observed.unsubscribe();
+      await runtime.close();
+    }
+  });
+
+  test('blocks a recovered generate_image approval when the configured drawing model changes before wake', async () => {
+    const execute = jest.fn(async () => ({
+      value: [{ id: 'img-1', name: 'out.png' }],
+      artifacts: [],
+    }));
+    const imageTool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'generate_image' },
+      providerName: 'generate_image',
+      displayName: 'Generate image',
+      description: 'Generate an image.',
+      inputSchema: { type: 'object', properties: { prompt: { type: 'string' } } },
+      executionSettingsKey: 'openai:gpt-image-1',
+      deferred: true,
+      approval: 'ask',
+      execute,
+    };
+    const state = await start(imageTool, {});
+    const baseResolveModel = state.dependencies.resolveModel;
+    state.dependencies.resolveModel = async (...values) => ({
+      ...(await baseResolveModel(...values)),
+      streamFn: (_model, context) => {
+        state.requests.push(context);
+        const step = state.requests.length;
+        const reason = step <= 2 ? 'toolUse' : 'stop';
+        const content =
+          step === 1
+            ? [
+                {
+                  type: 'toolCall' as const,
+                  id: 'find-image-tool',
+                  name: 'tool_search',
+                  arguments: { query: 'Generate image' },
+                },
+              ]
+            : step === 2
+              ? [
+                  {
+                    type: 'toolCall' as const,
+                    id: 'gen-image-call',
+                    name: 'generate_image',
+                    arguments: { prompt: 'Draw a cat' },
+                  },
+                ]
+              : [{ type: 'text' as const, text: 'Done.' }];
+        const stream = new AssistantMessageEventStream();
+        stream.push({
+          type: 'done',
+          reason,
+          message: { ...emptyAssistantMessage(wire), stopReason: reason, content },
+        });
+        stream.end();
+        return stream;
+      },
+    });
+    let currentKey = 'openai:gpt-image-1';
+    state.ports.resolveTool = jest.fn(async (_identity, ref) => {
+      if (ref.source !== 'builtin' || ref.capabilityId !== 'generate_image')
+        throw new Error('Unexpected tool.');
+      return { ...imageTool, executionSettingsKey: currentKey };
+    });
+    let runtime = state.runtime;
+    let observed = await observe(runtime);
+    try {
+      await runtime.submit(lane, input('generate-image-model-change'));
+      const approval = await observed.approval.promise;
+      await waitForIdle(runtime);
+      const taskId = Number(approval.id.split(':')[1]) as TaskId;
+      const conversationId = (await state.getStorage().task(taskId, BACKGROUND_CONTEXT))!
+        .conversationId;
+      await observed.unsubscribe();
+      await runtime.close();
+
+      runtime = state.create();
+      await state.initialize(runtime);
+      observed = await observe(runtime);
+      expect(await runtime.respondApproval(lane, approval.id, 'approve')).toBe(true);
+      await observed.unsubscribe();
+      await runtime.close();
+
+      currentKey = 'google:imagen-3';
+      runtime = state.create();
+      await state.initialize(runtime);
+      observed = await observe(runtime);
+      runtime.resume();
+      const turn = await observed.terminal.promise;
+      expect(turn.status).toBe('completed');
+      expect(execute).not.toHaveBeenCalled();
+      expect(turn.parts).toContainEqual(
+        expect.objectContaining({
+          type: 'tool',
+          toolCallId: approval.toolCallId,
+          state: 'denied',
+          output: expect.objectContaining({
+            value: {
+              status: 'denied',
+              reason: expect.stringContaining('Tool settings changed'),
+            },
+          }),
+        }),
+      );
+      await expectCleared(
+        state.getStorage(),
+        conversationId,
+        PiPendingApprovalsDoc.definition.kind,
+      );
+    } finally {
+      await observed.unsubscribe();
+      await runtime.close();
+    }
+  });
+
+  test('clears pending question atomically with signal delivery across crash before wake runs', async () => {
+    const fallback = jest.fn(async () => answer);
+    const secondAnswer: AgentUserAnswers = {
+      answers: [{ questionId: 'format', selectedOptionIds: [], text: 'Markdown', skipped: false }],
+    };
+    const state = await start(createAskUserQuestionTool(fallback), question);
+    let runtime = state.runtime;
+    let observed = await observe(runtime);
+    try {
+      await runtime.submit(lane, input('atomic-question'));
+      const pending = await observed.pendingQuestion.promise;
+      await waitForIdle(runtime);
+      await observed.unsubscribe();
+      await runtime.close();
+
+      // Reopen with scheduling paused so the answer signal commits before the parked task wakes.
+      runtime = state.create();
+      await state.initialize(runtime);
+      observed = await observe(runtime);
+      expect(observed.snapshot.pendingQuestion).toEqual(pending);
+      expect(await runtime.hasPendingQuestion(lane)).toBe(true);
+      expect(await runtime.respondQuestion(lane, pending.toolCallId, answer)).toBe(true);
+      await observed.unsubscribe();
+      await runtime.close();
+
+      runtime = state.create();
+      await state.initialize(runtime);
+      observed = await observe(runtime);
+      expect(observed.snapshot.pendingQuestion).toBeNull();
+      expect(await runtime.hasPendingQuestion(lane)).toBe(false);
+      expect(await runtime.respondQuestion(lane, pending.toolCallId, secondAnswer)).toBe(false);
+      runtime.resume();
+      const turn = await observed.terminal.promise;
+      expect(turn.status).toBe('completed');
+      const part = turn.parts.find(
+        (item) => item.type === 'tool' && item.toolCallId === pending.toolCallId,
+      );
+      expect(part?.type === 'tool' && part.output).toEqual({
+        value: {
+          ...answer,
+          selectedOptions: [{ questionId: 'format', options: question.questions[0]!.options }],
+        },
+        artifacts: [],
+      });
+    } finally {
+      await observed.unsubscribe();
+      await runtime.close();
+    }
+  });
+
+  test('rejects durable ask_user_question when hasPendingHostQuestion reports an active Host question', async () => {
+    const fallback = jest.fn(async () => answer);
+    const state = await start(createAskUserQuestionTool(fallback), question);
+    state.ports.hasPendingHostQuestion = () => true;
+    const observed = await observe(state.runtime);
+    try {
+      await state.runtime.submit(lane, input('host-question-active'));
+      const turn = await observed.terminal.promise;
+      expect(turn.status).toBe('completed');
+      expect(fallback).not.toHaveBeenCalled();
+      expect(await state.runtime.hasPendingQuestion(lane)).toBe(false);
+      expect(turn.parts).toContainEqual(
+        expect.objectContaining({
+          type: 'tool',
+          state: 'error',
+          error: expect.objectContaining({
+            message: 'Wait for the current question before asking another.',
+          }),
+        }),
+      );
+    } finally {
+      await observed.unsubscribe();
+      await state.runtime.close();
+    }
+  });
+});
+
 describe('Persistent Agent facade', () => {
+  test('fits model-facing tool images on recovery of a working copy created without the extension', async () => {
+    const state = fixture();
+    const started = deferred<void>();
+    const oversized = 'QUFB'.repeat(1_250_000);
+    const prepared = { data: 'AQID', mimeType: 'image/jpeg', convertedFrom: 'image/png' };
+    const prepare = jest.fn(async () => prepared);
+    const tool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'capture' },
+      providerName: 'capture',
+      displayName: 'Capture image',
+      description: 'Capture an image.',
+      inputSchema: { type: 'object' },
+      approval: 'auto',
+      execute: async () => ({
+        value: 'Captured',
+        modelImages: [{ data: oversized, mediaType: 'image/png' }],
+        artifacts: [],
+      }),
+    };
+    state.ports.resolveTool = async () => tool;
+    state.dependencies.preflightModel = async () => ({
+      contextWindow: 32768,
+      maxInputTokens: 28672,
+      maxOutputTokens: 4096,
+      inputModalities: ['text', 'image'],
+      supportsTools: true,
+    });
+    const resolveModel = state.dependencies.resolveModel;
+    let shouldInterrupt = true;
+    state.dependencies.resolveModel = async (...args) => ({
+      ...(await resolveModel(...args)),
+      model: { ...wire, input: ['text', 'image'] },
+      streamFn: withPiStreamIdleTimeout((model, context) => {
+        const stream = new AssistantMessageEventStream();
+        if (shouldInterrupt) {
+          shouldInterrupt = false;
+          started.resolve();
+          return stream;
+        }
+        state.requests.push(context);
+        const first = state.requests.length === 1;
+        const reason = first ? 'toolUse' : 'stop';
+        stream.push({
+          type: 'done',
+          reason,
+          message: {
+            ...emptyAssistantMessage(model),
+            stopReason: reason,
+            content: first
+              ? [{ type: 'toolCall', name: tool.providerName, id: 'capture', arguments: {} }]
+              : [{ type: 'text', text: 'Done.' }],
+          },
+        });
+        stream.end();
+        return stream;
+      }),
+    });
+
+    let runtime = state.create();
+    try {
+      await runtime.initialize(state.database, state.ports);
+      await runtime.ensureConversation({
+        ...seed,
+        configuration: { ...seed.configuration, tools: [tool] },
+      });
+      await runtime.submit(lane, input('capture'));
+      await started.promise;
+      await runtime.close();
+
+      runtime = state.create();
+      await runtime.initialize(state.database, { ...state.ports, imageProcessor: { prepare } });
+      const complete = deferred<void>();
+      const observer = await runtime.observe(lane, (event) => {
+        if (event.type === 'turn.updated' && event.turn.status === 'completed') complete.resolve();
+      });
+      try {
+        runtime.resume();
+        await complete.promise;
+        expect(prepare).toHaveBeenCalledTimes(1);
+        expect(prepare).toHaveBeenCalledWith(expect.any(Uint8Array), 'image/png', {
+          maxWidth: 2000,
+          maxHeight: 2000,
+          maxBytes: 4.5 * 1024 * 1024,
+        });
+        expect(state.requests[1]?.messages).toContainEqual(
+          expect.objectContaining({
+            role: 'toolResult',
+            content: expect.arrayContaining([
+              { type: 'image', data: prepared.data, mimeType: prepared.mimeType },
+            ]),
+          }),
+        );
+      } finally {
+        await observer.unsubscribe();
+      }
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('fits or omits historical tool-result images when rebuilding a working copy from Cherry history', async () => {
+    const state = fixture();
+    const rawWebp = 'QUFB'.repeat(1_250_000);
+    const rawPng = 'ZmFrZS1wbmctYnl0ZXM=';
+    const resizedPng = { data: 'AQID', mimeType: 'image/jpeg', convertedFrom: 'image/png' };
+    const prepare = jest.fn(async (_bytes: Uint8Array, mimeType: string) =>
+      mimeType === 'image/png' ? resizedPng : undefined,
+    );
+    state.dependencies.preflightModel = async () => ({
+      contextWindow: 32768,
+      maxInputTokens: 28672,
+      maxOutputTokens: 4096,
+      inputModalities: ['text', 'image'],
+      supportsTools: true,
+    });
+    const resolveModel = state.dependencies.resolveModel;
+    state.dependencies.resolveModel = async (...args) => ({
+      ...(await resolveModel(...args)),
+      model: { ...wire, input: ['text', 'image'] },
+      streamFn: withPiStreamIdleTimeout((model, context) => {
+        state.requests.push(context);
+        const stream = new AssistantMessageEventStream();
+        stream.push({
+          type: 'done',
+          reason: 'stop',
+          message: {
+            ...emptyAssistantMessage(model),
+            stopReason: 'stop',
+            content: [{ type: 'text', text: 'Done.' }],
+          },
+        });
+        stream.end();
+        return stream;
+      }),
+    });
+
+    const runtime = state.create();
+    try {
+      await runtime.initialize(state.database, { ...state.ports, imageProcessor: { prepare } });
+      await runtime.ensureConversation({
+        ...seed,
+        history: {
+          contextCheckpoint: null,
+          referencedFileEntryIds: [],
+          history: [
+            {
+              turnId: 'past',
+              messages: [
+                { role: 'user', parts: [{ type: 'text', text: 'Inspect files' }] },
+                {
+                  role: 'assistant',
+                  parts: [
+                    {
+                      type: 'tool-call',
+                      toolCallId: 'c1',
+                      toolRef: { source: 'mcp', serverId: 'srv', rawToolName: 'inspect' },
+                      providerName: 'mcp_inspect',
+                      input: {},
+                    },
+                    {
+                      type: 'tool-result',
+                      toolCallId: 'c1',
+                      isError: false,
+                      output: {
+                        value: 'Loaded images',
+                        modelContent: [
+                          { type: 'image', fileEntryId: 'f-webp', mimeType: 'image/webp' },
+                          { type: 'image', fileEntryId: 'f-png', mimeType: 'image/png' },
+                        ],
+                        modelImages: [
+                          { fileEntryId: 'f-webp', data: rawWebp, mediaType: 'image/webp' },
+                          { fileEntryId: 'f-png', data: rawPng, mediaType: 'image/png' },
+                        ],
+                        artifacts: [],
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      });
+      await submitAndWait(runtime, input('follow-up'));
+      expect(prepare).toHaveBeenCalledTimes(2);
+      const rebuiltToolResult = state.requests[0]?.messages.find(
+        (message) => message.role === 'toolResult',
+      );
+      expect(rebuiltToolResult).toMatchObject({
+        role: 'toolResult',
+        content: [
+          { type: 'image', data: resizedPng.data, mimeType: resizedPng.mimeType },
+          {
+            type: 'text',
+            text: '<harness>\n[info] An image (image/webp) cannot be prepared for the model and was left out. Converted from image/png to image/jpeg.\n</harness>',
+          },
+        ],
+      });
+      expect(JSON.stringify(state.requests[0])).not.toContain(rawWebp);
+      expect(JSON.stringify(state.requests[0])).not.toContain(rawPng);
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('replaces and discards only the lane’s MCP namespace extensions and preserves a fallback catalog', async () => {
+    const state = fixture();
+    const opened = jest.spyOn(PiDurableRuntime, 'open');
+    const runtime = state.create();
+    const other = runtimeLane(lane.sessionId, 1);
+    const tools: RuntimeTool[] = ['connected', 'unlisted'].map((serverId) => ({
+      ref: { source: 'mcp', serverId, rawToolName: 'lookup' },
+      providerName: `mcp_${serverId}_lookup`,
+      displayName: 'Lookup',
+      description: 'Look up records.',
+      inputSchema: {},
+      approval: 'ask',
+      execute: async () => ({ value: 'Found', artifacts: [] }),
+    }));
+    const mcpNamespaces = [
+      {
+        serverId: 'connected',
+        name: 'records',
+        description: 'Connected records.',
+        instructions: 'Record lookup guidance.',
+      },
+      {
+        serverId: 'disconnected',
+        name: 'offline',
+        description: 'Currently disconnected.',
+      },
+    ];
+    const configuration = { ...seed.configuration, tools, mcpNamespaces };
+    try {
+      await runtime.initialize(state.database, {
+        ...state.ports,
+        imageProcessor: { prepare: async () => undefined },
+      });
+      const registry = opened.mock.calls[0]![1].registry!;
+      const engine = await opened.mock.results[0]!.value;
+      const installed = (key: string) =>
+        registry
+          .snapshot()
+          .installed()
+          .filter(({ name }) => name === key || name.startsWith(`${key}:`));
+      await runtime.ensureConversation({ ...seed, configuration });
+      await runtime.ensureConversation({ ...seed, lane: other, configuration });
+      expect((await runtime.configuration(lane)).mcpNamespaces).toEqual(mcpNamespaces);
+      expect(installed('cherry.mcp:session')).toMatchObject([
+        {
+          name: 'cherry.mcp:session:connected',
+          namespace: { name: 'records', instructions: mcpNamespaces[0]!.instructions },
+          tools: [{ name: 'mcp_connected_lookup' }],
+        },
+        { name: 'cherry.mcp:session:disconnected', namespace: { name: 'offline' }, tools: [] },
+        {
+          name: 'cherry.mcp:session',
+          namespace: { name: 'mcp' },
+          tools: [{ name: 'mcp_unlisted_lookup' }],
+        },
+      ]);
+      const conversation = (await engine.conversation(lane.sessionId))!;
+      expect((await engine.snapshotDocument(AgentDoc, conversation.id))?.extensions).toEqual([
+        'cherry.capabilities:session',
+        'cherry.mcp:session:connected',
+        'cherry.mcp:session:disconnected',
+        'cherry.mcp:session',
+        'fit-images',
+      ]);
+      expect(installed('fit-images')).toHaveLength(1);
+
+      const legacy = { ...seed.configuration, tools };
+      await runtime.configure(lane, legacy);
+      expect(installed('cherry.mcp:session')).toMatchObject([
+        {
+          name: 'cherry.mcp:session',
+          namespace: { name: 'mcp' },
+          tools: [{ name: 'mcp_connected_lookup' }, { name: 'mcp_unlisted_lookup' }],
+        },
+      ]);
+      await runtime.configure(lane, configuration);
+      await runtime.discardConversation(lane);
+      expect(installed('cherry.mcp:session')).toEqual([]);
+      expect(installed('cherry.mcp:session#1')).toHaveLength(3);
+      expect(installed('fit-images')).toHaveLength(1);
+    } finally {
+      opened.mockRestore();
+      await runtime.close();
+    }
+  });
+
+  test('persists disabled compaction, inherits it at a fork, and forces it off for image lanes', async () => {
+    const state = fixture();
+    state.dependencies.preflightModel = async () => ({
+      contextWindow: 4096,
+      maxInputTokens: 1024,
+      maxOutputTokens: 256,
+      inputModalities: ['text'],
+      supportsTools: true,
+    });
+    const runtime = state.create();
+    const opened = jest.spyOn(PiDurableRuntime, 'open');
+    try {
+      await runtime.initialize(state.database, state.ports);
+      const engine = await opened.mock.results[0]!.value;
+      const readAgent = async (key: string) =>
+        engine.snapshotDocument(AgentDoc, (await engine.conversation(key))!.id);
+      const disabled = { ...seed.configuration, compaction: { enabled: false } };
+      const oldContext = 'Old context '.repeat(800);
+      const boundary = await runtime.ensureConversation({
+        ...seed,
+        configuration: disabled,
+        history: {
+          history: [
+            {
+              turnId: 'past',
+              messages: [
+                { role: 'user', parts: [{ type: 'text', text: oldContext }] },
+                { role: 'assistant', parts: [{ type: 'text', text: 'Previous answer' }] },
+              ],
+            },
+          ],
+          contextCheckpoint: null,
+          referencedFileEntryIds: [],
+        },
+      });
+      expect(await engine.configuration(lane.sessionId)).toMatchObject({
+        compaction: disabled.compaction,
+      });
+      expect((await readAgent(lane.sessionId))?.compaction).toEqual(disabled.compaction);
+      await submitAndWait(runtime, input('with-uncompacted-history'));
+      expect(state.requests).toHaveLength(1);
+      expect(state.requests[0]?.messages).toContainEqual(
+        expect.objectContaining({
+          role: 'user',
+          content: oldContext,
+        }),
+      );
+
+      const fork = runtimeLane(lane.sessionId, 1);
+      await runtime.forkConversation({
+        ...seed,
+        lane: fork,
+        from: { lane, boundary: boundary! },
+        referencedFileEntryIds: [],
+      });
+      expect((await readAgent('session#1'))?.compaction).toEqual(disabled.compaction);
+
+      const enabledFork = runtimeLane(lane.sessionId, 2);
+      await runtime.forkConversation({
+        ...seed,
+        configuration: { ...seed.configuration, compaction: { enabled: true } },
+        lane: enabledFork,
+        from: { lane, boundary: boundary! },
+        referencedFileEntryIds: [],
+      });
+      expect((await readAgent('session#2'))?.compaction).toEqual({ enabled: true });
+
+      await runtime.configure(lane, {
+        ...seed.configuration,
+        kind: 'image',
+        compaction: { enabled: true },
+      });
+      expect((await readAgent(lane.sessionId))?.compaction).toEqual(disabled.compaction);
+
+      await runtime.configure(lane, {
+        ...seed.configuration,
+        kind: 'image',
+        compaction: { enabled: false },
+      });
+      const inheritedFromImage = runtimeLane(lane.sessionId, 3);
+      await runtime.forkConversation({
+        ...seed,
+        configuration: { ...seed.configuration, kind: 'language' },
+        lane: inheritedFromImage,
+        from: { lane, boundary: boundary! },
+        referencedFileEntryIds: [],
+      });
+      expect((await readAgent('session#3'))?.compaction).toEqual({ enabled: false });
+
+      await runtime.configure(lane, {
+        ...seed.configuration,
+        kind: 'image',
+      });
+      expect((await readAgent(lane.sessionId))?.compaction).toEqual(disabled.compaction);
+
+      const textForkFromDefaultImage = runtimeLane(lane.sessionId, 4);
+      await runtime.forkConversation({
+        ...seed,
+        configuration: { ...seed.configuration, kind: 'language' },
+        lane: textForkFromDefaultImage,
+        from: { lane, boundary: boundary! },
+        referencedFileEntryIds: [],
+      });
+      expect((await readAgent('session#4'))?.compaction).toBeUndefined();
+
+      await runtime.configure(lane, seed.configuration);
+      expect((await readAgent(lane.sessionId))?.compaction).toBeUndefined();
+    } finally {
+      opened.mockRestore();
+      await runtime.close();
+    }
+  });
+
   test.each([false, true])(
     'publishes partial text before the terminal event only when shouldStream=%s',
     async (shouldStream) => {
@@ -3610,6 +4951,81 @@ describe('Native web tools', () => {
         expect.objectContaining({ type: 'text', text: 'Cherries are red.' }),
         expect.objectContaining({ type: 'source-url', url: 'https://example.com/cherry' }),
       ]);
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('forwards install_skill scope changes only when availableThisTurn is true', async () => {
+    const state = fixture();
+    let availableThisTurn = false;
+    const installTool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'install_skill' },
+      providerName: 'install_skill',
+      displayName: 'Install Skill',
+      description: 'Install one skill.',
+      inputSchema: { type: 'object', properties: {} },
+      approval: 'auto',
+      execute: async () => ({
+        value: {
+          status: 'installed',
+          skill_id: availableThisTurn ? 'skill-available' : 'skill-unavailable',
+          contentHash: availableThisTurn ? 'hash-available' : 'hash-unavailable',
+          availableThisTurn,
+        },
+        artifacts: [],
+      }),
+    };
+    const admitSkillScopeChange = jest.fn();
+    state.ports.admitSkillScopeChange = admitSkillScopeChange;
+    state.ports.resolveTool = jest.fn(async () => installTool);
+    const baseResolveModel = state.dependencies.resolveModel;
+    state.dependencies.resolveModel = async (...values) => ({
+      ...(await baseResolveModel(...values)),
+      streamFn: (_model, context) => {
+        state.requests.push(context);
+        const last = context.messages.at(-1);
+        const isFirstStep = last?.role === 'user';
+        const reason = isFirstStep ? 'toolUse' : 'stop';
+        const content = isFirstStep
+          ? [
+              {
+                type: 'toolCall' as const,
+                id: `install-call-${state.requests.length}`,
+                name: 'install_skill',
+                arguments: {},
+              },
+            ]
+          : [{ type: 'text' as const, text: 'Installed.' }];
+        const stream = new AssistantMessageEventStream();
+        stream.push({
+          type: 'done',
+          reason,
+          message: { ...emptyAssistantMessage(wire), stopReason: reason, content },
+        });
+        stream.end();
+        return stream;
+      },
+    });
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    runtime.resume();
+    try {
+      await runtime.ensureConversation({
+        ...seed,
+        configuration: { ...configuration, tools: [installTool] },
+      });
+      await submitAndWait(runtime, input('first'));
+      expect(admitSkillScopeChange).not.toHaveBeenCalled();
+
+      availableThisTurn = true;
+      await submitAndWait(runtime, input('second'));
+      expect(admitSkillScopeChange).toHaveBeenCalledTimes(1);
+      expect(admitSkillScopeChange).toHaveBeenCalledWith(expect.anything(), {
+        kind: 'installed',
+        skillId: 'skill-available',
+        contentHash: 'hash-available',
+      });
     } finally {
       await runtime.close();
     }

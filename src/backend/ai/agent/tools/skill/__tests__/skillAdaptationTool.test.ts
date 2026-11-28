@@ -107,9 +107,21 @@ test('shows exact changes through the existing question port, then replaces the 
   });
   expect(result.value).toMatchObject({
     status: 'adapted',
+    contentHash: 'new',
     instructionsLoaded: true,
     changes: [{ before, after: '' }],
   });
+  expect(result.modelValue).toMatchObject({
+    status: 'adapted',
+    instructionsLoaded: true,
+    changes: [{ before, after: '' }],
+  });
+  expect(result.modelValue).not.toHaveProperty('contentHash');
+  expect(result.instructionsFailureValue).toMatchObject({
+    status: 'adapted',
+    instructionsLoaded: false,
+  });
+  expect(result.instructionsFailureValue).not.toHaveProperty('contentHash');
   expect(result.instructions?.key).toBe('skill:notes');
   expect(result.instructions?.text).toContain(state.nextBody);
   expect(result.instructions?.text).not.toContain(before);

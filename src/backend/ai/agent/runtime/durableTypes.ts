@@ -1,4 +1,8 @@
-import type { AgentReplyPartEdit } from '@/shared/contracts/agent';
+import type {
+  AgentReplyPartEdit,
+  AgentUserAnswers,
+  AgentUserQuestions,
+} from '@/shared/contracts/agent';
 import { MAX_PARALLEL_ANSWERS } from '@/shared/contracts/agent/inputs';
 
 import type { TraceSpan } from '../../observability';
@@ -25,6 +29,8 @@ import type {
 
 /** Provider name of the Host tool that runs an explicitly submitted image request. */
 export const DURABLE_IMAGE_TOOL_NAME = 'cherry_generate_image';
+/** Built-in user-question capability whose pause/resume lifecycle Pi can persist durably. */
+export const DURABLE_QUESTION_TOOL_NAME = 'ask_user_question';
 
 /** Durable lane payload or configuration failed schema validation and must be isolated. */
 export class RuntimeCorruptLaneError extends Error {
@@ -34,6 +40,36 @@ export class RuntimeCorruptLaneError extends Error {
     super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = 'RuntimeCorruptLaneError';
     this.lane = options?.lane;
+  }
+}
+
+/** Confirmed capability revocation: the tool disappeared from the owning input's catalog. */
+export class RuntimeToolUnavailableError extends Error {
+  constructor(message = 'This capability is no longer available for the owning input.') {
+    super(message);
+    this.name = 'RuntimeToolUnavailableError';
+  }
+}
+
+/** Transient capability discovery outage: the tool could not be resolved right now and may recover. */
+export class RuntimeToolDiscoveryError extends Error {
+  readonly executionSettingsKey?: string;
+  readonly matchesExecutionSettingsKey?: (expected: string) => Promise<boolean>;
+  readonly approval?: RuntimeTool['approval'];
+
+  constructor(
+    message = 'This capability is temporarily unavailable because tool discovery failed.',
+    options?: {
+      executionSettingsKey?: string;
+      matchesExecutionSettingsKey?: (expected: string) => Promise<boolean>;
+      approval?: RuntimeTool['approval'];
+    },
+  ) {
+    super(message);
+    this.name = 'RuntimeToolDiscoveryError';
+    this.executionSettingsKey = options?.executionSettingsKey;
+    this.matchesExecutionSettingsKey = options?.matchesExecutionSettingsKey;
+    this.approval = options?.approval;
   }
 }
 
@@ -107,9 +143,35 @@ export type RuntimeScriptSandbox = {
   }>;
 };
 
+export type RuntimeImageLimits = {
+  readonly maxWidth: number;
+  readonly maxHeight: number;
+  /** Maximum encoded base64 length. */
+  readonly maxBytes: number;
+};
+
+export type RuntimePreparedImage = {
+  readonly data: string;
+  readonly mimeType: string;
+  readonly resized?: {
+    readonly from: { readonly width: number; readonly height: number };
+    readonly to: { readonly width: number; readonly height: number };
+  };
+  readonly convertedFrom?: string;
+};
+
+export type RuntimeImageProcessor = {
+  prepare(
+    bytes: Uint8Array,
+    mimeType: string,
+    limits: RuntimeImageLimits,
+  ): Promise<RuntimePreparedImage | undefined>;
+};
+
 /** Callbacks are reconstructed for the current process; never serialized with a conversation. */
 export type RuntimeExecutionPorts = {
   scriptSandbox?: RuntimeScriptSandbox;
+  imageProcessor?: RuntimeImageProcessor;
   writeToolOutput?(
     identity: RuntimeExecutionIdentity,
     output: { name: string; data: string | Uint8Array },
@@ -131,12 +193,33 @@ export type RuntimeExecutionPorts = {
     approval: RuntimeApproval,
     signal: AbortSignal,
   ): Promise<'approve' | 'deny'>;
+  hasPendingHostQuestion?(identity: RuntimeExecutionIdentity): boolean;
+  validateQuestionAnswer?(
+    question: RuntimePendingQuestion['question'],
+    answer: AgentUserAnswers,
+  ): void;
   admitArtifacts(
     identity: RuntimeExecutionIdentity,
     artifacts: readonly RuntimeArtifact[],
     signal: AbortSignal,
   ): Promise<void>;
+  admitToolInstructions?(identity: RuntimeExecutionIdentity, key: string): void;
+  rollbackToolInstructions?(identity: RuntimeExecutionIdentity, key: string): void;
+  admitSkillScopeChange?(identity: RuntimeExecutionIdentity, change: RuntimeSkillScopeChange): void;
   recordUsage(owner: RuntimeUsageOwner, report: RuntimeUsageReport): Promise<void>;
+};
+
+export type RuntimeSkillScopeChange = {
+  kind: 'adapted' | 'installed';
+  skillId: string;
+  contentHash: string;
+};
+
+export type RuntimeMcpNamespace = {
+  serverId: string;
+  name: string;
+  description: string;
+  instructions?: string;
 };
 
 export type RuntimeConversationConfiguration = {
@@ -149,6 +232,8 @@ export type RuntimeConversationConfiguration = {
   options: RuntimeOptions;
   /** The current offered schema/catalog; execution resolves the owning durable run through ports. */
   tools: readonly RuntimeTool[];
+  mcpNamespaces?: readonly RuntimeMcpNamespace[];
+  compaction?: { enabled?: boolean };
   /** Absent when the Agent may not use the web; the Runtime then never adds a native web tool. */
   webTools?: RuntimeWebTools;
 };
@@ -224,6 +309,8 @@ export type RuntimeDurableTurn = {
   isRetrying?: boolean;
   /** Repeated process interruptions paused execution; the input is still durable. */
   isPaused?: boolean;
+  /** Durable Skill scope changes committed directly or via nested Code Mode calls in this turn. */
+  skillScopeChanges?: readonly RuntimeSkillScopeChange[];
 };
 
 /** Current retained model context, distinct from a turn's billed usage or measured input. */
@@ -242,11 +329,33 @@ export type RuntimeInputParent = {
 
 export type RuntimeQueueSelection = { from: string; to: string };
 
+export type RuntimePendingApproval = {
+  id: string;
+  turnId: string;
+  requestId: string;
+  toolCallId: string;
+  toolRef: RuntimeToolRef;
+  providerName: string;
+  displayName: string;
+  input: RuntimeJsonValue;
+  requestedAt: number;
+};
+
+export type RuntimePendingQuestion = {
+  turnId: string;
+  requestId: string;
+  toolCallId: string;
+  question: AgentUserQuestions;
+  requestedAt: number;
+};
+
 export type RuntimeConversationSnapshot = {
   activeTurn: RuntimeDurableTurn | null;
   queue: readonly RuntimeDurableTurn[];
   contextStatus?: 'compacting' | 'compaction-failed' | null;
   contextUsage?: RuntimeContextUsage | null;
+  pendingApprovals?: readonly RuntimePendingApproval[];
+  pendingQuestion?: RuntimePendingQuestion | null;
 };
 
 export type RuntimeConversationEvent =
@@ -254,7 +363,9 @@ export type RuntimeConversationEvent =
   | { type: 'turn.updated'; turn: RuntimeDurableTurn }
   | { type: 'context.updated'; status: 'compacting' | 'compaction-failed' | null }
   | { type: 'context.usage.updated'; usage: RuntimeContextUsage | null }
-  | { type: 'queue.updated'; queue: readonly RuntimeDurableTurn[] };
+  | { type: 'queue.updated'; queue: readonly RuntimeDurableTurn[] }
+  | { type: 'approvals.updated'; approvals: readonly RuntimePendingApproval[] }
+  | { type: 'question.updated'; question: RuntimePendingQuestion | null };
 
 /** Persistent execution working copies. Cherry owns the user transcript and its lifecycle. */
 export interface DurableAgentRuntime {
@@ -292,6 +403,8 @@ export interface DurableAgentRuntime {
   unfinishedLanes(): Promise<readonly RuntimeLane[]>;
   configuration(lane: RuntimeLane): Promise<RuntimeConversationConfiguration>;
   resourceFileEntryIds(lane: RuntimeLane): Promise<readonly string[]>;
+  retainedSkillIds?(lane: RuntimeLane): Promise<readonly string[]>;
+  retainedSkillRevisions?(lane: RuntimeLane): Promise<ReadonlyMap<string, string>>;
   /**
    * Returns the copy's newest history boundary, from which other lanes may fork;
    * undefined while it holds no history.
@@ -369,6 +482,18 @@ export interface DurableAgentRuntime {
     requestId: string,
     options?: { currentContext?: boolean },
   ): Promise<{ contextCheckpoint: RuntimeContextCheckpoint | null }>;
+  respondApproval?(
+    lane: RuntimeLane,
+    approvalId: string,
+    decision: 'approve' | 'deny',
+  ): Promise<boolean>;
+  respondQuestion?(
+    lane: RuntimeLane,
+    toolCallId: string,
+    answer: AgentUserAnswers,
+    turnId?: string,
+  ): Promise<boolean>;
+  hasPendingQuestion?(lane: RuntimeLane): Promise<boolean>;
   compactContext(
     lane: RuntimeLane,
     signal: AbortSignal,
@@ -381,4 +506,101 @@ export interface DurableAgentRuntime {
     requestId: string,
   ): Promise<'aborted' | 'already-placed' | 'settled' | 'not-found'>;
   hasUnfinishedWork(): Promise<boolean>;
+}
+
+const LEGACY_SSH_FILE_CAPABILITIES = new Set([
+  'ssh_list_files',
+  'ssh_read_file',
+  'ssh_write_file',
+  'ssh_download_file',
+  'ssh_upload_file',
+]);
+
+function parseSshExecutionSettingsKey(
+  value: string | undefined,
+): [string, string | number, string, string | null] | null {
+  if (value === undefined) return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (
+      !Array.isArray(parsed) ||
+      parsed.length !== 4 ||
+      typeof parsed[0] !== 'string' ||
+      (typeof parsed[1] !== 'string' && typeof parsed[1] !== 'number') ||
+      typeof parsed[2] !== 'string' ||
+      (parsed[3] !== null && typeof parsed[3] !== 'string')
+    )
+      return null;
+    return [parsed[0], parsed[1], parsed[2], parsed[3]];
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * SshRuntime intentionally keeps selectionId unchanged only when moving a target from
+ * grantless (`ask`) to a `diagnostics` grant (`auto`), so approving a pending command while
+ * enabling diagnostics for subsequent commands can complete without re-targeting.
+ */
+export function isSshDiagnosticsGrantPromotion(
+  ref: RuntimeToolRef,
+  previousApproval: RuntimeTool['approval'],
+  previousKey: string | undefined,
+  currentApproval: RuntimeTool['approval'],
+  currentKey: string | undefined,
+): boolean {
+  if (
+    ref.source !== 'builtin' ||
+    ref.capabilityId !== 'ssh_execute' ||
+    previousApproval !== 'ask' ||
+    currentApproval !== 'auto'
+  )
+    return false;
+  const previous = parseSshExecutionSettingsKey(previousKey);
+  const current = parseSshExecutionSettingsKey(currentKey);
+  if (!previous || !current) return false;
+  return (
+    previous[3] === null &&
+    typeof current[3] === 'string' &&
+    current[3].length > 0 &&
+    current[0] === previous[0] &&
+    current[1] === previous[1] &&
+    current[2] === previous[2]
+  );
+}
+
+/**
+ * Compare stored and live `executionSettingsKey` values while admitting pre-1.6 snapshots:
+ * - Pre-1.6 omitted keys on MCP, `generate_image`, `ssh_execute`, and grantless `ssh_*_file`.
+ * - Pre-1.6 `ssh_*_file` with an active file grant stored only the plain grant ID string,
+ *   whereas 1.6 stores `[profileId, profileRevision, selectionId, fileGrantId]`.
+ */
+export function matchesLegacyExecutionSettingsKey(
+  ref: RuntimeToolRef,
+  templateKey: string | undefined,
+  liveKey: string | undefined,
+): boolean {
+  if (templateKey === liveKey) return true;
+  if (templateKey === undefined) {
+    if (ref.source === 'builtin' && LEGACY_SSH_FILE_CAPABILITIES.has(ref.capabilityId)) {
+      if (liveKey === undefined) return true;
+      const live = parseSshExecutionSettingsKey(liveKey);
+      return live !== null && live[3] === null;
+    }
+    return (
+      ref.source === 'mcp' ||
+      (ref.source === 'builtin' &&
+        (ref.capabilityId === 'generate_image' || ref.capabilityId === 'ssh_execute'))
+    );
+  }
+  if (
+    ref.source === 'builtin' &&
+    LEGACY_SSH_FILE_CAPABILITIES.has(ref.capabilityId) &&
+    liveKey !== undefined &&
+    !templateKey.startsWith('[')
+  ) {
+    const live = parseSshExecutionSettingsKey(liveKey);
+    return live !== null && live[3] === templateKey;
+  }
+  return false;
 }

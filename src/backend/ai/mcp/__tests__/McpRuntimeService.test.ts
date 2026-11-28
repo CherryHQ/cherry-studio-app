@@ -1,5 +1,6 @@
 import type { ListToolsResult } from '@modelcontextprotocol/client';
 import { ProtocolError, SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
+import { CryptoDigestAlgorithm, digestStringAsync } from 'expo-crypto';
 import { AppState } from 'react-native';
 
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
@@ -475,6 +476,62 @@ describe('listTools', () => {
       [server.id]: { state: 'error', lastError: warning, toolCount: 1 },
     });
   });
+
+  it('invokes onDiscoveryIncomplete only for incomplete/retryable failures, not clean empty or disabled servers', async () => {
+    const pluginServer: McpServer = {
+      ...makeServer({ id: 'feishu-partial' }),
+      origin: 'builtin',
+      endpointUrl: null,
+      headers: undefined,
+      builtinId: 'feishu',
+      authorizationId: 'grant-1',
+      name: '飞书',
+    };
+    const emptyRemote = makeServer({ id: 'remote-empty' });
+    const disabledRemote = makeServer({ id: 'disabled-srv', isEnabled: false });
+    const { service } = makeService([pluginServer, emptyRemote, disabledRemote]);
+
+    // 1) Partial plugin discovery warnings -> calls onDiscoveryIncomplete
+    mockCreateMCPClient.mockResolvedValueOnce({
+      ...makeClient(makeRawTools(['calendar_get_primary'])),
+      discoveryWarnings: ['Feishu document tools could not be loaded (network).'],
+    });
+    const incompletePartial = jest.fn();
+    await service.listExecutableToolDescriptors(
+      pluginServer.id,
+      undefined,
+      undefined,
+      incompletePartial,
+    );
+    expect(incompletePartial).toHaveBeenCalledTimes(1);
+
+    // 2) Clean empty remote catalog -> reports onUnavailable but NOT onDiscoveryIncomplete
+    mockCreateMCPClient.mockResolvedValueOnce(makeClient([]));
+    const onUnavailableEmpty = jest.fn();
+    const incompleteEmpty = jest.fn();
+    await expect(
+      service.listExecutableToolDescriptors(
+        emptyRemote.id,
+        onUnavailableEmpty,
+        undefined,
+        incompleteEmpty,
+      ),
+    ).resolves.toEqual([]);
+    expect(onUnavailableEmpty).toHaveBeenCalledWith(expect.stringContaining('no available tools'));
+    expect(incompleteEmpty).not.toHaveBeenCalled();
+
+    // 3) Disabled server -> rejects non-retryable without calling onDiscoveryIncomplete
+    const incompleteDisabled = jest.fn();
+    await expect(
+      service.listExecutableToolDescriptors(
+        disabledRemote.id,
+        undefined,
+        undefined,
+        incompleteDisabled,
+      ),
+    ).rejects.toMatchObject({ code: 'mcp_tool_unavailable', retryable: false });
+    expect(incompleteDisabled).not.toHaveBeenCalled();
+  });
   it('retains connection failures even when tool preparation never admits a conversation turn', async () => {
     const { traces, records } = createTraceRecorder();
     const failure = Object.assign(new Error('private endpoint and credential'), {
@@ -646,6 +703,7 @@ describe('Runtime tool adapter', () => {
         description: 'ServerOne: Search issues',
         displayName: 'Issue Search',
         endpointUrl: server.endpointUrl,
+        executionSettingsKey: expect.stringMatching(/^remote:[a-f0-9]{64}$/),
         generation: expect.any(Number),
         inputSchema: {
           properties: { query: { minLength: 1, type: 'string' } },
@@ -1841,6 +1899,68 @@ describe('catalog reuse', () => {
     );
     expect(mockCreateMCPClient).not.toHaveBeenCalled();
   });
+
+  it('restores cached disk tools and prompts written with legacy v0.6.3 mixed-case header sort order', async () => {
+    const server = makeServer({
+      headers: { 'X-Custom': 'value-1', authorization: 'Bearer token-1' },
+    });
+    const prompt: McpPromptEntry = {
+      kind: 'prompt',
+      key: 'review',
+      title: 'Review changes',
+      arguments: [{ name: 'topic', required: true }],
+    };
+    const legacyMaterial = JSON.stringify([
+      server.endpointUrl,
+      '',
+      [
+        ['x-custom', 'value-1'],
+        ['authorization', 'Bearer token-1'],
+      ],
+    ]);
+    const legacyKey = `remote:${await digestStringAsync(CryptoDigestAlgorithm.SHA256, legacyMaterial)}`;
+    const canonicalKey = await createMcpConnectionKey(server);
+    expect(legacyKey).not.toBe(canonicalKey);
+
+    storedFiles.set(
+      catalogPath(server.id),
+      JSON.stringify({
+        connectionKey: legacyKey,
+        discoveredAt: 1_000,
+        expiresAt: Date.now() + 60_000,
+        serverId: server.id,
+        tools: makeRawTools(['search']),
+        prompts: [prompt],
+        version: 2,
+      }),
+    );
+
+    const { service } = makeService([server]);
+    try {
+      await expect(service.listExecutableToolDescriptors(server.id)).resolves.toEqual([
+        expect.objectContaining({ rawToolName: 'search' }),
+      ]);
+      await expect(service.getCachedPrompts()).resolves.toEqual({ [server.id]: [prompt] });
+      expect(mockCreateMCPClient).not.toHaveBeenCalled();
+    } finally {
+      await service._doStop();
+    }
+
+    const mismatched = makeServer({
+      headers: { 'X-Custom': 'value-2', authorization: 'Bearer token-1' },
+    });
+    const client = makeClient(makeRawTools(['live_search']));
+    mockCreateMCPClient.mockResolvedValue(client);
+    const { service: updatedService } = makeService([mismatched]);
+    try {
+      await expect(updatedService.listExecutableToolDescriptors(mismatched.id)).resolves.toEqual([
+        expect.objectContaining({ rawToolName: 'live_search' }),
+      ]);
+      expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
+    } finally {
+      await updatedService._doStop();
+    }
+  });
 });
 
 describe('cached MCP prompts', () => {
@@ -1993,5 +2113,148 @@ describe('cached MCP prompts', () => {
       service.readPrompt(binding.agentId, server.id, prompt.key, { topic: 'Changes' }),
     ).rejects.toMatchObject({ code: 'mcp_tool_unavailable' });
     expect(client.getPrompt).toHaveBeenCalledTimes(2);
+  });
+
+  it('readResultResource accepts historical v0.6.3 mixed-case header keys and rejects changed headers', async () => {
+    const server = makeServer({
+      headers: { 'X-Custom': 'value-1', authorization: 'Bearer token-1' },
+    });
+    const client = makeClient([]);
+    client.protocolInfo = { version: '2026-07-28', tools: true, resources: true, prompts: false };
+    client.readResource = jest.fn(async () => ({
+      contents: [{ uri: 'data://result', mimeType: 'text/plain', text: 'Result' }],
+    }));
+    mockCreateMCPClient.mockResolvedValue(client);
+    const legacyMaterial = JSON.stringify([
+      server.endpointUrl,
+      '',
+      [
+        ['x-custom', 'value-1'],
+        ['authorization', 'Bearer token-1'],
+      ],
+    ]);
+    const legacyKey = `remote:${await digestStringAsync(CryptoDigestAlgorithm.SHA256, legacyMaterial)}`;
+    const canonicalKey = await createMcpConnectionKey(server);
+    expect(legacyKey).not.toBe(canonicalKey);
+
+    const { service } = makeService([server]);
+    try {
+      await expect(
+        service.readResultResource({
+          source: { serverId: server.id, connectionKey: legacyKey },
+          uri: 'data://result',
+        }),
+      ).resolves.toMatchObject({
+        title: 'data://result',
+        text: expect.stringContaining('Result'),
+      });
+
+      server.headers = { 'X-Custom': 'value-2', authorization: 'Bearer token-1' };
+      await expect(
+        service.readResultResource({
+          source: { serverId: server.id, connectionKey: legacyKey },
+          uri: 'data://result',
+        }),
+      ).rejects.toMatchObject({ code: 'mcp_tool_unavailable' });
+    } finally {
+      await service._doStop();
+    }
+  });
+
+  it('describeServerExecutionSettings matches canonical and v0.6.3 legacy keys and detects config edits offline', async () => {
+    const server = makeServer({
+      headers: { 'X-Custom': 'value-1', authorization: 'Bearer token-1' },
+    });
+    const client = makeClient([
+      { name: 'lookup', description: 'Lookup', inputSchema: { type: 'object' } },
+    ]);
+    mockCreateMCPClient.mockResolvedValue(client);
+    const { service } = makeService([server]);
+    try {
+      const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+      const saved = await service.describeServerExecutionSettings(server);
+      expect(saved.executionSettingsKey).toBe(descriptor!.executionSettingsKey);
+
+      const legacyMaterial = JSON.stringify([
+        server.endpointUrl,
+        '',
+        [
+          ['x-custom', 'value-1'],
+          ['authorization', 'Bearer token-1'],
+        ],
+      ]);
+      const legacyKey = `remote:${await digestStringAsync(CryptoDigestAlgorithm.SHA256, legacyMaterial)}`;
+      expect(legacyKey).not.toBe(saved.executionSettingsKey);
+      await expect(saved.matchesExecutionSettingsKey(saved.executionSettingsKey)).resolves.toBe(
+        true,
+      );
+      await expect(saved.matchesExecutionSettingsKey(legacyKey)).resolves.toBe(true);
+
+      const editedEndpoint = await service.describeServerExecutionSettings({
+        ...server,
+        endpointUrl: 'https://edited.example.com/mcp',
+      });
+      expect(editedEndpoint.executionSettingsKey).not.toBe(saved.executionSettingsKey);
+      await expect(editedEndpoint.matchesExecutionSettingsKey(legacyKey)).resolves.toBe(false);
+
+      const editedHeaders = await service.describeServerExecutionSettings({
+        ...server,
+        headers: { 'X-Custom': 'value-2', authorization: 'Bearer token-1' },
+      });
+      await expect(
+        editedHeaders.matchesExecutionSettingsKey(saved.executionSettingsKey),
+      ).resolves.toBe(false);
+
+      const editedOauth = await service.describeServerExecutionSettings({
+        ...server,
+        oauth: { authorizationId: 'oauth-2', clientId: 'client-2' },
+      });
+      await expect(
+        editedOauth.matchesExecutionSettingsKey(saved.executionSettingsKey),
+      ).resolves.toBe(false);
+    } finally {
+      await service._doStop();
+    }
+  });
+
+  it('increments getToolCatalogVersion across catalog discovery, background refresh, restore, and invalidation', async () => {
+    const server = makeServer();
+    const initialTools = makeRawTools(['calendar_list']);
+    const refreshedTools = makeRawTools(['calendar_list', 'doc_create']);
+    const client = makeClient(initialTools);
+    client.listTools
+      .mockResolvedValueOnce({ tools: initialTools })
+      .mockResolvedValueOnce({ tools: refreshedTools });
+    mockCreateMCPClient.mockResolvedValue(client);
+    const { service } = makeService([server]);
+    try {
+      expect(service.getToolCatalogVersion()).toBe(0);
+      await service.listExecutableToolDescriptors(server.id, undefined, undefined, undefined);
+      const vAfterLive = service.getToolCatalogVersion();
+      expect(vAfterLive).toBeGreaterThan(0);
+
+      // Simulate expiry triggering a background refresh when next listed.
+      const states = (
+        service as unknown as {
+          runtimeStates: Map<string, { catalog?: { expiresAt: number } }>;
+        }
+      ).runtimeStates;
+      states.get(server.id)!.catalog!.expiresAt = 0;
+
+      await service.listExecutableToolDescriptors(server.id);
+      await flush();
+      const vAfterRefresh = service.getToolCatalogVersion();
+      expect(vAfterRefresh).toBeGreaterThan(vAfterLive);
+
+      service.invalidateServer(server.id, { preserveSnapshot: true });
+      const vAfterInvalidate = service.getToolCatalogVersion();
+      expect(vAfterInvalidate).toBeGreaterThan(vAfterRefresh);
+
+      const restored = await service.listExecutableToolDescriptors(server.id);
+      expect(restored.map((item) => item.rawToolName)).toEqual(['calendar_list', 'doc_create']);
+      expect(service.getToolCatalogVersion()).toBeGreaterThan(vAfterInvalidate);
+    } finally {
+      await service._doStop();
+    }
   });
 });

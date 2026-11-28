@@ -179,3 +179,30 @@ test('preserves the output tail and excludes diagnostics from model results', as
     expect.any(AbortSignal),
   );
 });
+
+test('binds executionSettingsKey to the SSH profile, revision, selection, and diagnostic grant', () => {
+  const baseKey = createSshTool(ssh, 'conversation', target).executionSettingsKey;
+  expect(baseKey).toBe(JSON.stringify(['connection', 'revision', 'selection', null]));
+  expect(
+    createSshTool(ssh, 'conversation', {
+      ...target,
+      profile: { ...target.profile, id: 'other-connection' },
+    }).executionSettingsKey,
+  ).not.toBe(baseKey);
+  expect(
+    createSshTool(ssh, 'conversation', {
+      ...target,
+      profile: { ...target.profile, revision: 'revision-2' },
+    }).executionSettingsKey,
+  ).not.toBe(baseKey);
+  expect(
+    createSshTool(ssh, 'conversation', { ...target, selectionId: 'selection-2' })
+      .executionSettingsKey,
+  ).not.toBe(baseKey);
+  expect(
+    createSshTool(ssh, 'conversation', {
+      ...target,
+      grant: { scope: 'diagnostics', id: 'diag-grant', expiresAt: Date.now() + 60000 },
+    }).executionSettingsKey,
+  ).toBe(JSON.stringify(['connection', 'revision', 'selection', 'diag-grant']));
+});

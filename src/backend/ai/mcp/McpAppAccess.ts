@@ -15,7 +15,7 @@ import {
   McpRuntimeToolError,
   type McpInvocationProgress,
 } from './mcpRuntimeAdapter';
-import { createMcpConnectionKey } from './mcpToolCatalogStore';
+import { matchesMcpConnectionKey } from './mcpToolCatalogStore';
 
 /** The service owns connections and catalogs; App access owns authorization policy only. */
 export type McpAppConnection = {
@@ -84,7 +84,7 @@ export class McpAppAccess {
     await this.assertBinding(reference, reference.toolName);
     return this.ports.withConnection(reference.serverId, signal, async (connection) => {
       const { server } = connection;
-      if ((await createMcpConnectionKey(server)) !== reference.connectionKey) throw unavailable();
+      if (!(await matchesMcpConnectionKey(server, reference.connectionKey))) throw unavailable();
       const tools = await connection.tools();
       const source = tools.find((tool) => tool.name === reference.toolName);
       if (

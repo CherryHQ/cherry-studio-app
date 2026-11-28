@@ -1715,3 +1715,139 @@ describe('web policy persistence', () => {
       expect(() => PiConfigurationSchema.parse({ ...configuration, webTools })).toThrow();
   });
 });
+
+test('projects direct install_skill and nested PiCodemodeSkillScopeEntry in chronological order even while parent Code Mode call is still running', () => {
+  const turn = projectPiTurn({
+    lane: { sessionId: 'session', slot: 0 },
+    metadata: {
+      kind: 'cherry.input',
+      version: 1,
+      requestId: 'req',
+      turnId: 'turn',
+      userMessageId: 'u',
+      assistantMessageId: 'a',
+      createdAt: 1000,
+      metadata: {},
+      tools: [
+        {
+          ref: { source: 'builtin', capabilityId: 'install_skill' },
+          providerName: 'install_skill',
+          displayName: 'Install Skill',
+          description: 'Install skill.',
+          inputSchema: {},
+          approval: 'auto',
+        },
+        {
+          ref: { source: 'builtin', capabilityId: 'run_js' },
+          providerName: 'run_js',
+          displayName: 'Run JavaScript',
+          description: 'Code mode.',
+          inputSchema: {},
+          approval: 'auto',
+        },
+      ],
+    },
+    record: { id: 1, type: 'input', status: 'placed', entry: 1 } as unknown as SubmissionRecord,
+    active: true,
+    entries: [
+      {
+        id: 2,
+        conversationId: 1,
+        kind: 'pi.assistant',
+        model: [
+          {
+            role: 'assistant',
+            api: 'openai-responses',
+            provider: 'openai',
+            model: 'gpt-5',
+            stopReason: 'toolUse',
+            timestamp: 1100,
+            usage: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              totalTokens: 0,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+            },
+            content: [
+              { type: 'toolCall', id: 'direct-install', name: 'install_skill', arguments: {} },
+            ],
+          },
+        ],
+      },
+      {
+        id: 3,
+        conversationId: 1,
+        kind: 'pi.tool-result',
+        data: { diagnostics: [] },
+        model: [
+          {
+            role: 'toolResult',
+            toolCallId: 'direct-install',
+            toolName: 'install_skill',
+            content: [{ type: 'text', text: 'Installed.' }],
+            details: {
+              kind: 'cherry.tool-result',
+              ref: { source: 'builtin', capabilityId: 'install_skill' },
+              providerName: 'install_skill',
+              displayName: 'Install Skill',
+              output: {
+                value: {
+                  status: 'installed',
+                  skill_id: 'skill-direct',
+                  contentHash: 'hash-direct-1',
+                  availableThisTurn: true,
+                },
+                artifacts: [],
+              },
+            },
+            isError: false,
+            timestamp: 1200,
+          },
+        ],
+      },
+      {
+        id: 4,
+        conversationId: 1,
+        kind: 'pi.assistant',
+        model: [
+          {
+            role: 'assistant',
+            api: 'openai-responses',
+            provider: 'openai',
+            model: 'gpt-5',
+            stopReason: 'toolUse',
+            timestamp: 1300,
+            usage: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              totalTokens: 0,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+            },
+            content: [{ type: 'toolCall', id: 'parent-codemode', name: 'codemode', arguments: {} }],
+          },
+        ],
+      },
+      {
+        id: 5,
+        conversationId: 1,
+        kind: 'cherry.codemode-skill-scope',
+        data: {
+          parentCallId: 'parent-codemode',
+          callId: 'parent-codemode/c1',
+          change: { kind: 'adapted', skillId: 'skill-nested', contentHash: 'hash-nested-2' },
+        },
+      },
+    ] as unknown as EntryRecord[],
+  });
+
+  expect(turn.parts).toHaveLength(2);
+  expect(turn.parts[1]).toMatchObject({ toolCallId: 'parent-codemode', state: 'input-available' });
+  expect(turn.skillScopeChanges).toEqual([
+    { kind: 'installed', skillId: 'skill-direct', contentHash: 'hash-direct-1' },
+    { kind: 'adapted', skillId: 'skill-nested', contentHash: 'hash-nested-2' },
+  ]);
+});

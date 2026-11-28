@@ -81,6 +81,7 @@ import {
 import {
   createMcpConnectionKey,
   deleteMcpToolCatalog,
+  matchesMcpConnectionKey,
   readMcpToolCatalog,
   writeMcpToolCatalog,
 } from './mcpToolCatalogStore';
@@ -297,10 +298,15 @@ export class McpRuntimeService extends BaseService implements McpModule {
   private readonly runtimeStates = new Map<string, ServerRuntimeState>();
   private readonly runtimeSnapshots = new Map<string, McpServerRuntimeSnapshot>();
   private readonly promptCatalogListeners = new Set<() => void>();
+  private toolCatalogVersion = 0;
 
   constructor(private readonly traces?: TraceRecorder) {
     super();
     this.pluginAuthorizations = new PluginAuthorizationManager(undefined, undefined, traces);
+  }
+
+  getToolCatalogVersion(): number {
+    return this.toolCatalogVersion;
   }
 
   async beginOAuth(input: McpOAuthStartInput) {
@@ -547,7 +553,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
       source.serverId,
       signal,
       async ({ client, server, signal: requestSignal }) => {
-        if ((await createMcpConnectionKey(server)) !== source.connectionKey)
+        if (!(await matchesMcpConnectionKey(server, source.connectionKey)))
           throw unavailableToolError();
         // A returned resource need not appear in resources/list. Its URI is interpreted only by this server.
         return readMcpContent(
@@ -632,6 +638,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     serverId: string,
     onUnavailable?: (warning: string) => void,
     signal?: AbortSignal,
+    onDiscoveryIncomplete?: () => void,
   ): Promise<McpExecutableToolDescriptor[]> {
     const server = await mcpServerService.getById(serverId);
     const sourceName =
@@ -653,6 +660,9 @@ export class McpRuntimeService extends BaseService implements McpModule {
       onUnavailable?.(
         `${sourceName}: tool discovery failed (${reason}). Check authorization and the service connection.`,
       );
+      if (!(error instanceof McpRuntimeToolError && !error.retryable)) {
+        onDiscoveryIncomplete?.();
+      }
       if (error instanceof McpRuntimeToolError) {
         throw error;
       }
@@ -663,12 +673,16 @@ export class McpRuntimeService extends BaseService implements McpModule {
       );
     }
     if (!this.isCurrentState(state)) {
+      onDiscoveryIncomplete?.();
       throw unavailableToolError();
     }
     const definitions = catalog.tools;
-    const connectionKey =
-      server.origin === 'builtin' ? undefined : await this.getConnectionKey(state);
+    const bindingKey = await this.getConnectionKey(state);
+    const connectionKey = server.origin === 'builtin' ? undefined : bindingKey;
     const disabledTools = new Set(server.disabledTools);
+    if (catalog.discoveryWarnings.length > 0) {
+      onDiscoveryIncomplete?.();
+    }
     for (const warning of catalog.discoveryWarnings) onUnavailable?.(warning);
     if (definitions.length === 0)
       onUnavailable?.(`${sourceName}: the service returned no available tools.`);
@@ -688,6 +702,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
         const readOnly = tool.annotations?.readOnlyHint === true;
         return [
           {
+            executionSettingsKey: bindingKey,
             ...(connectionKey ? { connectionKey } : {}),
             ...(resourceUri && connectionKey
               ? { app: { serverId: server.id, toolName: tool.name, resourceUri, connectionKey } }
@@ -717,6 +732,22 @@ export class McpRuntimeService extends BaseService implements McpModule {
           },
         ];
       });
+  }
+
+  /**
+   * Compute the saved connection fingerprint for an MCP server row without opening a transport.
+   * Returns both the canonical key and a matcher that also accepts pre-1.6 header sort order.
+   */
+  async describeServerExecutionSettings(server: McpServer): Promise<{
+    executionSettingsKey: string;
+    matchesExecutionSettingsKey(expected: string): Promise<boolean>;
+  }> {
+    const config = toMcpConnectionConfig(server);
+    const executionSettingsKey = await createMcpConnectionKey(config);
+    return {
+      executionSettingsKey,
+      matchesExecutionSettingsKey: (expected) => matchesMcpConnectionKey(config, expected),
+    };
   }
 
   /** Adapt an already selected catalog without reading Agent bindings or injecting the Host. */
@@ -776,6 +807,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
       this.runtimeSnapshots.delete(serverId);
       deleteMcpToolCatalog(serverId);
     }
+    this.toolCatalogVersion += 1;
     this.notifyPromptCatalogs();
   }
 
@@ -849,11 +881,13 @@ export class McpRuntimeService extends BaseService implements McpModule {
   /** Single-flight restore of the stored catalog for this connection configuration. */
   private restoreCatalog(server: McpServer, state: ServerRuntimeState): Promise<void> {
     state.catalogRestore ??= (async () => {
-      const [stored, key] = await Promise.all([
-        readMcpToolCatalog(server.id),
-        this.getConnectionKey(state),
-      ]);
-      if (!stored || stored.connectionKey !== key || !this.isCurrentState(state)) return;
+      const stored = await readMcpToolCatalog(server.id);
+      if (
+        !stored ||
+        !(await matchesMcpConnectionKey(state.connectionConfig, stored.connectionKey)) ||
+        !this.isCurrentState(state)
+      )
+        return;
       state.prompts ??= stored.prompts;
       if (state.catalog) return;
       state.catalog = {
@@ -863,6 +897,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
         source: 'stored',
         tools: stored.tools,
       };
+      this.toolCatalogVersion += 1;
       this.runtimeSnapshots.set(server.id, {
         ...this.runtimeSnapshots.get(server.id),
         connectionConfig: state.connectionConfig,
@@ -1123,6 +1158,9 @@ export class McpRuntimeService extends BaseService implements McpModule {
   private retireState(state: ServerRuntimeState): void {
     if (this.runtimeStates.get(state.serverId) === state) {
       this.runtimeStates.delete(state.serverId);
+    }
+    if (state.catalog !== undefined) {
+      this.toolCatalogVersion += 1;
     }
     state.generation = this.allocateGeneration();
     state.abort.abort();
@@ -1447,6 +1485,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     if (discoveryWarnings.length > 0) this.recordDiscoveryFailure(state);
     else state.discoveryFailure = undefined;
     state.catalog = { discoveryWarnings, expiresAt, source: 'live', tools: rawTools };
+    this.toolCatalogVersion += 1;
     const discoveredAt = Date.now();
     this.runtimeSnapshots.set(server.id, {
       connectionConfig: state.connectionConfig,
