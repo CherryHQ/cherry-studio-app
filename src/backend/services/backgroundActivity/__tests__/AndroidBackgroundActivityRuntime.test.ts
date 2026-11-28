@@ -225,6 +225,28 @@ test.each(['foreground', 'replacement lease'] as const)(
   },
 );
 
+test('coalesces foreground return and a replacement lease before retrying a refused start', async () => {
+  const lease = runtime.acquire('chat');
+  native.start
+    .mockImplementationOnce(async () => {
+      setAppState('background');
+      setAppState('active');
+      lease.release();
+      runtime.acquire('next-task');
+      throw new Error('First refusal');
+    })
+    .mockRejectedValueOnce(new Error('Retry refused'));
+  await flush();
+  expect(native.start).toHaveBeenCalledTimes(2);
+  expect(runtime.getStatus()).toBe('limited');
+
+  setAppState('background');
+  setAppState('active');
+  await flush();
+  expect(native.start).toHaveBeenCalledTimes(3);
+  expect(runtime.getStatus()).toBe('active');
+});
+
 test('returning while the service runs requests permission skipped during startup', async () => {
   notices.getPermissionsAsync.mockResolvedValue({
     status: 'undetermined',
