@@ -7,15 +7,18 @@ const appleRuntime = 'ReactCommon/react/runtime/platform/ios';
 // Verify installed-source delivery. Runtime teardown is exercised by the upstream native tests.
 test('keeps the iOS renderer scheduler until JS cleanup and removes its observer on main', () => {
   const instance = readFileSync(join(root, appleRuntime, 'ReactCommon/RCTInstance.mm'), 'utf8');
-  const invalidate = instance.split('- (void)invalidate\n')[1].split('\n- (')[0];
+  const invalidate = instance
+    .split('- (void)invalidate\n')[1]
+    .split('\n- (')[0]
+    .replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
   const [suspend, teardown] = invalidate.split('RCTExecuteOnMainQueue(^{');
   expect(suspend).toMatch(
-    /__block RCTScheduler \*scheduler = _surfacePresenter\.scheduler;\s*\[_surfacePresenter suspend\];/,
+    /[;{}]\s*__block RCTScheduler \*scheduler = _surfacePresenter\.scheduler;\s*\[_surfacePresenter suspend\];/,
   );
   const [mainQueue, jsCleanup] = teardown.split('[self->_jsThreadManager dispatchToJSThread:^{');
   expect(mainQueue.trim()).toBe('[scheduler stopObservingLayoutAnimations];');
-  expect(jsCleanup.split('}];', 1)[0]).toMatch(
-    /scheduler = nil;\s*self->_reactInstance = nullptr;/,
+  expect(jsCleanup).toMatch(
+    /^\s*\[self->_turboModuleManager invalidate\];\s*scheduler = nil;\s*self->_reactInstance = nullptr;/,
   );
   const scheduler = readFileSync(join(root, 'React/Fabric/RCTScheduler.mm'), 'utf8');
   expect(scheduler).toMatch(
