@@ -192,6 +192,106 @@ const sessionResult = (id: string) => ({
 });
 const startInput = { draftId: 'draft', agentId: 'agent', workspaceId: 'workspace', text: 'hello' };
 
+it('settles more than 200 handoffs without retaining composer starts or undelivered drafts', async () => {
+  const { storage, port } = journal();
+  const request = jest.fn(async (name: string, body: unknown) => {
+    const payload = body as { commandId: string; text?: string };
+    if (name === 'agent.sessions.get') return sessionResult('s');
+    return receipt(
+      payload.commandId,
+      payload.text === 'private rejected brief' ? 'rejected' : 'applied',
+      {
+        method: name,
+      },
+    );
+  });
+  const actions = new RemoteAgentActions('pc:grant', port, request, () => {});
+  const input = { ...startInput, dispatch: true as const, text: 'private brief' };
+  for (let index = 0; index < 202; index++) {
+    const rejects = index % 2 === 1;
+    const operation = await actions.start({
+      ...input,
+      draftId: `approved-${index}`,
+      text: rejects ? 'private rejected brief' : input.text,
+    });
+    expect(operation.status).toBe(rejects ? 'rejected' : 'applied');
+  }
+  expect(actions.getStarts()).toEqual([]);
+  expect(actions.get()).toEqual([]);
+  const stored = storage.read('pc:grant')!;
+  expect(stored).not.toContain('private');
+  const saved = actions.getDispatch('approved-0')!;
+  actions.release(saved.id);
+  actions.discard(saved.id);
+  const replayRequest = jest.fn();
+  const restored = new RemoteAgentActions('pc:grant', port, replayRequest, () => {});
+  expect(await restored.start({ ...input, draftId: 'approved-0' })).toMatchObject(saved);
+  expect(await restored.start({ ...input, draftId: 'approved-1' })).toMatchObject({
+    status: 'rejected',
+  });
+  expect(replayRequest).not.toHaveBeenCalled();
+  expect(
+    new RemoteAgentActions('pc:replacement', port, replayRequest, () => {}).getDispatch(
+      saved.draftId,
+    ),
+  ).toBeUndefined();
+  await expect(actions.start(startInput)).resolves.toMatchObject({ status: 'applied' });
+  expect(actions.getStarts()).toHaveLength(1);
+});
+
+it.each([true, false])(
+  'recovers a draft-only handoff from a lost create reply (marked: %s)',
+  async (marked) => {
+    const { storage, port } = journal();
+    const request = jest.fn().mockRejectedValue(new RemoteAgentError('CONNECTION_LOST', true));
+    const original = new RemoteAgentActions('pc:grant', port, request, () => {});
+    const input = {
+      ...startInput,
+      title: 'Desktop task',
+      ...(marked ? { dispatch: true as const } : {}),
+    };
+    const pending = await original.start(input);
+    expect(pending).toMatchObject({ status: 'pending' });
+    expect(pending.sessionId).toBeUndefined();
+    original.stop();
+    const saved = JSON.parse(storage.read('pc:grant')!);
+    const [savedStart] = saved.starts;
+    if (!marked)
+      storage.write(
+        'pc:grant',
+        JSON.stringify({ version: 3, starts: saved.starts, records: saved.records }),
+      );
+    const recover = jest.fn(async (name: string, body: unknown) => {
+      const payload = body as { commandId: string };
+      if (name === 'agent.sessions.get') return sessionResult('s');
+      if (name === 'agent.commands.get')
+        return receipt(payload.commandId, 'applied', { method: 'agent.sessions.create' });
+      return receipt(payload.commandId, 'applied', { method: name });
+    });
+    const restored = new RemoteAgentActions('pc:grant', port, recover, () => {});
+    expect(restored.getDispatch(input.draftId, pending.id)).toMatchObject({ status: 'pending' });
+    expect(restored.getDispatch(input.draftId, 'other')).toBeUndefined();
+    await restored.recover();
+    expect(recover.mock.calls.map(([name]) => name)).toEqual([
+      'agent.commands.get',
+      'agent.sessions.get',
+      'agent.messages.send',
+    ]);
+    expect(recover).toHaveBeenCalledWith('agent.commands.get', { commandId: savedStart.createId });
+    expect(recover).toHaveBeenCalledWith(
+      'agent.messages.send',
+      expect.objectContaining({
+        commandId: savedStart.sendId,
+      }),
+    );
+    const applied = { id: pending.id, draftId: pending.draftId, status: 'applied', sessionId: 's' };
+    expect(restored.getDispatch(input.draftId, pending.id)).toMatchObject(applied);
+    expect(restored.getStarts()).toEqual([]);
+    const reopened = new RemoteAgentActions('pc:grant', port, recover, () => {});
+    expect(reopened.getDispatch(input.draftId, pending.id)).toMatchObject(applied);
+  },
+);
+
 it('recovers both fixed start commands after create succeeded and the send response was lost', async () => {
   const { storage, port } = journal();
   const request = jest.fn(async (name: string, body: any) => {
@@ -250,6 +350,36 @@ it('rejects different input for a start still awaiting its outcome', async () =>
   await expect(actions.start({ ...startInput, text: 'different' })).rejects.toMatchObject({
     code: 'IDEMPOTENCY_CONFLICT',
   });
+});
+
+it('preserves an explicit title in the durable create command and rejects a title change', async () => {
+  const { port } = journal();
+  const request = jest.fn(async (method: string, body: unknown) => {
+    if (method === 'agent.sessions.get') return sessionResult('s');
+    if (
+      typeof body !== 'object' ||
+      body === null ||
+      !('commandId' in body) ||
+      typeof body.commandId !== 'string'
+    )
+      throw new Error('Expected a command ID');
+    return { ...receipt(body.commandId, 'applied'), method };
+  });
+  const actions = new RemoteAgentActions('pc:grant', port, request, () => {});
+  const input = { ...startInput, title: 'Desktop task' };
+  const started = await actions.start(input);
+  expect(started).toMatchObject({ title: 'Desktop task', status: 'applied' });
+  expect(request).toHaveBeenCalledWith(
+    'agent.sessions.create',
+    expect.objectContaining({ title: 'Desktop task' }),
+  );
+  await expect(actions.start(input)).resolves.toEqual(started);
+  await expect(actions.start({ ...input, title: 'Changed' })).rejects.toMatchObject({
+    code: 'IDEMPOTENCY_CONFLICT',
+  });
+  expect(request.mock.calls.filter(([method]) => method === 'agent.sessions.create')).toHaveLength(
+    1,
+  );
 });
 
 it('replaces an undelivered start when its draft is submitted again', async () => {

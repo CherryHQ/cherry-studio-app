@@ -25,7 +25,9 @@ export type RemoteAttachmentDraftView = {
 };
 export type RemoteStartInput = {
   draftId: string;
+  dispatch?: true;
   agentId: string;
+  title?: string;
   text: string;
   attachments?: RemoteAttachment[];
 } & (
@@ -41,6 +43,7 @@ export type RemoteCommand = Readonly<{
   agentId?: string;
   userMessageId?: string;
   sessionId?: string;
+  executionId?: string;
   interactionId?: string;
   text?: string;
   attachments?: RemoteAttachment[];
@@ -54,13 +57,19 @@ export type RemoteStartOperation = Readonly<{
   agentId: string;
   workspaceId?: string;
   workspace?: RemoteWorkspaceSelection;
+  title?: string;
   text: string;
   attachments?: RemoteAttachment[];
   status: RemoteOperationStatus;
   sessionId?: string;
+  executionId?: string;
   error?: string;
   errorMessage?: string;
 }>;
+export type RemoteDispatchReceipt = Pick<
+  RemoteStartOperation,
+  'id' | 'draftId' | 'status' | 'sessionId' | 'executionId' | 'error'
+>;
 
 export type RemoteSourceState = Readonly<{
   status: 'connecting' | 'ready' | 'offline' | 'suspended' | 'retired';
@@ -180,4 +189,13 @@ export type RemoteSessionReadPreview = {
     hasOlderMessages: boolean;
     complete: boolean;
   };
+};
+
+/** Passive picture-in-picture preview of a remote Session. Observing it never opens a connection. */
+export type RemoteSessionLivePreview = {
+  connectionStatus: RemoteSourceState['status'];
+  current: boolean;
+  sessionTitle?: string;
+  executionState?: RemoteSessionSnapshot['executions'][number]['state'] | 'pending-confirm';
+  pendingInteraction?: { id: string; title: string; kind: 'decision' | 'question' };
 };
