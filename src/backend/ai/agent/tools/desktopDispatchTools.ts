@@ -102,6 +102,14 @@ export function isDispatchDevice(connection: DesktopConnection): boolean {
   return connection.status === 'paired' && connection.capabilities.includes('agent');
 }
 
+function sessionReadKey(connectionId: string, sessionId: string) {
+  return JSON.stringify(['session', connectionId, sessionId]);
+}
+
+function draftReadKey(connectionId: string, draftId: string) {
+  return JSON.stringify(['draft', connectionId, draftId]);
+}
+
 export function createDesktopDispatchTools(
   access: DesktopDispatchAccess,
   fileAccess: WorkspaceFileAccess,
@@ -114,6 +122,8 @@ export function createDesktopDispatchTools(
   const workspaceNames = new Map<string, string>();
   const { localSessionId } = metadata;
   const allowedSessions = [...initialDispatchedSessions];
+  const sameTurnDispatched = new Set<string>();
+  const checkedInTurn = new Set<string>();
 
   async function requireDevice(connectionId: string) {
     const connection = await access.connections.getById(connectionId);
@@ -154,7 +164,7 @@ export function createDesktopDispatchTools(
     capabilityId: 'desktop_dispatch_task',
     displayName: 'Dispatch task to desktop',
     description:
-      'Request approval to start a new desktop Agent session in the selected workspace with a title, a Markdown brief and authorized managed file attachments. A pending confirmation may already have reached the desktop. Check its session before considering another dispatch.',
+      'Request approval to start a new asynchronous desktop Agent session in the selected workspace with a title, a Markdown brief and authorized managed file attachments. Desktop tasks run in the background and may take a long time: once status is dispatched, report the handoff and finish the turn without calling desktop_read_session. A pending_confirmation may already have reached the desktop; check that dispatch once before considering another.',
     schema: dispatchSchema,
     write: true,
     async run(input, signal, { turnId, toolCallId }) {
@@ -165,12 +175,17 @@ export function createDesktopDispatchTools(
       const { workspace } = DesktopDispatchLastTargetSchema.parse(details);
       const finish = (operation: RemoteDispatchReceipt, errorMessage?: string) => {
         const { id: operationId, sessionId, error } = operation;
+        const status = dispatchStatus(operation);
+        if (status === 'dispatched') {
+          sameTurnDispatched.add(draftReadKey(details.connectionId, draftId));
+          if (sessionId) sameTurnDispatched.add(sessionReadKey(details.connectionId, sessionId));
+        }
         if (sessionId) allowedSessions.push({ connectionId: details.connectionId, sessionId });
         else allowedSessions.push({ connectionId: details.connectionId, draftId, operationId });
         return result(
           DesktopDispatchResultSchema.parse({
             ...value,
-            status: dispatchStatus(operation),
+            status,
             draftId,
             operationId,
             ...(sessionId ? { sessionId } : {}),
@@ -390,9 +405,37 @@ export function createDesktopDispatchTools(
       capabilityId: 'desktop_read_session',
       displayName: 'Read a dispatched desktop session',
       description:
-        'Read the latest reply and execution status of a desktop session dispatched from this local conversation. Provide connection_id and exactly one of session_id or draft_id using the IDs returned by desktop_dispatch_task. Use draft_id while the session ID is unknown to look up that exact dispatch.',
+        'Take one point-in-time snapshot of the latest reply and execution status of a desktop session dispatched from this local conversation. Provide connection_id and exactly one of session_id or draft_id using the IDs returned by desktop_dispatch_task. Use draft_id while the session ID is unknown to look up that exact dispatch. Call this at most once per desktop session in a turn, only when the user asks for an update or to check a pending_confirmation dispatch once. Never poll repeatedly or call this right after a dispatched handoff to wait for completion.',
       schema: readSessionSchema,
       async run({ connection_id: connectionId, session_id, draft_id }, signal) {
+        const readKey =
+          session_id !== undefined
+            ? sessionReadKey(connectionId, session_id)
+            : draft_id !== undefined
+              ? draftReadKey(connectionId, draft_id)
+              : undefined;
+        if (!readKey)
+          return result({
+            status: 'error',
+            error: 'INVALID_INPUT',
+            message: 'Provide exactly one of session_id or draft_id.',
+          });
+        const readSkipResult = (
+          status: 'already_dispatched' | 'already_checked',
+          message: string,
+        ) =>
+          result({
+            status,
+            connectionId,
+            ...(session_id !== undefined ? { sessionId: session_id } : {}),
+            ...(draft_id !== undefined ? { draftId: draft_id } : {}),
+            message,
+          });
+        if (sameTurnDispatched.has(readKey))
+          return readSkipResult(
+            'already_dispatched',
+            'This task was just dispatched to the desktop in this turn and runs asynchronously. Do not poll or wait for completion; report the handoff to the user and finish this turn. The user can follow progress in the task card or ask you to check in a later turn.',
+          );
         const ref = allowedSessions.find(
           (candidate) =>
             candidate.connectionId === connectionId &&
@@ -406,6 +449,12 @@ export function createDesktopDispatchTools(
             error: 'SESSION_NOT_IN_SCOPE',
             message: 'Only desktop sessions dispatched from this local conversation can be read.',
           });
+        if (checkedInTurn.has(readKey))
+          return readSkipResult(
+            'already_checked',
+            'This desktop session was already checked in this turn. Do not poll in a loop; report the status you already received and wait for the user to ask again later.',
+          );
+        checkedInTurn.add(readKey);
         await requireDevice(connectionId);
         return withDesktopSource(
           access.remoteAgent,
@@ -416,6 +465,8 @@ export function createDesktopDispatchTools(
               return readDesktopSession(source, connectionId, ref.sessionId, boundedSignal);
             const { draftId, operationId } = ref;
             const receipt = source.getDispatch(draftId, operationId);
+            if (receipt?.sessionId)
+              checkedInTurn.add(sessionReadKey(connectionId, receipt.sessionId));
             if (receipt?.sessionId && !isOffline(source)) {
               allowedSessions.push({ connectionId, sessionId: receipt.sessionId });
               return readDesktopSession(source, connectionId, receipt.sessionId, boundedSignal);

@@ -37,6 +37,9 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).toContain(
       '`dispatched` means the desktop accepted the task and dispatch approval is complete',
     );
+    expect(prompt).toContain('finish your turn without calling `desktop_read_session`');
+    expect(prompt).toContain('single point-in-time snapshot');
+    expect(prompt).toContain('never poll in a loop');
     expect(prompt).toContain(
       "`pending_confirmation` means the desktop's acceptance is still unconfirmed",
     );

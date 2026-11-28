@@ -277,16 +277,25 @@ it('reuses the approved call identity and reads an exact draft receipt before an
   ).toMatchObject({ status: 'pending_confirmation', draftId });
   expect(nextTurn.source.getDispatch).toHaveBeenCalledWith(draftId, 'operation');
   expect(nextTurn.source.observe).not.toHaveBeenCalled();
+  expect(
+    (await nextTurn.run('read_session', { connection_id: 'pc', draft_id: draftId })).value,
+  ).toMatchObject({ status: 'already_checked', connectionId: 'pc', draftId });
+  expect(nextTurn.open).toHaveBeenCalledTimes(1);
 
-  nextTurn.source.getDispatch.mockReturnValue({
+  const settledTurn = fixture([{ connectionId: 'pc', draftId, operationId: 'operation' }]);
+  settledTurn.source.getDispatch.mockReturnValue({
     ...receipt,
     status: 'applied',
     sessionId: 'session',
   });
   expect(
-    (await nextTurn.run('read_session', { connection_id: 'pc', draft_id: draftId })).value,
+    (await settledTurn.run('read_session', { connection_id: 'pc', draft_id: draftId })).value,
   ).toMatchObject({ status: 'ok', sessionId: 'session' });
-  expect(nextTurn.source.observe).toHaveBeenCalledWith('session', expect.any(Function));
+  expect(settledTurn.source.observe).toHaveBeenCalledWith('session', expect.any(Function));
+  expect(
+    (await settledTurn.run('read_session', { connection_id: 'pc', session_id: 'session' })).value,
+  ).toMatchObject({ status: 'already_checked', connectionId: 'pc', sessionId: 'session' });
+  expect(settledTurn.open).toHaveBeenCalledTimes(1);
 });
 
 it('lists paired Agent devices and the validated last target using only local metadata', async () => {
@@ -527,7 +536,7 @@ it('persists pending targets on a best effort basis and accepts eight attachment
   expect(test.createTextArtifact).not.toHaveBeenCalled();
 });
 
-it('refuses foreign desktop session pairs before opening and reads the same-turn dispatch', async () => {
+it('refuses foreign pairs, blocks same-turn polling after dispatch, and allows one readback per session in a later turn', async () => {
   const test = fixture();
   const request = { connection_id: 'pc', session_id: 'session' };
   expect((await test.run('read_session', request)).value).toMatchObject({
@@ -535,12 +544,31 @@ it('refuses foreign desktop session pairs before opening and reads the same-turn
     error: 'SESSION_NOT_IN_SCOPE',
   });
   expect(test.open).not.toHaveBeenCalled();
-  await test.run('dispatch_task', INPUT);
+
+  const dispatched = DesktopDispatchResultSchema.parse(
+    (await test.run('dispatch_task', INPUT)).value,
+  );
+  expect(dispatched).toMatchObject({ status: 'dispatched', sessionId: 'session' });
   expect(
     (await test.run('read_session', { ...request, connection_id: 'other' })).value,
   ).toMatchObject({ status: 'forbidden' });
+  expect((await test.run('read_session', request)).value).toMatchObject({
+    status: 'already_dispatched',
+    connectionId: 'pc',
+    sessionId: 'session',
+  });
+  expect(
+    (await test.run('read_session', { connection_id: 'pc', draft_id: dispatched.draftId! })).value,
+  ).toMatchObject({
+    status: 'already_dispatched',
+    connectionId: 'pc',
+    draftId: dispatched.draftId,
+  });
   expect(test.open).toHaveBeenCalledTimes(1);
-  expect((await test.run('read_session', request)).value).toEqual({
+  expect(test.source.observe).not.toHaveBeenCalled();
+
+  const laterTurn = fixture([{ connectionId: 'pc', sessionId: 'session' }]);
+  expect((await laterTurn.run('read_session', request)).value).toEqual({
     status: 'ok',
     connectionId: 'pc',
     sessionId: 'session',
@@ -550,9 +578,54 @@ it('refuses foreign desktop session pairs before opening and reads the same-turn
     latestReply: 'x'.repeat(2000),
     recentTools: [{ name: 'inspect', state: 'input-ready' }],
   });
-  expect(test.source.readResource).toHaveBeenCalledWith('reply-text', expect.any(AbortSignal));
-  expect(test.unobserve).toHaveBeenCalledTimes(1);
-  expect(test.source.dispose).toHaveBeenCalledTimes(2);
+  expect(laterTurn.source.readResource).toHaveBeenCalledWith('reply-text', expect.any(AbortSignal));
+  expect(laterTurn.unobserve).toHaveBeenCalledTimes(1);
+  expect(laterTurn.source.dispose).toHaveBeenCalledTimes(1);
+
+  expect((await laterTurn.run('read_session', request)).value).toMatchObject({
+    status: 'already_checked',
+    connectionId: 'pc',
+    sessionId: 'session',
+  });
+  expect(laterTurn.open).toHaveBeenCalledTimes(1);
+});
+
+it('allows one same-turn check for a pending_confirmation dispatch and blocks subsequent polling', async () => {
+  const test = fixture();
+  test.source.start.mockImplementationOnce(async (input) => ({
+    ...input,
+    id: 'operation',
+    status: 'pending',
+  }));
+  const pending = DesktopDispatchResultSchema.parse((await test.run('dispatch_task', INPUT)).value);
+  expect(pending.status).toBe('pending_confirmation');
+  const draftId = pending.draftId!;
+  test.source.getDispatch.mockReturnValue({ id: 'operation', draftId, status: 'pending' });
+
+  expect(
+    (await test.run('read_session', { connection_id: 'pc', draft_id: draftId })).value,
+  ).toMatchObject({ status: 'pending_confirmation', draftId });
+  expect(
+    (await test.run('read_session', { connection_id: 'pc', draft_id: draftId })).value,
+  ).toMatchObject({ status: 'already_checked', connectionId: 'pc', draftId });
+  expect(test.open).toHaveBeenCalledTimes(2);
+});
+
+it('scopes the single-check-per-turn guard per session so distinct sessions can each be read once', async () => {
+  const test = fixture([
+    { connectionId: 'pc', sessionId: 'session-1' },
+    { connectionId: 'pc', sessionId: 'session-2' },
+  ]);
+  expect(
+    (await test.run('read_session', { connection_id: 'pc', session_id: 'session-1' })).value,
+  ).toMatchObject({ status: 'ok', sessionId: 'session-1' });
+  expect(
+    (await test.run('read_session', { connection_id: 'pc', session_id: 'session-2' })).value,
+  ).toMatchObject({ status: 'ok', sessionId: 'session-2' });
+  expect(
+    (await test.run('read_session', { connection_id: 'pc', session_id: 'session-1' })).value,
+  ).toMatchObject({ status: 'already_checked', connectionId: 'pc', sessionId: 'session-1' });
+  expect(test.open).toHaveBeenCalledTimes(2);
 });
 
 it('keeps a pending remote question out of the approval field', async () => {
