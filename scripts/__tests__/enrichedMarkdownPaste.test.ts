@@ -1,5 +1,9 @@
 import { readFileSync } from 'node:fs';
 
+const editor = readFileSync(
+  'node_modules/react-native-enriched-markdown/ios/input/EnrichedMarkdownTextInput.mm',
+  'utf8',
+);
 const patch = readFileSync('patches/react-native-enriched-markdown@1.1.1.patch', 'utf8');
 const inputPatch = patch
   .split('+++ b/ios/input/ENRMInputTextView.mm\n')[1]
@@ -40,6 +44,28 @@ describe('iOS asynchronous editor paste patch', () => {
     expect(additions).toContain('NSEqualRanges(textView.selectedRange, textView->_pasteSelection)');
     expect(additions).toMatch(/resignFirstResponder[\s\S]*_pasteGeneration\+\+/);
     expect(additions).toContain('[textView.markdownTextInput pasteMarkdown:text]');
+  });
+
+  test('suspends smart punctuation only while inserting the parsed paste', () => {
+    expect(additions).toMatch(
+      /smartQuotesType = UITextSmartQuotesTypeNo;[\s\S]*smartDashesType = UITextSmartDashesTypeNo;[\s\S]*pasteMarkdown:text[\s\S]*@finally[\s\S]*smartQuotesType = quotes;[\s\S]*smartDashesType = dashes;/,
+    );
+  });
+
+  test('preserves the programmatic edit phase across UIKit replacement callbacks', () => {
+    const delegate = editor
+      .split('shouldChangeTextInRange:(NSRange)range replacementText:')[1]
+      .split('\n- (void)textViewDidChange:')[0];
+    expect(delegate).toMatch(
+      /if \(_editSession.shouldSuppressFormatting\) return YES;[\s\S]*?emitOnKeyPress:text[\s\S]*?enterPhase:ENRMEditPhaseProcessing/,
+    );
+  });
+
+  test('refreshes the empty list marker using the final pasted blocks and selection', () => {
+    const replacement = editor.split('- (void)replaceTextInRange:(NSRange)selection')[1];
+    expect(replacement).toMatch(
+      /\[_blockStore setBlockType:[^;]*;[\s\S]*?_lastSelectedRange = _textView.selectedRange;[\s\S]*?\[self applyFormatting\];[\s\S]*?\[self updateEmptyBulletMarker\];[\s\S]*?\[self requestHeightUpdate\];/,
+    );
   });
 
   // Pasting during IME composition worked before the asynchronous load and must keep working.
