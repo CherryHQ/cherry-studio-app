@@ -74,7 +74,7 @@ function MessageUsageButton({
       : new Intl.NumberFormat(locale, {
           style: 'unit',
           unit: 'second',
-          maximumFractionDigits: 1,
+          maximumFractionDigits: 0,
         }).format(durationMs / 1000);
   const summary = [tokens, duration].filter(Boolean).join(' · ') || t('chat.messageUsage.title');
 
