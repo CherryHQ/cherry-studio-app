@@ -550,15 +550,68 @@ describe('ModelService', () => {
         supportsStreaming: true,
       }),
     ]);
-    await expect(service.getById('openai::gpt-4o')).resolves.toMatchObject({
-      id: 'openai::gpt-4o',
-      name: 'GPT-4o',
-    });
-    await expect(service.getByKey('openai', 'gpt-4o')).resolves.toMatchObject({
-      id: 'openai::gpt-4o',
-      name: 'GPT-4o',
-    });
+    await expect(service.getById('openai::gpt-4o')).rejects.toThrow(
+      'Model registry has not been downloaded yet',
+    );
+    await expect(service.getByKey('openai', 'gpt-4o')).rejects.toThrow(
+      'Model registry has not been downloaded yet',
+    );
     expect(whereCalls).toHaveLength(3);
+  });
+
+  test('waits for ProviderRegistryUpdaterService on getById so execution reads receive preset capabilities', async () => {
+    const row: UserModelRow = {
+      createdAt: 0,
+      updatedAt: 0,
+      orderKey: 'a0',
+      inputModalitiesExplicit: false,
+      id: 'openai::gpt-4o',
+      providerId: 'openai',
+      modelId: 'gpt-4o',
+      presetModelId: 'gpt-4o',
+      name: null,
+      maxOutputTokens: null,
+      contextWindow: null,
+      maxInputTokens: null,
+      capabilities: null,
+      description: null,
+      endpointTypes: null,
+      group: null,
+      inputModalities: null,
+      outputModalities: null,
+      parameters: null,
+      pricing: null,
+      reasoning: null,
+      supportsStreaming: null,
+      notes: null,
+      isDeprecated: false,
+      isEnabled: true,
+      isHidden: false,
+    };
+    const db = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [row],
+            orderBy: async () => [row],
+          }),
+        }),
+      }),
+    };
+    const ensureReady = jest.fn(async () => {
+      installProviderRegistryTestSnapshot();
+    });
+    await installTestHost({
+      DbService: { getDb: () => db, withWriteTx: jest.fn() } as unknown as DbService,
+      PreferenceService: { get: jest.fn(async () => null) } as unknown as PreferenceService,
+      ProviderRegistryUpdaterService: { ensureReady } as never,
+    });
+    const service = new ModelService();
+    providerRegistryService.clearRemoteSnapshot();
+
+    const model = await service.getById('openai::gpt-4o');
+    expect(ensureReady).toHaveBeenCalledTimes(1);
+    expect(model?.capabilities).toContain(MODEL_CAPABILITY.FUNCTION_CALL);
   });
 });
 

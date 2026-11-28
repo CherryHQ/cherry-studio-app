@@ -27,6 +27,7 @@ import { raceAbort } from '@/backend/utils/raceAbort';
 import type { ProviderRegistryUpdateResult } from '@/shared/contracts';
 
 import {
+  type ActiveProviderRegistrySlot,
   type ProviderRegistrySnapshot,
   readActiveProviderRegistrySlot,
   readParsedProviderRegistryCache,
@@ -216,7 +217,10 @@ export class ProviderRegistryUpdaterService extends BaseService {
     }
   }
 
-  private async tryActivateParsedCache(slot: SnapshotSlot): Promise<boolean> {
+  private async tryActivateParsedCache(
+    slot: SnapshotSlot,
+    expectedPointer?: ActiveProviderRegistrySlot,
+  ): Promise<boolean> {
     const cached = await readParsedProviderRegistryCache(slot);
     if (!cached || this.stopped) return false;
     try {
@@ -224,7 +228,10 @@ export class ProviderRegistryUpdaterService extends BaseService {
       if (
         cached.cacheVersion !== PARSED_REGISTRY_CACHE_VERSION ||
         cached.desktopCompatibilityVersion !== REGISTRY_DESKTOP_COMPATIBILITY_VERSION ||
-        !isCatalogManifestCompatible(cached.manifest)
+        !isCatalogManifestCompatible(cached.manifest) ||
+        (expectedPointer &&
+          (cached.manifest.revision !== expectedPointer.revision ||
+            cached.manifest.schemaVersion !== expectedPointer.schemaVersion))
       ) {
         return false;
       }
@@ -246,12 +253,22 @@ export class ProviderRegistryUpdaterService extends BaseService {
 
   private async activateCachedSnapshot(): Promise<void> {
     if (Platform.OS === 'web') return;
-    const activeSlot = await readActiveProviderRegistrySlot();
-    if (activeSlot) {
-      const orderedSlots: readonly SnapshotSlot[] = [activeSlot, activeSlot === 'a' ? 'b' : 'a'];
+    const activePointer = await readActiveProviderRegistrySlot();
+    if (activePointer) {
+      const orderedSlots: readonly SnapshotSlot[] = [
+        activePointer.slot,
+        activePointer.slot === 'a' ? 'b' : 'a',
+      ];
       for (const slot of orderedSlots) {
         if (this.stopped) return;
-        if (await this.tryActivateParsedCache(slot)) return;
+        if (
+          await this.tryActivateParsedCache(
+            slot,
+            slot === activePointer.slot ? activePointer : undefined,
+          )
+        ) {
+          return;
+        }
         if (this.stopped) return;
         const raw = await readProviderRegistrySnapshotSlot(slot);
         if (this.stopped) return;

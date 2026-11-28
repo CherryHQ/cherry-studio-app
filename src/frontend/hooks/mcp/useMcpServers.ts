@@ -80,7 +80,9 @@ export function useCachedMcpPrompts(options?: { enabled?: boolean }) {
     enabled,
     queryKey: queryKeys.mcpServers.prompts(),
     queryFn: () => mcp.getCachedPrompts(),
-    staleTime: Infinity,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    staleTime: 0,
     retry: false,
   });
   return query.data ?? EMPTY_MCP_PROMPTS;

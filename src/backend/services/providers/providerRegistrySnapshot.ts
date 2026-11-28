@@ -29,6 +29,7 @@ const ParsedCacheEnvelopeSchema = z.object({
 });
 const slots = ['a', 'b'] as const;
 export type SnapshotSlot = (typeof slots)[number];
+export type ActiveProviderRegistrySlot = z.infer<typeof ActiveSlotPointerSchema>;
 export type ProviderRegistrySnapshot = z.infer<typeof SnapshotSchema> & { slot: SnapshotSlot };
 export type ParsedProviderRegistryCache = {
   cacheVersion: number;
@@ -58,11 +59,11 @@ async function writeJsonAtomically(destination: File, body: string): Promise<voi
   await temporary.move(destination, { overwrite: true });
 }
 
-export async function readActiveProviderRegistrySlot(): Promise<SnapshotSlot | null> {
+export async function readActiveProviderRegistrySlot(): Promise<ActiveProviderRegistrySlot | null> {
   const file = activeSlotFile();
   if (!file.exists) return null;
   try {
-    return ActiveSlotPointerSchema.parse(JSON.parse(await file.text())).slot;
+    return ActiveSlotPointerSchema.parse(JSON.parse(await file.text()));
   } catch (error) {
     logger.warn('Could not read the active registry slot pointer', error as Error);
     return null;
@@ -97,6 +98,32 @@ export async function readProviderRegistrySnapshotSlot(
   }
 }
 
+function deleteFileIfExists(file: File): void {
+  try {
+    if (file.exists) file.delete();
+  } catch (error) {
+    logger.warn('Could not delete stale registry cache file', error as Error, { name: file.name });
+  }
+}
+
+async function writeActiveSlotPointer(
+  slot: SnapshotSlot,
+  manifest: CatalogManifest,
+): Promise<void> {
+  try {
+    await writeJsonAtomically(
+      activeSlotFile(),
+      JSON.stringify({
+        revision: manifest.revision,
+        schemaVersion: manifest.schemaVersion,
+        slot,
+      }),
+    );
+  } catch (error) {
+    logger.warn('Could not persist active registry slot pointer', error as Error, { slot });
+  }
+}
+
 /** Persist the already-validated snapshot structure and active slot pointer (best effort). */
 export async function writeParsedProviderRegistryCache(
   slot: SnapshotSlot,
@@ -113,17 +140,11 @@ export async function writeParsedProviderRegistryCache(
         snapshot,
       }),
     );
-    await writeJsonAtomically(
-      activeSlotFile(),
-      JSON.stringify({
-        revision: manifest.revision,
-        schemaVersion: manifest.schemaVersion,
-        slot,
-      }),
-    );
   } catch (error) {
+    deleteFileIfExists(parsedCacheFile(slot));
     logger.warn('Could not persist parsed registry cache', error as Error, { slot });
   }
+  await writeActiveSlotPointer(slot, manifest);
 }
 
 /** Return newest first; the updater validates compatibility and both payloads before activation. */
@@ -144,22 +165,15 @@ export async function writeProviderRegistrySnapshot(
   parsed?: MobileRemoteRegistrySnapshot,
 ): Promise<SnapshotSlot> {
   const slot = activeSlot === 'a' ? 'b' : 'a';
+  // Clear stale slot cache and pointer before committing the raw snapshot so a failed
+  // cache or pointer write falls back to scanning both slots instead of pinning an older revision.
+  deleteFileIfExists(parsedCacheFile(slot));
+  deleteFileIfExists(activeSlotFile());
   await writeJsonAtomically(snapshotFile(slot), JSON.stringify({ files, manifest }));
   if (parsed) {
     await writeParsedProviderRegistryCache(slot, manifest, parsed);
   } else {
-    try {
-      await writeJsonAtomically(
-        activeSlotFile(),
-        JSON.stringify({
-          revision: manifest.revision,
-          schemaVersion: manifest.schemaVersion,
-          slot,
-        }),
-      );
-    } catch (error) {
-      logger.warn('Could not persist active registry slot pointer', error as Error, { slot });
-    }
+    await writeActiveSlotPointer(slot, manifest);
   }
   return slot;
 }

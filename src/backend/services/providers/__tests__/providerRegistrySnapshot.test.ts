@@ -16,7 +16,7 @@ import {
 
 jest.mock('expo-file-system', () => {
   const files = new Map<string, string>();
-  const state = { files, failMove: false };
+  const state = { files, failMove: false, failMoveNames: new Set<string>() };
   const join = (parts: (string | { uri: string })[]) =>
     parts.map((part) => (typeof part === 'string' ? part : part.uri).replace(/\/$/, '')).join('/');
   class MockDirectory {
@@ -43,6 +43,9 @@ jest.mock('expo-file-system', () => {
     create() {
       files.set(this.uri, '');
     }
+    delete() {
+      files.delete(this.uri);
+    }
     writeSync(body: string) {
       files.set(this.uri, body);
     }
@@ -54,7 +57,9 @@ jest.mock('expo-file-system', () => {
     async move(destination: MockFile) {
       // Expo's iOS overwrite removes the destination before moving the source.
       files.delete(destination.uri);
-      if (state.failMove) throw new Error('Move interrupted');
+      if (state.failMove || state.failMoveNames.has(destination.name)) {
+        throw new Error('Move interrupted');
+      }
       files.set(destination.uri, await this.text());
       files.delete(this.uri);
     }
@@ -67,7 +72,7 @@ jest.mock('expo-file-system', () => {
 });
 
 const { testState } = jest.requireMock<{
-  testState: { files: Map<string, string>; failMove: boolean };
+  testState: { files: Map<string, string>; failMove: boolean; failMoveNames: Set<string> };
 }>('expo-file-system');
 const files = {
   'models.json': '{"version":"models","models":[]}',
@@ -86,6 +91,7 @@ function manifest(revision: number): CatalogManifest {
 beforeEach(() => {
   testState.files.clear();
   testState.failMove = false;
+  testState.failMoveNames.clear();
 });
 
 it('keeps the previous complete snapshot when an overwrite is interrupted', async () => {
@@ -119,7 +125,11 @@ it('persists active slot pointer and parsed cache alongside the durable snapshot
   const slot = await writeProviderRegistrySnapshot(files, manifest(3), undefined, parsedSnapshot);
 
   expect(slot).toBe('a');
-  expect(await readActiveProviderRegistrySlot()).toBe('a');
+  expect(await readActiveProviderRegistrySlot()).toEqual({
+    revision: 3,
+    schemaVersion: 1,
+    slot: 'a',
+  });
   expect(await readParsedProviderRegistryCache('a')).toEqual({
     cacheVersion: PARSED_REGISTRY_CACHE_VERSION,
     desktopCompatibilityVersion: REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
@@ -138,5 +148,41 @@ it('persists active slot pointer and parsed cache alongside the durable snapshot
   expect(await readParsedProviderRegistryCache('a')).toBeNull();
 
   await writeParsedProviderRegistryCache('b', manifest(4), parsedSnapshot);
-  expect(await readActiveProviderRegistrySlot()).toBe('b');
+  expect(await readActiveProviderRegistrySlot()).toEqual({
+    revision: 4,
+    schemaVersion: 1,
+    slot: 'b',
+  });
+});
+
+it('advances the pointer without leaving stale parsed cache when parsed cache write fails', async () => {
+  const parsedSnapshot = {
+    models: { models: [], version: 'models' },
+    providerModels: { overrides: [], version: 'providers' },
+  } as unknown as MobileRemoteRegistrySnapshot;
+  const first = await writeProviderRegistrySnapshot(files, manifest(1), undefined, parsedSnapshot);
+
+  testState.failMoveNames.add('parsed-b.json');
+  const second = await writeProviderRegistrySnapshot(files, manifest(2), first, parsedSnapshot);
+
+  expect(second).toBe('b');
+  expect(await readParsedProviderRegistryCache('b')).toBeNull();
+  expect(await readActiveProviderRegistrySlot()).toEqual({
+    revision: 2,
+    schemaVersion: 1,
+    slot: 'b',
+  });
+});
+
+it('clears the old active pointer before committing so pointer failure triggers full scan', async () => {
+  const first = await writeProviderRegistrySnapshot(files, manifest(1));
+
+  testState.failMoveNames.add('active-slot.json');
+  const second = await writeProviderRegistrySnapshot(files, manifest(2), first);
+
+  expect(second).toBe('b');
+  expect(await readActiveProviderRegistrySlot()).toBeNull();
+  expect(
+    (await readProviderRegistrySnapshots()).map((snapshot) => snapshot.manifest.revision),
+  ).toEqual([2, 1]);
 });

@@ -21,8 +21,8 @@ let mockProviders: readonly Provider[] = mockEmptyList;
 let mockEnterprise = false;
 let mockModelsData: readonly Model[] | undefined = mockEmptyList;
 let mockProvidersData: readonly Provider[] | undefined = mockEmptyList;
-let mockModelCalls: Array<{ query: unknown; options: unknown }> = [];
-let mockProviderCalls: Array<{ query: unknown; options: unknown }> = [];
+let mockModelCalls: { query: unknown; options: unknown }[] = [];
+let mockProviderCalls: { query: unknown; options: unknown }[] = [];
 
 const openaiProvider = { id: 'openai', name: 'OpenAI', isEnabled: true } as Provider;
 const cloudProvider = { id: CLOUD_PROVIDER_ID, name: 'CherryAI', isEnabled: true } as Provider;
@@ -140,6 +140,12 @@ describe('useSelectedModelItem', () => {
       useSelectedModelItem({ modelId: `${CLOUD_PROVIDER_ID}::guest-model` }),
     );
     expect(cloudResult?.hasResolved).toBe(false);
+
+    const [delistedCloudResult] = renderHookTwice(() =>
+      useSelectedModelItem({ modelId: `${CLOUD_PROVIDER_ID}::delisted-model` }),
+    );
+    expect(delistedCloudResult?.hasResolved).toBe(true);
+    expect(delistedCloudResult?.item).toBeUndefined();
   });
 });
 

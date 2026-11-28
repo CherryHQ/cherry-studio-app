@@ -449,13 +449,27 @@ export class ModelService {
     return configs;
   }
 
-  private async enrichModels(rows: UserModelRow[]): Promise<Model[]> {
-    if (rows.length === 0) return [];
-    const configs = await this.getProviderConfigs(rows.map((row) => row.providerId));
-    // First-paint reads can run before the remote registry snapshot installs in PostReady.
-    if (!providerRegistryService.isReady()) {
-      return rows.map((row) => materializeStoredModel(row, configs.get(row.providerId)));
+  private async ensureRegistryReady(): Promise<void> {
+    if (providerRegistryService.isReady()) return;
+    if (application.current?.container.has('ProviderRegistryUpdaterService')) {
+      await application.get('ProviderRegistryUpdaterService').ensureReady();
     }
+    providerRegistryService.assertReady();
+  }
+
+  private async enrichModels(
+    rows: UserModelRow[],
+    options?: { allowStoredFallback?: boolean },
+  ): Promise<Model[]> {
+    if (rows.length === 0) return [];
+    if (!providerRegistryService.isReady()) {
+      if (options?.allowStoredFallback) {
+        const configs = await this.getProviderConfigs(rows.map((row) => row.providerId));
+        return rows.map((row) => materializeStoredModel(row, configs.get(row.providerId)));
+      }
+      await this.ensureRegistryReady();
+    }
+    const configs = await this.getProviderConfigs(rows.map((row) => row.providerId));
     return rows.map((row) => enrichModelFromRegistry(row, configs.get(row.providerId)));
   }
 
@@ -481,7 +495,7 @@ export class ModelService {
       .from(userModelTable)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(asc(userModelTable.providerId), asc(userModelTable.orderKey));
-    const models = await this.enrichModels(rows);
+    const models = await this.enrichModels(rows, { allowStoredFallback: true });
     return query.capability
       ? models.filter((model) => model.capabilities.includes(query.capability as never))
       : models;

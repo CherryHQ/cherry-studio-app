@@ -443,7 +443,11 @@ it('cold-starts from the active slot parsed cache without reading raw snapshots 
     providerModels: JSON.parse(cached.files['provider-models.json']),
   });
   const parseSpy = jest.spyOn(providerRegistryService, 'parseRemoteSnapshot');
-  jest.mocked(readActiveProviderRegistrySlot).mockResolvedValue('b');
+  jest.mocked(readActiveProviderRegistrySlot).mockResolvedValue({
+    revision: 2,
+    schemaVersion: REGISTRY_SCHEMA_VERSION,
+    slot: 'b',
+  });
   jest.mocked(readParsedProviderRegistryCache).mockResolvedValue({
     cacheVersion: PARSED_REGISTRY_CACHE_VERSION,
     desktopCompatibilityVersion: REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
@@ -465,7 +469,11 @@ it('cold-starts from the active slot parsed cache without reading raw snapshots 
 
 it('falls back to the active raw snapshot and refreshes cache when parsed cache is stale', async () => {
   const raw = snapshot(3);
-  jest.mocked(readActiveProviderRegistrySlot).mockResolvedValue('a');
+  jest.mocked(readActiveProviderRegistrySlot).mockResolvedValue({
+    revision: 3,
+    schemaVersion: REGISTRY_SCHEMA_VERSION,
+    slot: 'a',
+  });
   jest.mocked(readParsedProviderRegistryCache).mockResolvedValue({
     cacheVersion: 0,
     desktopCompatibilityVersion: REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
@@ -489,10 +497,48 @@ it('falls back to the active raw snapshot and refreshes cache when parsed cache 
   );
 });
 
+it('falls back to the active raw snapshot when parsed cache revision mismatches active pointer', async () => {
+  const stale = snapshot(2);
+  const current = snapshot(4);
+  const parsedStale = providerRegistryService.parseRemoteSnapshot({
+    models: JSON.parse(stale.files['models.json']),
+    providerModels: JSON.parse(stale.files['provider-models.json']),
+  });
+  jest.mocked(readActiveProviderRegistrySlot).mockResolvedValue({
+    revision: 4,
+    schemaVersion: REGISTRY_SCHEMA_VERSION,
+    slot: 'b',
+  });
+  jest.mocked(readParsedProviderRegistryCache).mockResolvedValue({
+    cacheVersion: PARSED_REGISTRY_CACHE_VERSION,
+    desktopCompatibilityVersion: REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
+    manifest: stale.manifest,
+    slot: 'b',
+    snapshot: parsedStale,
+  });
+  jest.mocked(readProviderRegistrySnapshotSlot).mockResolvedValueOnce({ ...current, slot: 'b' });
+
+  await updater.start();
+
+  expect(providerRegistryService.getCatalogVersion('models.json')).toBe('models-4');
+  expect(readProviderRegistrySnapshotSlot).toHaveBeenCalledWith('b');
+  expect(writeParsedProviderRegistryCache).toHaveBeenCalledWith(
+    'b',
+    current.manifest,
+    expect.objectContaining({
+      models: expect.objectContaining({ version: 'models-4' }),
+    }),
+  );
+});
+
 it('falls back to the previous slot when the active slot snapshot is invalid', async () => {
   const corrupt = snapshot(2);
   corrupt.files['models.json'] = JSON.stringify({ version: 'mismatched', models: [] });
-  jest.mocked(readActiveProviderRegistrySlot).mockResolvedValue('b');
+  jest.mocked(readActiveProviderRegistrySlot).mockResolvedValue({
+    revision: 2,
+    schemaVersion: REGISTRY_SCHEMA_VERSION,
+    slot: 'b',
+  });
   jest.mocked(readParsedProviderRegistryCache).mockResolvedValue(null);
   jest
     .mocked(readProviderRegistrySnapshotSlot)

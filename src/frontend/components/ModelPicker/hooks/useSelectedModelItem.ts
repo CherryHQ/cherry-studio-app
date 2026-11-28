@@ -4,7 +4,11 @@ import { useModels, useProviders } from '@/frontend/hooks/chat';
 import { useCloud } from '@/frontend/hooks/useCloud';
 import { CLOUD_PROVIDER_ID, isCloudModelListed } from '@/shared/contracts/cloud';
 import { isEnterpriseProfile } from '@/shared/data/activeProfile';
-import { type UniqueModelId, UniqueModelIdSchema } from '@/shared/data/types/model';
+import {
+  parseUniqueModelId,
+  type UniqueModelId,
+  UniqueModelIdSchema,
+} from '@/shared/data/types/model';
 
 import { getModelPickerModelItem, type ModelPickerModelItem } from '../utils/modelPickerData';
 import type { ModelTypeFilter } from '../utils/modelTypeFilter';
@@ -59,14 +63,23 @@ export function useSelectedModelItem({
     providers.some((provider) => provider.id === CLOUD_PROVIDER_ID),
   );
   const cloudSettledError = cloud.guestCatalog === 'error' || cloud.phase === 'error';
-  const hasListedCloudModels = cloud.models.some((model) => isCloudModelListed(cloud, model.id));
-  const hasProjectedCloudModels = models.some((model) => model.providerId === CLOUD_PROVIDER_ID);
+  const selectedCloudModelId =
+    isCloudModelSelected && queryId ? parseUniqueModelId(queryId).modelId : undefined;
+  const isSelectedCloudModelListed = Boolean(
+    selectedCloudModelId &&
+    cloud.models.some(
+      (model) => model.id === selectedCloudModelId && isCloudModelListed(cloud, model.id),
+    ),
+  );
+  const hasProjectedSelectedCloudModel = Boolean(
+    queryId && models.some((model) => model.id === queryId),
+  );
   const isCloudCatalogPending =
     isCloudModelSelected &&
     !cloudSettledError &&
     (cloud.phase === 'loading' ||
       (cloud.phase === 'signed_out' && cloud.guestCatalog !== 'ready') ||
-      (hasListedCloudModels && !hasProjectedCloudModels));
+      (isSelectedCloudModelListed && !hasProjectedSelectedCloudModel));
   const hasResolved =
     (enabled && Boolean(modelId) && !hasValidModelId) ||
     (active &&
