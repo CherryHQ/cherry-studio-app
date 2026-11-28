@@ -2809,7 +2809,7 @@
   "settings.websearch.source.fallback": "Preferir as ferramentas escolhidas em Plugins",
   "settings.websearch.source.label": "Origem das ferramentas web",
   "settings.websearch.source.preferred": "Preferir as ferramentas do modelo (predefinição)",
-  "sharing.clipboardTooLarge": "Selecione menos texto para copiar ou use Partilhar para exportar a mensagem.",
+  "sharing.clipboardTooLarge": "Selecione menos texto para copiar.",
   "sharing.imageExcerpt": "O conteúdo restante foi omitido",
   "sharing.imageGroup": "Partilhar grupo de imagens",
   "sharing.messageCount_many": "{{count}} mensagens",

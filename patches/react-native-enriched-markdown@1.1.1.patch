@@ -112,11 +112,13 @@ index 06fa054e9..65a7504ec 100644
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/view/SelectionActionMode.kt b/android/src/main/java/com/swmansion/enriched/markdown/utils/text/view/SelectionActionMode.kt
 --- a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/view/SelectionActionMode.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/utils/text/view/SelectionActionMode.kt
-@@ -3,12 +3,15 @@
+@@ -3,12 +3,17 @@
  import android.content.ClipData
  import android.content.ClipboardManager
  import android.content.Context
++import android.os.Build
 +import android.os.Parcel
++import android.os.Parcelable
 +import android.os.TransactionTooLargeException
  import android.text.Spannable
  import android.view.ActionMode
@@ -128,7 +130,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/vi
  import com.swmansion.enriched.markdown.EnrichedMarkdown
  import com.swmansion.enriched.markdown.EnrichedMarkdownText
  import com.swmansion.enriched.markdown.spans.ImageSpan
-@@ -127,24 +130,19 @@
+@@ -127,24 +132,19 @@
      ): Boolean {
        val itemId = item?.itemId ?: return false
  
@@ -164,7 +166,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/vi
        }
  
        val customItems = getCustomItemTexts()
-@@ -164,43 +162,76 @@
+@@ -164,43 +164,78 @@
      override fun onDestroyActionMode(mode: ActionMode?) {}
    }
  
@@ -175,7 +177,8 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/vi
 +private fun ClipboardManager.trySetClip(clip: ClipData): Boolean {
 +  val parcel = Parcel.obtain()
 +  try {
-+    clip.writeToParcel(parcel, 0)
++    // Android 10 can create a temporary descriptor for HTML during serialization.
++    clip.writeToParcel(parcel, Parcelable.PARCELABLE_WRITE_RETURN_VALUE)
 +    if (parcel.dataSize() >= MAX_CLIP_BYTES) return false
 +  } finally {
 +    parcel.recycle()
@@ -201,7 +204,8 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/vi
 +    val formatted = html?.invoke()
 +    if (
 +      formatted != null &&
-+      formatted.length < MAX_CLIP_BYTES - plainText.length &&
++      // Android 10 can send large HTML via shared memory. Its parcel contains only a descriptor.
++      (Build.VERSION.SDK_INT == Build.VERSION_CODES.Q || formatted.length < MAX_CLIP_BYTES - plainText.length) &&
 +      clipboard.trySetClip(ClipData.newHtmlText(label, plainText, formatted))
 +    ) {
 +      return true
@@ -272,7 +276,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/vi
  }
  
  /** Returns remote image URLs (http/https only) from the current selection. */
-@@ -216,12 +247,10 @@
+@@ -216,12 +251,10 @@
      .filter { it.startsWith("http://") || it.startsWith("https://") }
  }
  
@@ -292,7 +296,7 @@ diff --git a/android/src/test/java/com/swmansion/enriched/markdown/utils/text/vi
 new file mode 100644
 --- /dev/null
 +++ b/android/src/test/java/com/swmansion/enriched/markdown/utils/text/view/ClipboardSelectionTest.kt
-@@ -0,0 +1,39 @@
+@@ -0,0 +1,59 @@
 +package com.swmansion.enriched.markdown.utils.text.view
 +
 +import android.content.ClipData
@@ -304,8 +308,10 @@ new file mode 100644
 +import org.junit.runner.RunWith
 +import org.robolectric.RobolectricTestRunner
 +import org.robolectric.RuntimeEnvironment
++import org.robolectric.annotation.Config
 +
 +@RunWith(RobolectricTestRunner::class)
++@Config(sdk = [35])
 +class ClipboardSelectionTest {
 +  private val context: Context = RuntimeEnvironment.getApplication()
 +  private val view = TextView(context)
@@ -320,10 +326,28 @@ new file mode 100644
 +
 +  @Test fun keepsAllPlainTextWhenHtmlDoesNotFit() {
 +    val text = "plain text".repeat(10_000)
-+    assertTrue(view.copySelection("Text", text) { "x".repeat(1024 * 1024) })
++    // Fits the character-count guard, but its serialized representation exceeds 1 MiB.
++    assertTrue(view.copySelection("Text", text) { "界".repeat(600_000) })
 +    val item = clipboard.primaryClip!!.getItemAt(0)
 +    assertEquals(text, item.text)
 +    assertNull(item.htmlText)
++  }
++
++  @Test
++  @Config(sdk = [29])
++  fun preservesLargeHtmlCarriedBySharedMemoryOnAndroid10() {
++    val text = "&".repeat(200_000)
++    val html = "<b>" + "&amp;".repeat(200_000) + "</b>"
++    assertTrue(view.copySelection("Text", text) { html })
++    val item = clipboard.primaryClip!!.getItemAt(0)
++    assertEquals(text, item.text)
++    assertEquals(html, item.htmlText)
++  }
++
++  @Test fun keepsPreviousClipWhenPlainTextExceedsTheSerializedSizeLimit() {
++    clipboard.setPrimaryClip(ClipData.newPlainText("Text", "previous"))
++    assertFalse(view.copySelection("Text", "界".repeat(600_000)))
++    assertEquals("previous", clipboard.primaryClip!!.getItemAt(0).text)
 +  }
 +
 +  @Test fun keepsPreviousClipAndSkipsFormattingAnOversizedSelection() {

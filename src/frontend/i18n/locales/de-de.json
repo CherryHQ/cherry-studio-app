@@ -2788,7 +2788,7 @@
   "settings.websearch.source.fallback": "Unter „Plugins“ ausgewählte Tools bevorzugen",
   "settings.websearch.source.label": "Quelle der Webtools",
   "settings.websearch.source.preferred": "Integrierte Modelltools bevorzugen (Standard)",
-  "sharing.clipboardTooLarge": "Wähle zum Kopieren weniger Text aus oder exportiere die Nachricht über „Teilen“.",
+  "sharing.clipboardTooLarge": "Wähle zum Kopieren weniger Text aus.",
   "sharing.imageExcerpt": "Weitere Inhalte wurden ausgelassen",
   "sharing.imageGroup": "Bildgruppe teilen",
   "sharing.messageCount_one": "{{count}} Nachricht",

@@ -2809,7 +2809,7 @@
   "settings.websearch.source.fallback": "Preferă instrumentele alese în „Module suplimentare”",
   "settings.websearch.source.label": "Sursa instrumentelor web",
   "settings.websearch.source.preferred": "Preferă instrumentele integrate în model (implicit)",
-  "sharing.clipboardTooLarge": "Selectează mai puțin text de copiat sau folosește opțiunea de partajare pentru a exporta mesajul.",
+  "sharing.clipboardTooLarge": "Selectează mai puțin text de copiat.",
   "sharing.imageExcerpt": "Restul conținutului a fost omis",
   "sharing.imageGroup": "Partajează grupul de imagini",
   "sharing.messageCount_few": "{{count}} mesaje",
