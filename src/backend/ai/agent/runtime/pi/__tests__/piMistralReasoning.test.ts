@@ -87,12 +87,13 @@ async function run(deltas: Record<string, unknown>[], provider?: string) {
 async function replay(
   message: AssistantMessage,
   tail: Message[] = [{ role: 'user', content: 'Continue.', timestamp: 1 }],
+  replayModel: Model<'openai-completions'> = model,
 ) {
   const payloads: { messages: Record<string, unknown>[] }[] = [];
   // Replay the persisted representation, including provider-owned reasoning metadata.
   const saved = JSON.parse(JSON.stringify(message)) as AssistantMessage;
   const result = await streamSimple(
-    model,
+    replayModel,
     normalizeContext({
       messages: [{ role: 'user', content: 'Calculate.', timestamp: 0 }, saved, ...tail],
     }),
@@ -572,5 +573,31 @@ test('preserves literal object-string text arriving on the wire', async () => {
   expect(totals(result)).toEqual({
     thinking: '[object Object]',
     text: '[object Object][object Object]',
+  });
+});
+
+test('replays GitHub Copilot reasoning_opaque with and without reasoning_text', async () => {
+  const copilotModel: Model<'openai-completions'> = { ...model, provider: 'github-copilot' };
+  const withText = await run(
+    [{ reasoning_text: 'Check step 1.', reasoning_opaque: 'opaque-1' }, { content: 'Answer 1.' }],
+    'github-copilot',
+  );
+  const withTextMessages = await replay(withText.result, undefined, copilotModel);
+  expect(withTextMessages.find((message) => message.role === 'assistant')).toEqual({
+    role: 'assistant',
+    content: 'Answer 1.',
+    reasoning_text: 'Check step 1.',
+    reasoning_opaque: 'opaque-1',
+  });
+
+  const opaqueOnly = await run(
+    [{ reasoning_opaque: 'opaque-only' }, { content: 'Answer 2.' }],
+    'github-copilot',
+  );
+  const opaqueOnlyMessages = await replay(opaqueOnly.result, undefined, copilotModel);
+  expect(opaqueOnlyMessages.find((message) => message.role === 'assistant')).toEqual({
+    role: 'assistant',
+    content: 'Answer 2.',
+    reasoning_opaque: 'opaque-only',
   });
 });
