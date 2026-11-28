@@ -1,7 +1,8 @@
-import type {
-  AccountsPortal,
-  AuthState,
-  ProfileChoice,
+import {
+  AccountsPortalError,
+  type AccountsPortal,
+  type AuthState,
+  type ProfileChoice,
 } from '@cherryinternal/accounts-portal/client';
 import { loggerService } from '@logger';
 import * as z from 'zod';
@@ -192,16 +193,25 @@ export class AccountRuntime implements AccountModule {
     return stayed && !this.redirectRouted;
   }
 
-  readonly receiveRedirect = (url: string): Promise<boolean> => {
-    this.redirectRouted = true;
-    return this.finishRedirect(url);
-  };
+  readonly receiveRedirect = (url: string): Promise<boolean> => this.finishRedirect(url, true);
 
-  private finishRedirect(url: string): Promise<boolean> {
-    if (this.callback) {
-      if (this.callback.url === url) return this.callback.result;
-      return Promise.reject(new AccountError('rejected'));
+  private async finishRedirect(url: string, routed = false): Promise<boolean> {
+    const previous = this.callback;
+    if (previous && previous.url !== url) {
+      // The SDK leaves the pending sign-in intact when a different attempt's state arrives.
+      const stale = await previous.result.then(
+        () => false,
+        (error: unknown) => error instanceof AccountsPortalError && error.code === 'state_mismatch',
+      );
+      if (!stale || !this.callback) throw new AccountError('rejected');
+      if (this.callback === previous) this.callback = undefined;
     }
+    if (this.callback) {
+      if (this.callback.url !== url) throw new AccountError('rejected');
+      this.redirectRouted ||= routed;
+      return this.callback.result;
+    }
+    this.redirectRouted = routed;
     const ownsBusy = !this.state.isBusy;
     if (ownsBusy) this.update({ isBusy: true });
     const result = this.completeCloudSignIn(url).finally(() => {

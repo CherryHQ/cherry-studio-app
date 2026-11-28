@@ -1,4 +1,8 @@
-import type { AuthState, CompleteSignInOptions } from '@cherryinternal/accounts-portal/client';
+import {
+  AccountsPortalError,
+  type AuthState,
+  type CompleteSignInOptions,
+} from '@cherryinternal/accounts-portal/client';
 
 import { ProfileRegistry } from '@/backend/data/profile/ProfileRegistry';
 import { HttpError } from '@/backend/services/http';
@@ -212,6 +216,25 @@ describe('AccountRuntime', () => {
     expect(options.portal.beginSignIn).not.toHaveBeenCalled();
     expect(options.portal.completeSignIn).toHaveBeenCalledTimes(1);
     expect(options.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts the browser return when a stale routed callback fails its state check', async () => {
+    const { runtime, options } = setup(signedIn('cloud'));
+    options.portal.completeSignIn.mockRejectedValueOnce(
+      new AccountsPortalError('state_mismatch', 'Stale callback'),
+    );
+    options.openBrowser.mockImplementationOnce(async () => {
+      await expect(runtime.receiveRedirect('cb://?state=old')).rejects.toMatchObject({
+        code: 'state_mismatch',
+      });
+      return 'cb://?state=current';
+    });
+
+    await expect(runtime.signIn()).resolves.toBe(true);
+    expect(options.portal.completeSignIn.mock.calls.map(([url]) => url)).toEqual([
+      'cb://?state=old',
+      'cb://?state=current',
+    ]);
   });
 
   it('lets the callback route own navigation when the live browser also receives the result', async () => {
