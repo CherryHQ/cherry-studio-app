@@ -10,6 +10,7 @@ sending; this module is where those live.
 
 The `ComposerDraft` sub-entry exposes the in-memory editor buffer to local chat. Both the mounted
 editor and outstanding file imports or sends update the same buffer when its conversation reopens.
+The `fieldReadiness` sub-entry lets startup observe native field layout without loading the editor.
 
 ## Assembled by the caller
 

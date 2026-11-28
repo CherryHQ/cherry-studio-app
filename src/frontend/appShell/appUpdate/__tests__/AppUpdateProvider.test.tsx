@@ -1,6 +1,6 @@
 import type { AlertConfirmOptions, ToastShowOptions } from '@cherrystudio/ui/components';
 import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useLayoutEffect } from 'react';
+import { use, useLayoutEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type {
@@ -14,6 +14,7 @@ import type {
 import type { AppUpdateDialog } from '../AppUpdateDialog';
 import { AppUpdateProvider, useAppUpdateActions } from '../AppUpdateProvider';
 import { appUpdateQueryOptions } from '../appUpdateQueries';
+import { RequiredUpdateContext } from '../requiredUpdate';
 
 type AppUpdateDialogProps = Parameters<typeof AppUpdateDialog>[0];
 
@@ -73,12 +74,15 @@ const latestRelease: ApkUpdateRelease = {
 };
 
 let actions: ReturnType<typeof useAppUpdateActions>;
+let requiredUpdate: boolean;
 let renderer: ReactTestRenderer;
 let queryClient: QueryClient;
 function Probe() {
   const current = useAppUpdateActions();
+  const required = use(RequiredUpdateContext);
   useLayoutEffect(() => {
     actions = current;
+    requiredUpdate = required;
   });
   return null;
 }
@@ -311,6 +315,7 @@ test('domestic updates use the existing dialog and only open the store after con
 test('a supported launch stays silent without checking any release channel', async () => {
   await launch();
   expect(mockDialog.requiredVersion).toBeNull();
+  expect(requiredUpdate).toBe(false);
   expect(mockDialog.release).toBeNull();
   expect(mockUpdate.checkRequiredVersion).toHaveBeenCalledTimes(1);
   expect(mockUpdate.check).not.toHaveBeenCalled();
@@ -330,6 +335,7 @@ test('a required launch waits for the update action and keeps its store destinat
   mockUpdate.check.mockResolvedValue({ status: 'available', ...store });
   await launch();
   expect(mockDialog.requiredVersion).toBe('2.0.0');
+  expect(requiredUpdate).toBe(true);
   expect(mockUpdate.check).not.toHaveBeenCalled();
   await act(async () => mockDialog.actions.checkAndStart());
   expect(mockUpdate.openStore).toHaveBeenCalledWith(expect.objectContaining(store));

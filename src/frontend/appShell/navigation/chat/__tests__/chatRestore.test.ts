@@ -1,6 +1,16 @@
-import { resolveChatRestoreState } from '../chatRestore';
+import { DataApiErrorFactory, ErrorCode } from '@/shared/data/api/errors';
+
+import { isMissingChatAgent, resolveChatRestoreState } from '../chatRestore';
 
 describe('shared chat restore target', () => {
+  test('only a missing Agent permits fallback from the detail query', () => {
+    expect(isMissingChatAgent(DataApiErrorFactory.notFound('Agent', 'removed'))).toBe(true);
+    expect(
+      isMissingChatAgent(DataApiErrorFactory.create(ErrorCode.NOT_FOUND, 'Missing route')),
+    ).toBe(false);
+    expect(isMissingChatAgent(new Error('Database unavailable'))).toBe(false);
+  });
+
   test('restores the Agent found by ID even when it is outside the first 500 list entries', () => {
     expect(
       resolveChatRestoreState({

@@ -1,4 +1,4 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
 import { useMutation, useQuery } from '@/frontend/data';
@@ -36,11 +36,12 @@ export function useAgentsApi(options: { enabled?: boolean } = {}) {
   };
 }
 
-export function useAgentApiById(id: string | undefined) {
+export function useAgentApiById(id: string | undefined, options?: Pick<UseQueryOptions, 'retry'>) {
   const enabled = Boolean(id);
   const query = useQuery('/agents/:id', {
     enabled,
     params: { id: id ?? '' },
+    retry: options?.retry,
   });
 
   return {

@@ -27,6 +27,7 @@ type ShareDestination = { kind: 'draft'; agentId: string } | { kind: 'session'; 
 
 const SystemShareContext = createContext<{
   isPending: boolean;
+  startupShareCheck: ReturnType<typeof useSystemEntryClaims>;
   cancel(): void;
   select(destination: ShareDestination): void;
 } | null>(null);
@@ -94,17 +95,16 @@ export function SystemEntryBridge({ children }: PropsWithChildren) {
     if (router.canGoBack()) router.back();
     else router.replace('/');
   }, [router]);
-  const context = useMemo(
-    () => ({ isPending: Boolean(pendingAction), select, cancel }),
-    [pendingAction, select, cancel],
-  );
-
-  useSystemEntryClaims({
+  const startupShareCheck = useSystemEntryClaims({
     deliver,
     isReady: Boolean(accountReady && navigation?.key && !pendingAction && !isDestination),
     module,
     onFailure: () => toast.show({ label: t('systemEntry.failed'), variant: 'danger' }),
   });
+  const context = useMemo(
+    () => ({ isPending: Boolean(pendingAction), startupShareCheck, select, cancel }),
+    [pendingAction, startupShareCheck, select, cancel],
+  );
 
   return <SystemShareContext value={context}>{children}</SystemShareContext>;
 }

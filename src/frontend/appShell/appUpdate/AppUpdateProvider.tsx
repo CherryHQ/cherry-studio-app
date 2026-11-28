@@ -10,6 +10,7 @@ import type { AppUpdateRelease } from '@/shared/contracts/appUpdate';
 
 import { AppUpdateDialog } from './AppUpdateDialog';
 import { appUpdateQueryOptions } from './appUpdateQueries';
+import { RequiredUpdateContext } from './requiredUpdate';
 
 const UNAVAILABLE_KEYS = {
   unsupported: 'appUpdate.unsupported',
@@ -175,7 +176,7 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
 
   return (
     <AppUpdateActionsContext value={actions}>
-      {children}
+      <RequiredUpdateContext value={requiredVersion !== null}>{children}</RequiredUpdateContext>
       <AppUpdateDialog actions={dialog} release={release} requiredVersion={requiredVersion} />
     </AppUpdateActionsContext>
   );
