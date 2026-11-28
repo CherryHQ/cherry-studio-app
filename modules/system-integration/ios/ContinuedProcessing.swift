@@ -27,6 +27,8 @@ final class ContinuedProcessing {
     }
   }
 
+  // The scheduler can synchronously wait for a system process while completing a task.
+  private static let completionQueue = DispatchQueue(label: "expo.modules.SystemIntegration.taskCompletion", qos: .userInitiated)
   private var entries: [String: Entry] = [:]
 
   func begin(id: String, progress: ContinuedProcessingProgress, onChange: @escaping (String, String) -> Void) -> Bool {
@@ -40,7 +42,7 @@ final class ContinuedProcessing {
     guard scheduler.register(forTaskWithIdentifier: identifier, using: .main, launchHandler: { [weak self, weak entry] task in
       guard let self, let entry, self.entries[id] === entry,
             let continuedTask = task as? BGContinuedProcessingTask else {
-        task.setTaskCompleted(success: false)
+        Self.completionQueue.async { task.setTaskCompleted(success: false) }
         return
       }
       entry.admissionTimeout?.cancel()
@@ -73,7 +75,7 @@ final class ContinuedProcessing {
       let submitted: (Error?) -> Void = { error in
         DispatchQueue.main.async {
           guard let self, let entry, self.entries[id] === entry else {
-            scheduler.cancel(taskRequestWithIdentifier: identifier)
+            Self.completionQueue.async { scheduler.cancel(taskRequestWithIdentifier: identifier) }
             return
           }
           guard let error else { return }
@@ -126,15 +128,24 @@ final class ContinuedProcessing {
     task.updateTitle(progress.title, subtitle: progress.subtitle)
   }
 
-  func end(id: String, success: Bool) {
-    guard let entry = entries.removeValue(forKey: id) else { return }
+  func end(id: String, success: Bool, completion: @escaping () -> Void = {}) {
+    guard let entry = entries.removeValue(forKey: id) else {
+      // A deadline or disposal may already have queued this task's completion.
+      Self.completionQueue.async { completion() }
+      return
+    }
     let completed = success && entry.cancellationTimeout == nil
     entry.admissionTimeout?.cancel()
     entry.cancellationTimeout?.cancel()
-    entry.task?.expirationHandler = nil
-    if completed, let task = entry.task { task.progress.completedUnitCount = task.progress.totalUnitCount }
-    entry.task?.setTaskCompleted(success: completed)
-    BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: entry.identifier)
+    let task = entry.task
+    let identifier = entry.identifier
+    // Leave the expiry handler installed while the system completion is queued.
+    if completed, let task { task.progress.completedUnitCount = task.progress.totalUnitCount }
+    Self.completionQueue.async {
+      task?.setTaskCompleted(success: completed)
+      BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: identifier)
+      completion()
+    }
   }
 
   func dispose() {
