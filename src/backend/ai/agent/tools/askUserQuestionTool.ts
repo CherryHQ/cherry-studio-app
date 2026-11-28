@@ -1,10 +1,12 @@
 import {
+  AgentUserAnswersSchema,
   AgentUserQuestionsSchema,
+  validateUserAnswers,
   type AgentUserAnswers,
   type AgentUserQuestions,
 } from '@/shared/contracts/agent';
 
-import type { RuntimeTool, RuntimeToolCall } from '../runtime';
+import type { RuntimeTool, RuntimeToolCall, RuntimeToolResult } from '../runtime';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
 
 export const ASK_USER_QUESTION_TOOL_NAME = 'ask_user_question';
@@ -18,6 +20,24 @@ export type AskUserQuestion = (
   call: RuntimeToolCall,
 ) => Promise<AgentUserAnswers>;
 
+export function formatAskUserQuestionResult(
+  question: AgentUserQuestions,
+  answer: AgentUserAnswers,
+): RuntimeToolResult {
+  return {
+    value: {
+      ...answer,
+      selectedOptions: answer.answers.map((item) => ({
+        questionId: item.questionId,
+        options: question.questions
+          .find(({ id }) => id === item.questionId)!
+          .options.filter((option) => item.selectedOptionIds.includes(option.id)),
+      })),
+    },
+    artifacts: [],
+  };
+}
+
 export function createAskUserQuestionTool(ask: AskUserQuestion): RuntimeTool {
   return {
     ref: { source: 'builtin', capabilityId: ASK_USER_QUESTION_TOOL_NAME },
@@ -27,22 +47,18 @@ export function createAskUserQuestionTool(ask: AskUserQuestion): RuntimeTool {
       'Ask 1–8 concise, related questions in the user’s language for consequential missing decisions. Use unique stable ids and at most 4 short options per question; options: [] allows free text only. Use single for one choice, multiple for several. Free text and skipping are always available. Batch related questions in one call, never parallel calls, and wait before dependent work. Do not ask for known information, routine choices or tool approval. Skipping is not consent: continue only without that decision or explain the block.',
     inputSchema: toRuntimeInputSchema(AgentUserQuestionsSchema),
     approval: 'auto',
+    parseQuestion: (input) => AgentUserQuestionsSchema.parse(input),
     async execute(call) {
       const question = AgentUserQuestionsSchema.parse(call.input);
-      // The Host validates the answers against this exact request before resolving.
-      const answer = await ask(question, call);
-      return {
-        value: {
-          ...answer,
-          selectedOptions: answer.answers.map((item) => ({
-            questionId: item.questionId,
-            options: question.questions
-              .find(({ id }) => id === item.questionId)!
-              .options.filter((option) => item.selectedOptionIds.includes(option.id)),
-          })),
-        },
-        artifacts: [],
-      };
+      let answer: AgentUserAnswers;
+      if (call.answer !== undefined) {
+        answer = AgentUserAnswersSchema.parse(call.answer);
+        validateUserAnswers(question, answer);
+      } else {
+        // The Host validates the answers against this exact request before resolving.
+        answer = await ask(question, call);
+      }
+      return formatAskUserQuestionResult(question, answer);
     },
   };
 }

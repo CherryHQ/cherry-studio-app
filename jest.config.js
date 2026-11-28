@@ -64,6 +64,8 @@ module.exports = {
       '<rootDir>/node_modules/@earendil-works/chord/dist/$1.js',
     '^@earendil-works/pi-durable$':
       '<rootDir>/node_modules/@earendil-works/pi-durable/dist/index.js',
+    '^@earendil-works/pi-durable/images/fit$':
+      '<rootDir>/node_modules/@earendil-works/pi-durable/dist/images/fit.js',
     '^@earendil-works/pi-durable/storage/(.*)$':
       '<rootDir>/node_modules/@earendil-works/pi-durable/dist/storage/$1/index.js',
     '^@earendil-works/pi-codemode/(.*)$':

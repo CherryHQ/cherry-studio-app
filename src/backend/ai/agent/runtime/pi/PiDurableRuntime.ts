@@ -7,6 +7,7 @@ import {
   Harness,
   type AgentChange,
   type Conversation,
+  type ConversationDocToken,
   type ConversationId,
   type ContextEdit,
   type EntryDraft,
@@ -25,12 +26,14 @@ import {
   type Storage,
   type TaskGraph,
   type TaskId,
+  type Tx,
 } from '@earendil-works/pi-durable';
 
 import type { RuntimeInputParent, RuntimeQueueSelection } from '../durableTypes';
 import { RuntimeOptionsSchema } from '../runtimeSchemas';
 import type { RuntimeOptions } from '../types';
 import { estimatePiContextUsage } from './modelMessages';
+import { PiPendingApprovalsDoc, PiPendingQuestionsDoc } from './piPendingInteractions';
 import { PI_REPLY_EDIT_KIND } from './piReplyEditing';
 import { ToolInstructions } from './piToolInstructions';
 
@@ -664,7 +667,7 @@ export class PiDurableRuntime {
       // have moved this input since the UI/Host captured it; only this predecessor is authoritative.
       for (const item of inbox.items) {
         if (item.id === record.id || item.mode === 'write') continue;
-        const successor = await this.storage.submission(item.id, context);
+        const successor = await tx.submission(item.id);
         if (!successor?.requestId) continue;
         const document = await tx.doc(
           SubmissionMetadata,
@@ -764,7 +767,7 @@ export class PiDurableRuntime {
         inbox.items
           .filter((entry) => entry.mode !== 'write')
           .map(async (entry) => {
-            const record = await this.storage.submission(entry.id, context);
+            const record = await tx.submission(entry.id);
             if (!record?.requestId) throw new Error('A queued input has no request identity.');
             return {
               entry,
@@ -786,8 +789,7 @@ export class PiDurableRuntime {
         ({ document }) => !oldParents.has(document.value.assistantMessageId),
       )?.document.value.assistantMessageId;
       const activeId = live.run?.inputs.at(-1);
-      const active =
-        activeId === undefined ? undefined : await this.storage.submission(activeId, context);
+      const active = activeId === undefined ? undefined : await tx.submission(activeId);
       const activeMetadata = active?.requestId
         ? await tx.doc(SubmissionMetadata, metadataKey(conversation.id, active.requestId), {})
         : undefined;
@@ -1006,6 +1008,46 @@ export class PiDurableRuntime {
     return () => observation.detach();
   }
 
+  observePendingInteractions(conversationId: ConversationId, listener: () => void) {
+    const observation = this.harness.observeCommits({
+      advance: ({ changes }) => {
+        if (
+          changes.some(
+            (change) =>
+              change.type === 'document' &&
+              change.conversationId === conversationId &&
+              (change.record.kind === PiPendingApprovalsDoc.definition.kind ||
+                change.record.kind === PiPendingQuestionsDoc.definition.kind),
+          )
+        )
+          listener();
+      },
+      end: () => {},
+    });
+    return () => observation.detach();
+  }
+
+  snapshotDocument<T extends JsonObject>(
+    token: ConversationDocToken<T>,
+    conversationId: ConversationId,
+    context: Context = BACKGROUND_CONTEXT,
+  ) {
+    return this.harness.snapshot(token, conversationId, context);
+  }
+
+  commit(change: (tx: Tx) => Promise<void>, context: Context) {
+    return this.harness.commit(change, context);
+  }
+
+  async commitConversation<T>(
+    sessionId: string,
+    change: (tx: Tx, conversationId: ConversationId) => Promise<T>,
+    context: Context = BACKGROUND_CONTEXT,
+  ): Promise<T> {
+    const conversation = await this.requireSession(sessionId, context);
+    return conversation.commit((tx) => change(tx, conversation.id), context);
+  }
+
   async stop(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
     const conversation = await this.requireSession(sessionId, context);
     await conversation.abort(context, { background: true });
@@ -1200,7 +1242,7 @@ function jsonOptions(options: RuntimeOptions): JsonObject {
 }
 
 /** Compare detached JSON independent of object property insertion order. */
-function canonicalJson(value: JsonValue): string {
+export function canonicalJson(value: JsonValue): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value !== null && typeof value === 'object')
     return `{${Object.keys(value)

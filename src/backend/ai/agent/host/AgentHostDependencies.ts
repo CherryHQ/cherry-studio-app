@@ -42,6 +42,7 @@ import type { BackgroundActivityEnvironment } from '@/backend/services/backgroun
 import { fileContent } from '@/backend/services/file/fileContent';
 import { createInternalEntryWithPreview } from '@/backend/services/file/filePreviewStorage';
 import { createInternalEntry, discardInternalEntries } from '@/backend/services/file/fileStorage';
+import { createNativeModelImageProcessor } from '@/backend/services/file/modelImageProcessor';
 import { createJsSandbox } from '@/backend/services/jsSandbox';
 import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
@@ -58,7 +59,7 @@ import { imageMediaTypeFromExtension } from '@/shared/utils/imageFileTypes';
 import { resolveAppLanguage } from '@/shared/utils/languages';
 
 import { managedFileResolver } from '../resources/managedFileResolver';
-import type { RuntimeTextGenerator, RuntimeWebTools } from '../runtime';
+import type { RuntimeImageProcessor, RuntimeTextGenerator, RuntimeWebTools } from '../runtime';
 import type { AgentSessionStore } from '../sessionStore/AgentSessionStore';
 import {
   createSystemCapabilitySource,
@@ -95,6 +96,8 @@ const logger = loggerService.withContext('AgentHostDependencies');
   'RemoteAgentRuntime',
 ])
 export class AgentHostDependencies extends BaseService implements MobileAgentHostPorts {
+  readonly imageProcessor: RuntimeImageProcessor = createNativeModelImageProcessor();
+
   shouldRecoverStorage() {
     return Platform.OS === 'android' && AppState.currentState === 'active';
   }

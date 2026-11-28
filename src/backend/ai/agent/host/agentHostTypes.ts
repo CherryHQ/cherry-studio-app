@@ -7,6 +7,7 @@ import type { ManagedFileResolver } from '../resources/managedFileResolver';
 import type {
   RuntimeSqlDatabase,
   RuntimeExecutionPorts,
+  RuntimeImageProcessor,
   RuntimeScriptSandbox,
   RuntimeUsageOwner,
   RuntimeUsageReport,
@@ -33,6 +34,7 @@ export type MobileAgentHostNaming = Pick<
  */
 export type MobileAgentHostPorts = {
   scriptSandbox?(): RuntimeScriptSandbox | undefined;
+  imageProcessor?: RuntimeImageProcessor;
   writeToolOutput?(
     /** `folderId` is the turn's workspace; outputs land beside the Agent's other writes. */
     output: { name: string; data: string | Uint8Array; folderId: string | null },

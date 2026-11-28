@@ -8,10 +8,93 @@ import {
   ToolResultEntry,
   UserEntry,
 } from '@earendil-works/pi-durable';
+import { fitImages } from '@earendil-works/pi-durable/images/fit';
 
+import type { RuntimeImageLimits, RuntimeImageProcessor } from '../durableTypes';
 import type { RuntimeContextCheckpoint, RuntimeJsonValue } from '../types';
 import { type PiConversationInput, toPiConversation } from './modelMessages';
 import { parseCheckpointPayload } from './piLegacyCheckpoint';
+
+const DEFAULT_IMAGE_LIMITS: RuntimeImageLimits = {
+  maxWidth: 2000,
+  maxHeight: 2000,
+  maxBytes: 4.5 * 1024 * 1024,
+};
+
+function modelImageLimits(model: Pick<Model<Api>, 'inputLimits'> | undefined): RuntimeImageLimits {
+  const resize = model?.inputLimits?.images?.resize;
+  return {
+    maxWidth: resize?.maxWidth ?? DEFAULT_IMAGE_LIMITS.maxWidth,
+    maxHeight: resize?.maxHeight ?? DEFAULT_IMAGE_LIMITS.maxHeight,
+    maxBytes: resize?.maxBytes ?? DEFAULT_IMAGE_LIMITS.maxBytes,
+  };
+}
+
+/**
+ * Apply Pi's live `fit-images` preprocessing to imported historical tool-result images when
+ * rebuilding a working copy, keeping `createWorkingPiEntries` synchronous for size estimates.
+ */
+export async function fitWorkingPiEntries(
+  entries: EntryDraft[],
+  model: Pick<Model<Api>, 'inputLimits'> | undefined,
+  processor: RuntimeImageProcessor | undefined,
+  signal?: AbortSignal,
+): Promise<EntryDraft[]> {
+  if (!processor) return entries;
+  const limits = modelImageLimits(model);
+  const fittedEntries: EntryDraft[] = [];
+  for (const entry of entries) {
+    signal?.throwIfAborted();
+    if (entry.kind !== ToolResultEntry.kind) {
+      fittedEntries.push(entry);
+      continue;
+    }
+    const message = entry.model?.[0];
+    if (
+      message?.role !== 'toolResult' ||
+      !Array.isArray(message.content) ||
+      !message.content.some((item) => item.type === 'image')
+    ) {
+      fittedEntries.push(entry);
+      continue;
+    }
+    const fitted = await fitImages(message.content, limits, processor);
+    signal?.throwIfAborted();
+    if (fitted.kind === 'unchanged') {
+      fittedEntries.push(entry);
+      continue;
+    }
+    const existingData =
+      entry.data && typeof entry.data === 'object' && !Array.isArray(entry.data)
+        ? (entry.data as Record<string, unknown>)
+        : undefined;
+    const note =
+      fitted.notes.length > 0
+        ? { severity: 'info' as const, code: 'image', message: fitted.notes.join(' ') }
+        : undefined;
+    const content = note
+      ? [
+          ...fitted.content,
+          { type: 'text' as const, text: `<harness>\n[info] ${note.message}\n</harness>` },
+        ]
+      : fitted.content;
+    const data = note
+      ? {
+          ...existingData,
+          diagnostics: [
+            ...(Array.isArray(existingData?.diagnostics) ? existingData.diagnostics : []),
+            note,
+          ],
+        }
+      : entry.data;
+    fittedEntries.push({
+      ...entry,
+      model: [{ ...message, content }],
+      ...(data !== undefined ? { data } : {}),
+    } as EntryDraft);
+  }
+  return fittedEntries;
+}
 
 /**
  * Rebuild a disposable working copy from Cherry. Importing entries never calls a model or runs a

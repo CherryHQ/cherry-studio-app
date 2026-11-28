@@ -3,10 +3,12 @@ import type { Api, Model } from '@earendil-works/pi-ai';
 import { estimateTextTokens } from '@earendil-works/pi-ai/utils/estimate';
 import type { CodemodeSandboxBase } from '@earendil-works/pi-codemode/native';
 import {
+  AgentDoc,
   CompactionTask,
   createRegistry,
   GenerationTask,
   hook,
+  LiveDoc,
   section,
   type AgentChange,
   type EntryId,
@@ -18,11 +20,15 @@ import {
   type Registry,
   type Storage,
   type SubmissionRecord,
+  type TaskId,
+  type ToolRegistration,
 } from '@earendil-works/pi-durable';
 import { createCodemodeExtension } from '@earendil-works/pi-durable/codemode';
+import { createFitImagesExtension } from '@earendil-works/pi-durable/images/fit';
 import { SqliteStorage } from '@earendil-works/pi-durable/storage/sqlite';
 import { ZodError } from 'zod';
 
+import type { AgentUserAnswers } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import {
@@ -66,6 +72,14 @@ import {
 import { hasRunnablePiTasks, PiDurableRuntime } from './PiDurableRuntime';
 import { createPiDurableToolExtension } from './piDurableTools';
 import type { PiRuntimeDependencies } from './piModelTypes';
+import {
+  hasLiveTool,
+  PiPendingApprovalsDoc,
+  PiPendingQuestionsDoc,
+  pruneStaleInteractions,
+  ToolApprovalSignal,
+  UserQuestionAnswerSignal,
+} from './piPendingInteractions';
 import { createPiReplyEdits } from './piReplyEditing';
 import { PiToolBudget } from './piToolBudget';
 import {
@@ -74,7 +88,11 @@ import {
   selectPiClientTools,
   type PiWebToolRoutes,
 } from './piWebTools';
-import { createPiContextCheckpoint, createWorkingPiEntries } from './piWorkingHistory';
+import {
+  createPiContextCheckpoint,
+  createWorkingPiEntries,
+  fitWorkingPiEntries,
+} from './piWorkingHistory';
 
 const DESCRIPTOR: RuntimeDescriptor = {
   id: 'pi-durable',
@@ -215,6 +233,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       signal?.throwIfAborted();
       storage = await this.createStorage(database);
       signal?.throwIfAborted();
+      if (ports.imageProcessor)
+        this.registry.install(createFitImagesExtension(ports.imageProcessor));
       this.storageDatabase = database;
       this.runtimeFailed = false;
       this.runtime = await PiDurableRuntime.open(storage, {
@@ -290,6 +310,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         this.configurations.clear();
         this.providerOwners.clear();
         this.slots.clear();
+        for (const extension of this.registry.snapshot().installed())
+          this.registry.uninstall(extension);
       }
       throw error;
     }
@@ -445,6 +467,10 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       initialInstructions: stored.initialInstructions,
       options: { ...stored.options },
       tools: stored.tools.map((tool) => this.toolTemplate(tool)),
+      ...(stored.mcpNamespaces
+        ? { mcpNamespaces: stored.mcpNamespaces.map((namespace) => ({ ...namespace })) }
+        : {}),
+      ...(stored.compaction ? { compaction: { ...stored.compaction } } : {}),
       ...(stored.webTools ? { webTools: { ...stored.webTools } } : {}),
     };
   }
@@ -465,14 +491,19 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const agent = await this.installConfiguration(seed.lane, configuration);
     const model = this.requireModel(configuration);
     const originalEntries = seed.history
-      ? createWorkingPiEntries(
-          {
-            instructions: configuration.instructions,
-            input: [],
-            history: seed.history.history,
-            contextCheckpoint: seed.history.contextCheckpoint,
-          },
+      ? await fitWorkingPiEntries(
+          createWorkingPiEntries(
+            {
+              instructions: configuration.instructions,
+              input: [],
+              history: seed.history.history,
+              contextCheckpoint: seed.history.contextCheckpoint,
+            },
+            model,
+          ),
           model,
+          this.ports?.imageProcessor,
+          signal,
         )
       : undefined;
     signal?.throwIfAborted();
@@ -499,14 +530,22 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const runtime = this.requireRuntime();
     if (await runtime.conversation(laneKey(seed.lane)))
       throw new Error('The working copy already exists.');
-    const configuration = await this.configurationBlueprint(seed.configuration);
+    const fromKey = laneKey(seed.from.lane);
+    const parentConfig =
+      this.configurations.get(fromKey) ??
+      PiConfigurationSchema.safeParse(await runtime.configuration(fromKey)).data;
+    const compaction = seed.configuration.compaction ?? parentConfig?.compaction;
+    const configuration = await this.configurationBlueprint({
+      ...seed.configuration,
+      ...(compaction ? { compaction } : {}),
+    });
     const agent = await this.installConfiguration(seed.lane, configuration);
     signal?.throwIfAborted();
     await this.rebinding(seed.lane, () =>
-      runtime.forkConversation(laneKey(seed.from.lane), {
+      runtime.forkConversation(fromKey, {
         sessionId: laneKey(seed.lane),
         revision: seed.revision,
-        agent,
+        agent: { ...agent, compaction: agent.compaction ?? null },
         options: configuration.options,
         configuration: serializePiConfiguration(configuration),
         initialInstructions: configuration.initialInstructions,
@@ -524,7 +563,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     try {
       await this.requireRuntime().configure(
         laneKey(lane),
-        agent,
+        { ...agent, compaction: agent.compaction ?? null },
         configuration.options,
         BACKGROUND_CONTEXT,
         serializePiConfiguration(configuration),
@@ -730,6 +769,77 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     };
   }
 
+  async respondApproval(lane: RuntimeLane, approvalId: string, decision: 'approve' | 'deny') {
+    const runtime = this.requireRuntime();
+    const key = laneKey(lane);
+    if (!(await runtime.conversation(key))) return false;
+    return runtime.commitConversation(key, async (tx, conversationId) => {
+      const pending = await tx.doc(PiPendingApprovalsDoc, conversationId);
+      const item = Object.hasOwn(pending.items, approvalId) ? pending.items[approvalId] : undefined;
+      if (!item) return false;
+      const live = await tx.doc(LiveDoc, conversationId);
+      if (!hasLiveTool(live, item.toolCallId, item.taskId)) {
+        delete pending.items[approvalId];
+        return false;
+      }
+      const result = await tx.signal(item.taskId as TaskId, ToolApprovalSignal, item.key, {
+        decision,
+        ...(item.executionSettingsKey !== undefined
+          ? { executionSettingsKey: item.executionSettingsKey }
+          : {}),
+      });
+      // Remove inside the same transaction so a crash after signal persistence never re-prompts
+      // or admits an opposite second decision as a duplicate.
+      delete pending.items[approvalId];
+      return result === 'delivered';
+    });
+  }
+
+  async respondQuestion(
+    lane: RuntimeLane,
+    toolCallId: string,
+    answer: AgentUserAnswers,
+    turnId?: string,
+  ) {
+    const runtime = this.requireRuntime();
+    const key = laneKey(lane);
+    if (!(await runtime.conversation(key))) return false;
+    return runtime.commitConversation(key, async (tx, conversationId) => {
+      const pending = await tx.doc(PiPendingQuestionsDoc, conversationId);
+      const item = Object.hasOwn(pending.items, toolCallId) ? pending.items[toolCallId] : undefined;
+      if (!item) return false;
+      if (turnId !== undefined && item.turnId !== turnId) return false;
+      const live = await tx.doc(LiveDoc, conversationId);
+      if (!hasLiveTool(live, item.toolCallId, item.taskId)) {
+        delete pending.items[toolCallId];
+        return false;
+      }
+      this.requirePorts().validateQuestionAnswer?.(item.question, answer);
+      const result = await tx.signal(
+        item.taskId as TaskId,
+        UserQuestionAnswerSignal,
+        item.key,
+        detachedJson(answer),
+      );
+      delete pending.items[toolCallId];
+      return result === 'delivered';
+    });
+  }
+
+  async hasPendingQuestion(lane: RuntimeLane): Promise<boolean> {
+    const runtime = this.requireRuntime();
+    const key = laneKey(lane);
+    if (!(await runtime.conversation(key))) return false;
+    return runtime.commitConversation(key, async (tx, conversationId) => {
+      const pending = await tx.doc(PiPendingQuestionsDoc, conversationId);
+      const live = await tx.doc(LiveDoc, conversationId);
+      pruneStaleInteractions(pending.items, live);
+      return Object.values(pending.items).some((item) =>
+        hasLiveTool(live, item.toolCallId, item.taskId),
+      );
+    });
+  }
+
   async abort(lane: RuntimeLane) {
     await this.requireRuntime().stop(laneKey(lane));
   }
@@ -752,11 +862,9 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     this.configurations.delete(key);
     for (const [providerId, owner] of this.providerOwners)
       if (sameLane(owner, lane)) this.providerOwners.delete(providerId);
-    const name = `cherry.capabilities:${key}`;
-    for (const extensionName of [name, `cherry.mcp:${key}`]) {
-      const extension = this.registry.snapshot().extension(extensionName);
-      if (extension) this.registry.uninstall(extension);
-    }
+    const capabilities = this.registry.snapshot().extension(`cherry.capabilities:${key}`);
+    if (capabilities) this.registry.uninstall(capabilities);
+    this.replaceMcpExtensions(key, []);
   }
   async withdraw(lane: RuntimeLane, requestId: string) {
     const result = await this.requireRuntime().withdrawInput(laneKey(lane), requestId);
@@ -827,12 +935,29 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     try {
       const agent = await this.installConfiguration(lane, configuration, true, signal);
       signal?.throwIfAborted();
-      if (stored?.version === 1 || agent.extensions.length > 1) {
-        // Older working copies selected just the shared capability extension.
+      const conversation = await runtime.conversation(key);
+      if (!conversation) throw new Error('The working copy is missing.');
+      const state = await runtime.snapshotDocument(AgentDoc, conversation.id);
+      const selected = state?.extensions;
+      const extensionsDiffer =
+        !Array.isArray(selected) ||
+        selected.length !== agent.extensions.length ||
+        agent.extensions.some(({ name }, index) => name !== selected[index]);
+      const desiredCompaction = agent.compaction ?? null;
+      const compactionChanged =
+        JSON.stringify(desiredCompaction) !== JSON.stringify(state?.compaction ?? null);
+      signal?.throwIfAborted();
+      if (stored?.version === 1 || extensionsDiffer || compactionChanged) {
+        // Update the selected extensions without resetting deferred tools or loaded instructions.
         await runtime.restoreConfiguration(
           key,
           serializePiConfiguration(configuration),
-          stored?.version === 1 ? agent : { extensions: agent.extensions },
+          stored?.version === 1
+            ? { ...agent, compaction: desiredCompaction }
+            : {
+                extensions: agent.extensions,
+                ...(compactionChanged ? { compaction: desiredCompaction } : {}),
+              },
         );
       }
       signal?.throwIfAborted();
@@ -867,8 +992,10 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       configuration.tools.map((blueprint) => this.toolTemplate(blueprint)),
       routes,
     );
-    const mcpNames = new Set(
-      tools.filter((tool) => tool.ref.source === 'mcp').map((tool) => tool.providerName),
+    const mcpServerByTool = new Map(
+      tools.flatMap(({ providerName, ref }) =>
+        ref.source === 'mcp' ? [[providerName, ref.serverId] as const] : [],
+      ),
     );
     const extension = createPiDurableToolExtension({
       name: `cherry.capabilities:${key}`,
@@ -946,23 +1073,11 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
           turnId: identity.turnId,
         };
       },
-      approve: async (tool, input, call, api, context) => {
-        const identity = await this.taskIdentity(lane, api, context);
-        return (
-          (await this.requirePorts().requestApproval(
-            identity,
-            {
-              id: `pi:${api.taskId}:${call.id}`,
-              turnId: identity.turnId,
-              toolCallId: call.id,
-              toolRef: tool.ref,
-              displayName: tool.displayName,
-              input,
-              status: 'pending',
-            },
-            requireSignal(context),
-          )) === 'approve'
-        );
+      durableInteractions: {
+        identity: (api, context) => this.taskIdentity(lane, api, context),
+        hasPendingHostQuestion: (identity) =>
+          this.requirePorts().hasPendingHostQuestion?.({ ...lane, ...identity }) ?? false,
+        commit: (change, context) => this.requireRuntime().commit(change, context),
       },
       onResult: async (tool, result, api, context) => {
         if (result.failure?.scope === 'tool' && tool.failureGroup) {
@@ -981,6 +1096,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         }
         if (!result.artifacts.length) return;
         const identity = await this.taskIdentity(lane, api, context);
+        if (!identity) return;
         await this.requirePorts().admitArtifacts(
           identity,
           result.artifacts,
@@ -993,17 +1109,34 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         );
       },
     });
-    const mcp: Extension = {
-      name: `cherry.mcp:${key}`,
-      namespace: { name: 'mcp', description: 'Tools of the connected MCP servers.' },
-      tools: extension.tools?.filter((tool) => mcpNames.has(tool.name)),
-    };
-    if (mcp.tools?.length) this.registry.install(mcp);
-    else this.registry.uninstall(mcp);
-    this.registry.install({
+    const namespaces = configuration.kind === 'image' ? [] : (configuration.mcpNamespaces ?? []);
+    const mcpToolsByServer = new Map(
+      namespaces.map(({ serverId }) => [serverId, [] as ToolRegistration[]]),
+    );
+    const fallbackTools: ToolRegistration[] = [];
+    const capabilityTools = (extension.tools ?? []).filter((tool) => {
+      const serverId = mcpServerByTool.get(tool.name);
+      if (serverId === undefined) return true;
+      (mcpToolsByServer.get(serverId) ?? fallbackTools).push(tool);
+      return false;
+    });
+    const mcpExtensions: Extension[] = namespaces.map(({ serverId, ...namespace }) => ({
+      name: `cherry.mcp:${key}:${serverId}`,
+      namespace,
+      tools: mcpToolsByServer.get(serverId)!,
+    }));
+    if (fallbackTools.length) {
+      mcpExtensions.push({
+        name: `cherry.mcp:${key}`,
+        namespace: { name: 'mcp', description: 'Tools of the connected MCP servers.' },
+        tools: fallbackTools,
+      });
+    }
+    this.replaceMcpExtensions(key, mcpExtensions);
+    const capabilities: Extension = {
       ...extension,
       // Keep the shared hooks and catalog so authorization and failure groups span both owners.
-      tools: extension.tools?.filter((tool) => !mcpNames.has(tool.name)),
+      tools: capabilityTools,
       sections: [
         section(
           'cherry-runtime',
@@ -1059,7 +1192,11 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
           },
         }),
       ],
-    });
+    };
+    this.registry.install(capabilities);
+    const fitImages = this.registry.snapshot().extension('fit-images');
+    const compaction =
+      configuration.kind === 'image' ? { enabled: false } : configuration.compaction;
     this.configurations.set(key, configuration);
     return {
       model: {
@@ -1068,8 +1205,23 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       },
       // The reserved instructions section renders last; the extension keeps fixed rules first.
       instructions: null,
-      extensions: mcp.tools?.length ? [extension, mcp] : [extension],
+      extensions: [capabilities, ...mcpExtensions, ...(fitImages ? [fitImages] : [])],
+      ...(compaction ? { compaction } : {}),
     };
+  }
+
+  private replaceMcpExtensions(key: string, extensions: readonly Extension[]): void {
+    const prefix = `cherry.mcp:${key}`;
+    const names = new Set(extensions.map(({ name }) => name));
+    for (const extension of this.registry.snapshot().installed()) {
+      if (
+        (extension.name === prefix || extension.name.startsWith(`${prefix}:`)) &&
+        !names.has(extension.name)
+      ) {
+        this.registry.uninstall(extension);
+      }
+    }
+    for (const extension of extensions) this.registry.install(extension);
   }
 
   /** The route is chosen once per configuration and stored with it, never re-derived on recovery. */
