@@ -18,6 +18,7 @@ export function desktopConnectionErrorMessage(
   options?: { detail: 'summary' | 'diagnostic' },
 ): string {
   const reason = error instanceof DataApiError ? error.details?.reason : undefined;
+  if (reason === 'catalog-unavailable') return t('models.registry.downloadRequired');
   if (typeof reason === 'string') {
     // iOS can deny every attempt while the Local Network permission is undetermined, which the
     // pairing flow reports as `unreachable`; point the user at that permission, not the network.

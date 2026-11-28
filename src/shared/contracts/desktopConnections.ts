@@ -30,7 +30,7 @@ export interface DesktopConnectionsModule {
   ): Promise<DesktopConnection>;
   testEndpoint(id: string, endpoint: DirectEndpoint, signal: AbortSignal): Promise<void>;
   remove(id: string, signal: AbortSignal): Promise<void>;
-  preview(id: string, signal: AbortSignal): Promise<DesktopImportPreview>;
+  preview(id: string, signal: AbortSignal, retryCatalog?: boolean): Promise<DesktopImportPreview>;
   import(
     id: string,
     input: DesktopImportSelectionsDto,
