@@ -18,7 +18,6 @@ import {
   type RuntimeDurableSubmission,
   type RuntimeDurableTurn,
   type RuntimeLane,
-  type RuntimeSkillScopeChange,
 } from '../durableTypes';
 import { RuntimeJsonValueSchema, RuntimeOptionsSchema } from '../runtimeSchemas';
 import {
@@ -35,7 +34,7 @@ import type {
   RuntimeUsage,
 } from '../types';
 import { PiCodemodeArtifactsEntry } from './piCodemodeFiles';
-import { PiCodemodeMcpResultEntry, PiCodemodeSkillScopeEntry } from './piCodemodeResults';
+import { PiCodemodeMcpResultEntry } from './piCodemodeResults';
 import { readPiCompactionFailure } from './piCompaction';
 import { readPiTerminalError } from './piModelError';
 import { applyPiReplyEdits, PI_REPLY_EDIT_KIND } from './piReplyEditing';
@@ -64,7 +63,6 @@ export const PiToolBlueprintSchema = z.object({
   inputPreview: z.object({ textField: z.string(), nameField: z.string().optional() }).optional(),
   executionSettingsKey: z.string().optional(),
   approval: z.enum(['auto', 'ask', 'deny']),
-  effect: z.enum(['read', 'write']).optional(),
   failureGroup: z.string().optional(),
   autoApprovalEligible: z.boolean().optional(),
   deferred: z.boolean().optional(),
@@ -322,51 +320,6 @@ function hasLegacyRetainedParts(retainedParts: unknown): boolean {
   });
 }
 
-const SkillScopeChangeSchema = z.object({
-  kind: z.enum(['adapted', 'installed']),
-  skillId: z.string().min(1),
-  contentHash: z.string().min(1),
-});
-
-function extractDirectSkillScopeChange(
-  part: Extract<RuntimeOutputPart, { type: 'tool' }>,
-): RuntimeSkillScopeChange | undefined {
-  const value = part.output?.value;
-  if (
-    part.toolRef.source !== 'builtin' ||
-    part.output?.failure ||
-    typeof value !== 'object' ||
-    value === null ||
-    Array.isArray(value)
-  ) {
-    return undefined;
-  }
-  const record = value as {
-    status?: unknown;
-    skill_id?: unknown;
-    contentHash?: unknown;
-    availableThisTurn?: unknown;
-    instructionsLoaded?: unknown;
-  };
-  if (typeof record.skill_id !== 'string' || record.skill_id.length === 0) return undefined;
-  if (typeof record.contentHash !== 'string' || record.contentHash.length === 0) return undefined;
-  if (
-    part.toolRef.capabilityId === 'adapt_skill' &&
-    record.status === 'adapted' &&
-    record.instructionsLoaded === true
-  ) {
-    return { kind: 'adapted', skillId: record.skill_id, contentHash: record.contentHash };
-  }
-  if (
-    part.toolRef.capabilityId === 'install_skill' &&
-    record.status === 'installed' &&
-    record.availableThisTurn === true
-  ) {
-    return { kind: 'installed', skillId: record.skill_id, contentHash: record.contentHash };
-  }
-  return undefined;
-}
-
 export function projectPiTurn(options: {
   lane: RuntimeLane;
   record: SubmissionRecord;
@@ -391,8 +344,6 @@ export function projectPiTurn(options: {
   const entries = applyPiReplyEdits(options.entries);
   const parts: RuntimeOutputPart[] = [];
   const toolsByCall = new Map<string, Extract<RuntimeOutputPart, { type: 'tool' }>>();
-  const skillScopeChanges: RuntimeSkillScopeChange[] = [];
-  const seenSkillScopeCalls = new Set<string>();
   const usage: RuntimeUsage = {};
   let error: RuntimeError | null = null;
   let updatedAt = stored.createdAt;
@@ -618,11 +569,6 @@ export function projectPiTurn(options: {
                 .join('\n'),
         artifacts: [],
       };
-      const change = extractDirectSkillScopeChange(part);
-      if (change && !seenSkillScopeCalls.has(part.toolCallId)) {
-        seenSkillScopeCalls.add(part.toolCallId);
-        skillScopeChanges.push(change);
-      }
     }
     for (const artifact of part.output.artifacts)
       parts.push({
@@ -656,17 +602,6 @@ export function projectPiTurn(options: {
       };
       parts.push(part);
       toolsByCall.set(part.toolCallId, part);
-    }
-    if (
-      PiCodemodeSkillScopeEntry.is(entry) &&
-      toolsByCall.has(entry.data.parentCallId) &&
-      !seenSkillScopeCalls.has(entry.data.callId)
-    ) {
-      const parsed = SkillScopeChangeSchema.safeParse(entry.data.change);
-      if (parsed.success) {
-        seenSkillScopeCalls.add(entry.data.callId);
-        skillScopeChanges.push(parsed.data);
-      }
     }
     for (const message of entry.model ?? []) {
       if (message.role === 'assistant') assistant(message, `pi:${entry.id}`, false);
@@ -805,6 +740,5 @@ export function projectPiTurn(options: {
         }
       : {}),
     hasAssistant,
-    ...(skillScopeChanges.length ? { skillScopeChanges } : {}),
   };
 }

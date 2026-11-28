@@ -85,18 +85,13 @@ export function createSkillTools(
   options: {
     /** Skills whose instructions the system prompt already carries this turn. */
     loadedSkillIds?: readonly string[];
-    loadedSkills?: Set<string>;
     explicitSkillIds?: readonly string[];
     instructionCharacters?: number;
     instructionLengths?: ReadonlyMap<string, number>;
-    unreadableSkillIds?: ReadonlySet<string>;
     adaptation?: SkillAdaptationToolOptions;
   } = {},
 ): RuntimeTool[] {
-  const loaded = options.loadedSkills ?? new Set(options.loadedSkillIds);
-  if (options.loadedSkills) {
-    for (const id of options.loadedSkillIds ?? []) loaded.add(id);
-  }
+  const loaded = new Set(options.loadedSkillIds);
   const explicit = new Set(options.explicitSkillIds);
   let instructionCharacters = options.instructionCharacters ?? 0;
   const lengths = new Map(options.instructionLengths);
@@ -168,9 +163,6 @@ export function createSkillTools(
       async execute({ input, signal }) {
         const parsed = loadInputSchema.safeParse(input);
         if (!parsed.success) return invalid(`Invalid input: ${z.prettifyError(parsed.error)}`);
-        if (options.unreadableSkillIds?.has(parsed.data.skill_id)) {
-          return invalid('The Skill package could not be read.');
-        }
         const entry = resolve(parsed.data.skill_id);
         if (!('id' in entry)) return entry;
         signal.throwIfAborted();
@@ -242,9 +234,6 @@ export function createSkillTools(
       async execute({ input }) {
         const parsed = listFilesInputSchema.safeParse(input);
         if (!parsed.success) return invalid(`Invalid input: ${z.prettifyError(parsed.error)}`);
-        if (options.unreadableSkillIds?.has(parsed.data.skill_id)) {
-          return invalid('The Skill package could not be read.');
-        }
         const entry = resolve(parsed.data.skill_id);
         if (!('id' in entry)) return entry;
         if (!loaded.has(entry.id)) return invalid('Load this Skill before reading its resources.');
@@ -264,9 +253,6 @@ export function createSkillTools(
       async execute({ input, signal }): Promise<RuntimeToolResult> {
         const parsed = readFileInputSchema.safeParse(input);
         if (!parsed.success) return invalid(`Invalid input: ${z.prettifyError(parsed.error)}`);
-        if (options.unreadableSkillIds?.has(parsed.data.skill_id)) {
-          return invalid('The Skill package could not be read.');
-        }
         const entry = resolve(parsed.data.skill_id);
         if (!('id' in entry)) return entry;
         if (!loaded.has(entry.id)) return invalid('Load this Skill before reading its resources.');

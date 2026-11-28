@@ -194,7 +194,7 @@ export function createSkillAdaptationTool(
             : 'The local Skill was saved, but instructions could not be reloaded. Stop Skill execution for this turn and explain that a new turn is needed.',
         };
         return {
-          value: activated ? { ...receipt, contentHash: skill.contentHash } : receipt,
+          value: receipt,
           modelValue: receipt,
           instructions: activated?.instructions,
           ...(activated

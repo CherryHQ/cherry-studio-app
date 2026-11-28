@@ -74,14 +74,13 @@ See [Validation Status](#validation-status) for the gates run on this upgrade.
    records the pending task and Pi parks it on `ToolApprovalSignal`. Every MCP tool binds its
    `executionSettingsKey` (derived from the server's secret-free connection key or endpoint) into
    the offered blueprint and persisted approval signal, so changing an MCP endpoint or credentials
-   across recovery blocks the stale approval while legacy pre-1.6 MCP blueprints without a stored
-   key remain compatible and still bind live connection identity upon approval. On reopen, the hook
-   fails closed whenever a parked call is disabled or changed settings or approval policy
-   (including relaxing `ask` to `auto`), clearing stale pending entries and marking the task gate
-   blocked; the sole policy-relaxation exception is an approved SSH `ssh_execute` call promoted by
-   an explicit diagnostics grant (`ask` -> `auto` with the same SSH connection and a newly added
-   grant). An already persisted denial on `ToolApprovalSignal`, or a denial or cancellation while
-   waiting, clears any stale pending entry and settles the call without executing the capability.
+   across recovery blocks the stale approval. On reopen, the hook fails closed whenever a parked
+   call is disabled or changes its `approval` policy (including relaxing `ask` to `auto`) or its
+   `executionSettingsKey` (when defined on the offered template), clearing stale pending entries;
+   when recovery hits a transient `RuntimeToolDiscoveryError`, parked approvals stay intact and the
+   tool retries with bounded backoff. An already persisted denial on `ToolApprovalSignal`, or a
+   denial or cancellation while waiting, clears any stale pending entry and settles the call
+   without executing the capability.
    The same gate applies to nested Code Mode tool calls: the parent Code Mode task
    waits until active non-sleeping siblings finish so `Promise.race` / `Promise.all` proceed without
    blocking, parks on `ToolPark` (`wait`) once only sleeping children remain, and enforces the
@@ -770,10 +769,20 @@ Three platform hunks were retired after checking the pristine 1.4.0 packages:
 
 ## Validation Status
 
-The six API integrations passed `pnpm typecheck` and 125 Jest suites with 2,803 tests across
-Agent, file services, architecture boundaries and Metro resolution. The native image tests use
-mocked Expo resources. The Agent tests exercise Pi's image hook, Code Mode namespace discovery,
-compaction and queue transactions. Device acceptance of the actual native codecs remains pending.
+Following the final runtime and test simplifications, `pnpm typecheck`, `pnpm lint` (0 warnings,
+0 errors across `oxlint`, `expo lint`, and workspace `eslint`), `pnpm format:check` (4,076 files),
+`pnpm docs:check-links` (355 Markdown files), and the targeted Jest run across
+`src/backend/ai/agent/runtime/pi`, `DurableAgentHost.test.ts`, and `McpRuntimeService.test.ts`
+passed **45 / 45 suites (1,641 / 1,641 tests)**. Immediately prior to that final 9-line
+denial-precedence adjustment in `piDurableTools.ts` and test cleanup in those 3 suites,
+`pnpm test:packages` (`@cherrystudio/ai-runtime`) passed **63 / 63 files (589 / 589 tests)** and
+the broad `--runInBand` Jest sweep across Agent, MCP, `services/file`, `data/profile`,
+`services/chat`, `features/agent`, `architectureBoundaries.test.ts`, and `metroResolution.test.ts`
+passed **133 / 136 suites (3,056 / 3,063 tests)** (the 3 failing suites were fixed and re-verified
+to passing in the 45-suite run above; the remaining 91 suites and `packages/` were not separately
+re-run after that final `piDurableTools.ts` tweak). Native image tests use mocked Expo resources;
+real-device verification of the native iOS/Android Expo `ImageManipulator` codecs remains
+`device-pending`.
 
 The preceding dependency upgrade passed `pnpm typecheck`, `pnpm lint` (0 warnings, 0 errors across
 `oxlint`, `expo lint`, and workspace `eslint`), `pnpm format:check`, `pnpm docs:check-links`, and

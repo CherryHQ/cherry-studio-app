@@ -72,30 +72,6 @@ function catalogFile(serverId: string): File | undefined {
   return new File(catalogDirectory(), `${serverId}.json`);
 }
 
-async function hashRemoteMcpConnection(
-  config: McpConnectionFingerprintInput,
-  entries: readonly (readonly [string, string])[],
-): Promise<string> {
-  const material = JSON.stringify([
-    config.endpointUrl ?? '',
-    config.oauth?.authorizationId ?? '',
-    entries,
-  ]);
-  return `remote:${await digestStringAsync(CryptoDigestAlgorithm.SHA256, material)}`;
-}
-
-function canonicalHeaderEntries(headers: Readonly<Record<string, string>>): [string, string][] {
-  return Object.entries(headers)
-    .map(([name, value]): [string, string] => [name.toLowerCase(), value])
-    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
-}
-
-function legacyHeaderEntries(headers: Readonly<Record<string, string>>): [string, string][] {
-  return Object.keys(headers)
-    .sort()
-    .map((name) => [name.toLowerCase(), headers[name]!]);
-}
-
 /**
  * Stable identity of a connection configuration. Bundled plugins are identified
  * by plugin and grant; remote servers by a digest of endpoint and normalized
@@ -108,29 +84,14 @@ export async function createMcpConnectionKey(
     return `builtin:${config.builtinId ?? ''}:${config.authorizationId ?? ''}`;
   }
   const headers = normalizeMcpHeaders(config.headers);
-  return hashRemoteMcpConnection(config, canonicalHeaderEntries(headers));
-}
-
-/**
- * Verifies a persisted connection key against current server configuration, accepting both the
- * canonical lowercase header order and the pre-1.6 raw header-name sort order.
- */
-export async function matchesMcpConnectionKey(
-  config: McpConnectionFingerprintInput,
-  expectedKey: string,
-): Promise<boolean> {
-  if ((await createMcpConnectionKey(config)) === expectedKey) return true;
-  if (config.origin === 'builtin') return false;
-  const headers = normalizeMcpHeaders(config.headers);
-  const canonical = canonicalHeaderEntries(headers);
-  const legacy = legacyHeaderEntries(headers);
-  const sameOrder =
-    canonical.length === legacy.length &&
-    canonical.every(
-      ([name, value], index) => legacy[index]![0] === name && legacy[index]![1] === value,
-    );
-  if (sameOrder) return false;
-  return (await hashRemoteMcpConnection(config, legacy)) === expectedKey;
+  const material = JSON.stringify([
+    config.endpointUrl ?? '',
+    config.oauth?.authorizationId ?? '',
+    Object.keys(headers)
+      .sort()
+      .map((name) => [name.toLowerCase(), headers[name]]),
+  ]);
+  return `remote:${await digestStringAsync(CryptoDigestAlgorithm.SHA256, material)}`;
 }
 
 export async function readMcpToolCatalog(

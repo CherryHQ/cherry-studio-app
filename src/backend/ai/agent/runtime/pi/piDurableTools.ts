@@ -27,11 +27,8 @@ import { raceAbort } from '@/backend/utils/raceAbort';
 
 import {
   DURABLE_QUESTION_TOOL_NAME,
-  isSshDiagnosticsGrantPromotion,
-  matchesLegacyExecutionSettingsKey,
   type RuntimeExecutionIdentity,
   type RuntimePendingQuestion,
-  type RuntimeSkillScopeChange,
   RuntimeToolDiscoveryError,
   RuntimeToolUnavailableError,
 } from '../durableTypes';
@@ -44,7 +41,7 @@ import {
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../types';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
 import { piCodemodeFailureCode } from './piCodemodeOutput';
-import { PiCodemodeMcpResultEntry, PiCodemodeSkillScopeEntry } from './piCodemodeResults';
+import { PiCodemodeMcpResultEntry } from './piCodemodeResults';
 import { PI_SCRIPT_CAPABILITY_NAME } from './piDurableProjection';
 import {
   hasCommittedTaskSignal,
@@ -52,16 +49,14 @@ import {
   PiCodemodeDeadlineDoc,
   PiPendingApprovalsDoc,
   PiPendingQuestionsDoc,
-  PiToolGateDoc,
   pruneStaleInteractions,
-  type StoredToolGate,
   ToolApprovalDecisionSchema,
   ToolApprovalSignal,
   UserQuestionAnswerSignal,
 } from './piPendingInteractions';
 import {
   hasToolInstructions,
-  retainToolInstructionsTx,
+  retainToolInstructions,
   toolInstructionsSection,
 } from './piToolInstructions';
 import { piToolModelContent } from './piToolModelContent';
@@ -88,11 +83,6 @@ type PiDurableToolOptions = {
     result: RuntimeToolResult,
     api: ToolExecutionApi,
     context: Context,
-    meta?: {
-      instructionsKey?: string;
-      rolledBackInstructionsKey?: string;
-      skillScopeChange?: RuntimeSkillScopeChange;
-    },
   ): void | Promise<void>;
   durableInteractions?: {
     identity(
@@ -140,60 +130,6 @@ const TOOL_SETTINGS_CHANGED_MESSAGE =
 const TOOL_DISCOVERY_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 15_000, 30_000] as const;
 const SCRIPT_TIMEOUT_SETTLE_GRACE_MS = 20;
 
-async function matchesDiscoveryKey(
-  ref: RuntimeTool['ref'],
-  expected: string | undefined,
-  error: RuntimeToolDiscoveryError,
-): Promise<boolean> {
-  if (error.executionSettingsKey === undefined) return true;
-  if (expected === error.executionSettingsKey) return true;
-  if (expected === undefined) {
-    return matchesLegacyExecutionSettingsKey(ref, undefined, error.executionSettingsKey);
-  }
-  return (await error.matchesExecutionSettingsKey?.(expected)) ?? false;
-}
-
-async function matchesDiscoveryDecisionKey(
-  decisionKey: string | undefined,
-  error: RuntimeToolDiscoveryError,
-): Promise<boolean> {
-  if (error.executionSettingsKey === undefined) return true;
-  if (decisionKey === error.executionSettingsKey) return true;
-  if (decisionKey === undefined) return false;
-  return (await error.matchesExecutionSettingsKey?.(decisionKey)) ?? false;
-}
-
-async function isDiscoverySettingsDrifted(
-  error: RuntimeToolDiscoveryError,
-  template: RuntimeTool,
-  gate: StoredToolGate | undefined,
-  pendingExecutionSettingsKey?: string,
-): Promise<boolean> {
-  if (error.executionSettingsKey === undefined && error.approval === undefined) return false;
-  if (error.approval !== undefined && error.approval !== template.approval) return true;
-  if (!(await matchesDiscoveryKey(template.ref, template.executionSettingsKey, error))) {
-    return true;
-  }
-  if (gate?.bound) {
-    if (
-      error.approval !== undefined &&
-      gate.approval !== undefined &&
-      gate.approval !== error.approval
-    ) {
-      return true;
-    }
-    if (!(await matchesDiscoveryKey(template.ref, gate.executionSettingsKey, error))) {
-      return true;
-    }
-  } else if (
-    pendingExecutionSettingsKey !== undefined &&
-    !(await matchesDiscoveryKey(template.ref, pendingExecutionSettingsKey, error))
-  ) {
-    return true;
-  }
-  return false;
-}
-
 /**
  * Adapt existing capabilities to Pi's task boundary. Side effects are unsafe to replay after intent.
  */
@@ -204,78 +140,26 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
     scriptCapability && scriptCapability.approval !== 'deny' ? options.codemode : undefined;
   const interactions = options.durableInteractions;
   const codemodeRuns = new Map<number, (childTaskId: TaskId) => void>();
-  type AdmittedToolGate = {
-    executionSettingsKey?: string;
-    approval: RuntimeTool['approval'];
-    requiresApproval: boolean;
-    approvedByUser: boolean;
-    effect?: RuntimeTool['effect'];
-  };
-  const admittedGates = new Map<string, AdmittedToolGate>();
+  const admittedInProcess = new Set<string>();
+  const discoveryRetries = new Map<number, number>();
   const failedGroups = new Set<string>();
   let failedTurnId: string | undefined;
   let restoringFailures: Promise<void> = Promise.resolve();
 
-  function matchesApprovedDecisionKey(
-    decisionKey: string | undefined,
-    template: RuntimeTool,
-    live: RuntimeTool,
-  ): boolean {
-    return (
-      decisionKey === live.executionSettingsKey ||
-      isSshDiagnosticsGrantPromotion(
-        live.ref,
-        template.approval,
-        decisionKey,
-        live.approval,
-        live.executionSettingsKey,
-      )
-    );
-  }
-
-  function isApprovedDecision(value: unknown, template: RuntimeTool, live: RuntimeTool): boolean {
+  function isApprovedDecision(value: unknown, live: RuntimeTool): boolean {
     const parsed = ToolApprovalDecisionSchema.safeParse(value);
     return (
       parsed.success &&
       parsed.data.decision === 'approve' &&
-      matchesApprovedDecisionKey(parsed.data.executionSettingsKey, template, live)
-    );
-  }
-
-  function isStoredGateDrifted(
-    gate: StoredToolGate | undefined,
-    template: RuntimeTool,
-    live: RuntimeTool,
-    liveRequiresApproval: boolean,
-    gateOptions: { templateSettingsDrifted: boolean; approvedByUser: boolean },
-  ): boolean {
-    if (gate?.blocked || gateOptions.templateSettingsDrifted) return true;
-    if (!gate?.bound) return false;
-    if (gate.effect === 'read' && live.effect !== 'read') return true;
-    if (
-      gate.executionSettingsKey === live.executionSettingsKey &&
-      gate.approval === live.approval &&
-      gate.requiresApproval === liveRequiresApproval
-    )
-      return false;
-    return !(
-      gateOptions.approvedByUser &&
-      gate.requiresApproval === true &&
-      isSshDiagnosticsGrantPromotion(
-        live.ref,
-        gate.approval ?? template.approval,
-        gate.executionSettingsKey,
-        live.approval,
-        live.executionSettingsKey,
-      )
+      parsed.data.executionSettingsKey === live.executionSettingsKey
     );
   }
 
   async function resolve(
     template: RuntimeTool,
-    api: Pick<HookApi, 'conversationId' | 'snapshot' | 'taskId'>,
+    api: Pick<HookApi, 'conversationId' | 'snapshot'>,
     context: Context,
-    resolveOptions?: { allowSettingsDrift?: boolean; approvalId?: string },
+    resolveOptions?: { allowSettingsDrift?: boolean },
   ) {
     const binding = await options.resolve(template, api, context);
     if (
@@ -284,61 +168,10 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
       !sameCapability(binding.tool, template)
     )
       throw new RuntimeToolUnavailableError('A durable tool resolved to a different capability.');
-    let diagnosticsPromoted = isSshDiagnosticsGrantPromotion(
-      template.ref,
-      template.approval,
-      template.executionSettingsKey,
-      binding.tool.approval,
-      binding.tool.executionSettingsKey,
-    );
-    if (
-      !diagnosticsPromoted &&
-      interactions &&
-      template.ref.source === 'builtin' &&
-      template.ref.capabilityId === 'ssh_execute' &&
-      template.approval === 'ask' &&
-      template.executionSettingsKey === undefined &&
-      binding.tool.approval === 'auto'
-    ) {
-      const [existingGate, existingPending] = await Promise.all([
-        api.snapshot(PiToolGateDoc, api.taskId, context),
-        resolveOptions?.approvalId
-          ? api.snapshot(PiPendingApprovalsDoc, api.conversationId, context)
-          : Promise.resolve(undefined),
-      ]);
-      const pendingItem =
-        resolveOptions?.approvalId && existingPending
-          ? existingPending.items[resolveOptions.approvalId]
-          : undefined;
-      const bound =
-        existingGate?.bound && !existingGate.blocked && existingGate.requiresApproval === true
-          ? {
-              approval: existingGate.approval ?? template.approval,
-              key: existingGate.executionSettingsKey,
-            }
-          : !existingGate?.blocked && pendingItem?.taskId === Number(api.taskId)
-            ? { approval: template.approval, key: pendingItem.executionSettingsKey }
-            : undefined;
-      if (bound) {
-        diagnosticsPromoted = isSshDiagnosticsGrantPromotion(
-          template.ref,
-          bound.approval,
-          bound.key,
-          binding.tool.approval,
-          binding.tool.executionSettingsKey,
-        );
-      }
-    }
-    const effectEscalated = template.effect === 'read' && binding.tool.effect !== 'read';
     const settingsDrifted =
-      effectEscalated ||
-      (!diagnosticsPromoted &&
-        (!matchesLegacyExecutionSettingsKey(
-          template.ref,
-          template.executionSettingsKey,
-          binding.tool.executionSettingsKey,
-        ) ||
-          binding.tool.approval !== template.approval));
+      (template.executionSettingsKey !== undefined &&
+        binding.tool.executionSettingsKey !== template.executionSettingsKey) ||
+      binding.tool.approval !== template.approval;
     if (settingsDrifted && !resolveOptions?.allowSettingsDrift)
       throw new Error(TOOL_SETTINGS_CHANGED_MESSAGE);
     if (failedTurnId !== binding.turnId) {
@@ -366,14 +199,9 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
     if (deadline !== undefined && api.now() >= deadline) {
       return { timedOut: true };
     }
-    let retryAttempt = 1;
-    if (interactions) {
-      await interactions.commit(async (tx) => {
-        const gate = await tx.doc(PiToolGateDoc, api.taskId);
-        retryAttempt = (gate.discoveryRetryCount ?? 0) + 1;
-        gate.discoveryRetryCount = retryAttempt;
-      }, context);
-    }
+    const taskKey = Number(api.taskId);
+    const retryAttempt = (discoveryRetries.get(taskKey) ?? 0) + 1;
+    discoveryRetries.set(taskKey, retryAttempt);
     const delay =
       TOOL_DISCOVERY_RETRY_DELAYS_MS[
         Math.min(retryAttempt - 1, TOOL_DISCOVERY_RETRY_DELAYS_MS.length - 1)
@@ -393,57 +221,26 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
     context: Context,
   ): Promise<ToolExecutionResult | ToolPark> {
     const approvalId = toolApprovalId(api, api.callId);
-    const admitted = admittedGates.get(approvalId);
+    const approvedInProcess = admittedInProcess.has(approvalId);
     try {
       let tool: RuntimeTool;
       let turnId: string;
       try {
-        ({ tool, turnId } = await resolve(template, api, context, { approvalId }));
-        tool.assertInputAvailable?.(input);
+        ({ tool, turnId } = await resolve(template, api, context));
       } catch (error) {
-        if (error instanceof RuntimeToolDiscoveryError) {
-          if (!interactions) {
-            if (await isDiscoverySettingsDrifted(error, template, undefined)) {
-              throw new Error(TOOL_SETTINGS_CHANGED_MESSAGE, { cause: error });
-            }
-            throw error;
-          }
-          const [gate, received] = await Promise.all([
-            api.snapshot(PiToolGateDoc, api.taskId, context),
-            api.readSignal(ToolApprovalSignal, api.callId, context),
-          ]);
+        if (error instanceof RuntimeToolDiscoveryError && interactions) {
+          const received = await api.readSignal(ToolApprovalSignal, api.callId, context);
           const parsedDecision =
             received?.kind === 'value'
               ? ToolApprovalDecisionSchema.safeParse(received.value)
               : undefined;
-          const approvedByUser =
-            admitted?.approvedByUser === true ||
-            (parsedDecision?.success === true && parsedDecision.data.decision === 'approve');
-          const decisionKey =
-            parsedDecision?.success === true && parsedDecision.data.decision === 'approve'
-              ? parsedDecision.data.executionSettingsKey
-              : admitted?.executionSettingsKey;
-          const decisionDrifted =
-            approvedByUser && !(await matchesDiscoveryDecisionKey(decisionKey, error));
-          const admittedDrifted =
-            admitted !== undefined &&
-            ((error.approval !== undefined && admitted.approval !== error.approval) ||
-              !(await matchesDiscoveryKey(template.ref, admitted.executionSettingsKey, error)));
-          const settingsDrifted =
-            Boolean(gate?.blocked) ||
-            decisionDrifted ||
-            admittedDrifted ||
-            (await isDiscoverySettingsDrifted(error, template, gate));
-          if (settingsDrifted) {
-            if (!gate?.blocked) {
-              await interactions.commit(async (tx) => {
-                const currentGate = await tx.doc(PiToolGateDoc, api.taskId);
-                currentGate.blocked = true;
-              }, context);
+          if (parsedDecision?.success && parsedDecision.data.decision === 'approve') {
+            if (
+              template.executionSettingsKey !== undefined &&
+              parsedDecision.data.executionSettingsKey !== template.executionSettingsKey
+            ) {
+              throw new Error(TOOL_SETTINGS_CHANGED_MESSAGE, { cause: error });
             }
-            throw new Error(TOOL_SETTINGS_CHANGED_MESSAGE, { cause: error });
-          }
-          if (approvedByUser) {
             const task = await api.getTask(api.taskId, context);
             const taskInput = task?.input as ToolTaskInput | undefined;
             const parentTaskId = taskInput?.kind === 'nested' ? taskInput.parent : undefined;
@@ -458,67 +255,31 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
         }
         throw error;
       }
+      discoveryRetries.delete(Number(api.taskId));
       const signal = requireSignal(context);
       signal.throwIfAborted();
-      // Approval is admitted by the native beforeTool hook, before its durable execution intent.
-      // Recheck explicit denial, settings drift, and group failure at invocation too; sibling calls can fail meanwhile.
+      // Recheck explicit denial, approval, and group failure at invocation too; siblings can fail meanwhile.
       if (tool.approval === 'deny') throw new Error('This tool is disabled.');
       const currentRequiresApproval =
         tool.approval === 'ask' || Boolean(tool.requiresApproval?.(input));
-      if (
-        admitted !== undefined &&
-        (admitted.executionSettingsKey !== tool.executionSettingsKey ||
-          admitted.approval !== tool.approval ||
-          admitted.requiresApproval !== currentRequiresApproval ||
-          (admitted.effect === 'read' && tool.effect !== 'read') ||
-          (!admitted.approvedByUser && currentRequiresApproval))
-      )
-        throw new Error(TOOL_SETTINGS_CHANGED_MESSAGE);
-      if (interactions) {
-        const gate = await api.snapshot(PiToolGateDoc, api.taskId, context);
-        signal.throwIfAborted();
-        if (gate?.blocked) throw new Error(TOOL_SETTINGS_CHANGED_MESSAGE);
-        const needsSignalCheck =
-          (currentRequiresApproval || Boolean(gate?.bound && gate.requiresApproval)) &&
-          !admitted?.approvedByUser;
-        let signalApproved = Boolean(admitted?.approvedByUser);
-        if (needsSignalCheck) {
+      if (currentRequiresApproval) {
+        if (interactions) {
           const received = await api.readSignal(ToolApprovalSignal, api.callId, context);
           signal.throwIfAborted();
           if (received?.kind !== 'value') throw new Error(TOOL_SETTINGS_CHANGED_MESSAGE);
           const decision = ToolApprovalDecisionSchema.parse(received.value);
           if (decision.decision !== 'approve') throw new Error('The user denied this tool call.');
-          if (!matchesApprovedDecisionKey(decision.executionSettingsKey, template, tool))
+          if (decision.executionSettingsKey !== tool.executionSettingsKey)
             throw new Error(TOOL_SETTINGS_CHANGED_MESSAGE);
-          signalApproved = true;
-        }
-        if (
-          isStoredGateDrifted(gate, template, tool, currentRequiresApproval, {
-            templateSettingsDrifted: false,
-            approvedByUser: signalApproved,
-          })
-        )
+        } else if (!approvedInProcess) {
           throw new Error(TOOL_SETTINGS_CHANGED_MESSAGE);
-      } else if (currentRequiresApproval && !admitted?.approvedByUser) {
-        throw new Error(TOOL_SETTINGS_CHANGED_MESSAGE);
+        }
       }
       if (tool.failureGroup && failedGroups.has(tool.failureGroup))
         throw new Error('This tool group stopped after an earlier failure.');
-      if (
-        tool.requiredInstructions &&
-        !(await hasToolInstructions(
-          tool.requiredInstructions.key,
-          api,
-          context,
-          tool.requiredInstructions.text,
-        ))
-      ) {
-        signal.throwIfAborted();
-        throw new Error(tool.requiredInstructions.refusal);
-      }
       return resultWithDetails(tool, await runResolvedTool(tool, input, turnId, api, context));
     } finally {
-      admittedGates.delete(approvalId);
+      admittedInProcess.delete(approvalId);
     }
   }
 
@@ -619,64 +380,17 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
       ) as RuntimeToolResult;
       if (result.failure?.scope === 'tool' && tool.failureGroup)
         failedGroups.add(tool.failureGroup);
-      const preRetentionScopeChange = skillScopeChangeFromResult(tool, stored);
-      const scopeEntryParentCallId = preRetentionScopeChange
-        ? taskInput?.kind === 'nested'
-          ? taskInput.parentCallId
-          : api.callId
-        : undefined;
-      let retainedInstructionsKey: string | undefined;
-      let rolledBackInstructionsKey: string | undefined;
-      let committedSkillScope = false;
       if (instructions && !stored.failure && tool.ref.source === 'builtin') {
         try {
-          await api.commit(async (tx) => {
-            await retainToolInstructionsTx(tx, api.conversationId, instructions);
-            if (scopeEntryParentCallId !== undefined && preRetentionScopeChange) {
-              await tx.appendEntry(PiCodemodeSkillScopeEntry, api.conversationId, {
-                data: {
-                  parentCallId: scopeEntryParentCallId,
-                  callId: api.callId,
-                  change: preRetentionScopeChange,
-                },
-              });
-            }
-          }, context);
-          retainedInstructionsKey = instructions.key;
-          if (scopeEntryParentCallId !== undefined) committedSkillScope = true;
+          await retainToolInstructions(instructions, api, context);
         } catch (error) {
           signal.throwIfAborted();
           if (instructionsFailureValue === undefined) throw error;
           const fallback = RuntimeJsonValueSchema.parse(instructionsFailureValue);
           stored = { ...stored, value: fallback, modelValue: fallback };
-          if (instructions.key.startsWith('skill:')) {
-            rolledBackInstructionsKey = instructions.key;
-          }
         }
       }
-      const skillScopeChange = skillScopeChangeFromResult(tool, stored);
-      if (skillScopeChange && taskInput?.kind === 'nested' && !committedSkillScope) {
-        await api.commit(
-          (tx) =>
-            tx.appendEntry(PiCodemodeSkillScopeEntry, api.conversationId, {
-              data: {
-                parentCallId: taskInput.parentCallId,
-                callId: api.callId,
-                change: skillScopeChange,
-              },
-            }),
-          context,
-        );
-      }
-      const meta =
-        retainedInstructionsKey || rolledBackInstructionsKey || skillScopeChange
-          ? {
-              ...(retainedInstructionsKey ? { instructionsKey: retainedInstructionsKey } : {}),
-              ...(rolledBackInstructionsKey ? { rolledBackInstructionsKey } : {}),
-              ...(skillScopeChange ? { skillScopeChange } : {}),
-            }
-          : undefined;
-      await options.onResult?.(tool, stored, api, context, ...(meta ? [meta] : []));
+      await options.onResult?.(tool, stored, api, context);
       if (stored.artifacts.length || tool.ref.source === 'mcp') {
         if (taskInput?.kind === 'nested') {
           if (tool.ref.source === 'mcp') {
@@ -780,7 +494,6 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
     const outcome = await api.commit<'parked' | 'answered' | 'conflict' | 'timed_out'>(
       async (tx) => {
         const task = await tx.task(api.taskId);
-        const gate = await tx.doc(PiToolGateDoc, api.taskId);
         const pending = await tx.doc(PiPendingQuestionsDoc, api.conversationId);
         const live = await tx.doc(LiveDoc, api.conversationId);
         if (deadline !== undefined && api.now() >= deadline) {
@@ -788,7 +501,7 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
           return 'timed_out';
         }
         pruneStaleInteractions(pending.items, live);
-        if (gate.responded || hasCommittedTaskSignal(task, UserQuestionAnswerSignal.name, key)) {
+        if (hasCommittedTaskSignal(task, UserQuestionAnswerSignal.name, key)) {
           if (pending.items[key]?.taskId === Number(api.taskId)) delete pending.items[key];
           return 'answered';
         }
@@ -1191,18 +904,13 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
               : catalog.get(call.name);
           // Upstream discovery and Code Mode have no application-side effect to approve.
           if (!template) return;
-          const persistBlockedGate = async () => {
+          const clearPendingItem = async () => {
             if (!interactions) return;
-            const [existingPending, existingGate] = await Promise.all([
-              api.snapshot(PiPendingApprovalsDoc, api.conversationId, context),
-              api.snapshot(PiToolGateDoc, api.taskId, context),
-            ]);
-            if (existingGate?.blocked && !existingPending?.items[id]) return;
+            const existing = await api.snapshot(PiPendingApprovalsDoc, api.conversationId, context);
+            if (existing?.items[id]?.taskId !== Number(api.taskId)) return;
             await interactions.commit(async (tx) => {
               const pending = await tx.doc(PiPendingApprovalsDoc, api.conversationId);
-              const gate = await tx.doc(PiToolGateDoc, api.taskId);
-              gate.blocked = true;
-              delete pending.items[id];
+              if (pending.items[id]?.taskId === Number(api.taskId)) delete pending.items[id];
             }, context);
           };
           let target: RuntimeTool;
@@ -1212,24 +920,16 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
               template,
               api,
               context,
-              { allowSettingsDrift: true, approvalId: id },
+              { allowSettingsDrift: true },
             ));
-            target.assertInputAvailable?.(RuntimeJsonValueSchema.parse(call.arguments));
           } catch (error) {
             if (error instanceof RuntimeToolUnavailableError) {
-              await persistBlockedGate();
+              await clearPendingItem();
               return { block: error.message };
             }
-            if (error instanceof RuntimeToolDiscoveryError) {
-              if (!interactions) {
-                if (await isDiscoverySettingsDrifted(error, template, undefined)) {
-                  return { block: TOOL_SETTINGS_CHANGED_MESSAGE };
-                }
-                throw error;
-              }
-              const [existingPending, existingGate, received, deadlineDoc] = await Promise.all([
+            if (error instanceof RuntimeToolDiscoveryError && interactions) {
+              const [existingPending, received, deadlineDoc] = await Promise.all([
                 api.snapshot(PiPendingApprovalsDoc, api.conversationId, context),
-                api.snapshot(PiToolGateDoc, api.taskId, context),
                 api.readSignal(ToolApprovalSignal, key, context),
                 call.parent !== undefined
                   ? api.snapshot(PiCodemodeDeadlineDoc, call.parent.taskId, context)
@@ -1241,19 +941,6 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
                   ? existingPending.items[id]
                   : undefined;
               const hasParkedPendingApproval = pendingItem?.taskId === Number(api.taskId);
-              const clearPendingItem = async () => {
-                if (!hasParkedPendingApproval) return;
-                await interactions.commit(async (tx) => {
-                  const pending = await tx.doc(PiPendingApprovalsDoc, api.conversationId);
-                  if (pending.items[id]?.taskId === Number(api.taskId)) {
-                    delete pending.items[id];
-                  }
-                }, context);
-              };
-              if (existingGate?.blocked) {
-                await clearPendingItem();
-                return { block: TOOL_SETTINGS_CHANGED_MESSAGE };
-              }
               if (
                 (deadline !== undefined && api.now() >= deadline) ||
                 received?.kind === 'expired'
@@ -1261,34 +948,21 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
                 await clearPendingItem();
                 return { block: 'Script timed out before this tool call could run.' };
               }
-              const pendingSettingsKey = hasParkedPendingApproval
-                ? pendingItem?.executionSettingsKey
-                : undefined;
               if (received?.kind === 'value') {
                 const decision = ToolApprovalDecisionSchema.parse(received.value);
+                await clearPendingItem();
                 if (decision.decision !== 'approve') {
-                  await clearPendingItem();
                   return { block: 'The user denied this tool call.' };
                 }
-                if (!(await matchesDiscoveryDecisionKey(decision.executionSettingsKey, error))) {
-                  await persistBlockedGate();
+                if (
+                  template.executionSettingsKey !== undefined &&
+                  decision.executionSettingsKey !== template.executionSettingsKey
+                ) {
                   return {
                     block:
                       'Tool settings changed since approval was granted. Start a new turn to retry.',
                   };
                 }
-                if (
-                  await isDiscoverySettingsDrifted(
-                    error,
-                    template,
-                    existingGate,
-                    pendingSettingsKey,
-                  )
-                ) {
-                  await persistBlockedGate();
-                  return { block: TOOL_SETTINGS_CHANGED_MESSAGE };
-                }
-                await clearPendingItem();
                 const retry = await scheduleDiscoveryRetry(api, call.parent?.taskId, context);
                 if ('timedOut' in retry) {
                   return { block: 'Script timed out before this tool call could run.' };
@@ -1299,13 +973,7 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
                   },
                 };
               }
-              if (
-                await isDiscoverySettingsDrifted(error, template, existingGate, pendingSettingsKey)
-              ) {
-                await persistBlockedGate();
-                return { block: TOOL_SETTINGS_CHANGED_MESSAGE };
-              }
-              if (hasParkedPendingApproval && !existingGate?.responded) {
+              if (hasParkedPendingApproval) {
                 if (call.parent !== undefined) {
                   codemodeRuns.get(Number(call.parent.taskId))?.(api.taskId);
                 }
@@ -1320,204 +988,77 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
             throw error;
           }
           if (target.approval === 'deny') {
-            await persistBlockedGate();
+            await clearPendingItem();
             return { block: 'This tool is disabled.' };
+          }
+          if (templateSettingsDrifted) {
+            await clearPendingItem();
+            if (interactions) {
+              const received = await api.readSignal(ToolApprovalSignal, key, context);
+              if (received?.kind === 'value') {
+                const decision = ToolApprovalDecisionSchema.parse(received.value);
+                if (decision.decision !== 'approve') {
+                  return { block: 'The user denied this tool call.' };
+                }
+              }
+            }
+            return { block: TOOL_SETTINGS_CHANGED_MESSAGE };
           }
           if (target.failureGroup && failedGroups.has(target.failureGroup))
             return { block: 'This tool group stopped after an earlier failure.' };
           if (
             target.requiredInstructions &&
-            !(await hasToolInstructions(
-              target.requiredInstructions.key,
-              api,
-              context,
-              target.requiredInstructions.text,
-            ))
+            !(await hasToolInstructions(target.requiredInstructions.key, api, context))
           )
             return { block: target.requiredInstructions.refusal };
           const input = RuntimeJsonValueSchema.parse(call.arguments);
           const requiresApproval =
             target.approval === 'ask' || Boolean(target.requiresApproval?.(input));
-          const recordAdmitted = (approvedByUser: boolean) => {
-            admittedGates.set(id, {
-              executionSettingsKey: target.executionSettingsKey,
-              approval: target.approval,
-              requiresApproval,
-              approvedByUser,
-              effect: target.effect,
-            });
-          };
-          const isGateDrifted = (gate: StoredToolGate | undefined, approvedByUser = false) =>
-            isStoredGateDrifted(gate, template, target, requiresApproval, {
-              templateSettingsDrifted,
-              approvedByUser,
-            });
-          const bindGate = (
-            gate: StoredToolGate,
-            values: {
-              approval: RuntimeTool['approval'];
-              requiresApproval: boolean;
-              executionSettingsKey?: string;
-              effect?: RuntimeTool['effect'];
-            },
-          ) => {
-            gate.bound = true;
-            gate.approval = values.approval;
-            gate.requiresApproval = values.requiresApproval;
-            if (values.executionSettingsKey !== undefined) {
-              gate.executionSettingsKey = values.executionSettingsKey;
-            } else {
-              delete gate.executionSettingsKey;
-            }
-            if (values.effect !== undefined) {
-              gate.effect = values.effect;
-            } else {
-              delete gate.effect;
-            }
-          };
 
           if (interactions) {
-            const reconcileApproval = async (
-              checkDrifted?: (
-                gate: StoredToolGate | undefined,
-                task?: { readonly memos?: Readonly<Record<string, unknown>> },
-              ) => boolean,
-            ): Promise<{ gate: StoredToolGate | undefined; drifted: boolean }> => {
-              const [existingPending, existingGate] = await Promise.all([
-                api.snapshot(PiPendingApprovalsDoc, api.conversationId, context),
-                api.snapshot(PiToolGateDoc, api.taskId, context),
-              ]);
-              let drifted = checkDrifted ? checkDrifted(existingGate) : false;
-              if (!existingPending?.items[id]) {
-                if (drifted && !existingGate?.blocked) {
-                  await interactions.commit(async (tx) => {
-                    const gate = await tx.doc(PiToolGateDoc, api.taskId);
-                    gate.blocked = true;
-                  }, context);
-                  return { gate: { ...existingGate, blocked: true }, drifted };
-                }
-                return { gate: existingGate, drifted };
-              }
-              let latestGate = existingGate;
-              await interactions.commit(async (tx) => {
-                drifted = false;
-                const task = await tx.task(api.taskId);
-                const pending = await tx.doc(PiPendingApprovalsDoc, api.conversationId);
-                const gate = await tx.doc(PiToolGateDoc, api.taskId);
-                const previous = Object.hasOwn(pending.items, id) ? pending.items[id] : undefined;
-                if (!gate.bound && previous?.taskId === Number(api.taskId)) {
-                  bindGate(gate, {
-                    approval: template.approval,
-                    requiresApproval: true,
-                    executionSettingsKey: previous.executionSettingsKey,
-                    effect: template.effect,
-                  });
-                }
-                drifted = checkDrifted ? checkDrifted(gate, task) : false;
-                if (drifted) gate.blocked = true;
-                if (previous) delete pending.items[id];
-                latestGate = { ...gate };
-              }, context);
-              return { gate: latestGate, drifted };
-            };
-            const clearApproval = (approvedByUser = false) =>
-              reconcileApproval((gate) => isGateDrifted(gate, approvedByUser));
-            const decide = (value: unknown) => {
-              const decision = ToolApprovalDecisionSchema.parse(value);
-              if (decision.decision !== 'approve')
-                return { block: 'The user denied this tool call.' };
-              if (!matchesApprovedDecisionKey(decision.executionSettingsKey, template, target)) {
-                return {
-                  block:
-                    'Tool settings changed since approval was granted. Start a new turn to retry.',
-                };
-              }
-              return undefined;
-            };
-            const admitDecision = (
-              received: { kind: 'value'; value: unknown } | undefined,
-              gateDrifted: boolean,
-            ) => {
-              if (received) {
-                const blocked = decide(received.value);
-                if (blocked) return blocked;
-              }
-              if (gateDrifted || templateSettingsDrifted)
-                return { block: TOOL_SETTINGS_CHANGED_MESSAGE };
-              recordAdmitted(received !== undefined);
-              return undefined;
-            };
-
             const deadlineDoc =
               call.parent !== undefined
                 ? await api.snapshot(PiCodemodeDeadlineDoc, call.parent.taskId, context)
                 : undefined;
             const deadline = deadlineDoc?.deadline;
             if (deadline !== undefined && api.now() >= deadline) {
-              await clearApproval();
+              await clearPendingItem();
               return { block: 'Script timed out before this tool call could run.' };
             }
 
-            if (!requiresApproval) {
-              // Remove any pending record before reading the signal so a concurrent denial either
-              // commits its signal before deletion (and is read below) or sees the deletion and fails.
-              const canWaitForCommittedPromotion = (
-                gate: StoredToolGate | undefined,
-                task?: { readonly memos?: Readonly<Record<string, unknown>> },
-              ) =>
-                !templateSettingsDrifted &&
-                Boolean(
-                  gate?.bound &&
-                  !gate.blocked &&
-                  gate.requiresApproval === true &&
-                  isSshDiagnosticsGrantPromotion(
-                    target.ref,
-                    gate.approval ?? template.approval,
-                    gate.executionSettingsKey,
-                    target.approval,
-                    target.executionSettingsKey,
-                  ) &&
-                  (!task || hasCommittedTaskSignal(task, ToolApprovalSignal.name, key)),
-                );
-              const { gate } = await reconcileApproval(
-                (currentGate, currentTask) =>
-                  !canWaitForCommittedPromotion(currentGate, currentTask) &&
-                  isGateDrifted(currentGate, false),
-              );
-              const received = await api.readSignal(ToolApprovalSignal, key, context);
-              const approvedByUser =
-                received?.kind === 'value' && isApprovedDecision(received.value, template, target);
-              const drifted = isGateDrifted(gate, approvedByUser);
-              if (drifted && !gate?.blocked) {
-                await interactions.commit(async (tx) => {
-                  const currentGate = await tx.doc(PiToolGateDoc, api.taskId);
-                  currentGate.blocked = true;
-                }, context);
-              }
-              return admitDecision(received?.kind === 'value' ? received : undefined, drifted);
-            }
             const received = await api.readSignal(ToolApprovalSignal, key, context);
-            if (received?.kind === 'value') {
-              const { drifted } = await clearApproval(
-                isApprovedDecision(received.value, template, target),
-              );
-              return admitDecision(received, drifted);
+            if (!requiresApproval) {
+              await clearPendingItem();
+              if (received?.kind === 'value') {
+                const decision = ToolApprovalDecisionSchema.parse(received.value);
+                if (decision.decision !== 'approve') {
+                  return { block: 'The user denied this tool call.' };
+                }
+              }
+              return;
             }
-            if (templateSettingsDrifted) {
-              await clearApproval();
-              return { block: TOOL_SETTINGS_CHANGED_MESSAGE };
+            if (received?.kind === 'value') {
+              await clearPendingItem();
+              if (!isApprovedDecision(received.value, target)) {
+                const decision = ToolApprovalDecisionSchema.parse(received.value);
+                if (decision.decision !== 'approve') {
+                  return { block: 'The user denied this tool call.' };
+                }
+                return {
+                  block:
+                    'Tool settings changed since approval was granted. Start a new turn to retry.',
+                };
+              }
+              return;
             }
             const { turnId, requestId } = await interactions.identity(api, context);
-            let drifted = false;
             let alreadyResponded = false;
             let timedOutInCommit = false;
             await interactions.commit(async (tx) => {
-              drifted = false;
               alreadyResponded = false;
               timedOutInCommit = false;
               const task = await tx.task(api.taskId);
               const pending = await tx.doc(PiPendingApprovalsDoc, api.conversationId);
-              const gate = await tx.doc(PiToolGateDoc, api.taskId);
               const live = await tx.doc(LiveDoc, api.conversationId);
               if (deadline !== undefined && api.now() >= deadline) {
                 if (pending.items[id]?.taskId === Number(api.taskId)) {
@@ -1528,35 +1069,10 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
               }
               const previous = Object.hasOwn(pending.items, id) ? pending.items[id] : undefined;
               pruneStaleInteractions(pending.items, live);
-              if (!gate.bound && previous?.taskId === Number(api.taskId)) {
-                bindGate(gate, {
-                  approval: template.approval,
-                  requiresApproval: true,
-                  executionSettingsKey: previous.executionSettingsKey,
-                  effect: template.effect,
-                });
-              }
-              if (
-                !gate.blocked &&
-                (gate.responded || hasCommittedTaskSignal(task, ToolApprovalSignal.name, key))
-              ) {
+              if (hasCommittedTaskSignal(task, ToolApprovalSignal.name, key)) {
                 delete pending.items[id];
                 alreadyResponded = true;
                 return;
-              }
-              if (isGateDrifted(gate)) {
-                gate.blocked = true;
-                delete pending.items[id];
-                drifted = true;
-                return;
-              }
-              if (!gate.bound) {
-                bindGate(gate, {
-                  approval: target.approval,
-                  requiresApproval,
-                  executionSettingsKey: target.executionSettingsKey,
-                  effect: target.effect,
-                });
               }
               pending.items[id] = {
                 taskId: Number(api.taskId),
@@ -1577,14 +1093,20 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
             if (timedOutInCommit) {
               return { block: 'Script timed out before this tool call could run.' };
             }
-            if (drifted) return { block: TOOL_SETTINGS_CHANGED_MESSAGE };
             if (alreadyResponded) {
               const latest = await api.readSignal(ToolApprovalSignal, key, context);
               if (latest?.kind === 'value') {
-                const { drifted: postDrifted } = await clearApproval(
-                  isApprovedDecision(latest.value, template, target),
-                );
-                return admitDecision(latest, postDrifted);
+                const decision = ToolApprovalDecisionSchema.parse(latest.value);
+                if (decision.decision !== 'approve') {
+                  return { block: 'The user denied this tool call.' };
+                }
+                if (!isApprovedDecision(latest.value, target)) {
+                  return {
+                    block:
+                      'Tool settings changed since approval was granted. Start a new turn to retry.',
+                  };
+                }
+                return;
               }
               if (latest?.kind === 'expired')
                 return { block: 'Script timed out before this tool call could run.' };
@@ -1599,11 +1121,7 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
               },
             };
           }
-          if (templateSettingsDrifted) return { block: TOOL_SETTINGS_CHANGED_MESSAGE };
-          if (!requiresApproval) {
-            recordAdmitted(false);
-            return;
-          }
+          if (!requiresApproval) return;
           if (
             !(await options.approve?.(
               target,
@@ -1614,10 +1132,11 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
             ))
           )
             return { block: 'The user denied this tool call.' };
-          recordAdmitted(true);
+          admittedInProcess.add(id);
         },
         async afterTool(call, result, api, context) {
-          admittedGates.delete(toolApprovalId(api, call.id));
+          admittedInProcess.delete(toolApprovalId(api, call.id));
+          discoveryRetries.delete(Number(api.taskId));
           if (interactions) {
             const id = toolApprovalId(api, call.id);
             const [approvals, questions] = await Promise.all([
@@ -1810,40 +1329,6 @@ function toolParameters(tool: RuntimeTool) {
     !Object.hasOwn(parameters, 'properties')
     ? { ...parameters, properties: {} }
     : parameters;
-}
-
-function skillScopeChangeFromResult(
-  tool: RuntimeTool,
-  result: RuntimeToolResult,
-): RuntimeSkillScopeChange | undefined {
-  if (result.failure || tool.ref.source !== 'builtin') return undefined;
-  if (typeof result.value !== 'object' || result.value === null || Array.isArray(result.value)) {
-    return undefined;
-  }
-  const value = result.value as {
-    status?: unknown;
-    skill_id?: unknown;
-    contentHash?: unknown;
-    availableThisTurn?: unknown;
-    instructionsLoaded?: unknown;
-  };
-  if (typeof value.skill_id !== 'string' || value.skill_id.length === 0) return undefined;
-  if (typeof value.contentHash !== 'string' || value.contentHash.length === 0) return undefined;
-  if (
-    tool.ref.capabilityId === 'adapt_skill' &&
-    value.status === 'adapted' &&
-    value.instructionsLoaded === true
-  ) {
-    return { kind: 'adapted', skillId: value.skill_id, contentHash: value.contentHash };
-  }
-  if (
-    tool.ref.capabilityId === 'install_skill' &&
-    value.status === 'installed' &&
-    value.availableThisTurn === true
-  ) {
-    return { kind: 'installed', skillId: value.skill_id, contentHash: value.contentHash };
-  }
-  return undefined;
 }
 
 function sameCapability(left: RuntimeTool, right: RuntimeTool): boolean {

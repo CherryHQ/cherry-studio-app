@@ -20,11 +20,6 @@ type AgentToolBindingResolver = {
 
 type McpRuntimeToolCapability = {
   createRuntimeTools(selections: readonly McpRuntimeToolSelection[]): RuntimeTool[];
-  describeServerExecutionSettings?(server: McpServer): Promise<{
-    executionSettingsKey: string;
-    matchesExecutionSettingsKey(expected: string): Promise<boolean>;
-  }>;
-  getToolCatalogVersion?(): number;
   listExecutableToolDescriptors(
     serverId: string,
     onUnavailable?: (warning: string) => void,
@@ -33,15 +28,7 @@ type McpRuntimeToolCapability = {
   ): Promise<McpExecutableToolDescriptor[]>;
 };
 
-export type UnavailableMcpServerState = {
-  executionSettingsKey?: string;
-  matchesExecutionSettingsKey?(expected: string): Promise<boolean>;
-  disabledTools: ReadonlySet<string>;
-  resolveToolApproval?(rawToolName: string): Promise<'ask' | 'deny' | null>;
-};
-
 export type AgentRuntimeToolResolver = {
-  catalogVersion?(): number | undefined;
   resolve(
     agentId: string,
     onUnavailable?: (warning: string) => void,
@@ -52,7 +39,6 @@ export type AgentRuntimeToolResolver = {
     pluginGuides: readonly PluginGuideSnapshot[];
     mcpNamespaces?: readonly RuntimeMcpNamespace[];
     unavailableServerIds?: readonly string[];
-    unavailableServerStates?: ReadonlyMap<string, UnavailableMcpServerState>;
   }>;
 };
 
@@ -67,7 +53,6 @@ export function createAgentRuntimeToolResolver(input: {
   getMcpRuntime(): McpRuntimeToolCapability;
 }): AgentRuntimeToolResolver {
   return {
-    catalogVersion: () => input.getMcpRuntime().getToolCatalogVersion?.(),
     async resolve(agentId, onUnavailable, signal, workspaceFolderId) {
       const [{ items }, { items: connectedServers }] = await Promise.all([
         input.bindings.list(agentId),
@@ -194,64 +179,9 @@ export function createAgentRuntimeToolResolver(input: {
             : {}),
         };
       });
-      const failedServers = servers.filter(
-        (_server, index) => catalogs[index]!.discoveryIncomplete,
-      );
-      let unavailableServerIds: string[];
-      const unavailableServerStates = new Map<string, UnavailableMcpServerState>();
-      if (failedServers.length === 0) {
-        unavailableServerIds = [];
-      } else {
-        let latestServersById: Map<string, McpServer> | undefined;
-        let latestBoundServerIds: Set<string> | undefined;
-        try {
-          const [{ items: latestBindings }, { items: latestServers }] = await Promise.all([
-            input.bindings.list(agentId),
-            input.servers.list(),
-          ]);
-          signal?.throwIfAborted();
-          latestBoundServerIds = new Set(
-            latestBindings.flatMap((binding) => (binding.enabled ? [binding.serverId] : [])),
-          );
-          latestServersById = new Map(latestServers.map((server) => [server.id, server]));
-        } catch {
-          signal?.throwIfAborted();
-        }
-        if (!latestServersById || !latestBoundServerIds) {
-          // Transient DB read failure after discovery failure: fail conservatively without stale settings.
-          unavailableServerIds = failedServers.map((server) => server.id);
-        } else {
-          const activeFailedServers = failedServers.flatMap((initialServer) => {
-            const currentServer = latestServersById.get(initialServer.id);
-            const stillActive = Boolean(
-              currentServer &&
-              currentServer.isEnabled &&
-              (currentServer.origin === 'builtin' || latestBoundServerIds.has(currentServer.id)),
-            );
-            return stillActive && currentServer ? [currentServer] : [];
-          });
-          unavailableServerIds = activeFailedServers.map((server) => server.id);
-          await Promise.all(
-            activeFailedServers.map(async (currentServer) => {
-              const settings = await mcpRuntime.describeServerExecutionSettings?.(currentServer);
-              unavailableServerStates.set(currentServer.id, {
-                ...settings,
-                disabledTools: new Set(currentServer.disabledTools),
-                resolveToolApproval: async (rawToolName) => {
-                  if (currentServer.origin === 'builtin') return 'ask';
-                  const resolved = await input.bindings.resolveMcpTool(agentId, {
-                    isToolAvailable: true,
-                    rawToolName,
-                    serverId: currentServer.id,
-                  });
-                  if (!resolved.enabled || resolved.approval === null) return null;
-                  return clampMcpToolApproval(resolved.approval);
-                },
-              });
-            }),
-          );
-        }
-      }
+      const unavailableServerIds = servers
+        .filter((_server, index) => catalogs[index]!.discoveryIncomplete)
+        .map((server) => server.id);
       return {
         tools: mcpRuntime.createRuntimeTools(
           selections.map((selection) => ({
@@ -268,7 +198,6 @@ export function createAgentRuntimeToolResolver(input: {
         pluginGuides,
         mcpNamespaces,
         unavailableServerIds,
-        ...(unavailableServerStates.size > 0 ? { unavailableServerStates } : {}),
       };
     },
   };

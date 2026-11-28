@@ -539,7 +539,6 @@ describe('turn preparation', () => {
       resources: plan.resources,
       documentParserMode: 'anydoc',
       resolveUsageAttribution: plan.usageAttribution.resolve,
-      onUnavailableCapability: expect.any(Function),
     });
     // Tools read the attribution when they run; the Host binds the message after reservation.
     expect(plan.usageAttribution.resolve()).toEqual({
@@ -937,81 +936,6 @@ describe('Skill turn preparation', () => {
     },
   );
 
-  test('omits local skill tools and records builtin failure when skills.resolve rejects even with skillWorkflow configured', async () => {
-    const harness = createHarness();
-    let resolveCalls = 0;
-    const resolveSkills = jest.fn(async () => {
-      resolveCalls += 1;
-      if (resolveCalls === 1) throw new Error('Skills DB unavailable');
-      return scope;
-    });
-    harness.dependencies.skills = { resolve: resolveSkills };
-    harness.dependencies.skillWorkflow = {
-      resolve: jest.fn(async () => [
-        {
-          candidateId: 'cand-1',
-          name: 'outline',
-          description: 'Outline a document',
-          author: null,
-          version: null,
-          tags: [],
-          installedSkillId: null,
-          source: {
-            registry: 'github' as const,
-            locator: 'github:o/r/outline',
-            url: 'https://github.com/o/r/blob/main/outline/SKILL.md',
-            revision: 'commit',
-          },
-        },
-      ]),
-      install: jest.fn(async () => ({
-        id: skillId,
-        name: 'outline',
-        description: 'Outline a document',
-        folderName: 'outline',
-        source: 'marketplace' as const,
-        sourceUrl: 'https://github.com/o/r/blob/main/outline/SKILL.md',
-        author: null,
-        version: null,
-        tags: [],
-        contentHash: 'directory-sha256:abc',
-        manifest: [{ path: 'SKILL.md', size: 1, digest: 'e'.repeat(64) }],
-        invocation: { modelInvocable: true, userInvocable: true },
-        profile: { declaredTools: [] },
-        isEnabled: true,
-        createdAt: NOW,
-        updatedAt: NOW,
-      })),
-    } as unknown as NonNullable<typeof harness.dependencies.skillWorkflow>;
-    const plan = await prepareTurn(harness.dependencies, textInput(), new AbortController().signal);
-    const names = new Set(plan.tools.map((item) => item.providerName));
-    for (const id of [
-      'list_local_skills',
-      'load_skill',
-      'list_skill_files',
-      'read_skill_file',
-      'adapt_skill',
-    ]) {
-      expect(names.has(id)).toBe(false);
-      expect(plan.toolDiscoveryFailures?.builtinCapabilityIds.has(id)).toBe(true);
-    }
-    const installSkill = plan.tools.find((item) => item.providerName === 'install_skill')!;
-    expect(installSkill).toBeDefined();
-    const receipt = await installSkill.execute({
-      input: { url: 'https://github.com/o/r/blob/main/outline/SKILL.md' },
-      signal: new AbortController().signal,
-      toolCallId: 'install-1',
-      turnId: 'turn-1',
-    });
-    expect(receipt.value).toMatchObject({
-      status: 'installed',
-      skill_id: skillId,
-      availableThisTurn: false,
-      next: expect.stringContaining('not available for automatic loading in this turn'),
-    });
-    expect(resolveSkills).toHaveBeenCalledTimes(1);
-  });
-
   test('persists explicit selection receipts and rejects out-of-scope selection', async () => {
     const harness = createHarness();
     harness.dependencies.skills = { resolve: async () => scope };
@@ -1097,103 +1021,6 @@ describe('Skill turn preparation', () => {
     // Pi holds the model history, so no transcript is loaded; receipts still are.
     expect(harness.loadRuntimeTurnContext).not.toHaveBeenCalled();
     expect(plan.skills.active?.get(skillId)?.instructions).toBe('Use a concise outline.');
-  });
-
-  test('prepareDurableTurn preserves hasMessages=false and seeds in-turn Skill activations', async () => {
-    const harness = createHarness();
-    const readFile = jest.fn(async () => new TextEncoder().encode('Reference text'));
-    harness.dependencies.skills = {
-      resolve: async () => ({
-        ...scope,
-        entries: [{ ...scope.entries[0]!, files: ['SKILL.md', 'ref.md'] }],
-        readFile,
-      }),
-    };
-    const plan = await prepareDurableTurn(
-      harness.dependencies,
-      textInput(),
-      [],
-      new AbortController().signal,
-      {},
-      undefined,
-      { hasMessages: false, extraSkillActivations: [activation] },
-    );
-    expect(plan.hasMessages).toBe(false);
-    expect(plan.skills.active?.get(skillId)?.instructions).toBe('Use a concise outline.');
-    const readSkillFile = plan.tools.find((item) => item.providerName === 'read_skill_file')!;
-    await expect(
-      readSkillFile.execute({
-        input: { skill_id: skillId, path: 'ref.md' },
-        signal: new AbortController().signal,
-        toolCallId: 'read-1',
-        turnId: 'turn-1',
-      }),
-    ).resolves.toMatchObject({
-      value: { status: 'ok', skill_id: skillId, path: 'ref.md', text: 'Reference text' },
-    });
-    expect(readFile).toHaveBeenCalledWith(skillId, 'ref.md');
-  });
-
-  test('prepareDurableTurn restores Code Mode retainedSkillIds without overwriting explicit manual-only receipts', async () => {
-    const harness = createHarness();
-    const manualId = '00000000-0000-4000-8000-000000000125';
-    const manualEntry = {
-      ...scope.entries[0]!,
-      id: manualId,
-      name: 'manual-only',
-      folderName: 'manual-only',
-      files: ['SKILL.md', 'manual.md'],
-      invocation: { modelInvocable: false, userInvocable: true },
-    };
-    const readFile = jest.fn(async (_id: string, path: string) =>
-      new TextEncoder().encode(`content:${path}`),
-    );
-    harness.dependencies.skills = {
-      resolve: async () => ({
-        ...scope,
-        entries: [{ ...scope.entries[0]!, files: ['SKILL.md', 'ref.md'] }, manualEntry],
-        readFile,
-      }),
-    };
-    harness.loadSkillActivations.mockResolvedValue([
-      {
-        messageId: 'prev-msg',
-        activation: {
-          ...activation,
-          skillId: manualId,
-          name: manualEntry.name,
-          origin: 'explicit',
-        },
-      },
-    ]);
-    const plan = await prepareDurableTurn(
-      harness.dependencies,
-      textInput(),
-      [],
-      new AbortController().signal,
-      {},
-      undefined,
-      { retainedSkillIds: [skillId, manualId] },
-    );
-    expect(plan.skills.active?.get(skillId)?.instructions).toBe('Use a concise outline.');
-    expect(plan.skills.active?.get(manualId)?.instructions).toBe('Use a concise outline.');
-    const readSkillFile = plan.tools.find((item) => item.providerName === 'read_skill_file')!;
-    await expect(
-      readSkillFile.execute({
-        input: { skill_id: skillId, path: 'ref.md' },
-        signal: new AbortController().signal,
-        toolCallId: 'read-1',
-        turnId: 'turn-1',
-      }),
-    ).resolves.toMatchObject({ value: { status: 'ok', text: 'content:ref.md' } });
-    await expect(
-      readSkillFile.execute({
-        input: { skill_id: manualId, path: 'manual.md' },
-        signal: new AbortController().signal,
-        toolCallId: 'read-2',
-        turnId: 'turn-1',
-      }),
-    ).resolves.toMatchObject({ value: { status: 'ok', text: 'content:manual.md' } });
   });
 
   test('prepareInitialTurn uses parsed.modelId fallback when sessionModelId is omitted and rejects disallowed pool models', async () => {

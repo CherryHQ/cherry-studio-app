@@ -35,7 +35,7 @@ import type { RuntimeOptions } from '../types';
 import { estimatePiContextUsage } from './modelMessages';
 import { PiPendingApprovalsDoc, PiPendingQuestionsDoc } from './piPendingInteractions';
 import { PI_REPLY_EDIT_KIND } from './piReplyEditing';
-import { ToolInstructions, parseRetainedSkillRevision } from './piToolInstructions';
+import { ToolInstructions } from './piToolInstructions';
 
 type PiSessionBinding = {
   conversationId: ConversationId | null;
@@ -325,37 +325,6 @@ export class PiDurableRuntime {
     return (
       (await this.harness.snapshot(ResourceScope, conversation.id, context))?.fileEntryIds ?? []
     );
-  }
-
-  async retainedSkillIds(
-    sessionId: string,
-    context: Context = BACKGROUND_CONTEXT,
-  ): Promise<string[]> {
-    const conversation = await this.requireSession(sessionId, context);
-    const instructions = await this.harness.snapshot(ToolInstructions, conversation.id, context);
-    return [
-      ...new Set(
-        (instructions?.sections ?? []).flatMap(({ key }) => {
-          const skillId = key.startsWith('skill:') ? key.slice('skill:'.length) : '';
-          return skillId ? [skillId] : [];
-        }),
-      ),
-    ];
-  }
-
-  async retainedSkillRevisions(
-    sessionId: string,
-    context: Context = BACKGROUND_CONTEXT,
-  ): Promise<ReadonlyMap<string, string>> {
-    const conversation = await this.requireSession(sessionId, context);
-    const instructions = await this.harness.snapshot(ToolInstructions, conversation.id, context);
-    const revisions = new Map<string, string>();
-    for (const { key, text } of instructions?.sections ?? []) {
-      const skillId = key.startsWith('skill:') ? key.slice('skill:'.length) : '';
-      const revision = skillId ? parseRetainedSkillRevision(text) : undefined;
-      if (skillId && revision) revisions.set(skillId, revision);
-    }
-    return revisions;
   }
 
   async grantFiles(

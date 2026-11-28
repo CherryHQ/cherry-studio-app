@@ -37,12 +37,6 @@ export function createSshTool(
     inputSchema: toRuntimeInputSchema(schema),
     inputPreview: { textField: 'command', nameField: 'target' },
     approval: target.grant?.scope === 'diagnostics' ? 'auto' : 'ask',
-    executionSettingsKey: JSON.stringify([
-      profile.id,
-      profile.revision,
-      target.selectionId,
-      target.grant?.scope === 'diagnostics' ? target.grant.id : null,
-    ]),
     requiresApproval(input) {
       const parsed = schema.safeParse(input);
       // Deliberately small, exact diagnostic commands. No shell composition,

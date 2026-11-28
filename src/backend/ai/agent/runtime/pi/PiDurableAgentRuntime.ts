@@ -76,7 +76,6 @@ import {
   hasLiveTool,
   PiPendingApprovalsDoc,
   PiPendingQuestionsDoc,
-  PiToolGateDoc,
   pruneStaleInteractions,
   ToolApprovalSignal,
   UserQuestionAnswerSignal,
@@ -480,14 +479,6 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     return this.requireRuntime().resourceFileEntryIds(laneKey(lane));
   }
 
-  retainedSkillIds(lane: RuntimeLane) {
-    return this.requireRuntime().retainedSkillIds(laneKey(lane));
-  }
-
-  retainedSkillRevisions(lane: RuntimeLane) {
-    return this.requireRuntime().retainedSkillRevisions(laneKey(lane));
-  }
-
   async ensureConversation(seed: RuntimeConversationSeed, signal?: AbortSignal) {
     const runtime = this.requireRuntime();
     const key = laneKey(seed.lane);
@@ -791,14 +782,12 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         delete pending.items[approvalId];
         return false;
       }
-      const gate = await tx.doc(PiToolGateDoc, item.taskId as TaskId);
       const result = await tx.signal(item.taskId as TaskId, ToolApprovalSignal, item.key, {
         decision,
         ...(item.executionSettingsKey !== undefined
           ? { executionSettingsKey: item.executionSettingsKey }
           : {}),
       });
-      if (result === 'delivered') gate.responded = true;
       // Remove inside the same transaction so a crash after signal persistence never re-prompts
       // or admits an opposite second decision as a duplicate.
       delete pending.items[approvalId];
@@ -825,7 +814,6 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         delete pending.items[toolCallId];
         return false;
       }
-      const gate = await tx.doc(PiToolGateDoc, item.taskId as TaskId);
       this.requirePorts().validateQuestionAnswer?.(item.question, answer);
       const result = await tx.signal(
         item.taskId as TaskId,
@@ -833,7 +821,6 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         item.key,
         detachedJson(answer),
       );
-      if (result === 'delivered') gate.responded = true;
       delete pending.items[toolCallId];
       return result === 'delivered';
     });
@@ -1092,7 +1079,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
           this.requirePorts().hasPendingHostQuestion?.({ ...lane, ...identity }) ?? false,
         commit: (change, context) => this.requireRuntime().commit(change, context),
       },
-      onResult: async (tool, result, api, context, meta) => {
+      onResult: async (tool, result, api, context) => {
         if (result.failure?.scope === 'tool' && tool.failureGroup) {
           const inputs = await this.requireRuntime().inputsForTask(api, context);
           const input = inputs.at(-1);
@@ -1107,23 +1094,9 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
               failures.failedGroups.push(tool.failureGroup!);
           }, context);
         }
-        const identity =
-          meta?.instructionsKey ||
-          meta?.rolledBackInstructionsKey ||
-          meta?.skillScopeChange ||
-          result.artifacts.length
-            ? await this.taskIdentity(lane, api, context)
-            : undefined;
-        if (meta?.instructionsKey && identity) {
-          this.requirePorts().admitToolInstructions?.(identity, meta.instructionsKey);
-        }
-        if (meta?.rolledBackInstructionsKey && identity) {
-          this.requirePorts().rollbackToolInstructions?.(identity, meta.rolledBackInstructionsKey);
-        }
-        if (meta?.skillScopeChange && identity) {
-          this.requirePorts().admitSkillScopeChange?.(identity, meta.skillScopeChange);
-        }
-        if (!result.artifacts.length || !identity) return;
+        if (!result.artifacts.length) return;
+        const identity = await this.taskIdentity(lane, api, context);
+        if (!identity) return;
         await this.requirePorts().admitArtifacts(
           identity,
           result.artifacts,

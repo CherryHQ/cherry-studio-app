@@ -995,30 +995,6 @@ describe('PiDurableRuntime identity and handoff', () => {
           BACKGROUND_CONTEXT,
         );
       expect(await read()).toEqual(initial);
-      await conversation.commit(async (tx) => {
-        const doc = await tx.doc(ToolInstructions, conversation.id);
-        doc.sections = [
-          ...doc.sections,
-          {
-            key: 'skill:codemode-skill',
-            text: '## Current Skill instructions: cm (skill_id: codemode-skill; revision 0123456789ab)\nCode mode body.',
-          },
-          {
-            key: 'skill:codemode-skill',
-            text: '## Current Skill instructions: cm (skill_id: codemode-skill; revision fedcba987654)\nUpdated body.',
-          },
-          { key: 'plugin:srv-1', text: 'Plugin body.' },
-          { key: 'skill:', text: 'Empty id ignored.' },
-        ];
-      }, BACKGROUND_CONTEXT);
-      expect(await runtime.retainedSkillIds(seed.sessionId)).toEqual([
-        'selected',
-        'previous',
-        'codemode-skill',
-      ]);
-      expect(await runtime.retainedSkillRevisions(seed.sessionId)).toEqual(
-        new Map([['codemode-skill', 'fedcba987654']]),
-      );
       const current = [{ key: 'skill:selected', text: 'Adapted body.' }];
       await runtime.configure(
         seed.sessionId,
@@ -1029,7 +1005,6 @@ describe('PiDurableRuntime identity and handoff', () => {
         current,
       );
       expect(await read()).toEqual(current);
-      expect(await runtime.retainedSkillIds(seed.sessionId)).toEqual(['selected']);
     } finally {
       await runtime.close();
     }

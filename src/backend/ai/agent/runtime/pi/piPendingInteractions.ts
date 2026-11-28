@@ -54,26 +54,6 @@ export const PiCodemodeDeadlineDoc = defineDoc<{ deadline?: number }>({
   initial: () => ({}),
 });
 
-export type StoredToolGate = {
-  bound?: boolean;
-  blocked?: boolean;
-  responded?: boolean;
-  discoveryRetryCount?: number;
-  executionSettingsKey?: string;
-  approval?: 'auto' | 'ask' | 'deny';
-  requiresApproval?: boolean;
-  effect?: 'read' | 'write';
-};
-
-/** Durable offered-gate binding for a ToolTask; survives crashes until the task settles. */
-export const PiToolGateDoc = defineDoc<StoredToolGate>({
-  kind: 'cherry.tool-gate',
-  version: 1,
-  scope: 'task',
-  checkpointWhen: () => true,
-  initial: () => ({}),
-});
-
 export function hasCommittedTaskSignal(
   task: { readonly memos?: Readonly<Record<string, unknown>> } | undefined,
   signalName: string,

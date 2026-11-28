@@ -1,7 +1,7 @@
 import type { PluginGuideSnapshot } from '@/backend/services/builtInMcp';
 import { resolveBuiltInPluginGuides } from '@/backend/services/builtInMcp';
 
-import { RuntimeToolDiscoveryError, type RuntimeTool } from '../../runtime';
+import type { RuntimeTool } from '../../runtime';
 import {
   createLoadWorkflowTool,
   getPluginWorkflows,
@@ -81,11 +81,9 @@ test('gates only tools on a connection with a guide until that guide is loaded',
   );
   expect(github!.requiredInstructions).toEqual({
     key: 'workflow:plugin:github-connection',
-    text: workflows[0]!.instructions.text,
     refusal: expect.stringContaining('"plugin:github-connection"'),
   });
   expect(feishu!.requiredInstructions?.key).toBe('workflow:plugin:feishu-connection');
-  expect(feishu!.requiredInstructions?.text).toBe(workflows[1]!.instructions.text);
   expect(other!.requiredInstructions).toBeUndefined();
   expect(builtin!.requiredInstructions).toBeUndefined();
 });
@@ -129,29 +127,3 @@ test.each([
     expect(result.instructions?.text).toContain(guide.content);
   },
 );
-
-test('ignores loaded workflows even if their serverId also appears in unavailableWorkflowIds', async () => {
-  const loader = createLoadWorkflowTool(
-    getPluginWorkflows([guides[1]!]),
-    new Set(['plugin:feishu-connection', 'plugin:offline-connection']),
-  );
-
-  expect(() =>
-    loader.assertInputAvailable?.({ workflow_id: 'plugin:feishu-connection' }),
-  ).not.toThrow();
-  await expect(loader.execute(call('plugin:feishu-connection'))).resolves.toMatchObject({
-    value: { status: 'ok', workflow_id: 'plugin:feishu-connection', instructionsInSystem: true },
-  });
-
-  expect(() => loader.assertInputAvailable?.({ workflow_id: 'plugin:offline-connection' })).toThrow(
-    RuntimeToolDiscoveryError,
-  );
-  await expect(loader.execute(call('plugin:offline-connection'))).rejects.toBeInstanceOf(
-    RuntimeToolDiscoveryError,
-  );
-
-  expect(() => loader.assertInputAvailable?.({ workflow_id: 'plugin:other' })).not.toThrow();
-  await expect(loader.execute(call('plugin:other'))).resolves.toMatchObject({
-    value: { status: 'error' },
-  });
-});

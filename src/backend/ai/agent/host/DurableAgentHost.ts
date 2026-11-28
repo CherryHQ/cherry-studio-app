@@ -35,7 +35,6 @@ import {
   type AgentErrorView,
   type AgentEvent,
   type AgentInputPart,
-  type AgentMessagePart,
   type AgentMessageSibling,
   type AgentMessageView,
   type AgentPendingQuestion,
@@ -58,11 +57,7 @@ import { FileEntryIdSchema, type FileEntryId } from '@/shared/data/types/file';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import type { PluginTextReference } from '@/shared/data/types/plugin';
 import type { SelectionTextReference } from '@/shared/data/types/selectionReference';
-import {
-  SkillActivationSchema,
-  type SkillActivation,
-  type SkillTextReference,
-} from '@/shared/data/types/skill';
+import type { SkillTextReference } from '@/shared/data/types/skill';
 import type { SshTextReference } from '@/shared/data/types/ssh';
 import type { TraceContext } from '@/shared/data/types/trace';
 import { projectAgentMessageDisplay } from '@/shared/utils/agentMessageDisplay';
@@ -74,7 +69,6 @@ import {
   RuntimeToolDiscoveryError,
   RuntimeToolUnavailableError,
   laneKey,
-  matchesLegacyExecutionSettingsKey,
   raceAbort,
   runtimeLane,
   sameLane,
@@ -87,10 +81,8 @@ import {
   type RuntimeExecutionIdentity,
   type RuntimeExecutionPorts,
   type RuntimeJsonValue,
-  type RuntimeOutputPart,
   type RuntimePendingApproval,
   type RuntimePendingQuestion,
-  type RuntimeSkillScopeChange,
   type RuntimeToolCall,
   type RuntimeToolRef,
   type RuntimeTool,
@@ -102,7 +94,6 @@ import type {
   ReserveSubmissionResult,
 } from '../sessionStore/AgentSessionStore';
 import { settleInterruptedAssistantParts } from '../sessionStore/messageSettlement';
-import { LOAD_SKILL_TOOL_NAME } from '../tools/skill';
 import type { MobileAgentHostNaming, MobileAgentHostPorts } from './agentHostTypes';
 import { createImageRequestTool } from './agentImageGeneration';
 import { buildInitialSkillInstructions, buildAgentSystemPrompt } from './agentSystemPrompt';
@@ -113,7 +104,6 @@ import {
 } from './durableHostProjection';
 import { chooseLanes, type LaneChoice, type LaneTail } from './lanePlanning';
 import { toAgentApprovalView } from './runtimeProjection';
-import type { SkillTurnScope } from './skillScope';
 import { toolResultDiagnostics } from './toolResultDiagnostics';
 import { materializeRuntimeAttachments } from './turnAttachments';
 import {
@@ -189,17 +179,14 @@ function pendingQuestion(states: readonly LiveSession[]): AgentPendingQuestion |
   }
   return null;
 }
-type PreparedInput = { sessionId: string; turnId: string; plan: TurnPlan; epoch: number };
-
-const MAX_MCP_CATALOG_PREPARE_RETRIES = 4;
+type PreparedInput = { sessionId: string; turnId: string; plan: TurnPlan };
 
 function hasPlanToolDiscoveryFailure(plan: TurnPlan): boolean {
   return Boolean(
     plan.toolDiscoveryFailures &&
     (plan.toolDiscoveryFailures.mcpCapabilitiesAll ||
       plan.toolDiscoveryFailures.mcpServerIds.size > 0 ||
-      plan.toolDiscoveryFailures.systemCapabilitiesAll ||
-      plan.toolDiscoveryFailures.builtinCapabilityIds.size > 0),
+      plan.toolDiscoveryFailures.systemCapabilitiesAll),
   );
 }
 type ReplyTarget = LaneChoice & {
@@ -225,13 +212,6 @@ export class DurableAgentHost implements AgentProtocol {
   private readonly admissions = new Map<string, Admission>();
   private readonly prepared = new Map<string, PreparedInput>();
   private readonly admittedArtifactFiles = new Map<string, Set<FileEntryId>>();
-  private readonly pinnedSkillScopes = new Map<string, SkillTurnScope>();
-  private readonly preparedInvalidatedEpoch = new Map<string, number>();
-  private readonly pendingSkillScopeChanges = new Map<
-    string,
-    ({ epoch: number } & RuntimeSkillScopeChange)[]
-  >();
-  private preparedEpoch = 0;
   /** Branch alternatives by {@link siblingKey}, refreshed when a sibling set changes. */
   private readonly branchSiblings = new Map<string, AgentMessageSibling[]>();
   /** Approval waits are app-observed; they join the turn's timing and its settled message. */
@@ -239,10 +219,7 @@ export class DurableAgentHost implements AgentProtocol {
     string,
     NonNullable<RuntimeTurnTiming['approvals']>[number][]
   >();
-  private readonly preparing = new Map<
-    string,
-    { epoch: number; promise: Promise<PreparedInput> }
-  >();
+  private readonly preparing = new Map<string, Promise<PreparedInput>>();
   private readonly listeners = new Map<string, Set<(event: AgentEvent) => void>>();
   /** Read-side estimates for observed branches without a matching working copy. */
   private readonly storedContextUsages = new Map<string, RuntimeContextUsage>();
@@ -468,57 +445,6 @@ export class DurableAgentHost implements AgentProtocol {
           }
         }
       },
-      admitToolInstructions: (identity, instructionKey) => {
-        if (!instructionKey.startsWith('skill:')) return;
-        const skillId = instructionKey.slice('skill:'.length);
-        if (!skillId) return;
-        const key = executionKey(identity, identity.requestId);
-        const cached = this.prepared.get(key);
-        if (this.preparing.has(key) || !cached || !cached.plan.skills.isLoaded?.(skillId)) {
-          this.invalidatePrepared(key);
-        }
-      },
-      rollbackToolInstructions: (identity, instructionKey) => {
-        if (!instructionKey.startsWith('skill:')) return;
-        const key = executionKey(identity, identity.requestId);
-        this.invalidatePrepared(key);
-        this.prepared.delete(key);
-      },
-      admitSkillScopeChange: (identity, change) => {
-        const key = executionKey(identity, identity.requestId);
-        if (change.kind === 'adapted') {
-          const epoch = this.invalidatePrepared(key);
-          const pending = this.pendingSkillScopeChanges.get(key) ?? [];
-          pending.push({ epoch, ...change });
-          this.pendingSkillScopeChanges.set(key, pending);
-          return;
-        }
-        const cached = this.prepared.get(key);
-        if (
-          this.preparing.has(key) ||
-          !cached ||
-          cached.plan.toolDiscoveryFailures?.builtinCapabilityIds.has(LOAD_SKILL_TOOL_NAME) ||
-          !cached.plan.skills.scope.entries.some(
-            (entry) => entry.id === change.skillId && entry.contentHash === change.contentHash,
-          )
-        ) {
-          const epoch = this.invalidatePrepared(key);
-          const pending = this.pendingSkillScopeChanges.get(key) ?? [];
-          pending.push({ epoch, ...change });
-          this.pendingSkillScopeChanges.set(key, pending);
-          return;
-        }
-        const pinned = this.pinnedSkillScopes.get(key);
-        if (
-          !pinned?.entries.some(
-            (entry) => entry.id === change.skillId && entry.contentHash === change.contentHash,
-          )
-        ) {
-          const pending = this.pendingSkillScopeChanges.get(key) ?? [];
-          pending.push({ epoch: this.preparedEpoch, ...change });
-          this.pendingSkillScopeChanges.set(key, pending);
-        }
-      },
       recordUsage: async (identity, report) => {
         if (!initialized) this.controller.signal.throwIfAborted();
         const prepared = identity.requestId
@@ -657,9 +583,6 @@ export class DurableAgentHost implements AgentProtocol {
       this.storedContextUsages.clear();
       this.prepared.clear();
       this.admittedArtifactFiles.clear();
-      this.pinnedSkillScopes.clear();
-      this.preparedInvalidatedEpoch.clear();
-      this.pendingSkillScopeChanges.clear();
       this.preparing.clear();
       this.listeners.clear();
       this.executionLease?.release();
@@ -884,9 +807,6 @@ export class DurableAgentHost implements AgentProtocol {
         this.live.clear();
         this.prepared.clear();
         this.admittedArtifactFiles.clear();
-        this.pinnedSkillScopes.clear();
-        this.preparedInvalidatedEpoch.clear();
-        this.pendingSkillScopeChanges.clear();
         this.preparing.clear();
         this.executionLease?.release();
         this.executionLease = undefined;
@@ -1386,23 +1306,11 @@ export class DurableAgentHost implements AgentProtocol {
         signal.throwIfAborted();
         plan.usageAttribution.bindMessage({ id: assistant.id, kind: 'agent-session' });
         const key = executionKey(target.lane, requestId);
-        if (!hasPlanToolDiscoveryFailure(plan) && this.isPreparedMcpCatalogCurrent(plan)) {
-          this.prepared.set(key, {
-            sessionId,
-            turnId,
-            plan,
-            epoch: ++this.preparedEpoch,
-          });
+        if (!hasPlanToolDiscoveryFailure(plan)) {
+          this.prepared.set(key, { sessionId, turnId, plan });
         } else {
           this.prepared.delete(key);
         }
-        if (!plan.toolDiscoveryFailures?.builtinCapabilityIds.has(LOAD_SKILL_TOOL_NAME)) {
-          this.pinnedSkillScopes.set(key, plan.skills.pinnedScope ?? plan.skills.scope);
-        } else {
-          this.pinnedSkillScopes.delete(key);
-        }
-        this.preparedInvalidatedEpoch.delete(key);
-        this.pendingSkillScopeChanges.delete(key);
         this.sessionExecutions.get(sessionId)?.lease.update?.({
           title: selected?.name || plan.agent.name,
           completedUnitCount: 1,
@@ -1441,15 +1349,6 @@ export class DurableAgentHost implements AgentProtocol {
             referencedFileEntryIds: [...plan.resources.inputFiles.keys()],
             hasHistoryBeforeActiveTurn: plan.hasMessages,
             parentMessageId: reserved.userMessage.parentId ?? null,
-            ...(!plan.imageGeneration &&
-            !plan.toolDiscoveryFailures?.builtinCapabilityIds.has(LOAD_SKILL_TOOL_NAME)
-              ? {
-                  pinnedSkillRevisions: plan.skills.scope.entries.map((entry) => ({
-                    skillId: entry.id,
-                    contentHash: entry.contentHash,
-                  })),
-                }
-              : {}),
             ...(targets.length > 1 ? { readOnlyTools: true } : {}),
           },
         });
@@ -2146,7 +2045,7 @@ export class DurableAgentHost implements AgentProtocol {
         (durable.active?.identity.turnId === parsed.turnId
           ? durable.active.identity.requestId
           : undefined);
-      if (requestId) this.invalidatePrepared(executionKey(durable.lane, requestId));
+      if (requestId) this.prepared.delete(executionKey(durable.lane, requestId));
       const respond = this.conversations.respondApproval.bind(this.conversations);
       const response = {
         decision,
@@ -2171,7 +2070,7 @@ export class DurableAgentHost implements AgentProtocol {
     const pending = state?.approvals.get(parsed.approvalId);
     if (!pending) fail('APPROVAL_NOT_FOUND', 'The approval is no longer pending.');
     if (state?.active) {
-      this.invalidatePrepared(executionKey(state.lane, state.active.identity.requestId));
+      this.prepared.delete(executionKey(state.lane, state.active.identity.requestId));
     }
     pending.resolve(parsed.decision);
   }
@@ -2340,18 +2239,9 @@ export class DurableAgentHost implements AgentProtocol {
     };
   }
 
-  private invalidatePrepared(key: string): number {
-    const next = ++this.preparedEpoch;
-    this.preparedInvalidatedEpoch.set(key, next);
-    return next;
-  }
-
   private clearPrepared(key: string): void {
     this.prepared.delete(key);
     this.admittedArtifactFiles.delete(key);
-    this.pinnedSkillScopes.delete(key);
-    this.preparedInvalidatedEpoch.delete(key);
-    this.pendingSkillScopeChanges.delete(key);
   }
 
   private async loadOwningTurn(identity: RuntimeExecutionIdentity): Promise<RuntimeDurableTurn> {
@@ -2370,109 +2260,28 @@ export class DurableAgentHost implements AgentProtocol {
     return turn;
   }
 
-  private isPreparedMcpCatalogCurrent(
-    plan: TurnPlan,
-    currentVersion = this.ports.runtimeTools.catalogVersion?.(),
-  ): boolean {
-    return plan.mcpCatalogVersion === undefined || plan.mcpCatalogVersion === currentVersion;
-  }
-
   private async prepareExecution(
     identity: RuntimeExecutionIdentity,
     signal: AbortSignal,
-    catalogVersionRetries = 0,
   ): Promise<PreparedInput> {
     this.assertSessionRecovered(identity.sessionId);
     signal.throwIfAborted();
     const key = executionKey(identity, identity.requestId);
-    const requiredEpoch = this.preparedInvalidatedEpoch.get(key) ?? 0;
-    const currentCatalogVersion = this.ports.runtimeTools.catalogVersion?.();
     const cached = this.prepared.get(key);
-    if (
-      cached &&
-      cached.epoch >= requiredEpoch &&
-      this.isPreparedMcpCatalogCurrent(cached.plan, currentCatalogVersion)
-    ) {
-      return cached;
-    }
+    if (cached) return cached;
     const existing = this.preparing.get(key);
-    if (existing && existing.epoch >= requiredEpoch) {
-      let prepared: PreparedInput;
-      try {
-        prepared = await raceAbort(existing.promise, signal);
-      } catch (error) {
-        signal.throwIfAborted();
-        if ((this.preparedInvalidatedEpoch.get(key) ?? 0) > existing.epoch) {
-          return this.prepareExecution(identity, signal, catalogVersionRetries);
-        }
-        throw error;
-      }
-      if ((this.preparedInvalidatedEpoch.get(key) ?? 0) > prepared.epoch) {
-        return this.prepareExecution(identity, signal, catalogVersionRetries);
-      }
-      if (!this.isPreparedMcpCatalogCurrent(prepared.plan)) {
-        if (this.preparing.get(key)?.promise === existing.promise) this.preparing.delete(key);
-        if (catalogVersionRetries < MAX_MCP_CATALOG_PREPARE_RETRIES) {
-          return this.prepareExecution(identity, signal, catalogVersionRetries + 1);
-        }
-        throw new RuntimeToolDiscoveryError(
-          'MCP tool catalog kept changing while preparing execution; retry shortly.',
-        );
-      }
-      return prepared;
-    }
-    const epoch = ++this.preparedEpoch;
-    const inheritedFiles = [
-      ...new Set([
-        ...(cached ? cached.plan.resources.fileEntryIds : []),
-        ...(this.admittedArtifactFiles.get(key) ?? []),
-      ]),
-    ];
-    const pinnedSkillScope = this.pinnedSkillScopes.get(key);
-    const skillScopeChanges = (this.pendingSkillScopeChanges.get(key) ?? [])
-      .filter((entry) => entry.epoch <= epoch)
-      .map(({ kind, skillId, contentHash }) => ({ kind, skillId, contentHash }));
+    if (existing) return raceAbort(existing, signal);
+    const inheritedFiles = [...(this.admittedArtifactFiles.get(key) ?? [])];
     const operation = this.traceOperation(
       'ai.prepare',
       identity,
       async () => {
         const turn = await this.loadOwningTurn(identity);
         const facts = DurableTurnMetadataSchema.parse(turn.metadata);
-        const inTurnChanges = turn.skillScopeChanges ?? extractInTurnSkillScopeChanges(turn.parts);
-        const combinedSkillScopeChanges = [...inTurnChanges, ...skillScopeChanges];
-        let pinnedSkillRevisions: Map<string, string> | undefined;
-        if (!pinnedSkillScope && facts.pinnedSkillRevisions !== undefined) {
-          pinnedSkillRevisions = new Map(
-            facts.pinnedSkillRevisions.map(({ skillId, contentHash }) => [skillId, contentHash]),
-          );
-          for (const change of combinedSkillScopeChanges) {
-            if (change.kind === 'adapted') {
-              if (pinnedSkillRevisions.has(change.skillId)) {
-                pinnedSkillRevisions.set(change.skillId, change.contentHash);
-              }
-            } else if (!pinnedSkillRevisions.has(change.skillId)) {
-              pinnedSkillRevisions.set(change.skillId, change.contentHash);
-            }
-          }
-        }
         const configuration = await this.conversations.configuration(identity);
         const { sessionId } = identity;
         const question = await this.store.getMessage(sessionId, turn.userMessageId);
-        const [runtimeFiles, retainedSkillIds, retainedSkillRevisions] = await Promise.all([
-          this.conversations.resourceFileEntryIds(identity),
-          this.conversations.retainedSkillIds?.(identity) ?? Promise.resolve(undefined),
-          this.conversations.retainedSkillRevisions?.(identity) ?? Promise.resolve(undefined),
-        ]);
-        const registeredTools =
-          configuration.tools.length > 0 ? configuration.tools : facts.inferenceSnapshot.tools;
-        const loadSkillAvailable =
-          registeredTools.length === 0 ||
-          registeredTools.some(
-            (tool) =>
-              tool.ref.source === 'builtin' &&
-              tool.ref.capabilityId === LOAD_SKILL_TOOL_NAME &&
-              tool.approval !== 'deny',
-          );
+        const runtimeFiles = await this.conversations.resourceFileEntryIds(identity);
         const plan = await prepareDurableTurn(
           this.preparation,
           {
@@ -2492,17 +2301,8 @@ export class DurableAgentHost implements AgentProtocol {
           { through: question?.parentId ?? null, readOnlyTools: facts.readOnlyTools === true },
           facts.workspaceFolderId,
           {
-            hasMessages: cached ? cached.plan.hasMessages : facts.hasHistoryBeforeActiveTurn,
+            hasMessages: facts.hasHistoryBeforeActiveTurn,
             recovering: true,
-            extraSkillActivations: extractInTurnSkillActivations(turn.parts, facts.retainedParts),
-            ...(retainedSkillIds !== undefined ? { retainedSkillIds } : {}),
-            ...(retainedSkillRevisions !== undefined ? { retainedSkillRevisions } : {}),
-            loadSkillAvailable,
-            ...(pinnedSkillScope ? { pinnedSkillScope } : {}),
-            ...(pinnedSkillRevisions !== undefined ? { pinnedSkillRevisions } : {}),
-            ...(pinnedSkillScope && combinedSkillScopeChanges.length
-              ? { skillScopeChanges: combinedSkillScopeChanges }
-              : {}),
           },
         );
         plan.usageAttribution.bindMessage({ id: turn.assistantMessageId, kind: 'agent-session' });
@@ -2512,71 +2312,22 @@ export class DurableAgentHost implements AgentProtocol {
         for (const fileEntryId of this.admittedArtifactFiles.get(key) ?? []) {
           plan.resources.grantFile(fileEntryId);
         }
-        const prepared = { sessionId, turnId: identity.turnId, plan, epoch };
-        if (
-          (this.preparedInvalidatedEpoch.get(key) ?? 0) <= epoch &&
-          (this.prepared.get(key)?.epoch ?? 0) <= epoch
-        ) {
-          const hasToolDiscoveryFailure = hasPlanToolDiscoveryFailure(plan);
-          if (
-            !plan.skills.unreadableSelectedSkillIds?.size &&
-            !plan.skills.unreadableActiveSkillIds?.size &&
-            !plan.skills.incompletePinnedScope &&
-            !hasToolDiscoveryFailure &&
-            this.isPreparedMcpCatalogCurrent(plan)
-          ) {
-            this.prepared.set(key, prepared);
-          } else {
-            this.prepared.delete(key);
-          }
-          if (
-            !plan.toolDiscoveryFailures?.builtinCapabilityIds.has(LOAD_SKILL_TOOL_NAME) &&
-            !plan.skills.incompletePinnedScope
-          ) {
-            this.pinnedSkillScopes.set(key, plan.skills.pinnedScope ?? plan.skills.scope);
-            const pending = this.pendingSkillScopeChanges.get(key);
-            if (pending) {
-              const remaining = pending.filter((entry) => entry.epoch > epoch);
-              if (remaining.length > 0) this.pendingSkillScopeChanges.set(key, remaining);
-              else this.pendingSkillScopeChanges.delete(key);
-            }
-          }
+        const prepared = { sessionId, turnId: identity.turnId, plan };
+        if (!hasPlanToolDiscoveryFailure(plan)) {
+          this.prepared.set(key, prepared);
+        } else {
+          this.prepared.delete(key);
         }
         return prepared;
       },
       signal,
     );
-    this.preparing.set(key, {
-      epoch,
-      promise: operation,
-    });
-    let outcome: { kind: 'ok'; prepared: PreparedInput } | { kind: 'err'; error: unknown };
+    this.preparing.set(key, operation);
     try {
-      outcome = { kind: 'ok', prepared: await operation };
-    } catch (error) {
-      outcome = { kind: 'err', error };
+      return await raceAbort(operation, signal);
     } finally {
-      if (this.preparing.get(key)?.promise === operation) this.preparing.delete(key);
+      if (this.preparing.get(key) === operation) this.preparing.delete(key);
     }
-    if (outcome.kind === 'err') {
-      signal.throwIfAborted();
-      if ((this.preparedInvalidatedEpoch.get(key) ?? 0) > epoch) {
-        return this.prepareExecution(identity, signal, catalogVersionRetries);
-      }
-      throw outcome.error;
-    }
-    if ((this.preparedInvalidatedEpoch.get(key) ?? 0) > outcome.prepared.epoch) {
-      return this.prepareExecution(identity, signal, catalogVersionRetries);
-    }
-    if (!this.isPreparedMcpCatalogCurrent(outcome.prepared.plan)) {
-      if (catalogVersionRetries < MAX_MCP_CATALOG_PREPARE_RETRIES) {
-        return this.prepareExecution(identity, signal, catalogVersionRetries + 1);
-      }
-      throw new RuntimeToolDiscoveryError(
-        'MCP tool catalog kept changing while preparing execution; retry shortly.',
-      );
-    }
-    return outcome.prepared;
   }
 
   private async resolveTool(
@@ -2598,46 +2349,11 @@ export class DurableAgentHost implements AgentProtocol {
           failures &&
           (ref.source === 'mcp'
             ? failures.mcpCapabilitiesAll || failures.mcpServerIds.has(ref.serverId)
-            : failures.systemCapabilitiesAll ||
-              failures.builtinCapabilityIds.has(ref.capabilityId)),
+            : failures.systemCapabilitiesAll),
         );
       if (discoveryFailed) {
-        let executionSettingsKey: string | undefined;
-        let matchesExecutionSettingsKey: ((expected: string) => Promise<boolean>) | undefined;
-        let effectiveApproval: RuntimeTool['approval'] | undefined;
-        if (ref.source === 'mcp') {
-          const serverState = failures?.mcpServerStates?.get(ref.serverId);
-          if (serverState) {
-            if (serverState.disabledTools.has(ref.rawToolName)) {
-              throw new RuntimeToolUnavailableError();
-            }
-            if (serverState.resolveEffectiveApproval) {
-              try {
-                const resolvedApproval = await raceAbort(
-                  serverState.resolveEffectiveApproval(ref.rawToolName),
-                  signal,
-                );
-                if (resolvedApproval === null || resolvedApproval === 'deny') {
-                  throw new RuntimeToolUnavailableError();
-                }
-                effectiveApproval = resolvedApproval;
-              } catch (error) {
-                if (error instanceof RuntimeToolUnavailableError) throw error;
-                signal.throwIfAborted();
-              }
-            }
-            executionSettingsKey = serverState.executionSettingsKey;
-            matchesExecutionSettingsKey = serverState.matchesExecutionSettingsKey;
-          }
-        }
-        const key = executionKey(identity, identity.requestId);
-        this.invalidatePrepared(key);
-        this.prepared.delete(key);
-        throw new RuntimeToolDiscoveryError(undefined, {
-          ...(executionSettingsKey !== undefined ? { executionSettingsKey } : {}),
-          ...(matchesExecutionSettingsKey ? { matchesExecutionSettingsKey } : {}),
-          ...(effectiveApproval !== undefined ? { approval: effectiveApproval } : {}),
-        });
+        this.prepared.delete(executionKey(identity, identity.requestId));
+        throw new RuntimeToolDiscoveryError();
       }
       throw new RuntimeToolUnavailableError();
     }
@@ -4074,36 +3790,8 @@ function sameConversationConfiguration(
   if (configurationKey(current) === configurationKey(next)) return true;
   // Pre-1.6 snapshots omitted mcpNamespaces even when MCP servers (including zero-tool ones)
   // were active; 1.6 always persists mcpNamespaces ([] or populated) on new configurations.
-  const hasLegacyNamespaces = current.mcpNamespaces === undefined;
-  let hasLegacyToolFields = false;
-  const normalizedTools = next.tools.map((tool) => {
-    const legacy = current.tools.find((candidate) => sameRef(candidate.ref, tool.ref));
-    if (!legacy) return tool;
-    let normalized = tool;
-    if (
-      legacy.executionSettingsKey !== tool.executionSettingsKey &&
-      matchesLegacyExecutionSettingsKey(
-        tool.ref,
-        legacy.executionSettingsKey,
-        tool.executionSettingsKey,
-      )
-    ) {
-      hasLegacyToolFields = true;
-      normalized = { ...normalized, executionSettingsKey: legacy.executionSettingsKey };
-    }
-    if (hasLegacyNamespaces && legacy.effect === undefined && tool.effect !== undefined) {
-      hasLegacyToolFields = true;
-      normalized = { ...normalized, effect: undefined };
-    }
-    return normalized;
-  });
-  if (!hasLegacyNamespaces && !hasLegacyToolFields) return false;
-  const normalizedNext: RuntimeConversationSeed['configuration'] = {
-    ...next,
-    ...(hasLegacyNamespaces ? { mcpNamespaces: undefined } : {}),
-    ...(hasLegacyToolFields ? { tools: normalizedTools } : {}),
-  };
-  return configurationKey(current) === configurationKey(normalizedNext);
+  if (current.mcpNamespaces !== undefined) return false;
+  return configurationKey(current) === configurationKey({ ...next, mcpNamespaces: undefined });
 }
 function sameRef(left: RuntimeToolRef, right: RuntimeToolRef) {
   return (
@@ -4303,84 +3991,4 @@ function editedUserInput(parts: AgentMessageView['parts'], text: string): AgentI
         : [],
     ),
   ];
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function extractLoadSkillActivation(value: unknown): SkillActivation | null {
-  if (!isRecord(value) || value.status !== 'ok') return null;
-  const parsed = SkillActivationSchema.safeParse(value.activation);
-  return parsed.success ? parsed.data : null;
-}
-
-function extractInTurnSkillActivations(
-  turnParts: readonly RuntimeOutputPart[],
-  retainedParts?: readonly AgentMessagePart[],
-): SkillActivation[] {
-  const activations: SkillActivation[] = [];
-  for (const part of retainedParts ?? []) {
-    if (
-      part.type === 'dynamic-tool' &&
-      part.toolRef.source === 'builtin' &&
-      part.toolRef.capabilityId === 'load_skill' &&
-      part.state === 'output-available' &&
-      isRecord(part.output)
-    ) {
-      const activation = extractLoadSkillActivation(part.output.value);
-      if (activation) activations.push(activation);
-    }
-  }
-  for (const part of turnParts) {
-    if (
-      part.type === 'tool' &&
-      part.toolRef.source === 'builtin' &&
-      part.toolRef.capabilityId === 'load_skill' &&
-      part.state === 'output-available'
-    ) {
-      const activation = extractLoadSkillActivation(part.output?.value);
-      if (activation) activations.push(activation);
-    }
-  }
-  return activations;
-}
-
-function extractInTurnSkillScopeChanges(
-  turnParts: readonly RuntimeOutputPart[],
-): RuntimeSkillScopeChange[] {
-  const changes: RuntimeSkillScopeChange[] = [];
-  for (const part of turnParts) {
-    if (
-      part.type !== 'tool' ||
-      part.toolRef.source !== 'builtin' ||
-      part.state !== 'output-available' ||
-      !isRecord(part.output?.value)
-    ) {
-      continue;
-    }
-    const {
-      status,
-      skill_id: skillId,
-      contentHash,
-      availableThisTurn,
-      instructionsLoaded,
-    } = part.output.value;
-    if (typeof skillId !== 'string' || skillId.length === 0) continue;
-    if (typeof contentHash !== 'string' || contentHash.length === 0) continue;
-    if (
-      part.toolRef.capabilityId === 'adapt_skill' &&
-      status === 'adapted' &&
-      instructionsLoaded === true
-    ) {
-      changes.push({ kind: 'adapted', skillId, contentHash });
-    } else if (
-      part.toolRef.capabilityId === 'install_skill' &&
-      status === 'installed' &&
-      availableThisTurn === true
-    ) {
-      changes.push({ kind: 'installed', skillId, contentHash });
-    }
-  }
-  return changes;
 }

@@ -6,10 +6,7 @@ import type { RemoteMcpServer } from '@/shared/data/types/mcpServer';
 import { McpAppAccess, type McpAppConnection } from '../McpAppAccess';
 import { McpRuntimeToolError } from '../mcpRuntimeAdapter';
 
-jest.mock('../mcpToolCatalogStore', () => ({
-  createMcpConnectionKey: async () => 'connection',
-  matchesMcpConnectionKey: async (_config: unknown, expected: string) => expected === 'connection',
-}));
+jest.mock('../mcpToolCatalogStore', () => ({ createMcpConnectionKey: async () => 'connection' }));
 
 function fixture() {
   const reference: McpAppReference = {

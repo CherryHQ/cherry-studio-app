@@ -131,24 +131,6 @@ export function createSkillScopeSource(deps: SkillScopeSourceDependencies): Skil
   };
 }
 
-/** Filter a freshly resolved Skill scope to the exact revisions pinned for an active turn. */
-export function filterSkillScopeByRevisions(
-  resolved: SkillTurnScope,
-  revisions: ReadonlyMap<string, string>,
-): SkillTurnScope {
-  if (revisions.size === 0 || resolved.entries.length === 0) return EMPTY_SKILL_SCOPE;
-  const entries = resolved.entries.filter((entry) => revisions.get(entry.id) === entry.contentHash);
-  if (entries.length === 0) return EMPTY_SKILL_SCOPE;
-  const allowedIds = new Set(entries.map((entry) => entry.id));
-  return {
-    entries: Object.freeze(entries),
-    readInstructions: (id) =>
-      allowedIds.has(id) ? resolved.readInstructions(id) : Promise.resolve(null),
-    readFile: (id, path) =>
-      allowedIds.has(id) ? resolved.readFile(id, path) : Promise.resolve(null),
-  };
-}
-
 /** Only installation may append entries; consented adaptation may replace an existing entry. */
 export function createExpandingSkillScope(initial: SkillTurnScope) {
   const entries = new Map(initial.entries.map((entry) => [entry.id, entry]));

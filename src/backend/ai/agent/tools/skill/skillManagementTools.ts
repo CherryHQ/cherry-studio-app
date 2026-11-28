@@ -16,7 +16,7 @@ export function createSkillManagementTools(options: {
   source: SkillScopeSource;
   context: Omit<Parameters<SkillScopeSource['resolve']>[0], 'signal'>;
   installIntent: boolean;
-  include?(scope: SkillTurnScope, skillId: string, digest: string): boolean;
+  include(scope: SkillTurnScope, skillId: string, digest: string): boolean;
 }): RuntimeTool[] {
   const safe =
     (execute: RuntimeTool['execute']): RuntimeTool['execute'] =>
@@ -102,29 +102,24 @@ export function createSkillManagementTools(options: {
           signal,
         );
         let available = false;
-        if (options.include) {
-          try {
-            const scope = await options.source.resolve({ ...options.context, signal });
-            available =
-              options.include(scope, skill.id, skill.contentHash) &&
-              skill.invocation.modelInvocable;
-          } catch {
-            /* The committed installation remains valid even if turn refresh fails. */
-          }
+        try {
+          const scope = await options.source.resolve({ ...options.context, signal });
+          available =
+            options.include(scope, skill.id, skill.contentHash) && skill.invocation.modelInvocable;
+        } catch {
+          /* The committed installation remains valid even if turn refresh fails. */
         }
-        const receipt = {
-          status: 'installed',
-          skill_id: skill.id,
-          name: skill.name,
-          source: skill.sourceUrl,
-          availableThisTurn: available,
-          next: available
-            ? 'Call load_skill to read the instructions, then check whether the actual tools support the requested steps.'
-            : 'Installed and enabled for this Agent, but instructions are not available for automatic loading in this turn.',
-        };
         return {
-          value: { ...receipt, contentHash: skill.contentHash },
-          modelValue: receipt,
+          value: {
+            status: 'installed',
+            skill_id: skill.id,
+            name: skill.name,
+            source: skill.sourceUrl,
+            availableThisTurn: available,
+            next: available
+              ? 'Call load_skill to read the instructions, then check whether the actual tools support the requested steps.'
+              : 'Installed and enabled for this Agent, but instructions are not available for automatic loading in this turn.',
+          },
           artifacts: [],
         };
       }),

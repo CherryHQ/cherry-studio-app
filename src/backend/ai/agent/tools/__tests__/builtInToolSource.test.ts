@@ -934,41 +934,6 @@ describe('createSystemCapabilitySource', () => {
     expect(known.value).toMatchObject({ status: 'ok', text: 'a\nb', totalLines: 2 });
     expect(unknown.value).toMatchObject({ status: 'error' });
   });
-
-  test('invokes onUnavailableCapability only when a capability lookup throws transiently', async () => {
-    const onUnavailableClean = jest.fn();
-    const unconfigured = await resolve(
-      { paintingModel: null },
-      { onUnavailableCapability: onUnavailableClean },
-    );
-    expect(capabilityIds(unconfigured)).not.toContain('generate_image');
-    expect(onUnavailableClean).not.toHaveBeenCalled();
-
-    const onUnavailableTransient = jest.fn();
-    const deps = dependencies({});
-    const source = createSystemCapabilitySource(SERVICES, {
-      ...deps,
-      platform: 'ios',
-      painting: {
-        ...deps.painting!,
-        preference: {
-          get: jest.fn(async () => {
-            throw new Error('SQLite busy');
-          }),
-        },
-      },
-    });
-    const tools = await source.getTools({
-      acceptsImages: true,
-      askUser: noAskUser,
-      documentParserMode: 'builtin',
-      model: MODEL,
-      resources: TURN_RESOURCES,
-      onUnavailableCapability: onUnavailableTransient,
-    });
-    expect(capabilityIds(tools)).not.toContain('generate_image');
-    expect(onUnavailableTransient).toHaveBeenCalledWith('generate_image');
-  });
 });
 
 type Scenario = {
@@ -992,7 +957,6 @@ async function resolve(
     documentParserMode?: DocumentParserMode;
     acceptsImages?: boolean;
     agentConfiguration?: SystemCapabilityServices['agentConfiguration'];
-    onUnavailableCapability?: (capabilityId: string) => void;
   } = {},
 ): Promise<readonly RuntimeTool[]> {
   const source = createSystemCapabilitySource(
@@ -1010,9 +974,6 @@ async function resolve(
     model: MODEL,
     resources: TURN_RESOURCES,
     workspaceFolderId: scenario.workspaceFolderId,
-    ...(options.onUnavailableCapability
-      ? { onUnavailableCapability: options.onUnavailableCapability }
-      : {}),
   });
 }
 

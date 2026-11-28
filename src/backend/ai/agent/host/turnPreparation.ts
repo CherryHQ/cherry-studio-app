@@ -27,7 +27,6 @@ import { createUniqueModelId, parseUniqueModelId } from '@/shared/data/types/mod
 import {
   SKILL_ACTIVE_MAX_CHARACTERS,
   SKILL_ACTIVE_MAX_ENTRIES,
-  skillContentHashHex,
   type SkillActivation,
 } from '@/shared/data/types/skill';
 import { applyToolApprovalMode } from '@/shared/utils/agentToolApproval';
@@ -44,7 +43,6 @@ import type {
   RuntimeContextCheckpoint,
   RuntimeMcpNamespace,
   RuntimeModelPreflight,
-  RuntimeSkillScopeChange,
   RuntimeTool,
   RuntimeWebTools,
 } from '../runtime';
@@ -59,13 +57,8 @@ import {
   createSkillTools,
   createSkillManagementTools,
   createSkillCreationTool,
-  LIST_LOCAL_SKILLS_TOOL_NAME,
-  LIST_SKILL_FILES_TOOL_NAME,
-  LOAD_SKILL_TOOL_NAME,
-  READ_SKILL_FILE_TOOL_NAME,
 } from '../tools/skill';
 import {
-  LOAD_WORKFLOW_TOOL_NAME,
   createLoadWorkflowTool,
   getPluginWorkflows,
   requireLoadedWorkflows,
@@ -82,7 +75,6 @@ import { isSkillActivationCurrent, latestSkillActivations } from './skillHistory
 import {
   EMPTY_SKILL_SCOPE,
   createExpandingSkillScope,
-  filterSkillScopeByRevisions,
   type SkillScopeSource,
   type SkillTurnEntry,
   type SkillTurnScope,
@@ -127,13 +119,6 @@ export type TurnPreparationDependencies = {
   webTools?(): Promise<RuntimeWebTools>;
 };
 
-type FailedMcpServerState = {
-  executionSettingsKey?: string;
-  matchesExecutionSettingsKey?(expected: string): Promise<boolean>;
-  disabledTools: ReadonlySet<string>;
-  resolveEffectiveApproval?(rawToolName: string): Promise<RuntimeTool['approval'] | null>;
-};
-
 /** Everything the Host needs to reserve and execute a turn, frozen before the first write. */
 export type TurnPlan = {
   agent: AgentDefinition;
@@ -159,7 +144,6 @@ export type TurnPlan = {
   runtimeContentAttachments: RuntimeAttachmentContents;
   sessionTitle: string;
   tools: readonly RuntimeTool[];
-  mcpCatalogVersion?: number;
   mcpNamespaces: readonly RuntimeMcpNamespace[];
   webTools?: RuntimeWebTools;
   pluginGuides: readonly PluginGuideSnapshot[];
@@ -171,9 +155,7 @@ export type TurnPlan = {
   toolDiscoveryFailures?: {
     mcpCapabilitiesAll?: boolean;
     mcpServerIds: ReadonlySet<string>;
-    mcpServerStates?: ReadonlyMap<string, FailedMcpServerState>;
     systemCapabilitiesAll: boolean;
-    builtinCapabilityIds: ReadonlySet<string>;
   };
   toolDiscoveryWarnings: readonly string[];
   /** The user message parts to reserve, projected from the canonical input. */
@@ -184,21 +166,12 @@ export type TurnPlan = {
 
 export type TurnSkillPlan = {
   scope: SkillTurnScope;
-  /** Immutable baseline scope prior to in-turn expansions, used for warm recovery. */
-  pinnedScope?: SkillTurnScope;
   findAndInstall?: boolean;
   create?: boolean;
   /** Explicitly selected Skills with their instructions already loaded. */
   selected: readonly { entry: SkillTurnEntry; instructions: string }[];
   /** Instructions restored from earlier turns' receipts; they ride with the system prompt. */
   active?: ReadonlyMap<string, { entry: SkillTurnEntry; instructions: string }>;
-  /** Selected Skills whose package instructions could not be read during recovery. */
-  unreadableSelectedSkillIds?: ReadonlySet<string>;
-  /** Previously loaded active Skills whose package instructions could not be read during recovery. */
-  unreadableActiveSkillIds?: ReadonlySet<string>;
-  /** One or more pinned Skill revisions for the active turn were missing during recovery. */
-  incompletePinnedScope?: boolean;
-  isLoaded?(skillId: string): boolean;
 };
 
 export const EMPTY_TURN_SKILL_PLAN: TurnSkillPlan = Object.freeze({
@@ -243,13 +216,6 @@ export type TurnScope = {
   through?: string | null;
   readOnlyTools?: boolean;
   recovering?: boolean;
-  extraSkillActivations?: readonly SkillActivation[];
-  retainedSkillIds?: readonly string[];
-  retainedSkillRevisions?: ReadonlyMap<string, string>;
-  loadSkillAvailable?: boolean;
-  pinnedSkillScope?: SkillTurnScope;
-  pinnedSkillRevisions?: ReadonlyMap<string, string>;
-  skillScopeChanges?: readonly RuntimeSkillScopeChange[];
 };
 
 export async function prepareTurn(
@@ -408,13 +374,6 @@ export async function prepareDurableTurn(
   options?: {
     hasMessages?: boolean;
     recovering?: boolean;
-    extraSkillActivations?: readonly SkillActivation[];
-    retainedSkillIds?: readonly string[];
-    retainedSkillRevisions?: ReadonlyMap<string, string>;
-    loadSkillAvailable?: boolean;
-    pinnedSkillScope?: SkillTurnScope;
-    pinnedSkillRevisions?: ReadonlyMap<string, string>;
-    skillScopeChanges?: readonly RuntimeSkillScopeChange[];
   },
 ): Promise<TurnPlan> {
   const session = await raceAbort(dependencies.store.getSession(parsed.sessionId), signal);
@@ -441,23 +400,6 @@ export async function prepareDurableTurn(
     {
       ...scope,
       ...(options?.recovering ? { recovering: true } : {}),
-      ...(options?.extraSkillActivations?.length
-        ? { extraSkillActivations: options.extraSkillActivations }
-        : {}),
-      ...(options?.retainedSkillIds !== undefined
-        ? { retainedSkillIds: options.retainedSkillIds }
-        : {}),
-      ...(options?.retainedSkillRevisions !== undefined
-        ? { retainedSkillRevisions: options.retainedSkillRevisions }
-        : {}),
-      ...(options?.loadSkillAvailable === false ? { loadSkillAvailable: false } : {}),
-      ...(options?.pinnedSkillScope ? { pinnedSkillScope: options.pinnedSkillScope } : {}),
-      ...(options?.pinnedSkillRevisions !== undefined
-        ? { pinnedSkillRevisions: options.pinnedSkillRevisions }
-        : {}),
-      ...(options?.skillScopeChanges?.length
-        ? { skillScopeChanges: options.skillScopeChanges }
-        : {}),
     },
   );
 }
@@ -644,47 +586,26 @@ export async function prepareResolvedTurn(
   // resolution remains optional; configured MCP binding resolution fails closed.
   let systemTools: readonly RuntimeTool[] = [];
   let configuredTools: readonly RuntimeTool[] = [];
-  let mcpCatalogVersion: number | undefined;
   let mcpNamespaces: readonly RuntimeMcpNamespace[] = [];
   let skillTools: readonly RuntimeTool[] = [];
   let pluginGuides: TurnPlan['pluginGuides'] = [];
   let skills: TurnSkillPlan = EMPTY_TURN_SKILL_PLAN;
   let systemCapabilitiesAll = false;
   let mcpCapabilitiesAll = false;
-  const failedBuiltinCapabilityIds = new Set<string>();
   const failedMcpServerIds = new Set<string>();
-  const failedMcpServerStates = new Map<string, FailedMcpServerState>();
   const toolDiscoveryWarnings: string[] = [];
   // A multi-model answer runs beside others, so it never loads Skills or plugin workflows.
   const canUseSkills = canUseTools && !scope.readOnlyTools;
   let receipts: ReturnType<typeof latestSkillActivations> = [];
   if (canUseTools) {
     // Read prior Skill receipts only when this turn can use tools and Skills.
-    if (dependencies.skills && canUseSkills) {
-      const priorReceipts = await raceAbort(
-        dependencies.store.loadSkillActivations(parsed.sessionId, scope.through),
-        signal,
+    if (dependencies.skills && canUseSkills)
+      receipts = latestSkillActivations(
+        await raceAbort(
+          dependencies.store.loadSkillActivations(parsed.sessionId, scope.through),
+          signal,
+        ),
       );
-      const extraReceipts = (scope.extraSkillActivations ?? []).map((activation) => ({
-        messageId: parsed.assistantMessageId,
-        activation,
-      }));
-      const knownSkillIds = new Set([
-        ...priorReceipts.map(({ activation }) => activation.skillId),
-        ...extraReceipts.map(({ activation }) => activation.skillId),
-      ]);
-      const retainedReceipts = (scope.retainedSkillIds ?? []).flatMap((skillId) =>
-        knownSkillIds.has(skillId)
-          ? []
-          : [
-              {
-                messageId: parsed.assistantMessageId,
-                activation: { skillId, name: '', contentHash: '', origin: 'automatic' as const },
-              },
-            ],
-      );
-      receipts = latestSkillActivations([...priorReceipts, ...extraReceipts, ...retainedReceipts]);
-    }
     try {
       systemTools = await raceAbort(
         dependencies.systemCapabilities.getTools({
@@ -697,9 +618,6 @@ export async function prepareResolvedTurn(
           resources,
           documentParserMode,
           resolveUsageAttribution: usageAttribution.resolve,
-          onUnavailableCapability: (capabilityId) => {
-            failedBuiltinCapabilityIds.add(capabilityId);
-          },
         }),
         signal,
       );
@@ -709,7 +627,6 @@ export async function prepareResolvedTurn(
       logger.warn('Failed to resolve system capabilities; continuing without them', error as Error);
     }
     try {
-      mcpCatalogVersion = dependencies.runtimeTools.catalogVersion?.();
       // The turn signal reaches live MCP discovery so cancelling the send
       // stops the network request rather than only abandoning its result.
       const configured = await raceAbort(
@@ -728,26 +645,6 @@ export async function prepareResolvedTurn(
       for (const serverId of configured.unavailableServerIds ?? []) {
         failedMcpServerIds.add(serverId);
       }
-      for (const [serverId, state] of configured.unavailableServerStates ?? []) {
-        failedMcpServerStates.set(serverId, {
-          ...(state.executionSettingsKey !== undefined
-            ? { executionSettingsKey: state.executionSettingsKey }
-            : {}),
-          ...(state.matchesExecutionSettingsKey
-            ? { matchesExecutionSettingsKey: state.matchesExecutionSettingsKey }
-            : {}),
-          disabledTools: state.disabledTools,
-          ...(state.resolveToolApproval
-            ? {
-                resolveEffectiveApproval: async (rawToolName) => {
-                  const baseApproval = await state.resolveToolApproval!(rawToolName);
-                  if (baseApproval === null || baseApproval === 'deny') return baseApproval;
-                  return applyToolApprovalMode(baseApproval, agent.toolApprovalMode, true);
-                },
-              }
-            : {}),
-        });
-      }
       if (canUseSkills) pluginGuides = configured.pluginGuides;
     } catch (error) {
       signal.throwIfAborted();
@@ -755,84 +652,25 @@ export async function prepareResolvedTurn(
         fail('EXECUTION_UNAVAILABLE', 'The configured Agent tools are unavailable.');
       }
       mcpCapabilitiesAll = true;
-      failedBuiltinCapabilityIds.add(LOAD_WORKFLOW_TOOL_NAME);
       logger.warn(
         'Failed to resolve configured Agent tools during recovery; continuing without them',
         error as Error,
       );
     }
   }
-  const authoritativeRetainedSkillIds =
-    scope.recovering === true &&
-    (scope.retainedSkillIds !== undefined || scope.retainedSkillRevisions !== undefined)
-      ? new Set([
-          ...(scope.retainedSkillIds ?? []),
-          ...(scope.retainedSkillRevisions?.keys() ?? []),
-        ])
-      : undefined;
   if (canUseSkills) {
-    let skillDiscoveryFailed = false;
-    skills = await resolveTurnSkills(
-      dependencies,
-      agent,
-      parsed.skillIds ?? [],
-      receipts,
-      signal,
-      () => {
-        skillDiscoveryFailed = true;
-        for (const id of [
-          LIST_LOCAL_SKILLS_TOOL_NAME,
-          LOAD_SKILL_TOOL_NAME,
-          LIST_SKILL_FILES_TOOL_NAME,
-          READ_SKILL_FILE_TOOL_NAME,
-          'adapt_skill',
-        ]) {
-          failedBuiltinCapabilityIds.add(id);
-        }
-      },
-      scope.pinnedSkillScope,
-      scope.skillScopeChanges,
-      scope.pinnedSkillRevisions,
-      scope.recovering === true,
-      authoritativeRetainedSkillIds,
-    );
-    const baseScope = skills.scope;
-    const expanding = createExpandingSkillScope(baseScope);
+    skills = await resolveTurnSkills(dependencies, agent, parsed.skillIds ?? [], receipts, signal);
+    const expanding = createExpandingSkillScope(skills.scope);
     skills = {
       ...skills,
       scope: expanding.scope,
-      pinnedScope: baseScope,
       findAndInstall: parsed.skillAction === 'find-and-install',
       create: parsed.skillAction === 'create',
     };
-    const hasLocalSkillTools =
-      !skillDiscoveryFailed &&
-      (skills.scope.entries.length > 0 ||
-        skills.incompletePinnedScope === true ||
-        Boolean(dependencies.skillWorkflow));
-    if (hasLocalSkillTools) {
-      const matchesRetainedRevision = (entry: SkillTurnEntry) => {
-        if (authoritativeRetainedSkillIds && !authoritativeRetainedSkillIds.has(entry.id)) {
-          return false;
-        }
-        const committed = scope.retainedSkillRevisions?.get(entry.id);
-        return (
-          committed === undefined ||
-          committed === skillContentHashHex(entry.contentHash).slice(0, 12)
-        );
-      };
-      const loaded = [...skills.selected, ...(skills.active?.values() ?? [])].filter(({ entry }) =>
-        matchesRetainedRevision(entry),
-      );
-      const loadedSkills = new Set(loaded.map(({ entry }) => entry.id));
-      skills = { ...skills, isLoaded: (skillId) => loadedSkills.has(skillId) };
-      const unreadableSkillIds = new Set([
-        ...(skills.unreadableSelectedSkillIds ?? []),
-        ...(skills.unreadableActiveSkillIds ?? []),
-      ]);
+    if (skills.scope.entries.length > 0 || dependencies.skillWorkflow) {
+      const loaded = [...skills.selected, ...(skills.active?.values() ?? [])];
       skillTools = createSkillTools(skills.scope, {
         loadedSkillIds: loaded.map(({ entry }) => entry.id),
-        loadedSkills,
         explicitSkillIds: [
           ...skills.selected.map(({ entry }) => entry.id),
           ...receipts
@@ -849,7 +687,6 @@ export async function prepareResolvedTurn(
         instructionLengths: new Map(
           loaded.map(({ entry, instructions }) => [entry.id, [...instructions].length]),
         ),
-        ...(unreadableSkillIds.size ? { unreadableSkillIds } : {}),
         ...(dependencies.skillWorkflow && dependencies.skills
           ? {
               adaptation: {
@@ -866,7 +703,6 @@ export async function prepareResolvedTurn(
       });
     }
     if (dependencies.skillWorkflow && dependencies.skills) {
-      const canLoadInstalledSkills = hasLocalSkillTools && scope.loadSkillAvailable !== false;
       skillTools = [
         ...skillTools,
         createSkillCreationTool(dependencies.skillWorkflow, { deferred: !skills.create }),
@@ -875,7 +711,7 @@ export async function prepareResolvedTurn(
           source: dependencies.skills,
           context: { agentId: agent.id },
           installIntent: skills.findAndInstall === true,
-          ...(canLoadInstalledSkills ? { include: expanding.include } : {}),
+          include: expanding.include,
         }),
       ];
     }
@@ -895,16 +731,7 @@ export async function prepareResolvedTurn(
   let workflowInstructions: TurnPlan['workflowInstructions'] = [];
   if (pluginGuides.length > 0) {
     const workflows = getPluginWorkflows(pluginGuides);
-    const availableWorkflowIds = new Set(workflows.map((workflow) => workflow.id));
-    const unavailableWorkflowIds = new Set(
-      [...failedMcpServerIds]
-        .map((serverId) => `plugin:${serverId}`)
-        .filter((workflowId) => !availableWorkflowIds.has(workflowId)),
-    );
-    tools = [
-      ...requireLoadedWorkflows(tools, workflows),
-      createLoadWorkflowTool(workflows, unavailableWorkflowIds),
-    ];
+    tools = [...requireLoadedWorkflows(tools, workflows), createLoadWorkflowTool(workflows)];
     workflowInstructions = restoreLoadedWorkflows(
       workflows,
       await raceAbort(
@@ -912,8 +739,6 @@ export async function prepareResolvedTurn(
         signal,
       ),
     );
-  } else if (canUseSkills && failedMcpServerIds.size > 0) {
-    failedBuiltinCapabilityIds.add(LOAD_WORKFLOW_TOOL_NAME);
   }
   const webTools = runtime.descriptor.capabilities.tools
     ? await raceAbort(Promise.resolve(dependencies.webTools?.()), signal)
@@ -999,7 +824,6 @@ export async function prepareResolvedTurn(
     runtimeContentAttachments,
     sessionTitle: session.name,
     tools,
-    ...(mcpCatalogVersion !== undefined ? { mcpCatalogVersion } : {}),
     mcpNamespaces,
     webTools,
     toolDiscoveryWarnings,
@@ -1010,9 +834,7 @@ export async function prepareResolvedTurn(
     toolDiscoveryFailures: {
       mcpCapabilitiesAll,
       mcpServerIds: failedMcpServerIds,
-      ...(failedMcpServerStates.size > 0 ? { mcpServerStates: failedMcpServerStates } : {}),
       systemCapabilitiesAll,
-      builtinCapabilityIds: failedBuiltinCapabilityIds,
     },
     usageAttribution,
   };
@@ -1029,101 +851,33 @@ async function resolveTurnSkills(
   skillIds: readonly string[],
   activations: readonly SkillActivation[],
   signal: AbortSignal,
-  onDiscoveryFailure?: () => void,
-  pinnedScope?: SkillTurnScope,
-  skillScopeChanges?: readonly RuntimeSkillScopeChange[],
-  pinnedSkillRevisions?: ReadonlyMap<string, string>,
-  recovering = false,
-  authoritativeRetainedSkillIds?: ReadonlySet<string>,
 ): Promise<TurnSkillPlan> {
-  if (!dependencies.skills && !pinnedScope) {
-    if (skillIds.length > 0 && !recovering) {
+  if (!dependencies.skills) {
+    if (skillIds.length > 0) {
       fail('CAPABILITY_UNSUPPORTED', 'Skills are not available in this environment.');
     }
     return EMPTY_TURN_SKILL_PLAN;
   }
-  const unappliedChanges = pinnedScope
-    ? coalesceSkillScopeChanges(pinnedScope, skillScopeChanges ?? [])
-    : [];
   let scope: SkillTurnScope;
-  let incompletePinnedScope = false;
-  if (pinnedScope && unappliedChanges.length === 0) {
-    scope = pinnedScope;
-  } else if (!pinnedScope && pinnedSkillRevisions?.size === 0) {
-    scope = EMPTY_SKILL_SCOPE;
-  } else {
-    let resolvedScope: SkillTurnScope;
-    try {
-      if (!dependencies.skills) {
-        throw new Error('Skills source is unavailable.');
-      }
-      resolvedScope = await raceAbort(
-        dependencies.skills.resolve({ agentId: agent.id, signal }),
-        signal,
-      );
-    } catch (error) {
-      signal.throwIfAborted();
-      if (skillIds.length > 0 && !recovering) {
-        fail('EXECUTION_UNAVAILABLE', 'The selected Skills are unavailable.');
-      }
-      onDiscoveryFailure?.();
-      logger.warn('Failed to resolve Agent Skills; continuing without them', error as Error);
-      return EMPTY_TURN_SKILL_PLAN;
+  try {
+    scope = await raceAbort(dependencies.skills.resolve({ agentId: agent.id, signal }), signal);
+  } catch (error) {
+    signal.throwIfAborted();
+    if (skillIds.length > 0) {
+      fail('EXECUTION_UNAVAILABLE', 'The selected Skills are unavailable.');
     }
-    if (pinnedScope) {
-      const expanding = createExpandingSkillScope(pinnedScope);
-      for (const change of unappliedChanges) {
-        if (change.kind === 'adapted') {
-          expanding.replace(resolvedScope, change.skillId, change.contentHash);
-        } else {
-          expanding.include(resolvedScope, change.skillId, change.contentHash);
-        }
-      }
-      scope = expanding.scope;
-      for (const change of unappliedChanges) {
-        if (
-          !scope.entries.some(
-            (entry) => entry.id === change.skillId && entry.contentHash === change.contentHash,
-          )
-        ) {
-          incompletePinnedScope = true;
-          break;
-        }
-      }
-    } else if (pinnedSkillRevisions !== undefined) {
-      scope = filterSkillScopeByRevisions(resolvedScope, pinnedSkillRevisions);
-      if (scope.entries.length < pinnedSkillRevisions.size) {
-        incompletePinnedScope = true;
-      }
-    } else {
-      scope = resolvedScope;
-    }
+    logger.warn('Failed to resolve Agent Skills; continuing without them', error as Error);
+    return EMPTY_TURN_SKILL_PLAN;
   }
   const selected: { entry: SkillTurnEntry; instructions: string }[] = [];
-  const unreadableSelectedSkillIds = new Set<string>();
   let instructionCharacters = 0;
   for (const skillId of new Set(skillIds)) {
     const entry = scope.entries.find((candidate) => candidate.id === skillId);
     if (!entry || !entry.invocation.userInvocable) {
-      if (pinnedSkillRevisions !== undefined || recovering) continue;
       fail('CAPABILITY_UNSUPPORTED', `The selected Skill is not usable by this Agent: ${skillId}`);
     }
-    let instructions: string | null;
-    try {
-      instructions = await raceAbort(scope.readInstructions(entry.id), signal);
-    } catch (error) {
-      signal.throwIfAborted();
-      if (!recovering) throw error;
-      instructions = null;
-    }
+    const instructions = await raceAbort(scope.readInstructions(entry.id), signal);
     if (instructions === null) {
-      if (recovering) {
-        unreadableSelectedSkillIds.add(skillId);
-        logger.warn('Failed to read selected Skill package during recovery; isolating it', {
-          skillId,
-        });
-        continue;
-      }
       fail('EXECUTION_UNAVAILABLE', `The selected Skill package could not be read: ${skillId}`);
     }
     instructionCharacters += [...instructions].length;
@@ -1137,71 +891,22 @@ async function resolveTurnSkills(
   // Earlier activations stay active while their Skill remains usable; a
   // removed or disabled Skill simply stops contributing instructions.
   const active = new Map<string, { entry: SkillTurnEntry; instructions: string }>();
-  const unreadableActiveSkillIds = new Set<string>();
   for (const activation of activations.toReversed()) {
     if (selected.length + active.size >= SKILL_ACTIVE_MAX_ENTRIES) break;
-    if (authoritativeRetainedSkillIds && !authoritativeRetainedSkillIds.has(activation.skillId)) {
-      continue;
-    }
     if (
       !isSkillActivationCurrent(activation, scope) ||
       selected.some(({ entry }) => entry.id === activation.skillId)
     )
       continue;
     const entry = scope.entries.find((candidate) => candidate.id === activation.skillId)!;
-    let instructions: string | null;
-    try {
-      instructions = await raceAbort(scope.readInstructions(entry.id), signal);
-    } catch (error) {
-      signal.throwIfAborted();
-      if (!recovering) throw error;
-      instructions = null;
-    }
-    if (instructions === null) {
-      if (recovering) {
-        unreadableActiveSkillIds.add(entry.id);
-        logger.warn('Failed to read active Skill package during recovery; isolating it', {
-          skillId: entry.id,
-        });
-      }
-      continue;
-    }
+    const instructions = await raceAbort(scope.readInstructions(entry.id), signal);
+    if (instructions === null) continue;
     const length = [...instructions].length;
     if (instructionCharacters + length > SKILL_ACTIVE_MAX_CHARACTERS) continue;
     instructionCharacters += length;
     active.set(entry.id, { entry, instructions });
   }
-  return {
-    scope,
-    selected,
-    active,
-    ...(unreadableSelectedSkillIds.size ? { unreadableSelectedSkillIds } : {}),
-    ...(unreadableActiveSkillIds.size ? { unreadableActiveSkillIds } : {}),
-    ...(incompletePinnedScope ? { incompletePinnedScope: true } : {}),
-  };
-}
-
-function coalesceSkillScopeChanges(
-  pinnedScope: SkillTurnScope,
-  changes: readonly RuntimeSkillScopeChange[],
-): RuntimeSkillScopeChange[] {
-  const pinnedById = new Map(pinnedScope.entries.map((entry) => [entry.id, entry.contentHash]));
-  const targetById = new Map<string, RuntimeSkillScopeChange>();
-  for (const change of changes) {
-    const current = targetById.get(change.skillId);
-    if (change.kind === 'installed') {
-      if (!pinnedById.has(change.skillId) && !current) {
-        targetById.set(change.skillId, { ...change });
-      }
-    } else if (current) {
-      targetById.set(change.skillId, { ...current, contentHash: change.contentHash });
-    } else if (pinnedById.has(change.skillId)) {
-      targetById.set(change.skillId, { ...change });
-    }
-  }
-  return [...targetById.values()].filter(
-    (change) => pinnedById.get(change.skillId) !== change.contentHash,
-  );
+  return { scope, selected, active };
 }
 
 function applyTurnOverrides(

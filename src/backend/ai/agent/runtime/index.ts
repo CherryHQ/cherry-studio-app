@@ -15,7 +15,6 @@ export type {
   RuntimePendingApproval,
   RuntimePendingQuestion,
   RuntimeSqlDatabase,
-  RuntimeSkillScopeChange,
   RuntimeScriptSandbox,
   RuntimeUsageOwner,
 } from './durableTypes';
@@ -74,7 +73,6 @@ export {
   RuntimeToolDiscoveryError,
   RuntimeToolUnavailableError,
   laneKey,
-  matchesLegacyExecutionSettingsKey,
   parseLaneKey,
   runtimeLane,
   sameLane,

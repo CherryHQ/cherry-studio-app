@@ -318,14 +318,12 @@ export type RuntimeTool = {
    * (cost-bearing or permission-gated calls). Absent means eligible.
    */
   autoApprovalEligible?: boolean;
-  /** Refuse before approval until a trusted instruction section with this key (and optional exact text) is in context. */
-  requiredInstructions?: { key: string; text?: string; refusal: string };
+  /** Refuse before approval until a trusted instruction section with this key is in context. */
+  requiredInstructions?: { key: string; refusal: string };
   /** Low-frequency tools are found through tool_search instead of sent with every request. */
   deferred?: boolean;
   /** Normalize and validate question arguments before parking; owned by the capability. */
   parseQuestion?: (input: RuntimeJsonValue) => RuntimeJsonValue;
-  /** Optional input-scoped transient discovery guard run in beforeTool and execute. */
-  assertInputAvailable?: (input: RuntimeJsonValue) => void;
   execute(call: RuntimeToolCall): Promise<RuntimeToolResult>;
 };
 

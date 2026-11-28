@@ -123,8 +123,6 @@ export type SystemCapabilitySource = {
     resources: TurnToolResources;
     /** Attribution for provider calls a tool makes; read when the tool runs. */
     resolveUsageAttribution?: AiUsageAttributionResolver;
-    /** Called when a transient lookup failure forces a capability out of the resolved catalog. */
-    onUnavailableCapability?: (capabilityId: string) => void;
   }): Promise<readonly RuntimeTool[]>;
 };
 
@@ -176,7 +174,6 @@ export function createSystemCapabilitySource(
       resources,
       documentParserMode,
       resolveUsageAttribution,
-      onUnavailableCapability,
     }) {
       const deps = resolveDependencies(services, overrides);
       if (!(await deps.supportsToolCalling(model))) {
@@ -184,18 +181,12 @@ export function createSystemCapabilitySource(
         return [];
       }
 
-      const scope = await resolveScope(deps, onUnavailableCapability);
+      const scope = await resolveScope(deps);
       const fileAccess = new WorkspaceFileAccess(workspaceFolderId ?? null, resources);
       const workspaceName = workspaceFolderId
         ? (await fileAccess.library.folder(workspaceFolderId))?.name
         : undefined;
-      const transcriptionEngine = await deps.voice
-        ?.getReadyTranscriptionEngine()
-        .catch((error: unknown) => {
-          logger.warn('Transcription engine lookup failed; omitting transcribe_audio', { error });
-          onUnavailableCapability?.('transcribe_audio');
-          return null;
-        });
+      const transcriptionEngine = await deps.voice?.getReadyTranscriptionEngine().catch(() => null);
       const catalog = createCatalog(
         deps,
         scope,
@@ -423,22 +414,14 @@ function bindTurnResources(tool: RuntimeTool, resources: TurnToolResources): Run
   };
 }
 
-async function resolveScope(
-  deps: SystemCapabilitySourceDependencies,
-  onUnavailableCapability?: (capabilityId: string) => void,
-): Promise<BuiltInToolScope> {
+async function resolveScope(deps: SystemCapabilitySourceDependencies): Promise<BuiltInToolScope> {
   const [deviceAccess, paintingModel, webSearchAvailability] = await Promise.all([
-    resolveDeviceAccess(deps, onUnavailableCapability),
+    resolveDeviceAccess(deps),
     resolveConfiguredPaintingModel(deps.painting).catch((error: unknown) => {
       logger.warn('Drawing model lookup failed; omitting generate_image', error as Error);
-      for (const descriptor of BUILT_IN_TOOL_DESCRIPTORS) {
-        if (descriptor.requiresPaintingModel) {
-          onUnavailableCapability?.(descriptor.capabilityId);
-        }
-      }
       return null;
     }),
-    resolveWebSearchAvailability(deps, onUnavailableCapability),
+    resolveWebSearchAvailability(deps),
   ]);
 
   return {
@@ -456,11 +439,10 @@ async function resolveScope(
  */
 async function resolveWebSearchAvailability(
   deps: SystemCapabilitySourceDependencies,
-  onUnavailableCapability?: (capabilityId: string) => void,
 ): Promise<WebSearchAvailability> {
   const [fetchProvider, searchProvider] = await Promise.all([
-    readWebSearchProvider(deps, 'fetchUrls', onUnavailableCapability),
-    readWebSearchProvider(deps, 'searchKeywords', onUnavailableCapability),
+    readWebSearchProvider(deps, 'fetchUrls'),
+    readWebSearchProvider(deps, 'searchKeywords'),
   ]);
   return { fetchUrls: Boolean(fetchProvider), searchKeywords: Boolean(searchProvider) };
 }
@@ -468,7 +450,6 @@ async function resolveWebSearchAvailability(
 async function readWebSearchProvider(
   deps: SystemCapabilitySourceDependencies,
   capability: WebSearchCapability,
-  onUnavailableCapability?: (capabilityId: string) => void,
 ): Promise<unknown> {
   try {
     return await deps.preference.get(WEB_SEARCH_PROVIDER_PREFERENCE_KEYS[capability]);
@@ -477,18 +458,12 @@ async function readWebSearchProvider(
       capability,
       error,
     });
-    for (const descriptor of BUILT_IN_TOOL_DESCRIPTORS) {
-      if (descriptor.requiresWebSearchCapability === capability) {
-        onUnavailableCapability?.(descriptor.capabilityId);
-      }
-    }
     return null;
   }
 }
 
 async function resolveDeviceAccess(
   deps: SystemCapabilitySourceDependencies,
-  onUnavailableCapability?: (capabilityId: string) => void,
 ): Promise<DeviceAccess> {
   const scopes = [
     ...new Set(
@@ -501,14 +476,6 @@ async function resolveDeviceAccess(
     return await deps.devicePermissions.getStatuses(scopes);
   } catch (error) {
     logger.warn('Device access lookup failed; omitting device tools', { error });
-    for (const descriptor of BUILT_IN_TOOL_DESCRIPTORS) {
-      if (
-        isPlatformSupported(descriptor, deps.platform) &&
-        descriptor.permissionScopes.length > 0
-      ) {
-        onUnavailableCapability?.(descriptor.capabilityId);
-      }
-    }
     return {};
   }
 }
