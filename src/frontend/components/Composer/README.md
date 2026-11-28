@@ -93,8 +93,9 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   dismissal and presents the model, settings or media picker.
 - `ComposerEditor` and `ComposerEditorAccessories` connect the shared frame and large-editor
   controls to the app field and translated labels. Chat uses its own software keyboard for the
-  ordinary one-row/two-row transition. The painting workspace opts into retained editing and can
-  also expand for draft text. Its compact reference preview and the attachment strip are separate.
+  toolbar transition. The resting field grows with wrapped draft text. The painting workspace
+  opts into retained editing and can also expand for draft text. Its compact reference preview
+  and the attachment strip are separate.
 - `ComposerDock` — connects that input-context state to CherryUI's
   `Composer.Dock`. Chat uses `expandable-overlay`: the message list reserves the dock's measured
   height as a native content inset, leaving its viewport fixed through keyboard and editor motion.

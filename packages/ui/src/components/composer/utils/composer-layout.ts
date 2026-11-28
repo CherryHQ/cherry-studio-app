@@ -71,11 +71,11 @@ export const textInputBoxStyle = {
   maxHeight: COMPOSER_MAX_TEXT_HEIGHT,
   paddingVertical: textPaddingVertical,
 } as const;
-// The native field measures one line at rest. Give taller glyphs, CJK fallback
-// fonts and scaled text the full toolbar row height.
-export const compactTextInputBoxStyle = {
+export const compactTextInputBoxStyle = { ...textInputBoxStyle, paddingVertical: 0 } as const;
+// A wrapping placeholder alone should not grow the resting composer.
+export const compactPlaceholderBoxStyle = {
+  ...compactTextInputBoxStyle,
   maxHeight: composerActionSize,
-  paddingVertical: 0,
 } as const;
 // The paste wrapper shrink-wraps its child by default, which would pull the
 // field in from the surface's right edge and leave the caret short of it.

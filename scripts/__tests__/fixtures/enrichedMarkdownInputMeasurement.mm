@@ -32,7 +32,7 @@ static CGSize measureWhileMainIsBlocked(NSAttributedString *snapshot, CGFloat wi
   dispatch_semaphore_t done = dispatch_semaphore_create(0);
   __block CGSize size = CGSizeZero;
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-    size = ENRMMeasureInputText(snapshot, width, YES);
+    size = ENRMMeasureInputText(snapshot, width);
     dispatch_semaphore_signal(done);
   });
   // No run loop pumping: a dispatch_sync(main) regression must time out here.
@@ -68,16 +68,6 @@ int main(void)
       }
     }
     puts("PASS: background measurement completes with main blocked; empty, trailing newline, CJK, RTL and emoji match");
-
-    NSAttributedString *oneLine = [[NSAttributedString alloc] initWithString:@"草稿" attributes:typing];
-    NSAttributedString *draft = [[NSAttributedString alloc] initWithString:@"草稿草稿草稿草稿草稿草稿\n第二段"
-                                                              attributes:typing];
-    NSAttributedString *draftSnapshot = ENRMInputMeasurementText(draft, typing);
-    CGSize compact = ENRMMeasureInputText(draftSnapshot, 50, NO);
-    requireSize(compact, ENRMMeasureInputText(ENRMInputMeasurementText(oneLine, typing), 50, NO),
-                "compact draft must measure one line");
-    require(ENRMMeasureInputText(draftSnapshot, 50, YES).height > compact.height,
-            "reopening must measure all lines of the same draft");
 
     NSMutableParagraphStyle *paragraph = [NSMutableParagraphStyle new];
     paragraph.headIndent = 24;
@@ -115,7 +105,7 @@ int main(void)
       dispatch_group_async(group, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         for (int iteration = 0; iteration < 40; iteration++) {
           CGFloat width = iteration % 2 == 0 ? 120 : 600;
-          CGSize size = ENRMMeasureInputText(snapshot, width, YES);
+          CGSize size = ENRMMeasureInputText(snapshot, width);
           CGSize expected = iteration % 2 == 0 ? narrow : wide;
           if (!CGSizeEqualToSize(size, expected)) failureCount->fetch_add(1);
         }

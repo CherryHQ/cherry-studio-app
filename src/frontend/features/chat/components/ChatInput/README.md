@@ -37,11 +37,10 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   composer; afterwards it stops the selected answer by its message and turn IDs. Switching to
   a completed answer restores the send control; it stays disabled until the other answers finish.
   A queued follow-up keeps its running ancestor as the stop target.
-- In local and remote chat, the ordinary field and primary actions share one row while the
-  field's software keyboard is hidden. Its keyboard opening reveals the full-width text field
-  and the model and reasoning toolbar. Closing the keyboard restores the single row with the
-  existing draft. The compact field displays one line of a wrapped or multiline draft. Reopening
-  the keyboard restores multiline layout in the same native field. Staged attachments occupy their own row.
+- In local and remote chat, hiding the software keyboard places the primary actions beside the
+  field. Empty and single-line drafts fit in one row. Longer drafts grow to fit the text at the
+  available width and scroll at the normal height cap. Opening the keyboard reveals the full-width
+  field and its model and reasoning toolbar. Staged attachments occupy their own row.
 - While the keyboard is open, the diagonal expand action is available. It opens a large opaque editing
   surface below the top safe area, with a collapse action and no heading. Its background fills
   both screen edges and extends through the footer and bottom safe area. Local and
@@ -173,7 +172,7 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   the item, so repeated taps cannot send it twice. Preview/take-back retains the existing edit flow.
 
 The chat-owned context usage action stays on the right of the composer toolbar while editing or when
-the composer holds content, keeping the resting single-row capsule focused on input and dictation.
+the composer holds content, keeping the resting capsule focused on input and dictation.
 Tapping it opens a keyboard-preserving anchored popover with one progress row: measured occupancy,
 percentage, and declared model capacity in `k token`. The action owns the popover and remounts when
 its Session or context answer changes, so an old measurement cannot reopen it. Usage comes from

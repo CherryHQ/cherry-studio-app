@@ -26,6 +26,7 @@ import Animated, {
 import { easing } from '../../../motion';
 import type { ComposerInputProps } from '../composer.types';
 import {
+  compactPlaceholderBoxStyle,
   compactTextInputBoxStyle,
   composerActionSize,
   COMPOSER_MAX_TEXT_HEIGHT,
@@ -94,15 +95,15 @@ export function ComposerEditor({
   const activeProgress = useDerivedValue<number>(() =>
     withTiming(editingTarget.get() ? 1 : 0, activeTransitionMotion),
   );
-  const fieldFrameHeight = useDerivedValue(() =>
-    editingTarget.get() ? naturalFieldHeight.get() : restingInputHeight,
-  );
   const editorMorphing = expansion?.meta.editorMorphing;
   useAnimatedReaction(
     () => activeProgress.get() !== (editingTarget.get() ? 1 : 0),
     (morphing) => editorMorphing?.set(morphing),
   );
   const expansionHeight = expansion?.meta.extraHeight;
+  const fieldFrameHeight = useDerivedValue(
+    () => naturalFieldHeight.get() + (expansionHeight?.get() ?? 0),
+  );
   const collapseEditor = expansion?.actions.collapse;
   const canExpand = expansion !== null;
   const hasCompactAccessory = compactAccessory != null;
@@ -118,25 +119,13 @@ export function ComposerEditor({
   useEffect(() => () => editorMorphing?.set(false), [editorMorphing]);
 
   const morphFrameStyle = useAnimatedStyle(() => ({
-    height:
-      restingInputHeight +
-      activeProgress.get() * (naturalFieldHeight.get() + activeToolbarGap) +
-      (expansionHeight?.get() ?? 0),
+    height: fieldFrameHeight.get() + activeProgress.get() * (restingInputHeight + activeToolbarGap),
   }));
   const fieldFrameStyle = useAnimatedStyle(() => ({
-    height: Math.max(restingInputHeight, fieldFrameHeight.get() + (expansionHeight?.get() ?? 0)),
+    height: fieldFrameHeight.get(),
     // A width change rewraps the native field. Commit its target width once and clip the morph.
     left: editingTarget.get() ? 0 : restingActionSlotWidth * (hasCompactAccessory ? 2 : 1),
     right: editingTarget.get() ? 0 : restingActionSlotWidth * restingTrailingActionCount,
-  }));
-  const controlsRowStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateY:
-          activeProgress.get() * (naturalFieldHeight.get() + activeToolbarGap) +
-          (expansionHeight?.get() ?? 0),
-      },
-    ],
   }));
   const compactAccessoryStyle = useAnimatedStyle(() => ({ opacity: 1 - activeProgress.get() }));
   const handleFieldLayout = useCallback(
@@ -173,7 +162,7 @@ export function ComposerEditor({
         {hasCompactAccessory ? (
           <Animated.View
             accessibilityElementsHidden={isInputActive}
-            className="absolute top-0 size-8"
+            className="absolute bottom-0 size-8"
             importantForAccessibility={isInputActive ? 'no-hide-descendants' : 'auto'}
             pointerEvents={isInputActive ? 'none' : 'auto'}
             style={[{ left: restingActionSlotWidth }, compactAccessoryStyle]}
@@ -194,27 +183,30 @@ export function ComposerEditor({
             <Maximize2Icon className="size-4 text-muted-foreground" />
           </Pressable>
         ) : null}
-        <Animated.View
-          className="absolute top-0 right-0 left-0 flex-row items-center gap-2"
+        <View
+          className="absolute right-0 bottom-0 left-0 flex-row items-center gap-2"
           pointerEvents="box-none"
-          style={controlsRowStyle}
         >
           {children}
-        </Animated.View>
+        </View>
       </Animated.View>
     </EditorContext>
   );
 }
 
 /** Optional field layout for adapters that add app-specific paste or rich-text behavior. */
-export function useComposerEditorInput(): {
-  layout: 'compact' | 'content' | 'fill';
-  style?: ComposerInputProps['style'];
-} | null {
+export function useComposerEditorInput(
+  hasText: boolean,
+): Pick<ComposerInputProps, 'layout' | 'style'> | null {
   const context = use(EditorContext);
   if (!context) return null;
   const { active, isExpanded, canExpand } = context.state;
-  if (!active) return { layout: 'compact', style: compactTextInputBoxStyle };
+  if (!active) {
+    return {
+      layout: 'content',
+      style: hasText ? compactTextInputBoxStyle : compactPlaceholderBoxStyle,
+    };
+  }
   return {
     layout: isExpanded ? 'fill' : 'content',
     style: !isExpanded && canExpand ? fieldActionInsetStyle : undefined,

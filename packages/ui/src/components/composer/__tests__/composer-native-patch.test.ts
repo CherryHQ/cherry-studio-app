@@ -145,21 +145,9 @@ describe('react-native-enriched-markdown Android input patch', () => {
     const measurement = readFileSync(`${inputRoot}/layout/InputMeasurementStore.kt`, 'utf8');
     expect(measurement).toContain('val text: SpannedString?,');
     expect(measurement).toContain('val textSnapshot = text?.let { SpannedString(it) }');
-    expect(measurement).toContain('val size = measure(cachedWidth, textSnapshot, paint, maxLines)');
+    expect(measurement).toContain('val size = measure(cachedWidth, textSnapshot, paint)');
     expect(measurement).toContain(
-      'data.replace(id, value, value.copy(cachedWidth = width, maxLines = maxLines, cachedSize = size))',
-    );
-  });
-
-  test('measures compact drafts by visible lines and keeps the Android editable buffer', () => {
-    const manager = readFileSync(`${inputRoot}/EnrichedMarkdownTextInputManager.kt`, 'utf8');
-    const measurement = readFileSync(`${inputRoot}/layout/InputMeasurementStore.kt`, 'utf8');
-    expect(manager).toContain('view?.setMultilineLayout(value)');
-    expect(manager).not.toContain('view?.isSingleLine = !value');
-    expect(input).toContain('maxLines = if (multiline) Int.MAX_VALUE else 1');
-    expect(measurement).toContain('width == value.cachedWidth && maxLines == value.maxLines');
-    expect(measurement).toContain(
-      'staticLayout.getLineTop(minOf(maxLines, staticLayout.lineCount))',
+      'data.replace(id, value, MeasurementParams(width, size, value.text, value.paintParams))',
     );
   });
 });

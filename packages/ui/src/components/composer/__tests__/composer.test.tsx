@@ -276,7 +276,11 @@ describe('Composer', () => {
     expect(tree.root.findByType(EnrichedMarkdownTextInput).props.defaultValue).toBe(defaultValue);
   });
 
-  it('keeps placeholder padding outside the compact native field and restores it when editing', () => {
+  it.each([
+    { value: '', restingCap: 32 },
+    { value: 'An automatically wrapping draft. '.repeat(12), restingCap: 132 },
+    { value: '第一行\n第二行', restingCap: 132 },
+  ])('uses a resting height cap of $restingCap for the current draft', ({ value, restingCap }) => {
     const editor = (active: boolean) => (
       <Composer.Editor
         active={active}
@@ -284,41 +288,19 @@ describe('Composer', () => {
         field={<Composer.Input placeholder="Write a message" />}
       />
     );
-    const tree = render({ children: editor(false) });
+    const tree = render({ value, children: editor(false) });
     const nativeStyle = () => StyleSheet.flatten(tree.root.findByType(TextInput).props.style);
 
-    expect(nativeStyle()).toMatchObject({ maxHeight: 32, paddingVertical: 0 });
+    expect(nativeStyle()).toMatchObject({ maxHeight: restingCap, paddingVertical: 0 });
 
     act(() => {
       tree.update(
-        <Composer onChangeText={jest.fn()} onSend={jest.fn()} value="">
+        <Composer onChangeText={jest.fn()} onSend={jest.fn()} value={value}>
           {editor(true)}
         </Composer>,
       );
     });
     expect(nativeStyle()).toMatchObject({ maxHeight: 132, paddingVertical: 4 });
-  });
-
-  it('folds a wrapped draft into one line and reopens the same multiline editor', () => {
-    const draft = '草稿内容会随输入框宽度自动换行。'.repeat(8) + '\n第二段';
-    const onChangeText = jest.fn();
-    const composer = (active: boolean) => (
-      <Composer onChangeText={onChangeText} onSend={jest.fn()} value={draft}>
-        <Composer.Editor active={active} expandLabel="Expand" field={<Composer.Input />} />
-      </Composer>
-    );
-    act(() => {
-      renderer = create(composer(false));
-    });
-    const field = renderer!.root.findByType(EnrichedMarkdownTextInput);
-    expect(field.props.multiline).toBe(false);
-    for (const active of [true, false, true]) {
-      act(() => renderer!.update(composer(active)));
-      expect(renderer!.root.findByType(EnrichedMarkdownTextInput)).toBe(field);
-      expect(field.props.multiline).toBe(active);
-      expect(field.props.defaultValue).toBe(draft);
-    }
-    expect(onChangeText).not.toHaveBeenCalled();
   });
 
   function renderReturnInput(submitOnReturn: boolean, insertNewlineLabel = 'Insert newline') {
