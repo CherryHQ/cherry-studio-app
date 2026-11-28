@@ -1,4 +1,5 @@
 import { TextAnimation } from '@cherrystudio/ui/components';
+import type { ReactNode } from 'react';
 import { AppState } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -62,7 +63,10 @@ const subscribedState: CloudState = {
 let mockCloudState: CloudState;
 let mockSidebarPresence: 'open' | 'closed';
 
-jest.mock('@cherrystudio/ui/components', () => ({ TextAnimation: { Rotating: () => null } }));
+jest.mock('@cherrystudio/ui/components', () => ({
+  Surface: ({ children }: { children?: ReactNode }) => children,
+  TextAnimation: { Rotating: () => null },
+}));
 jest.mock('@cherrystudio/app-icons/icons/settings', () => () => null);
 jest.mock('@/frontend/components/Avatar', () => ({ ProfileAvatarImage: () => null }));
 jest.mock('@/frontend/data/hooks', () => ({ usePreference: () => ['Lin'] }));
