@@ -347,7 +347,11 @@ function WorkspaceFolderFiles({
             key={item.entry.id}
             onPress={() => {
               // A file beside chat would sit under this sheet, so the sheet gives way to it.
-              if (item.uri && openFileEntry({ entry: item.entry, uri: item.uri }) === 'pane') {
+              if (
+                item.uri &&
+                openFileEntry({ entry: item.entry, uri: item.uri }, { origin: 'external' }) ===
+                  'pane'
+              ) {
                 onOpenPreview();
               }
             }}

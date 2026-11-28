@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 
+import { useChatSource } from '@/frontend/appShell/navigation/chat';
 import { isComposerImageMediaType } from '@/frontend/components/Composer/utils/composerAttachments';
 import { useOpenFileEntry } from '@/frontend/components/FileEntryPreview';
 import { useApiClient } from '@/frontend/data';
@@ -15,6 +16,7 @@ import type { ResolvedFile } from '@/shared/contracts/file';
 export function useOpenLibraryFile() {
   const api = useApiClient();
   const router = useRouter();
+  const { localChat } = useChatSource();
   const { openFileEntry } = useOpenFileEntry();
 
   return useCallback(
@@ -31,8 +33,12 @@ export function useOpenLibraryFile() {
         }
       }
       // Each edit is already a new library entry; accepting it only advances the viewer.
-      openFileEntry(file, () => true);
+      openFileEntry(file, {
+        origin: 'external',
+        replaceImage: () => true,
+        sourceChat: localChat,
+      });
     },
-    [api, openFileEntry, router],
+    [api, localChat, openFileEntry, router],
   );
 }

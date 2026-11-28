@@ -3,15 +3,18 @@
 `/files/[fileEntryId]` is the shared page for managed images, Markdown, text, HTML, PDF, and Office
 Open XML documents, and RTF. `FileViewerPane` renders the same viewer inside
 [Files Master-Detail](../../appShell/pane/README.md); only the route sets native screen options,
-and Office references use the active chat.
-Image, document and text previews opened with a source chat
-offer Add to current chat: `useAddFileToChat` hands the whole file to that chat's composer once,
-keeping its draft text, and returns to it. The action appears in a footer, which owns the bottom
-safe area in place of the content. The route passes its `sourceChat` identity; the pane resolves
-the current chat from route parameters or the chat source and passes it to the viewer.
-The footer appears only while `returnsToSourceChat` is true and disables its text-only button
-while the source chat is resolving. Without it, the preview content owns the bottom safe area.
-A preview without a chat, or whose chat's Agent cannot take the file, does not offer it.
+passes explicit `'external'` provenance (`sourceOrigin="external"`), and uses the active chat for
+Add to current chat and Office references.
+The route carries `sourceChat` alongside sparse `sourceOrigin=chat` when opened from a conversation
+(omitted for external surfaces). `useAddFileToChat` exposes `canAddToChat` (requiring a managed
+file, eligible `standard` Agent `sourceChat`, and `sourceOrigin !== 'chat'`) while leaving
+`returnsToSourceChat` independent for Office selection references. `FileViewerActionFooter` resolves
+up to two actions via `resolveFileViewerFooterActions`: chat-originated files show Share (plus Save
+to Photos for images), external previews with an eligible chat show Share + Add to current chat
+(disabling Add while resolving), standalone images show Save to Photos + Share, standalone
+non-images show Share, and temporary images show Save to Photos. While a footer is shown (including
+Office selection mode), `FileViewerFooter` owns the bottom safe area; otherwise preview content owns
+it.
 The route carries identity only. `FileEntryPreview` owns classification and the choice between
 this page and system opening, and shares file export actions with the painting viewer.
 This page owns reading, rendering, and copying.
@@ -32,7 +35,8 @@ to `features/sharing`, using the shared HtmlCapture executor and Backend.documen
   flat More menu offers saving to Photos, sharing and system opening. Edit joins the same menu
   only when the existing editing request allows it and the file is an exported-document PNG or
   the loaded image is confirmed static. Edit exits zoom before opening the editor. The old bottom
-  image toolbar is replaced by the shared Add to current chat footer. Cropping, rotation, mirroring,
+  image toolbar is replaced by `FileViewerActionFooter` (preserving Save to Photos, Share, and
+  external Add to current chat, and keeping `sourceOrigin` across in-place composer edits). Cropping, rotation, mirroring,
   straightening and perspective adjustments create a new managed image through
   `Backend.file.editImage`. Only an accepted source-matching callback replaces the caller's
   attachment. The source file and existing messages retain their

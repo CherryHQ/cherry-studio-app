@@ -11,7 +11,11 @@ import {
 } from '@/frontend/appShell/navigation/chat';
 import { AgentMenu } from '@/frontend/components/AgentMenu';
 import { createReadyAttachmentDraft } from '@/frontend/components/Composer/utils/composerAttachments';
-import { canPreviewDocument, useOpenFileEntry } from '@/frontend/components/FileEntryPreview';
+import {
+  canPreviewDocument,
+  type FilePreviewOrigin,
+  useOpenFileEntry,
+} from '@/frontend/components/FileEntryPreview';
 import type { Agent } from '@/shared/data/types/agent';
 import {
   documentFileTypeFromMediaType,
@@ -23,18 +27,22 @@ import { useAddFileToChat } from '../hooks/useAddFileToChat';
 import { useDocumentPreviewPage } from '../hooks/useDocumentPreviewPage';
 import { useReturnToChat } from '../hooks/useReturnToChat';
 import { acceptsSelection } from '../hooks/useSelectionSourceChat';
+import { resolveFileViewerFooterActions } from '../utils/fileViewerFooterActions';
 import { officeSelectionReference } from '../utils/officeSelection';
 import { FileDocumentPreview } from './FileDocumentPreview';
 import { FileMenuGuide } from './FileMenuGuide';
+import { FileViewerActionFooter } from './FileViewerActionFooter';
 import { FileViewerFooter } from './FileViewerFooter';
 import { FileViewerHeader } from './FileViewerHeader';
 
 export function FileDocumentViewer({
   file,
   sourceChat,
+  sourceOrigin = 'external',
 }: {
   file: FileViewerSource;
   sourceChat?: ChatTarget;
+  sourceOrigin?: FilePreviewOrigin;
 }) {
   const { t } = useTranslation();
   const { openFileEntryWithSystem } = useOpenFileEntry();
@@ -47,8 +55,17 @@ export function FileDocumentViewer({
   const [selection, setSelection] = useState<FilePreviewSelection | null>(null);
   const [revision, setRevision] = useState(file.entry.updatedAt);
   const returnToChat = useReturnToChat();
-  const addToChat = useAddFileToChat(file.kind === 'managed' ? file : undefined, sourceChat);
+  const addToChat = useAddFileToChat(
+    file.kind === 'managed' ? file : undefined,
+    sourceChat,
+    sourceOrigin,
+  );
   const { isResolving: isResolvingSourceChat, returnsToSourceChat } = addToChat;
+  const footerActions = resolveFileViewerFooterActions({
+    canAddToChat: addToChat.canAddToChat,
+    canSaveToPhotos: false,
+    canShare: file.kind === 'managed',
+  });
   if (revision !== file.entry.updatedAt) {
     setRevision(file.entry.updatedAt);
     setStatus(canPreviewDocument(file.entry) ? 'preview' : 'system');
@@ -92,7 +109,8 @@ export function FileDocumentViewer({
     });
     returnToChat({ kind: 'draft', agentId: agent.id, composerHandoff });
   };
-  const hasAddFooter = isPreviewing && returnsToSourceChat;
+  const isSelectionFooter = isSelecting && canSelect;
+  const hasActionFooter = !isSelectionFooter && isPreviewing && footerActions.hasActions;
   const openWithSystem = () => void openFileEntryWithSystem(file);
   const openWithAction = { children: t('filePreview.openWith'), onPress: openWithSystem };
 
@@ -148,7 +166,7 @@ export function FileDocumentViewer({
         </View>
       ) : (
         <FileDocumentPreview
-          bottomInset={(isSelecting && canSelect) || hasAddFooter ? 0 : undefined}
+          bottomInset={isSelectionFooter || hasActionFooter ? 0 : undefined}
           file={file}
           key={attempt}
           // The app, not the package, offers system opening for documents it cannot preview.
@@ -156,11 +174,11 @@ export function FileDocumentViewer({
           onFailure={() => setStatus('failed')}
           onTooLarge={() => setStatus('tooLarge')}
           onUnsupported={() => setStatus('system')}
-          onSelection={isSelecting && canSelect ? setSelection : undefined}
+          onSelection={isSelectionFooter ? setSelection : undefined}
           page={page.data}
         />
       )}
-      {isSelecting && canSelect ? (
+      {isSelectionFooter ? (
         <FileViewerFooter>
           <Text className="text-sm text-muted-foreground" numberOfLines={2}>
             {selection?.excerpt ?? t('fileViewer.selection.hint')}
@@ -175,12 +193,13 @@ export function FileDocumentViewer({
             </AgentMenu>
           )}
         </FileViewerFooter>
-      ) : hasAddFooter ? (
-        <FileViewerFooter>
-          <Button disabled={isResolvingSourceChat} onPress={addToChat.add}>
-            {t('fileViewer.addToChat')}
-          </Button>
-        </FileViewerFooter>
+      ) : hasActionFooter ? (
+        <FileViewerActionFooter
+          actions={footerActions}
+          file={file}
+          isResolvingAddToChat={isResolvingSourceChat}
+          onAddToChat={addToChat.add}
+        />
       ) : null}
     </>
   );

@@ -33,6 +33,15 @@ const logger = loggerService.withContext('FileEntryPreview');
 /** Where a file opened: beside chat, on its own page, or in another app. */
 export type FileEntryOpenTarget = 'pane' | 'route' | 'system';
 
+/** Whether the preview was opened from inside a conversation or an external browsing surface. */
+export type FilePreviewOrigin = 'chat' | 'external';
+
+export type OpenFileEntryOptions = {
+  origin?: FilePreviewOrigin;
+  replaceImage?: ReplacePreviewImage;
+  sourceChat?: ChatTarget;
+};
+
 /** Shared by cards and the viewer's explicit system-open escape hatch. */
 export function useOpenFileEntry(options: FileExportOptions = {}) {
   const router = useRouter();
@@ -69,7 +78,7 @@ export function useOpenFileEntry(options: FileExportOptions = {}) {
 
   const openFileEntry = (
     file: ResolvedFile,
-    replaceImage?: ReplacePreviewImage,
+    openOptions?: OpenFileEntryOptions,
   ): FileEntryOpenTarget => {
     const kind = fileEntryPreviewKind(file.entry);
     if (kind === 'audio' || (kind === 'document' && !canPreviewDocument(file.entry))) {
@@ -77,8 +86,8 @@ export function useOpenFileEntry(options: FileExportOptions = {}) {
       return 'system';
     }
     const imageEditRequestId =
-      replaceImage && canEditFileImage(file.entry.mediaType)
-        ? requestImageEdit(file.entry.id, replaceImage)
+      openOptions?.replaceImage && canEditFileImage(file.entry.mediaType)
+        ? requestImageEdit(file.entry.id, openOptions.replaceImage)
         : undefined;
     // In wide Files Master-Detail, tapping an entry updates the live right preview pane.
     // Chat attachments and compact libraries always push the standalone file viewer route.
@@ -86,7 +95,9 @@ export function useOpenFileEntry(options: FileExportOptions = {}) {
       masterDetail.selectFile(file.entry.id);
       return 'pane';
     }
-    const sourceChat = resolveSourceChat(pathname, params);
+    const origin: FilePreviewOrigin =
+      openOptions?.origin ?? (pathname === '/' ? 'chat' : 'external');
+    const sourceChat = resolveSourceChat(pathname, params, openOptions?.sourceChat);
     try {
       router.push({
         pathname: '/files/[fileEntryId]',
@@ -94,6 +105,7 @@ export function useOpenFileEntry(options: FileExportOptions = {}) {
           fileEntryId: file.entry.id,
           ...(imageEditRequestId ? { imageEditRequestId } : {}),
           ...(sourceChat ? { sourceChat: JSON.stringify(chatRouteParams(sourceChat)) } : {}),
+          ...(sourceChat && origin === 'chat' ? { sourceOrigin: 'chat' } : {}),
         },
       });
     } catch (error) {
@@ -110,8 +122,11 @@ export function useOpenFileEntry(options: FileExportOptions = {}) {
 function resolveSourceChat(
   pathname: string,
   params: ChatRouteParamsInput & { sourceChat?: string | string[] },
+  fallbackSourceChat?: ChatTarget,
 ): ChatTarget | undefined {
-  if (pathname !== '/') return parseChatPreviewSource(getSingleRouteParam(params.sourceChat));
+  if (pathname !== '/') {
+    return parseChatPreviewSource(getSingleRouteParam(params.sourceChat)) ?? fallbackSourceChat;
+  }
   const chat = parseChatRoute(params);
   return chat.status === 'ready' ? chat.target : undefined;
 }
