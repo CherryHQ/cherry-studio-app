@@ -53,7 +53,9 @@ describe('iOS asynchronous editor paste patch', () => {
   });
 
   test('preserves the programmatic edit phase across UIKit replacement callbacks', () => {
-    const delegate = editor.split('shouldChangeTextInRange:(NSRange)range replacementText:')[1];
+    const delegate = editor
+      .split('shouldChangeTextInRange:(NSRange)range replacementText:')[1]
+      .split('\n- (void)textViewDidChange:')[0];
     expect(delegate).toMatch(
       /if \(_editSession.shouldSuppressFormatting\) return YES;[\s\S]*?emitOnKeyPress:text[\s\S]*?enterPhase:ENRMEditPhaseProcessing/,
     );
