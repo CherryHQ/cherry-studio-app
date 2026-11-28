@@ -4,6 +4,37 @@ The local entry uses `PiDurableAgentRuntime` behind `MobileAgentHost` and `Durab
 Cherry owns history and Pi owns disposable execution working copies. See
 [Validation Status](#validation-status) for local checks and pending device acceptance.
 
+## Pi 1.7.0 Upgrade
+
+The four direct packages (`chord`, `pi-ai`, `pi-codemode`, `pi-durable`) and transitive
+`pi-schema` and `pi-telemetry` move from `1.6.1` to `1.7.0`. `@google/genai` stays at `3.6.1` and
+`@anthropic-ai/vertex-sdk` stays at `0.22.0`. Because `1.7.0` was published within the 24-hour
+`minimumReleaseAge` window (`2026-11-27T16:59:43.623Z`), `pnpm-workspace.yaml` temporarily lists the
+six `@earendil-works/*@1.7.0` entries under `minimumReleaseAgeExclude`. `pnpm dedupe` also collapsed
+the pre-existing split `zod` peer resolutions onto `zod@4.6.7`. See the
+[Durable](https://github.com/earendil-works/pi/blob/v1.7.0/packages/durable/CHANGELOG.md),
+[Pi AI](https://github.com/earendil-works/pi/blob/v1.7.0/packages/ai/CHANGELOG.md) and
+[Chord](https://github.com/earendil-works/pi/blob/v1.7.0/packages/chord/CHANGELOG.md) changelogs.
+
+- **Storage, tasks, and Code Mode replay unchanged.** SQLite stays at schema version 2 (`pi.live`
+  v3, `pi.tool` v4, `pi.generation` v3), and `pi-codemode` has no code or `PRELUDE_SOURCE` /
+  `PRELUDE_HASH` changes. Upgrading from `1.6.1` requires no migration or working-file clearing.
+- **Pi Durable.** Adds only `usage.imageOutput` accumulation in `dist/harness/usage.js`.
+- **Pi AI.** Extracts `dist/api/openai-completions-reasoning.js` and adds GitHub Copilot
+  `reasoning_opaque` capture and replay ([#12418](https://github.com/earendil-works/pi/issues/12418));
+  updates Copilot model metadata (`supportsMidConvoEffort`, `supportsMidConvoToolChanges`,
+  `supportsMidConvoSystemMessages`, and `promptCache`); adds `Usage.imageOutput`, `cost.imageOutput`,
+  `ImagesOptions.{aspectRatio,size}`, the `pi-image` API, Radius image model support, and
+  `openrouter-images` usage/pricing/error fixes; adds Bedrock `compat.supportsReasoningReplay` and
+  non-Claude/non-GPT `reasoning_effort` mapping ([#12462](https://github.com/earendil-works/pi/issues/12462));
+  migrates Ant Ling to `thinkingFormat: "deepseek"` (keeping `"ant-ling"` as a deprecated alias);
+  and refreshes static provider catalogs.
+- **Chord and transitive packages.** Mobile/Durable subpaths only gain aborted-context cleanup in
+  `awaitWithContext` (`ERNDL-1191`, adding `dist/context/abort-origin.js`) and an `O(k)` shifted
+  array-window diff fast path in `dist/delta/diff.js`. Remote contract variant removal
+  (`grantable`/`flags`, `PROTOCOL_VERSION` 2), store commit indexing, and shared live-query updates
+  do not affect Mobile. `pi-codemode`, `pi-schema`, and `pi-telemetry` have no runtime code changes.
+
 ## Pi 1.6.1 Upgrade
 
 The four direct packages (`chord`, `pi-ai`, `pi-codemode`, `pi-durable`) and the transitive
@@ -626,7 +657,7 @@ history gains revision zero through the additive migration.
 
 ## Maintained Patch Contracts
 
-The five rebased patches target the four pinned `1.6.1` Pi packages and GenAI `3.6.1`. Anthropic
+The five rebased patches target the four pinned `1.7.0` Pi packages and GenAI `3.6.1`. Anthropic
 Vertex retains its `0.22.0` patch. The Mobile AI runtime
 owner maintains this inventory with [#1345](https://github.com/CherryHQ/cherry-studio-app/issues/1345).
 The queue fix originated in [#1318](https://github.com/CherryHQ/cherry-studio-app/issues/1318) and
@@ -642,7 +673,7 @@ The generation and startup-repair hunks were removed in the 1.4.0 upgrade:
 | `generation.js`: `failNoModel`, `failModelError`, terminal `classify` | Upstream [`a30c2a81`](https://github.com/earendil-works/pi/commit/a30c2a81df8ee89dfe47ee2855a0c1aa9a7d9533), first released in 1.4.0, with `afterFailedRun: 'continue'`; default `keep` is not equivalent | [PiDurableRuntime.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/PiDurableRuntime.test.ts): admitted-run reopen with missing model and failed blocking compaction; [PiDurableAgentRuntime.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/PiDurableAgentRuntime.test.ts): final failure advances the queue, transient post-tool retry does not repeat the action |
 | `harness.js`: `openTasks` orphaned-inbox scan and ownership guards | No upstream replacement. The explicitly chosen clear/rebuild scope does not preserve old orphaned queues; the idle-inbox repair fixture is replaced by normal admitted-run recovery | Same runtime suite retains existing-run and task-owned conversation exclusions. This is a scope retirement, not a claim of backward-compatible orphan repair |
 
-The remaining [Pi Durable patch](../../../patches/@earendil-works__pi-durable@1.6.1.patch) contains
+The remaining [Pi Durable patch](../../../patches/@earendil-works__pi-durable@1.7.0.patch) contains
 Segmenter fallback and Han search terms, exact-name tool search, and the host Code Mode output
 hook with its final store-commit budget guard. The compaction hook can also fail the native task
 when the bounded summarizer fails, preventing a fallback to one unbounded request. The hook uses
@@ -730,6 +761,19 @@ Three platform hunks were retired after checking the pristine 1.4.0 packages:
 | Pi AI `provider-env.js` Bun fallback removal | The `require("node:fs")` is inside `try`; Expo's `allowOptionalDependencies` makes Metro skip it, and it runs only under Bun | The graph guard allows only that try-wrapped require; any other Node import still fails |
 | Pi Durable tool-search `Type` import | The `pi-ai` entry adds only `auth/helpers.js`, `auth/types.js` and other import-free modules; its `auth/context.js` uses the native browser-map variant | Same guard's auth module list |
 
+### Pi 1.7.0 Hunk Audit
+
+All maintained patch hunks remain necessary in `1.7.0`:
+
+- `pi-durable`, `pi-codemode`, and `chord` patches carry forward unchanged from `1.6.1` with zero
+  conflicting upstream changes in their patched files.
+- `pi-ai` rebased `dist/api/openai-completions.js` onto upstream's extracted
+  `dist/api/openai-completions-reasoning.js`: `parseMistralThinkingSignature` remains local in
+  `openai-completions.js` (returning `undefined` from `decodeThinkingSignature` so `resolveReasoningReplay`
+  never emits `reasoning_details` or `reasoning_opaque` for Mistral blocks), and Google tool-call
+  replay calls `decodeLegacyToolCallReasoningDetail(tc.thoughtSignature)` instead of the removed
+  inline `parseLegacyEncryptedReasoningDetail`. All other `pi-ai` files carry forward unchanged.
+
 ### Pi 1.6.1 Hunk Audit
 
 | Published file or patch group | 1.6.1 disposition and evidence |
@@ -768,6 +812,18 @@ Three platform hunks were retired after checking the pristine 1.4.0 packages:
    a failing check. Do not read/write private upstream SQL. Storage ownership remains unchanged.
 
 ## Validation Status
+
+For the `1.7.0` upgrade, `pnpm check:changed` (running `oxlint`, `expo lint`, `oxfmt --check`,
+`check-app-theme`, `pnpm docs:check-links` across 355 Markdown files, and full `pnpm typecheck`), a
+read-only patch non-reapplicability check across the four `@earendil-works/*@1.7.0.patch` files
+(`4 / 4`), and the targeted `--runInBand` Jest sweep across `src/backend/ai/agent/runtime/pi/__tests__`
+(43 suites, including the new GitHub Copilot `reasoning_opaque` regression),
+`AgentSqlDatabase.test.ts`, `metroResolution.test.ts`, and `architectureBoundaries.test.ts` passed
+**46 / 46 suites (1,583 / 1,583 tests)** (an initial 46-suite run hit a 20 s Jest timeout in one
+`piDurableTools.test.ts` case, which passed 78 / 78 in 4.94 s standalone and passed inside the
+subsequent clean 46 / 46 run in 14.69 s). Dependency installation and deduplication used pnpm 12.2.1
+with lifecycle scripts disabled (`--ignore-scripts`). Native Hermes/device acceptance, production
+provider calls, and reopening an actual on-device working file remain `device-pending`.
 
 Following the final runtime and test simplifications, `pnpm typecheck`, `pnpm lint` (0 warnings,
 0 errors across `oxlint`, `expo lint`, and workspace `eslint`), `pnpm format:check` (4,076 files),

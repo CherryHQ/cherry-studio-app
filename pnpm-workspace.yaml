@@ -17,6 +17,13 @@ minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@cherrystudio/*'
   - '@cherryinternal/*'
+  # Explicit Pi upgrade: keep the release-age exception limited to this version.
+  - '@earendil-works/chord@1.7.0'
+  - '@earendil-works/pi-ai@1.7.0'
+  - '@earendil-works/pi-codemode@1.7.0'
+  - '@earendil-works/pi-durable@1.7.0'
+  - '@earendil-works/pi-schema@1.7.0'
+  - '@earendil-works/pi-telemetry@1.7.0'
 trustPolicy: no-downgrade
 
 # 既有 lockfile 版本，早年发布缺 provenance 触发误报；升级后可移除对应条目
@@ -86,9 +93,9 @@ patchedDependencies:
   '@noble/hashes@1.8.0': patches/@noble__hashes@1.8.0.patch
   multiformats@14.0.5: patches/multiformats@14.0.5.patch
   '@anthropic-ai/vertex-sdk@0.22.0': patches/@anthropic-ai__vertex-sdk@0.22.0.patch
-  '@earendil-works/pi-durable@1.6.1': patches/@earendil-works__pi-durable@1.6.1.patch
-  '@earendil-works/pi-codemode@1.6.1': patches/@earendil-works__pi-codemode@1.6.1.patch
-  '@earendil-works/pi-ai@1.6.1': patches/@earendil-works__pi-ai@1.6.1.patch
+  '@earendil-works/pi-durable@1.7.0': patches/@earendil-works__pi-durable@1.7.0.patch
+  '@earendil-works/pi-codemode@1.7.0': patches/@earendil-works__pi-codemode@1.7.0.patch
+  '@earendil-works/pi-ai@1.7.0': patches/@earendil-works__pi-ai@1.7.0.patch
   "@magrinj/expo-quick-look@0.3.1": patches/@magrinj__expo-quick-look@0.3.1.patch
   metro@0.87.1: patches/metro@0.87.1.patch
   metro-runtime@0.87.1: patches/metro-runtime@0.87.1.patch
@@ -115,7 +122,7 @@ patchedDependencies:
   react-native-anydoc@0.4.1: patches/react-native-anydoc@0.4.1.patch
   drizzle-orm@0.45.2: patches/drizzle-orm@0.45.2.patch
   expo-paste-input@0.2.2: patches/expo-paste-input@0.2.2.patch
-  '@earendil-works/chord@1.6.1': patches/@earendil-works__chord@1.6.1.patch
+  '@earendil-works/chord@1.7.0': patches/@earendil-works__chord@1.7.0.patch
   '@preeternal/react-native-file-hash@3.0.1': patches/@preeternal__react-native-file-hash@3.0.1.patch
   react-native-nitro-modules@0.36.4: patches/react-native-nitro-modules@0.36.4.patch
   '@google/genai@3.6.1': patches/@google__genai@3.6.1.patch
