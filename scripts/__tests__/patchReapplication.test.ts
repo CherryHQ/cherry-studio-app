@@ -39,6 +39,7 @@ function escapeRegExp(value: string): string {
 
 const workspace = readFileSync('pnpm-workspace.yaml', 'utf8');
 const lockfile = readFileSync('pnpm-lock.yaml', 'utf8');
+const installedLockfile = readFileSync('node_modules/.pnpm/lock.yaml', 'utf8');
 const patches = [...workspace.matchAll(/^ {2}['"]?(.+?)['"]?: (patches\/\S+\.patch)$/gm)].map(
   ([, spec, path]) => ({ spec, path }),
 );
@@ -48,13 +49,22 @@ test.each(patches)('$path cannot apply twice to its installed package', ({ spec,
   const name = spec.slice(0, at);
   const prefix = `${name.replace('/', '+')}@${spec.slice(at + 1)}_patch_hash=`;
   // Earlier patch revisions can leave sibling installs; check the one the lockfile selects.
-  const hash = new RegExp(`^ {2}['"]?${escapeRegExp(spec)}['"]?: (\\w+)$`, 'm').exec(lockfile)?.[1];
+  const patchHash = new RegExp(`^ {2}['"]?${escapeRegExp(spec)}['"]?: (\\w+)$`, 'm');
+  const hash = patchHash.exec(lockfile)?.[1];
+  expect(hash).toBeDefined();
+  expect(patchHash.exec(installedLockfile)?.[1]).toBe(hash);
   const store = readdirSync('node_modules/.pnpm').find(
     (entry) =>
       entry.startsWith(prefix) && hash?.startsWith(entry.slice(prefix.length).split('_')[0]),
   );
-  expect(store).toBeDefined();
-  const root = join('node_modules/.pnpm', store!, 'node_modules', name);
+  // pnpm can shorten the virtual-store name past the package/version prefix.
+  // A direct dependency's symlink still resolves to the installation used by the app.
+  const root = store
+    ? join('node_modules/.pnpm', store, 'node_modules', name)
+    : join('node_modules', name);
+  expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version).toBe(
+    spec.slice(at + 1),
+  );
 
   const reapplicable = [...patchedFiles(readFileSync(path, 'utf8'))]
     .filter(([file, hunks]) => {

@@ -76,6 +76,18 @@ test('returns the refreshed matched pair instead of mixing old ID and new access
   expect(await sdk.getIdentityTokens()).toEqual({ accessToken: 'access-new', idToken: 'id-new' });
 });
 
+test('rejects an empty successful token response with a protocol error and preserves the current account', async () => {
+  const fetch = jest.fn(async () => new Response(null, { status: 204 }));
+  const sdk = await portal(fetch);
+  const { url } = await sdk.beginSignIn();
+  const state = new URL(url).searchParams.get('state');
+  await expect(sdk.completeSignIn(`app://callback?state=${state}&code=new`)).rejects.toMatchObject({
+    code: 'invalid_response',
+  });
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(await sdk.getIdentityTokens()).toEqual({ accessToken: 'access-a', idToken: 'id-a' });
+});
+
 test('sign-out wins over a pending identity-token read', async () => {
   let release!: (value: ReturnType<typeof response>) => void;
   let entered!: () => void;
