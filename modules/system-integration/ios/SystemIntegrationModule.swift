@@ -52,8 +52,12 @@ public class SystemIntegrationModule: Module {
     AsyncFunction("updateContinuedProcessingTask") { (id: String, progress: ContinuedProcessingProgress) in
       if #available(iOS 26.0, *) { (self.continuedProcessing as? ContinuedProcessing)?.update(id: id, progress: progress) }
     }.runOnQueue(.main)
-    AsyncFunction("endContinuedProcessingTask") { (id: String, success: Bool) in
-      if #available(iOS 26.0, *) { (self.continuedProcessing as? ContinuedProcessing)?.end(id: id, success: success) }
+    AsyncFunction("endContinuedProcessingTask") { (id: String, success: Bool, promise: Promise) in
+      guard #available(iOS 26.0, *), let tasks = self.continuedProcessing as? ContinuedProcessing else {
+        promise.resolve()
+        return
+      }
+      tasks.end(id: id, success: success) { promise.resolve() }
     }.runOnQueue(.main)
     AsyncFunction("beginBackgroundAudioExecution") { (id: String) -> Bool in
       self.backgroundAudio.begin(id: id) { [weak self] owner, active in
