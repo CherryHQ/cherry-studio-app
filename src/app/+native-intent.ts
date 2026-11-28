@@ -5,7 +5,7 @@ import { redirectSystemPath as redirectUuRemoteSystemPath } from '@/frontend/app
 export function redirectSystemPath(intent: Parameters<typeof redirectUuRemoteSystemPath>[0]) {
   const destination = redirectCloudAmdSystemPath(intent);
   return routeAccountCallback(
-    intent.path,
+    intent,
     destination === undefined ? redirectUuRemoteSystemPath(intent) : destination,
   );
 }

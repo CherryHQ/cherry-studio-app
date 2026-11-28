@@ -1,3 +1,5 @@
+import { getLinkingURL } from 'expo-linking';
+import { Platform } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { redirectSystemPath as redirectUuRemoteSystemPath } from '@/frontend/appShell/uuRemote/nativeIntent';
@@ -24,6 +26,7 @@ const mockAccount = {
 jest.mock('../../../../../modules/system-integration/linking', () => ({
   retireNativeUrl: (url: string) => mockRetireNativeUrl(url),
 }));
+jest.mock('expo-linking', () => ({ getLinkingURL: jest.fn() }));
 jest.mock('expo-constants', () => ({ expoConfig: { scheme: 'cherrystudio' } }));
 jest.mock('expo-crypto', () => ({ randomUUID: () => String(++mockNextId) }));
 jest.mock('expo-router', () => ({
@@ -43,7 +46,8 @@ function Probe() {
   return null;
 }
 function route(url: string, initial = false) {
-  const path = routeAccountCallback(url, redirectUuRemoteSystemPath({ path: url, initial }));
+  const intent = { path: url, initial };
+  const path = routeAccountCallback(intent, redirectUuRemoteSystemPath(intent));
   if (path !== null) {
     mockDelivery = new URL(path, 'https://route.invalid').searchParams.get('delivery') ?? undefined;
   }
@@ -58,6 +62,7 @@ function render() {
 beforeEach(() => {
   route('/', true);
   jest.clearAllMocks();
+  jest.mocked(getLinkingURL).mockReturnValue(null);
   route(accountUrl, true);
   mockReturnTo = '/settings';
   mockOnboarding = 'completed';
@@ -66,6 +71,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => renderer?.unmount());
   renderer = undefined;
+  jest.restoreAllMocks();
 });
 
 it('returns to the saved caller after a rerender, exchanging the staged account callback only once', async () => {
@@ -84,6 +90,8 @@ it('returns to the saved caller after a rerender, exchanging the staged account 
 });
 
 it('abandons an unmounted delivery after navigation to another feature and exits a direct visit', () => {
+  jest.replaceProperty(Platform, 'OS', 'android');
+  jest.mocked(getLinkingURL).mockReturnValue(accountUrl);
   const abandoned = mockDelivery;
   const other = 'cherrystudio://oauth/callback?code=provider';
   expect(route(other)).toBe(other);
@@ -91,19 +99,57 @@ it('abandons an unmounted delivery after navigation to another feature and exits
   render();
   expect(mockReceiveRedirect).not.toHaveBeenCalled();
   expect(mockRetireNativeUrl.mock.calls).toEqual([[accountUrl]]);
+  expect(getLinkingURL).not.toHaveBeenCalled();
   expect(mockReportError).not.toHaveBeenCalled();
   expect(mockRouter.dismissTo).toHaveBeenCalledWith('/settings');
 });
 
 it('claims the cold account URL after a warm in-place return replaced the native URL before mount', async () => {
+  jest.replaceProperty(Platform, 'OS', 'android');
+  const other = 'cherrystudio://uu-remote/callback?request=other';
   const ticket = mockDelivery;
-  expect(route('cherrystudio://uu-remote/callback?request=other')).toBeNull();
+  expect(route(other)).toBeNull();
+  jest.mocked(getLinkingURL).mockReturnValue(other);
   expect(mockDelivery).toBe(ticket);
   mockReceiveRedirect.mockResolvedValueOnce(true);
   await act(async () => render());
   expect(mockReceiveRedirect.mock.calls).toEqual([[accountUrl]]);
   expect(mockRetireNativeUrl).not.toHaveBeenCalled();
   expect(mockRouter.dismissTo.mock.calls).toEqual([['/settings']]);
+});
+
+it('recovers a later account callback received by Android before Router subscribed', async () => {
+  jest.replaceProperty(Platform, 'OS', 'android');
+  const latest = 'cherrystudio://auth/callback?state=current&code=next';
+  jest.mocked(getLinkingURL).mockReturnValue(latest);
+  mockReceiveRedirect.mockRejectedValueOnce(new Error('stale state')).mockResolvedValueOnce(true);
+  await act(async () => render());
+  expect(mockReceiveRedirect.mock.calls).toEqual([[accountUrl], [latest]]);
+  expect(mockRouter.dismissTo.mock.calls).toEqual([['/settings']]);
+  expect(mockReportError).not.toHaveBeenCalled();
+});
+
+it.each([accountUrl, 'cherrystudio-preview://auth/callback?code=another-app'])(
+  'keeps one delivery for an identical or foreign-scheme Android latest URL',
+  async (latest) => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    jest.mocked(getLinkingURL).mockReturnValue(latest);
+    mockReceiveRedirect.mockResolvedValueOnce(true);
+    await act(async () => render());
+    expect(mockReceiveRedirect.mock.calls).toEqual([[accountUrl]]);
+  },
+);
+
+it('does not promote the abandoned native latest link into a new warm account route', async () => {
+  jest.replaceProperty(Platform, 'OS', 'android');
+  route('/settings');
+  const warm = 'cherrystudio://auth/callback?code=new';
+  route(warm);
+  jest.mocked(getLinkingURL).mockReturnValue(accountUrl);
+  mockReceiveRedirect.mockResolvedValueOnce(true);
+  await act(async () => render());
+  expect(getLinkingURL).not.toHaveBeenCalled();
+  expect(mockReceiveRedirect.mock.calls).toEqual([[warm]]);
 });
 
 it('exits a direct account route without a callback', () => {

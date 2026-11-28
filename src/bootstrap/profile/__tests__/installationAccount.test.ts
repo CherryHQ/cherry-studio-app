@@ -114,8 +114,8 @@ test('a private-profile reload waits for a cold account callback discarded befor
     const { installationAccount } =
       jest.requireActual<typeof import('../installationAccount')>('../installationAccount');
     installationAccount();
-    routeAccountCallback(cold, cold);
-    expect(routeAccountCallback(other, other)).toBe(other);
+    routeAccountCallback({ path: cold, initial: true }, cold);
+    expect(routeAccountCallback({ path: other, initial: false }, other)).toBe(other);
   });
   const account = mockCreateRuntime.mock.lastCall![0] as AccountRuntimeOptions;
   const reload = account.reload();
@@ -146,12 +146,12 @@ test('a profile switch retires unmounted account routes, including a link arrivi
       jest.requireActual<typeof import('../installationAccount')>('../installationAccount');
     installationAccount();
   });
-  route(first, first);
+  route({ path: first, initial: true }, first);
   expect(mockConsumeUrl).not.toHaveBeenCalled();
   const account = mockCreateRuntime.mock.lastCall![0] as AccountRuntimeOptions;
   const reload = account.reload();
   expect(mockConsumeUrl.mock.calls).toEqual([[first]]);
-  route(second, second);
+  route({ path: second, initial: false }, second);
   ackFirst.resolve();
   await startedSecond.promise;
   expect(mockConsumeUrl.mock.calls).toEqual([[first], [second]]);

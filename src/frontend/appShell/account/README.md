@@ -14,7 +14,9 @@ data profile. Navigation never treats a community guest as an expired enterprise
   codes. Onboarding supplies `/onboarding`; organization switching records its profile settings page.
 - Native routing stages the original account callback URLs in memory before bootstrap and opens
   the callback page with an opaque delivery ID. A warm return handled in place can replace the
-  operating system's last URL while the queued account delivery waits for its page. Once claimed,
+  operating system's last URL while the queued account delivery waits for its page. An Android cold
+  batch also checks the latest native URL at claim time, covering an account return received before
+  the router subscribed to events. Warm and discarded tickets never recover links from that cache. Once claimed,
   the page passes the original URLs to the account runtime. A replacement navigation or new sign-in
   discards an abandoned delivery. The native main queue retires exact matches in the system
   link stores. A profile switch also retires any unmounted account deliveries and waits for
