@@ -202,6 +202,29 @@ test('a failed start does not block protection for work admitted after the unpro
   expect(running).toBe(true);
 });
 
+test.each(['foreground', 'replacement lease'] as const)(
+  'retries when %s arrives before the pending native start rejects',
+  async (trigger) => {
+    const interrupted = jest.fn();
+    const lease = runtime.acquire('chat', interrupted);
+    native.start.mockImplementationOnce(async () => {
+      if (trigger === 'foreground') {
+        setAppState('background');
+        setAppState('active');
+      } else {
+        lease.release();
+        runtime.acquire('next-task', interrupted);
+      }
+      throw new Error('Native admission refused');
+    });
+    await flush();
+
+    expect(native.start).toHaveBeenCalledTimes(2);
+    expect(runtime.getStatus()).toBe('active');
+    expect(interrupted).not.toHaveBeenCalled();
+  },
+);
+
 test('returning while the service runs requests permission skipped during startup', async () => {
   notices.getPermissionsAsync.mockResolvedValue({
     status: 'undetermined',

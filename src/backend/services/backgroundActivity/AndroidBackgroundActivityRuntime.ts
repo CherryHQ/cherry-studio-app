@@ -190,9 +190,8 @@ export class AndroidBackgroundActivityRuntime
       if (state === 'active') {
         this.backgroundStartedAt = undefined;
         this.backgroundLimitReached = false;
-        this.unprotected = false;
         this.clearDeadline();
-        this.scheduleReconcile();
+        this.scheduleReconcile(true);
       } else {
         this.backgroundStartedAt ??= Date.now();
         this.armDeadline();
@@ -239,9 +238,8 @@ export class AndroidBackgroundActivityRuntime
       release: () => {
         if (!this.leases.delete(lease)) return;
         // Later work gets its own admission attempt once the unprotected work has ended.
-        if (this.leases.size === 0) this.unprotected = false;
+        this.scheduleReconcile(this.leases.size === 0);
         this.publishStatus();
-        this.scheduleReconcile();
       },
     };
   }
@@ -354,9 +352,13 @@ export class AndroidBackgroundActivityRuntime
     });
   }
 
-  private scheduleReconcile(): void {
+  private scheduleReconcile(retryAdmission = false): void {
     if (this.disposed) return;
-    void this.enqueue(() => this.reconcile()).catch((error: unknown) => {
+    void this.enqueue(() => {
+      // A pending native start can still fail after foreground entry or the last lease release.
+      if (retryAdmission) this.unprotected = false;
+      return this.reconcile();
+    }).catch((error: unknown) => {
       logger.warn('Background service update failed', error as Error);
     });
   }
