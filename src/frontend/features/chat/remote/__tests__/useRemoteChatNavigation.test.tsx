@@ -3,8 +3,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { RemoteConversationSource } from '@/frontend/appShell/conversation/remote';
 import type { RemoteChatTarget } from '@/frontend/appShell/navigation/chat';
+import { cacheService } from '@/frontend/data/CacheService';
 
 import { useRemoteChatNavigation } from '../useRemoteChatNavigation';
+import { remoteDraftKey, writeRemoteDraftModel } from '../useRemoteDraftPersistence';
 
 const mockOpen = jest.fn();
 const mockSetParams = jest.fn();
@@ -17,7 +19,11 @@ jest.mock('@/frontend/appShell/navigation/chat', () => ({
   useChatSource: () => ({ openRemote: mockOpen }),
 }));
 let submitted = false;
-const source: Pick<RemoteConversationSource, 'hasSubmission'> = { hasSubmission: () => submitted };
+const source: Pick<RemoteConversationSource, 'draftScope' | 'hasSubmission' | 'ref'> = {
+  draftScope: 'binding',
+  ref: { kind: 'desktop', connectionId: 'desktop' },
+  hasSubmission: () => submitted,
+};
 let navigation: ReturnType<typeof useRemoteChatNavigation>;
 let renderer: ReactTestRenderer;
 function Probe({ target }: { target: RemoteChatTarget }) {
@@ -29,8 +35,12 @@ function Probe({ target }: { target: RemoteChatTarget }) {
 }
 const draft = { connectionId: 'desktop', agentId: 'a', draftId: 'draft' };
 const created = {
-  source: { kind: 'desktop', connectionId: 'desktop' },
-  sessionId: 'created',
+  inputDraftId: 'draft',
+  agentId: 'a',
+  conversation: {
+    source: { kind: 'desktop', connectionId: 'desktop' },
+    sessionId: 'created',
+  },
 } as const;
 async function render(target: RemoteChatTarget) {
   await act(async () => {
@@ -148,6 +158,44 @@ it('accepts only the current focused draft handoff and preserves its composer ac
   await act(async () => renderer.unmount());
   renderer = undefined!;
   expect(result(created)).toBe(false);
+});
+
+it('hands off an adopted start without transferring the viewing draft or clearing its saved choice', async () => {
+  const b = { ...draft, draftId: 'b', agentId: 'other' };
+  const keyA = remoteDraftKey(source, 'draft:draft');
+  const keyB = remoteDraftKey(source, 'draft:b');
+  const model = { providerId: 'provider', modelId: 'm', providerName: 'Provider', name: 'Model' };
+  writeRemoteDraftModel(keyA, 'a', model);
+  writeRemoteDraftModel(keyB, 'other', model);
+  cacheService.setPersist('remote_agent.drafts', { [keyB]: 'unsent B' });
+  await render(b);
+  const identityB = navigation.identity;
+  await act(async () => {
+    expect(navigation.onSessionCreated(created)).toBe(true);
+  });
+  await render({ ...b, draftId: undefined, sessionId: 'created' });
+  expect(navigation.identity).toBe('session:created');
+  await render(b);
+  expect(navigation.identity).toBe(identityB);
+  expect(cacheService.getPersist('remote_agent.draft_models')[keyA]).toBeUndefined();
+  expect(cacheService.getPersist('remote_agent.draft_models')[keyB]).toEqual({
+    agentId: 'other',
+    model,
+  });
+  expect(cacheService.getPersist('remote_agent.drafts')[keyB]).toBe('unsent B');
+});
+
+it('preserves saved input for legacy handoffs with no recorded owner', async () => {
+  const key = remoteDraftKey(source, 'draft:draft');
+  const model = { providerId: 'legacy', providerName: 'Legacy', modelId: 'm', name: 'M' };
+  writeRemoteDraftModel(key, 'a', model);
+  await render(draft);
+  await act(async () => {
+    expect(navigation.onSessionCreated({ ...created, inputDraftId: undefined })).toBe(true);
+  });
+  expect(cacheService.getPersist('remote_agent.draft_models')[key]?.model).toEqual(model);
+  await render({ ...draft, draftId: undefined, sessionId: 'created' });
+  expect(navigation.identity).toBe('session:created');
 });
 
 it('new chat invalidates a pending handoff synchronously', async () => {

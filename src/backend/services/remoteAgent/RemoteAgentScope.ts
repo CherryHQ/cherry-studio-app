@@ -1435,15 +1435,19 @@ export class RemoteAgentScope implements RemoteAgentSource {
     this.assertActive();
     return this.track(
       this.withPreparation(async () => {
-        const draftId = input.replaceStartId
-          ? this.actions.getStarts().find((start) => start.id === input.replaceStartId)?.draftId
-          : input.draftId;
-        if (!draftId) throw new RemoteAgentError('CONFLICT');
+        const previous = input.replaceStartId
+          ? this.actions.getStarts().find((start) => start.id === input.replaceStartId)
+          : undefined;
+        if (input.replaceStartId && !previous) throw new RemoteAgentError('CONFLICT');
+        const attachmentKey =
+          previous && !previous.inputDraftId
+            ? `retry:${previous.id}`
+            : `draft:${previous?.inputDraftId ?? input.draftId}`;
         // Titled handoffs create the session through the journal together with the first send.
         const prepared =
           !input.dispatch && !input.title && input.attachments?.length && this.state.preupload
             ? await this.attachmentDrafts!.prepare(
-                `draft:${draftId}`,
+                attachmentKey,
                 {
                   agentId: input.agentId,
                   workspace: input.workspace ?? { kind: 'registered', id: input.workspaceId! },

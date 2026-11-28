@@ -53,6 +53,7 @@ const StartSchema = z
   .object({
     id: z.string(),
     draftId: z.string(),
+    inputDraftId: z.string().optional(),
     dispatch: z.literal(true).optional(),
     agentId: z.string(),
     workspaceId: z.string().optional(),
@@ -463,6 +464,7 @@ export class RemoteAgentActions {
       });
       entry = {
         ...input,
+        inputDraftId: replaceStartId ? replaced?.inputDraftId : input.draftId,
         ...prepared,
         id: randomUUID(),
         createId: randomUUID(),
@@ -683,7 +685,11 @@ export class RemoteAgentActions {
         try {
           receipt = await this.request('agent.commands.get', { commandId: entry.action.id });
         } catch (error) {
-          if (!(error instanceof RemoteAgentError) || error.code !== 'NOT_FOUND') throw error;
+          if (!(error instanceof RemoteAgentError) || error.code !== 'NOT_FOUND') {
+            // A failed receipt lookup cannot settle a previously sent model-bearing create.
+            if (entry.method === 'agent.sessions.create' && entry.params.model) return;
+            throw error;
+          }
         }
       }
       if (receipt === undefined) {

@@ -75,6 +75,7 @@ export type UndeliveredMessage = {
   resend: ConversationAction<void, Submission>;
   resendWithModel?: ConversationAction<RemoteModelSelection | undefined, Submission> & {
     agent: AgentRef;
+    defaultOnly: boolean;
   };
   discard(): void;
 };
@@ -148,6 +149,11 @@ export interface RemoteConversationSession {
   refresh(signal: AbortSignal): Promise<void>;
   dispose(): void;
 }
+export type RemoteDraftHandoff = {
+  conversation: ConversationRef;
+  inputDraftId?: string;
+  agentId: string;
+};
 export interface ConversationDraft {
   readonly id: DraftId;
   readonly state: Readable<{
@@ -156,7 +162,7 @@ export interface ConversationDraft {
     sessionModelSelection: boolean;
     start: ConversationAction<ConversationInput, Submission>;
     /** The Session this draft's start created; the route hands off to it, then releases the start. */
-    created?: { conversation: ConversationRef; release(): void };
+    created?: RemoteDraftHandoff & { release(): void };
     attachmentPreparation?: AttachmentPreparation;
     upload?: { sent: number; total: number; cancel(): void };
     undelivered?: UndeliveredMessage;
@@ -182,6 +188,7 @@ export interface RemoteConversationCatalog extends ConversationCatalog {
   ): Promise<ConversationDraft>;
 }
 export interface RemoteConversationSource extends ConversationSource {
+  readonly ref: Extract<ConversationSource['ref'], { kind: 'desktop' }>;
   /** Stable identity/grant binding for unsent drafts; independent of Query lifetime. */
   readonly draftScope: string;
   readonly catalog: RemoteConversationCatalog;

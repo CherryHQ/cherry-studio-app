@@ -28,6 +28,7 @@ import { AgentPickerSheet } from '@/frontend/components/AgentPicker';
 import { ChatScreenFrame } from '../components/ChatScreenFrame';
 import { RemoteConversationBody, useRemoteConversation } from './RemoteConversationBody';
 import { useRemoteChatNavigation } from './useRemoteChatNavigation';
+import { remoteDraftKey } from './useRemoteDraftPersistence';
 
 export function RemoteChatScreen() {
   const target = parseRemoteChatRoute(useLocalSearchParams<RemoteChatRouteParams>());
@@ -134,7 +135,7 @@ type RemoteChatSessionProps = { opened: ReturnType<typeof useConversation> } & (
 export function RemoteChatSession({ target, opened, navigation }: RemoteChatSessionProps) {
   const sidebarPresence = useSidebarPresence();
   const source = useRemoteConversationSource();
-  const connectionId = source.ref.kind === 'desktop' ? source.ref.connectionId : undefined;
+  const connectionId = source.ref.connectionId;
   const conversation = useRemoteConversation(opened);
   useBackgroundTaskNotifications(
     connectionId && target.sessionId
@@ -148,7 +149,7 @@ export function RemoteChatSession({ target, opened, navigation }: RemoteChatSess
   );
   const sessionKey = `session:${target.sessionId}`;
   const identity = navigation?.identity ?? sessionKey;
-  const draftKey = `${source.draftScope}:${target.connectionId}:${target.sessionId ? sessionKey : identity}`;
+  const draftKey = remoteDraftKey(source, target.sessionId ? sessionKey : identity);
   return (
     // oxlint-disable-next-line react/jsx-no-constructed-context-values -- Preserve current header updates; memoization needs consumer-cost evidence.
     <HeaderContext value={{ agent, agents, navigation }}>

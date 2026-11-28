@@ -14,7 +14,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   type AgentRef,
   type AgentSummary,
-  type ConversationRef,
   type WorkspaceSummary,
   type useConversationAgents,
   useConversationSourceState,
@@ -22,6 +21,7 @@ import {
 } from '@/frontend/appShell/conversation';
 import {
   type DraftId,
+  type RemoteDraftHandoff,
   type RemoteConversationSource,
   type useConversation,
   useConversationDraft,
@@ -114,7 +114,7 @@ export function RemoteConversationBody({
     draftId?: DraftId;
     draftKey: string;
     identity: string;
-    onSessionCreated?(ref: ConversationRef): boolean;
+    onSessionCreated?(created: RemoteDraftHandoff): boolean;
     agents: ReturnType<typeof useConversationAgents>;
     surface?: 'default' | 'sheet';
   }) {

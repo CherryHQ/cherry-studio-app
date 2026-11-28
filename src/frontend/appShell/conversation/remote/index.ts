@@ -1,5 +1,6 @@
 export type {
   ConversationDraft,
+  RemoteDraftHandoff,
   ConversationInput,
   DraftId,
   HistoryPosition,

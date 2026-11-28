@@ -224,6 +224,103 @@ it('closing one consumer does not cancel a shared download, while closing all re
   rmSync(path.dirname(uri), { recursive: true, force: true });
 });
 
+it.each(['applied', 'absent', 'remove', 'unknown'] as const)(
+  'reconciles an explicit preupload create after downgrade: %s',
+  async (outcome) => {
+    const target = {
+      agentId: 'agent',
+      workspace: { kind: 'system' as const },
+      model: { providerId: 'p', modelId: 'm' },
+    };
+    const applied = {
+      status: 'applied',
+      sessionId: 'original-session',
+      method: 'agent.sessions.create',
+    };
+    let downgraded = false;
+    const request = jest.fn(
+      async (method: string, params: { commandId: string; model?: unknown }) => {
+        if (method === 'agent.sessions.create') {
+          if (!downgraded) throw new RemoteAgentError('CONNECTION_LOST', true);
+          if (params.model) throw new RemoteAgentError('UPGRADE_REQUIRED');
+          return { ...applied, commandId: params.commandId, sessionId: 'default-session' };
+        }
+        if (method === 'agent.commands.get') {
+          if (outcome === 'unknown') throw new RemoteAgentError('CONNECTION_LOST', true);
+          if (outcome === 'absent' || outcome === 'remove') throw new RemoteAgentError('NOT_FOUND');
+          return { ...applied, commandId: params.commandId };
+        }
+        throw new Error(method);
+      },
+    );
+    let saved: string | undefined;
+    const journal = {
+      read: () => saved,
+      write: (_key: string, value: string) => {
+        saved = value;
+      },
+    } as unknown as RemoteAgentCommandJournal;
+    const open = () =>
+      new RemoteAttachmentDrafts(
+        'binding',
+        journal,
+        { resolve: async () => undefined } as unknown as RemoteUploadFiles,
+        request as unknown as AgentRequest,
+        new AbortController().signal,
+        () => {},
+        async () => ({ write: jest.fn() }),
+      );
+    let tasks = open();
+    tasks.stage('draft:a', target, [attachment]);
+    await tasks.drain();
+    const createId = request.mock.calls[0][1].commandId;
+    tasks.stop();
+    downgraded = true;
+    if (outcome === 'remove') {
+      // An older installation had already persisted the local capability failure.
+      const rows = JSON.parse(saved!);
+      rows[0].blocked = true;
+      rows[0].error = 'UPGRADE_REQUIRED';
+      saved = JSON.stringify(rows);
+    }
+    tasks = open();
+    tasks.recover();
+    await tasks.drain();
+    expect(request).toHaveBeenCalledWith(
+      'agent.commands.get',
+      { commandId: createId },
+      expect.anything(),
+    );
+    const row = tasks.get()[0];
+    expect(row.canReviseModel).toBe(outcome === 'absent' || outcome === 'remove');
+    if (outcome === 'applied') expect(row.sessionId).toBe('original-session');
+    if (outcome === 'remove') {
+      const count = request.mock.calls.length;
+      tasks.stage('draft:a', target, []);
+      await tasks.drain();
+      expect(tasks.get()).toEqual([]);
+      expect(request).toHaveBeenCalledTimes(count);
+    } else if (outcome === 'absent') {
+      tasks.stage('draft:a', { agentId: 'agent', workspace: target.workspace }, [attachment]);
+      await tasks.drain();
+      expect(tasks.get()[0]).toMatchObject({
+        sessionId: 'default-session',
+        items: [{ fileEntryId: attachment.fileEntryId }],
+      });
+      const replacement = request.mock.calls.findLast(
+        ([method]) => method === 'agent.sessions.create',
+      )![1];
+      expect(replacement.commandId).not.toBe(createId);
+      expect(replacement).not.toHaveProperty('model');
+    } else {
+      expect(() =>
+        tasks.stage('draft:a', { agentId: 'agent', workspace: target.workspace }, [attachment]),
+      ).toThrow('CONFLICT');
+    }
+    tasks.stop();
+  },
+);
+
 it('changes the create command only after a definitive model rejection and keeps the selected files', async () => {
   const create = jest
     .fn()

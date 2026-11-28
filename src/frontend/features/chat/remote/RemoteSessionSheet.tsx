@@ -36,6 +36,7 @@ import { useBackendModule } from '@/frontend/data';
 import { useDesktopConnection } from '@/frontend/hooks/useDesktopConnections';
 
 import { RemoteConversationBody, useRemoteConversation } from './RemoteConversationBody';
+import { remoteDraftKey } from './useRemoteDraftPersistence';
 
 type SessionTarget = Extract<RemoteSessionSheetTarget, { sessionId: string }>;
 type DispatchTarget = Extract<RemoteSessionSheetTarget, { draftId: string }>;
@@ -318,7 +319,7 @@ function RemoteSession({
         target={target}
         agent={agent}
         agents={agents}
-        draftKey={`${source.draftScope}:${connectionId}:${identity}`}
+        draftKey={remoteDraftKey(source, identity)}
         identity={identity}
         header={ModalHeader}
         headerPlacement="inline"

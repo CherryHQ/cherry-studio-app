@@ -329,7 +329,7 @@ export function createRemoteConversationSource(
             model: input.model,
           };
           const unsupportedModel =
-            !!target.model && !staged && sourceState.sessionModelSelection === false;
+            !!target.model && !staged?.sessionId && sourceState.sessionModelSelection === false;
           const ready: ConversationAction<ConversationInput, Submission>['availability'] =
             availability.state === 'disabled'
               ? availability
@@ -341,7 +341,11 @@ export function createRemoteConversationSource(
               ready.state === 'enabled' && !target.workspace
                 ? { state: 'disabled', reason: 'workspace-required' }
                 : ready.state === 'enabled' && unsupportedModel
-                  ? { state: 'disabled', reason: 'model-unavailable' }
+                  ? {
+                      state: 'disabled',
+                      reason:
+                        staged && !staged.canReviseModel ? 'synchronizing' : 'model-unavailable',
+                    }
                   : ready,
             execute: (value) => submit(target, value),
           };
@@ -375,10 +379,12 @@ export function createRemoteConversationSource(
                 remote.discard(failed.id);
               },
             );
-            if (message?.failure?.code === 'model-unavailable') {
+            const defaultOnly = !!failed.model && sourceState.sessionModelSelection === false;
+            if (message && (message.failure?.code === 'model-unavailable' || defaultOnly)) {
               message.resendWithModel = {
                 agent: catalogRefs.issue<AgentRef>('agent', failed.agentId),
                 availability: ready,
+                defaultOnly,
                 execute: (model) => resend(message.input, model),
               };
             }
@@ -400,7 +406,7 @@ export function createRemoteConversationSource(
             sessionModelSelection: sourceState.sessionModelSelection === true,
             attachmentPreparation:
               target.workspace &&
-              !unsupportedModel &&
+              (!unsupportedModel || staged) &&
               sourceState.preupload &&
               remote.stageAttachments
                 ? {
@@ -431,6 +437,8 @@ export function createRemoteConversationSource(
               ? {
                   created: {
                     conversation: { source: ref, sessionId: own.sessionId },
+                    inputDraftId: own.inputDraftId,
+                    agentId: own.agentId,
                     release: () => {
                       assertSource();
                       remote.release(own.id);

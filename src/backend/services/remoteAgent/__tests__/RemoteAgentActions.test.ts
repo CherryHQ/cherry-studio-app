@@ -215,12 +215,44 @@ it('keeps a rejected start until its replacement is durably admitted', async () 
   expect(actions.getStarts()).toEqual([rejected]);
   request.mockRejectedValue(new RemoteAgentError('CONNECTION_LOST', true));
   const admitted = await actions.start(revised);
-  expect(admitted).toMatchObject({ draftId: 'next', status: 'pending', model: revised.model });
+  expect(admitted).toMatchObject({
+    draftId: 'next',
+    inputDraftId: startInput.draftId,
+    status: 'pending',
+    model: revised.model,
+  });
   expect(actions.getStarts()).toEqual([admitted]);
   expect(new RemoteAgentActions('binding', port, request, () => {}).getStarts()).toEqual([
     admitted,
   ]);
   await expect(actions.start(revised)).rejects.toThrow('CONFLICT');
+});
+
+it('keeps an unconfirmed first turn pending until its original create receipt can be read', async () => {
+  const { port } = journal();
+  const request = jest.fn().mockRejectedValue(new RemoteAgentError('CONNECTION_LOST', true));
+  const actions = new RemoteAgentActions('binding', port, request, () => {});
+  const model = { providerId: 'p', modelId: 'm' };
+  await actions.start({ ...startInput, model });
+  const create = request.mock.calls[0][1];
+  actions.stop();
+  const lookup = jest.fn(async (method: string, params: unknown) => {
+    if (method === 'agent.commands.get') throw new RemoteAgentError('UPGRADE_REQUIRED');
+    if (method === 'agent.sessions.get') return sessionResult('s');
+    return receipt((params as { commandId: string }).commandId, 'applied', { method });
+  });
+  const restored = new RemoteAgentActions('binding', port, lookup, () => {});
+  await restored.recover();
+  expect(restored.getStarts()[0].status).toBe('pending');
+  expect(lookup.mock.calls).toEqual([['agent.commands.get', { commandId: create.commandId }]]);
+  lookup.mockResolvedValueOnce(
+    receipt(create.commandId, 'applied', { method: 'agent.sessions.create' }),
+  );
+  await restored.recover();
+  expect(restored.getStarts()[0]).toMatchObject({ status: 'applied', sessionId: 's', model });
+  expect(lookup.mock.calls.filter(([method]) => method === 'agent.sessions.create')).toHaveLength(
+    0,
+  );
 });
 
 it('settles more than 200 handoffs without retaining composer starts or undelivered drafts', async () => {

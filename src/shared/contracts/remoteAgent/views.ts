@@ -61,6 +61,8 @@ export type RemoteCommand = Readonly<{
 export type RemoteStartOperation = Readonly<{
   id: string;
   draftId: string;
+  /** Owner of the consumed input. Older journal records may only identify the route. */
+  inputDraftId?: string;
   agentId: string;
   model?: RemoteModelSelection;
   workspaceId?: string;

@@ -1,13 +1,31 @@
 import { BottomSheet, Button } from '@cherrystudio/ui/components';
-import type { ComponentProps, ReactNode } from 'react';
+import { type ComponentProps, type ReactNode, useState } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { AgentRef } from '@/frontend/appShell/conversation';
 import { useRemoteModels } from '@/frontend/appShell/conversation/remote';
+import { ComposerModelPillButton } from '@/frontend/components/Composer';
 import { ModelPickerList, ModelPickerSearch } from '@/frontend/components/ModelPicker';
 
+import { RemoteComposer } from '../RemoteComposer';
 import { RemoteModelPicker } from '../RemoteModelPicker';
+import { UndeliveredMessageRow } from '../UndeliveredMessageRow';
 
+jest.mock('@/frontend/components/Composer', () => ({
+  ComposerSurface: ({ children }: { children: ReactNode }) => children,
+  ComposerModelPillButton: jest.fn(() => null),
+  ComposerAttachments: () => null,
+  useComposerState: () => ({ draft: '', attachments: [] }),
+  useComposerActions: () => ({}),
+  useComposerPresentationActions: () => ({ runInputReplacement: (fn: () => void) => fn() }),
+}));
+jest.mock('../../components/ChatInput', () => ({
+  ChatInputAccessories: () => null,
+  ChatInputSurface: ({ secondaryAction }: { secondaryAction: ReactNode }) => secondaryAction,
+}));
+jest.mock('../RemoteComposerMenu', () => ({ RemoteComposerMenu: () => null }));
+jest.mock('../useRemoteDraftPersistence', () => ({ useRemoteDraftPersistence: () => {} }));
+jest.mock('@/frontend/data', () => ({ useBackendModule: () => ({}) }));
 jest.mock('@/frontend/appShell/conversation/remote', () => ({ useRemoteModels: jest.fn() }));
 jest.mock('@/frontend/components/ModelPicker', () => ({
   ...jest.requireActual('@/frontend/components/ModelPicker/components/ModelPickerSheet'),
@@ -15,6 +33,7 @@ jest.mock('@/frontend/components/ModelPicker', () => ({
 }));
 jest.mock('@/frontend/components/EmptyIllustration', () => ({ EmptyIllustration: () => null }));
 jest.mock('@cherrystudio/ui/components', () => ({
+  useToast: () => ({ toast: { show: jest.fn() } }),
   BottomSheet: ({
     open,
     children,
@@ -127,4 +146,72 @@ test('recovery keeps selection provisional until Resend and drops it on close', 
   act(() => list().onChoose(key));
   act(() => screen.root.findByType(Button).props.onPress());
   expect(select).toHaveBeenCalledWith(second);
+});
+
+test('remote composer retains the full-height picker through closing while its new model draft is unresolved', async () => {
+  type Props = ComponentProps<typeof RemoteComposer>;
+  const ready = {
+    sessionModelSelection: true,
+    inputPolicy: { attachments: false },
+    start: { availability: { state: 'enabled' } },
+  } as NonNullable<Props['draft']['state']>;
+  function DraftComposer() {
+    const [model, setModel] = useState<typeof second>();
+    return (
+      <RemoteComposer
+        agent={{ ref: agent, id: 'a', name: 'Agent', configuration: 'available' }}
+        snapshot={{ executions: [] } as unknown as Props['snapshot']}
+        draftId={'d' as Props['draftId']}
+        draftKey="draft:d"
+        modelSelection={{ model, setModel }}
+        draft={{ draft: undefined, state: model ? undefined : ready, error: undefined }}
+        workspaces={{ items: [] } as unknown as Props['workspaces']}
+        supportsAttachments={false}
+        onSelectWorkspace={jest.fn()}
+      />
+    );
+  }
+  act(() => {
+    screen = create(<DraftComposer />);
+  });
+  act(() => screen.root.findByType(ComposerModelPillButton).props.onPress());
+  act(() => screen.root.findByType(ModelPickerSearch).props.onFocus());
+  const sheet = screen.root.findByType(BottomSheet);
+  expect(sheet.props.size).toBe('full');
+  const picker = list();
+  const row = picker.listItems.find(
+    (item) => item.type === 'choice' && item.model?.providerId === 'b',
+  )!;
+  act(() => picker.onChoose(row.key));
+  expect(screen.root.findByType(BottomSheet)).toBe(sheet);
+  expect(sheet.props.open).toBe(false);
+  act(() => sheet.props.onClosed());
+  expect(screen.root.findAllByType(BottomSheet)).toHaveLength(0);
+});
+
+test('an older desktop asks for confirmation before resending with the default, without requesting its model catalog', async () => {
+  type Message = NonNullable<ComponentProps<typeof UndeliveredMessageRow>['message']>;
+  const execute = jest.fn().mockResolvedValue({ state: 'pending' });
+  const ordinaryResend = jest.fn();
+  const message: Message = {
+    id: 'old' as Message['id'],
+    input: { parts: [{ type: 'text', text: 'original text' }] },
+    state: 'interrupted',
+    resend: { availability: { state: 'enabled' }, execute: ordinaryResend },
+    discard: jest.fn(),
+    resendWithModel: { agent, defaultOnly: true, availability: { state: 'enabled' }, execute },
+  };
+  act(() => {
+    screen = create(<UndeliveredMessageRow message={message} onEdit={jest.fn()} />);
+  });
+  const button = (label: string) =>
+    screen.root.findAllByType(Button).find((node) => node.props.children === label)!;
+  act(() => void button('remoteAgent.followAgentModel').props.onPress());
+  act(() => screen.root.findByType(BottomSheet).props.onClose());
+  expect(execute).not.toHaveBeenCalled();
+  act(() => void button('remoteAgent.followAgentModel').props.onPress());
+  await act(async () => button('remoteAgent.undelivered.resend').props.onPress());
+  expect(execute).toHaveBeenCalledWith(undefined);
+  expect(ordinaryResend).not.toHaveBeenCalled();
+  expect(useRemoteModels).not.toHaveBeenCalled();
 });

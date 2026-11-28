@@ -6,12 +6,12 @@ import { Text, View } from 'react-native';
 
 import {
   type AgentSummary,
-  type ConversationRef,
   type useConversationWorkspaces,
   type WorkspaceSummary,
 } from '@/frontend/appShell/conversation';
 import {
   type DraftId,
+  type RemoteDraftHandoff,
   type RemoteConversationSession,
   type RemoteConversationSnapshot,
   type useConversationDraft,
@@ -61,7 +61,7 @@ export function RemoteComposer({
   selectedWorkspace?: WorkspaceSummary;
   supportsAttachments: boolean;
   onSelectWorkspace: (workspace: WorkspaceSummary) => void;
-  onSessionCreated?(ref: ConversationRef): boolean;
+  onSessionCreated?(created: RemoteDraftHandoff): boolean;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -78,11 +78,8 @@ export function RemoteComposer({
   const canSelectModel = !existing && draft.state?.sessionModelSelection === true;
   const created = draft.state?.created;
   useEffect(() => {
-    if (!session && created && onSessionCreated?.(created.conversation)) {
-      created.release();
-      setModel();
-    }
-  }, [created, session, onSessionCreated, setModel]);
+    if (!session && created && onSessionCreated?.(created)) created.release();
+  }, [created, session, onSessionCreated]);
 
   const undelivered = existing ? snapshot.undelivered : draft.state?.undelivered;
   const startAvailability = draft.state?.start.availability;
@@ -94,6 +91,15 @@ export function RemoteComposer({
   const preparation = existing
     ? snapshot.attachmentPreparation
     : draft.state?.attachmentPreparation;
+  const selectModel: typeof setModel = (model) => {
+    try {
+      preparation?.reviseModel?.(model);
+      setModel(model);
+    } catch {
+      toast.show({ label: t('remoteAgent.loadFailed'), variant: 'danger' });
+    }
+    setChoosingModel(false);
+  };
   const boundTarget = preparation?.draft?.draftTarget;
   const stagedModel = boundTarget?.model;
   const boundWorkspace = boundTarget?.workspace;
@@ -316,7 +322,8 @@ export function RemoteComposer({
               };
             }}
           />
-          {preparation?.draft?.items.some((item) => item.state === 'failed') ? (
+          {!needsDefaultModel &&
+          preparation?.draft?.items.some((item) => item.state === 'failed') ? (
             <View className="flex-row items-center justify-end px-4">
               <Button
                 size="xs"
@@ -383,7 +390,7 @@ export function RemoteComposer({
                     testID="remote-composer-model-button"
                   />
                 ) : needsDefaultModel ? (
-                  <Button size="xs" variant="ghost" onPress={() => setModel()}>
+                  <Button size="xs" variant="ghost" onPress={() => selectModel()}>
                     {t('remoteAgent.followAgentModel')}
                   </Button>
                 ) : null}
@@ -408,23 +415,15 @@ export function RemoteComposer({
           }
         />
       </ComposerSurface>
-      {canSelectModel && agent ? (
+      {!existing && agent ? (
         <RemoteModelPicker
           agent={agent.ref}
-          open={choosingModel && !modelLocked}
+          open={choosingModel && canSelectModel && !modelLocked}
           defaultModelIdentity={agent.modelIdentity}
           defaultModelName={agent.modelName}
           selected={boundTarget ? stagedModel : selectedModel}
           onClose={() => setChoosingModel(false)}
-          onSelect={(model) => {
-            try {
-              preparation?.reviseModel?.(model);
-              setModel(model);
-            } catch {
-              toast.show({ label: t('remoteAgent.loadFailed'), variant: 'danger' });
-            }
-            setChoosingModel(false);
-          }}
+          onSelect={selectModel}
         />
       ) : null}
       {choosingWorkspace && canChangeWorkspace ? (

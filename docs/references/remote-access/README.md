@@ -250,8 +250,13 @@ page. The inherited Agent default remains selectable. An explicit selection acco
 start journal after submission. Adding an attachment creates the desktop Session during preupload
 and binds its model at that point. If creation rejects the model, the user can choose another and
 keep the attachments. Changing the model on an undelivered start uses its original Agent, workspace and input,
-including when the failure appears on another draft. Following the Agent default omits the model.
-Older desktops keep the existing creation flow.
+including when the failure appears on another draft. A successful retry clears the consumed
+draft’s model and preserves the other draft’s input, attachments and selection. Following the
+Agent default omits the model. If the desktop loses selection support during preupload, the phone
+looks up the original create receipt. It reuses a confirmed Session and retains the command ID
+while the outcome is unknown. After confirmed non-creation the user can keep the files and switch
+to the default, or remove the files. An undelivered first message can likewise be resent with the
+default after explicit confirmation. New drafts on older desktops keep the existing creation flow.
 
 `agent.workspaces.list` advertises `systemWorkspace: true` when supported. Creation accepts
 `workspace: { kind: 'system' }` or `{ kind: 'registered', id }`; only the desktop resolves the
