@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -766,4 +767,17 @@ describe('publishGitcodeRelease', () => {
       ),
     ).toThrow('Missing or ambiguous SHA256SUMS entry');
   });
+});
+
+it('rejects malformed summaries before remote release preconditions or effects', () => {
+  for (const command of ['publish', 'stage']) {
+    const result = spawnSync(
+      process.execPath,
+      ['--import', 'tsx', 'scripts/publishGitcodeRelease.ts', command, '--summary', 'bad\npath'],
+      { cwd: process.cwd(), encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '' } },
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('Invalid --summary');
+    expect(result.stderr).not.toContain('Missing required');
+  }
 });

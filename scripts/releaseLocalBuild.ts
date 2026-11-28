@@ -22,7 +22,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { parseArgs } from 'node:util';
 
-import { requireCliPath, requireSafeId } from './cliInput';
+import { requireCliPath, requireSafeId, validateCliPath } from './cliInput';
 import {
   SHA_RE,
   TAG_RE,
@@ -31,6 +31,7 @@ import {
   parseReleaseTag,
   redactSecretsInStream,
   sanitizeDiagnostic,
+  sanitizeReleaseResult,
   sanitizeSecrets,
 } from './release/shared';
 import { verifyIosSymbolPackage } from './verifyIosSymbolPackage';
@@ -1950,6 +1951,12 @@ async function main() {
       },
       strict: true,
     });
+    const outputPath =
+      values['github-output'] === undefined
+        ? undefined
+        : requireCliPath(values['github-output'], '--github-output');
+    const summaryPath =
+      values.summary === undefined ? undefined : requireCliPath(values.summary, '--summary');
     if (!values.target || !values.tag || !values.commit) {
       throw new Error('Missing required flags: --target, --tag, --commit.');
     }
@@ -1959,10 +1966,10 @@ async function main() {
       commitSha: values.commit,
       runId: requireSafeId(values['run-id'] ?? 'manual', '--run-id'),
       attempt: requireSafeId(values.attempt ?? '1', '--attempt'),
-      releaseRoot: optionalCliPath(values.root, '--root'),
+      releaseRoot: values.root === undefined ? undefined : validateCliPath(values.root, '--root'),
     });
-    if (values['github-output']) {
-      writeGitHubOutputs(requireCliPath(values['github-output'], '--github-output'), {
+    if (outputPath) {
+      writeGitHubOutputs(outputPath, {
         build_id: result.buildId,
         archive_dir: result.archiveDir,
         artifact_name: result.artifactName,
@@ -1971,9 +1978,9 @@ async function main() {
         native_build_version: result.nativeBuildVersion,
       });
     }
-    if (values.summary) {
+    if (summaryPath) {
       appendFileSync(
-        requireCliPath(values.summary, '--summary'),
+        summaryPath,
         `- \`${result.target}\` build \`${result.buildId}\` (native \`${result.nativeBuildVersion}\`) archived to \`${result.archiveDir}\`\n`,
       );
     }
@@ -1998,6 +2005,12 @@ async function main() {
       },
       strict: true,
     });
+    const outputPath =
+      values['github-output'] === undefined
+        ? undefined
+        : requireCliPath(values['github-output'], '--github-output');
+    const summaryPath =
+      values.summary === undefined ? undefined : requireCliPath(values.summary, '--summary');
     if (!values.tag || !values.commit) {
       throw new Error('Missing required flags: --tag, --commit.');
     }
@@ -2010,21 +2023,15 @@ async function main() {
       commitSha: values.commit,
       runId: requireSafeId(values['run-id'] ?? 'manual', '--run-id'),
       attempt: requireSafeId(values.attempt ?? '1', '--attempt'),
-      releaseRoot: optionalCliPath(values.root, '--root'),
+      releaseRoot: values.root === undefined ? undefined : validateCliPath(values.root, '--root'),
       includeGooglePlay: googlePlayMode === 'auto' ? undefined : googlePlayMode === 'true',
       reuseExisting: !values['no-reuse'],
     });
-    if (values['github-output']) {
-      writeGitHubOutputs(
-        requireCliPath(values['github-output'], '--github-output'),
-        formatBatchOutputs(result.overallOk, result.targets),
-      );
+    if (outputPath) {
+      writeGitHubOutputs(outputPath, formatBatchOutputs(result.overallOk, result.targets));
     }
-    if (values.summary) {
-      appendFileSync(
-        requireCliPath(values.summary, '--summary'),
-        formatBatchSummary(result.tag, result.targets),
-      );
+    if (summaryPath) {
+      appendFileSync(summaryPath, formatBatchSummary(result.tag, result.targets));
     }
     console.log(JSON.stringify(result, null, 2));
     if (!result.overallOk && !values['allow-partial-failure']) {
@@ -2045,19 +2052,26 @@ async function main() {
       },
       strict: true,
     });
+    const outputPath =
+      values['github-output'] === undefined
+        ? undefined
+        : requireCliPath(values['github-output'], '--github-output');
     if (!values.target || !values.tag || !values.commit) {
       throw new Error('Missing required flags: --target, --tag, --commit.');
     }
-    const releaseRoot = resolveReleaseRoot(process.env, optionalCliPath(values.root, '--root'));
+    const releaseRoot = resolveReleaseRoot(
+      process.env,
+      values.root === undefined ? undefined : validateCliPath(values.root, '--root'),
+    );
     const result = await findCompleteBuild({
       target: resolveTargetConfig(values.target).id,
       tag: values.tag,
       commitSha: values.commit,
       releaseRoot,
     });
-    if (values['github-output']) {
+    if (outputPath) {
       writeGitHubOutputs(
-        requireCliPath(values['github-output'], '--github-output'),
+        outputPath,
         result.found
           ? {
               found: 'true',
@@ -2086,6 +2100,10 @@ async function main() {
       },
       strict: true,
     });
+    const outputPath =
+      values['github-output'] === undefined
+        ? undefined
+        : requireCliPath(values['github-output'], '--github-output');
     if (!values['build-dir']) {
       throw new Error('Usage: check-submit --build-dir <dir> [--build-id <id>]');
     }
@@ -2093,12 +2111,12 @@ async function main() {
     const alreadySubmitted =
       receipt?.status === 'succeeded' &&
       (!values['build-id'] || receipt.buildId === values['build-id']);
-    if (values['github-output']) {
-      writeGitHubOutputs(requireCliPath(values['github-output'], '--github-output'), {
+    if (outputPath) {
+      writeGitHubOutputs(outputPath, {
         already_submitted: alreadySubmitted ? 'true' : 'false',
       });
     }
-    console.log(sanitizeDiagnostic(JSON.stringify({ alreadySubmitted, receipt }, null, 2)));
+    console.log(JSON.stringify(sanitizeReleaseResult({ alreadySubmitted, receipt }), null, 2));
     return;
   }
 
@@ -2167,7 +2185,7 @@ async function main() {
     const recovered = await recoverPendingIosBuild({
       pendingDir: requireCliPath(values['pending-dir'], '--pending-dir'),
     });
-    console.log(sanitizeDiagnostic(JSON.stringify(recovered, null, 2)));
+    console.log(JSON.stringify(sanitizeReleaseResult(recovered), null, 2));
     return;
   }
 
@@ -2193,7 +2211,10 @@ async function main() {
       throw new Error('--keep-prerelease must be a non-negative integer.');
     }
     const result = pruneReleases({
-      releaseRoot: resolveReleaseRoot(process.env, optionalCliPath(values.root, '--root')),
+      releaseRoot: resolveReleaseRoot(
+        process.env,
+        values.root === undefined ? undefined : validateCliPath(values.root, '--root'),
+      ),
       keepStable,
       keepPrerelease,
       dryRun: values['dry-run'],

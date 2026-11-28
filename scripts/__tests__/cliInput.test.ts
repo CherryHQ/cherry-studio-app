@@ -1,6 +1,6 @@
 import { isAbsolute } from 'node:path';
 
-import { requireCliPath, requireSafeId } from '../cliInput';
+import { requireCliPath, requireSafeId, validateCliPath } from '../cliInput';
 
 describe('cliInput', () => {
   it('accepts plain ids and rejects path-like ids', () => {
@@ -17,4 +17,11 @@ describe('cliInput', () => {
       expect(() => requireCliPath(bad, '--notes-file')).toThrow(/Invalid --notes-file/);
     }
   });
+});
+
+it('checks controls before caller-specific root trimming and preserves file spaces', () => {
+  expect(validateCliPath(' /srv/releases ', '--root')).toBe(' /srv/releases ');
+  expect(requireCliPath(' notes.md ', '--summary')).toContain(' notes.md ');
+  for (const bad of [' /srv/releases\n', '\t/srv/releases', '/srv/\0releases'])
+    expect(() => validateCliPath(bad, '--root')).toThrow(/Invalid --root/);
 });

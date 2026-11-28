@@ -21,9 +21,14 @@ export function requireSafeId(value: string, label: string): string {
  * Rejects empty values and control characters (NUL, newlines) that could truncate
  * or split the path when it is passed to the file system or written to a log or output file.
  */
-export function requireCliPath(value: string, label: string): string {
+export function validateCliPath(value: string, label: string): string {
   if (value.trim() === '' || UNSAFE_PATH_CHARS_RE.test(value)) {
     throw new Error(`Invalid ${label}: expected a non-empty path without control characters.`);
   }
-  return resolve(value);
+  return value;
+}
+
+/** Validate before normalizing, preserving caller-specific whitespace handling. */
+export function requireCliPath(value: string, label: string): string {
+  return resolve(validateCliPath(value, label));
 }

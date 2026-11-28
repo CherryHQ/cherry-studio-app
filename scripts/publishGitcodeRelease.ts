@@ -702,6 +702,8 @@ async function main() {
       },
       strict: true,
     });
+    const summaryPath =
+      values.summary === undefined ? undefined : requireCliPath(values.summary, '--summary');
 
     if (!values.tag || !values.commit || !values['archive-dir'] || !values['artifact-name']) {
       throw new Error(
@@ -722,9 +724,9 @@ async function main() {
       nativeBuildVersion: values['native-build-version'],
     });
 
-    if (values.summary) {
+    if (summaryPath) {
       appendFileSync(
-        requireCliPath(values.summary, '--summary'),
+        summaryPath,
         `GitCode Staged Release (${result.releaseStatus}): ${result.releaseUrl}\n`,
       );
     }
@@ -744,6 +746,8 @@ async function main() {
       },
       strict: true,
     });
+    const summaryPath =
+      values.summary === undefined ? undefined : requireCliPath(values.summary, '--summary');
 
     if (!values.tag || !values['notes-file']) {
       throw new Error('Missing required flags for publish: --tag, --notes-file.');
@@ -756,9 +760,9 @@ async function main() {
       releaseName: values.name,
     });
 
-    if (values.summary) {
+    if (summaryPath) {
       appendFileSync(
-        requireCliPath(values.summary, '--summary'),
+        summaryPath,
         `GitCode Release (${result.releaseStatus}): ${result.releaseUrl}\n`,
       );
     }
