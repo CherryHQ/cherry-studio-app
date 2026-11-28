@@ -149,7 +149,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/vi
            mode?.finish()
 -          return true
 +        } else {
-+          UIManagerHelper.getReactContext(textView).emitDeviceEvent("enrichedMarkdownClipboardTooLarge")
++          UIManagerHelper.getReactContext(textView).emitDeviceEvent("enrichedMarkdownClipboardWriteFailed")
          }
 -
 -        MENU_ITEM_COPY_MARKDOWN -> {
@@ -167,7 +167,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/vi
        }
  
        val customItems = getCustomItemTexts()
-@@ -164,43 +165,81 @@
+@@ -164,43 +165,88 @@
      override fun onDestroyActionMode(mode: ActionMode?) {}
    }
  
@@ -178,21 +178,28 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/vi
 +internal fun Throwable.isClipboardTransferFailure(): Boolean =
 +  generateSequence(this) { it.cause }.any { it is TransactionTooLargeException || it is DeadObjectException }
 +
-+private fun ClipboardManager.trySetClip(clip: ClipData): Boolean {
++private fun ClipData.fitsClipboardParcel(): Boolean {
 +  val parcel = Parcel.obtain()
 +  try {
 +    // Android 10 can create a temporary descriptor for HTML during serialization.
-+    clip.writeToParcel(parcel, Parcelable.PARCELABLE_WRITE_RETURN_VALUE)
-+    if (parcel.dataSize() >= MAX_CLIP_BYTES) return false
++    writeToParcel(parcel, Parcelable.PARCELABLE_WRITE_RETURN_VALUE)
++    return parcel.dataSize() < MAX_CLIP_BYTES
 +  } finally {
 +    parcel.recycle()
 +  }
++}
 +
++private fun ClipboardManager.trySetClip(clip: ClipData): Boolean {
 +  try {
++    if (!clip.fitsClipboardParcel()) return false
 +    setPrimaryClip(clip)
 +    return true
 +  } catch (error: Exception) {
-+    if (!error.isClipboardTransferFailure()) throw error
++    // Android 10 embeds the shared-memory IOException in its message and discards the cause.
++    val htmlAllocationFailed =
++      Build.VERSION.SDK_INT == Build.VERSION_CODES.Q && clip.getItemAt(0).htmlText != null &&
++        error is IllegalStateException && error.message?.startsWith("Error creating the shared memory area: ") == true
++    if (!htmlAllocationFailed && !error.isClipboardTransferFailure()) throw error
 +    return false
 +  }
 +}
@@ -280,7 +287,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/utils/text/vi
  }
  
  /** Returns remote image URLs (http/https only) from the current selection. */
-@@ -216,12 +255,10 @@
+@@ -216,12 +262,10 @@
      .filter { it.startsWith("http://") || it.startsWith("https://") }
  }
  
@@ -300,7 +307,7 @@ diff --git a/android/src/test/java/com/swmansion/enriched/markdown/utils/text/vi
 new file mode 100644
 --- /dev/null
 +++ b/android/src/test/java/com/swmansion/enriched/markdown/utils/text/view/ClipboardSelectionTest.kt
-@@ -0,0 +1,67 @@
+@@ -0,0 +1,128 @@
 +package com.swmansion.enriched.markdown.utils.text.view
 +
 +import android.content.ClipData
@@ -308,6 +315,8 @@ new file mode 100644
 +import android.content.Context
 +import android.os.DeadObjectException
 +import android.os.TransactionTooLargeException
++import android.system.ErrnoException
++import android.system.OsConstants
 +import android.widget.TextView
 +import org.junit.Assert.*
 +import org.junit.Test
@@ -315,6 +324,11 @@ new file mode 100644
 +import org.robolectric.RobolectricTestRunner
 +import org.robolectric.RuntimeEnvironment
 +import org.robolectric.annotation.Config
++import org.robolectric.annotation.Implementation
++import org.robolectric.annotation.Implements
++import org.robolectric.shadow.api.Shadow
++import org.robolectric.shadows.ShadowClipboardManager
++import org.robolectric.shadows.ShadowSharedMemory
 +
 +@RunWith(RobolectricTestRunner::class)
 +@Config(sdk = [35])
@@ -327,6 +341,60 @@ new file mode 100644
 +    assertTrue(RuntimeException(DeadObjectException()).isClipboardTransferFailure())
 +    assertTrue(RuntimeException(TransactionTooLargeException()).isClipboardTransferFailure())
 +    assertFalse(SecurityException().isClipboardTransferFailure())
++  }
++
++  @Implements(ClipboardManager::class)
++  class RejectingClipboard : ShadowClipboardManager() {
++    var beforeWrite: (ClipData) -> Unit = {}
++
++    @Implementation
++    override fun setPrimaryClip(clip: ClipData) {
++      beforeWrite(clip)
++      super.setPrimaryClip(clip)
++    }
++  }
++
++  @Test
++  @Config(sdk = [29])
++  fun copiesPlainTextWhenSharedMemoryCannotBeAllocatedWhileMeasuringHtml() {
++    ShadowSharedMemory.setCreateShouldThrow(ErrnoException("ashmem_create_region", OsConstants.ENOMEM))
++    try {
++      assertTrue(view.copySelection("Text", "hello") { "x".repeat(500_000) })
++      val item = clipboard.primaryClip!!.getItemAt(0)
++      assertEquals("hello", item.text)
++      assertNull(item.htmlText)
++    } finally {
++      ShadowSharedMemory.setCreateShouldThrow(null)
++    }
++  }
++
++  @Test
++  @Config(sdk = [29], shadows = [RejectingClipboard::class])
++  fun copiesPlainTextWhenSharedMemoryCannotBeAllocatedDuringTheWrite() {
++    val shadow = Shadow.extract<RejectingClipboard>(clipboard)
++    shadow.beforeWrite = { clip ->
++      if (clip.getItemAt(0).htmlText != null) {
++        throw IllegalStateException("Error creating the shared memory area: java.io.IOException")
++      }
++    }
++    assertTrue(view.copySelection("Text", "hello") { "x".repeat(500_000) })
++    val item = clipboard.primaryClip!!.getItemAt(0)
++    assertEquals("hello", item.text)
++    assertNull(item.htmlText)
++
++    shadow.beforeWrite = { throw IllegalStateException("unrelated clipboard failure") }
++    assertThrows(IllegalStateException::class.java) {
++      view.copySelection("Text", "hello") { "<b>hello</b>" }
++    }
++  }
++
++  @Test
++  @Config(shadows = [RejectingClipboard::class])
++  fun preservesTheClipboardWhenATinyWriteLosesTheService() {
++    clipboard.setPrimaryClip(ClipData.newPlainText("Text", "previous"))
++    Shadow.extract<RejectingClipboard>(clipboard).beforeWrite = { throw RuntimeException(DeadObjectException()) }
++    assertFalse(view.copySelection("Text", "x"))
++    assertEquals("previous", clipboard.primaryClip!!.getItemAt(0).text)
 +  }
 +
 +  @Test fun copiesBothRepresentationsWhenTheyFit() {

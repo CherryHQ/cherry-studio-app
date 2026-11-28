@@ -2830,7 +2830,7 @@
   "settings.websearch.source.fallback": "Сначала инструменты, выбранные в разделе «Плагины»",
   "settings.websearch.source.label": "Источник веб-инструментов",
   "settings.websearch.source.preferred": "Сначала встроенные инструменты модели (по умолчанию)",
-  "sharing.clipboardTooLarge": "Выделите меньше текста для копирования.",
+  "sharing.clipboardWriteFailed": "Не удалось скопировать выделенный текст. Попробуйте ещё раз или выделите меньше текста.",
   "sharing.imageExcerpt": "Остальное содержимое опущено",
   "sharing.imageGroup": "Поделиться группой изображений",
   "sharing.messageCount_few": "{{count}} сообщения",

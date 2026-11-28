@@ -9,9 +9,12 @@ export function MarkdownClipboardFeedback() {
   const { t } = useTranslation();
   useEffect(() => {
     if (Platform.OS !== 'android') return;
-    const subscription = DeviceEventEmitter.addListener('enrichedMarkdownClipboardTooLarge', () => {
-      toast.show({ label: t('sharing.clipboardTooLarge'), variant: 'danger' });
-    });
+    const subscription = DeviceEventEmitter.addListener(
+      'enrichedMarkdownClipboardWriteFailed',
+      () => {
+        toast.show({ label: t('sharing.clipboardWriteFailed'), variant: 'danger' });
+      },
+    );
     return () => subscription.remove();
   }, [t, toast]);
   return null;

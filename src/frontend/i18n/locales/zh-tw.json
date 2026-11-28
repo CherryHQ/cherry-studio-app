@@ -2767,7 +2767,7 @@
   "settings.websearch.source.fallback": "優先使用外掛頁面選取的工具",
   "settings.websearch.source.label": "連網工具來源",
   "settings.websearch.source.preferred": "優先使用模型內建的工具（預設）",
-  "sharing.clipboardTooLarge": "請選取較短的文字複製。",
+  "sharing.clipboardWriteFailed": "複製失敗。請再試一次或選取較短的文字。",
   "sharing.imageExcerpt": "後續內容已省略",
   "sharing.imageGroup": "分享這組圖片",
   "sharing.messageCount_other": "{{count}} 則訊息",
