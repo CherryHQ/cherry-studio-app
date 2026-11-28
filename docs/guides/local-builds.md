@@ -505,11 +505,12 @@ clang++ -std=c++20 -fsanitize=thread -I"$GTEST/include" -I"$GTEST" -I"$RN/ReactC
 
 - Screens 4.30.1's patch iterates over a copy of the header subviews. Synchronous shadow-state updates
   can mount or unmount children during this loop, invalidating an enumeration of the live array.
-- React Native 0.88.0 no longer needs a patch for pending render/command callbacks reaching a torn-down
-  scheduler delegate. 0.86.3 needed the `enableSchedulerDelegateInvalidation` flag from
-  [React Native #56680](https://github.com/facebook/react-native/pull/56680); 0.88 removed that flag
-  and instead clears pending rendering updates in `RuntimeScheduler_Modern::handleTaskError` before
-  the host's fatal handler drops the delegate, covered by its `SchedulerDelegateInvalidationTest`.
+- React Native 0.88.1 clears pending renderer callbacks on fatal JS task errors. Normal bridgeless
+  instance invalidation takes a separate path. The React Native patch backports
+  [upstream #59754](https://github.com/react/react-native/pull/59754) for that path. The iOS
+  instance holds the renderer scheduler across surface suspension, removes its run-loop observer
+  on main, and releases the scheduler on the JS thread just before destroying the runtime. Drop
+  these hunks when the pinned release includes the upstream fix.
 - Widgets 58.0.26's patch reads `isActivityFullscreen` only on iOS 18 and newer, returning `false` on older
   systems. Build 26's five iOS 17.6.1 widget samples all return to binary offset `0x24bf98` after
   calling this missing weak-linked WidgetKit getter. Although the SDK declares it available earlier,
