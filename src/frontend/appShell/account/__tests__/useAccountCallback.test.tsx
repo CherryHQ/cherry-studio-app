@@ -118,16 +118,19 @@ it('claims the cold account URL after a warm in-place return replaced the native
   expect(mockRouter.dismissTo.mock.calls).toEqual([['/settings']]);
 });
 
-it('recovers a later account callback received by Android before Router subscribed', async () => {
-  jest.replaceProperty(Platform, 'OS', 'android');
-  const latest = 'cherrystudio://auth/callback?state=current&code=next';
-  jest.mocked(getLinkingURL).mockReturnValue(latest);
-  mockReceiveRedirect.mockRejectedValueOnce(new Error('stale state')).mockResolvedValueOnce(true);
-  await act(async () => render());
-  expect(mockReceiveRedirect.mock.calls).toEqual([[accountUrl], [latest]]);
-  expect(mockRouter.dismissTo.mock.calls).toEqual([['/settings']]);
-  expect(mockReportError).not.toHaveBeenCalled();
-});
+it.each(['ios', 'android'] as const)(
+  'recovers a later %s account callback received before Router subscribed',
+  async (os) => {
+    jest.replaceProperty(Platform, 'OS', os);
+    const latest = 'cherrystudio://auth/callback?state=current&code=next';
+    jest.mocked(getLinkingURL).mockReturnValue(latest);
+    mockReceiveRedirect.mockRejectedValueOnce(new Error('stale state')).mockResolvedValueOnce(true);
+    await act(async () => render());
+    expect(mockReceiveRedirect.mock.calls).toEqual([[accountUrl], [latest]]);
+    expect(mockRouter.dismissTo.mock.calls).toEqual([['/settings']]);
+    expect(mockReportError).not.toHaveBeenCalled();
+  },
+);
 
 it.each([accountUrl, 'cherrystudio-preview://auth/callback?code=another-app'])(
   'keeps one delivery for an identical or foreign-scheme Android latest URL',

@@ -2,7 +2,6 @@ import { loggerService } from '@logger';
 import Constants from 'expo-constants';
 import { randomUUID } from 'expo-crypto';
 import { getLinkingURL } from 'expo-linking';
-import { Platform } from 'react-native';
 
 import { isAccountCallbackUrl, type AccountModule } from '@/shared/contracts/account';
 import { resolveNativeCallbackUrl } from '@/shared/utils/nativeCallbackUrl';
@@ -74,8 +73,8 @@ export function claimAccountCallback(
   if (!batch || batch.id !== id) return null;
   if (batch.result !== undefined) return batch.result;
   const urls = batch.urls.splice(0);
-  // Android's launch Intent can predate an onNewIntent delivery made before Router subscribed.
-  if (batch.initial && Platform.OS === 'android') {
+  // A newer link can arrive between the initial route snapshot and the native URL subscription.
+  if (batch.initial) {
     const latest = getLinkingURL();
     if (latest && !urls.includes(latest) && isInstalledAccountUrl(latest)) urls.push(latest);
   }
