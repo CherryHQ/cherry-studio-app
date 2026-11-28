@@ -213,12 +213,10 @@ function ProfileButtonContent({
               <View
                 className={cn(
                   'size-10 shrink-0 items-center justify-center rounded-full',
-                  selected && 'bg-sidebar-foreground',
+                  selected && 'bg-secondary-active',
                 )}
               >
-                <SettingsIcon
-                  className={cn('size-5', selected ? 'text-background' : 'text-sidebar-foreground')}
-                />
+                <SettingsIcon className="size-5 text-sidebar-foreground" />
               </View>
             </View>
           )}
