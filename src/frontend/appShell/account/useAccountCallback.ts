@@ -1,17 +1,17 @@
-import { clearInitialURL, getLinkingURL, useLinkingURL } from 'expo-linking';
-import { type Href, useRouter } from 'expo-router';
+import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 
 import { usePreference } from '@/frontend/data';
 
 import { getAccountReturnTo } from './accountNavigation';
 import { accountSignInHref } from './accountRoute';
+import { claimAccountCallback } from './nativeIntent';
 import { useAccount } from './useAccount';
 import { useAccountErrorReporter } from './useAccountErrorReporter';
 
 /** Browser and cold-start completions end at the same profile-scoped entry target. */
 export function useAccountCallback() {
-  const url = useLinkingURL();
+  const { delivery } = useLocalSearchParams<{ delivery?: string }>();
   const { account } = useAccount();
   const router = useRouter();
   const reportError = useAccountErrorReporter('AccountCallback');
@@ -23,26 +23,17 @@ export function useAccountCallback() {
         : '/settings/profile',
     ),
   );
-  const completion = useRef<{ url: string; result: Promise<boolean> } | null>(null);
+  const completion = useRef<{ delivery?: string; result: Promise<boolean> } | null>(null);
 
   useEffect(() => {
-    if (url && completion.current?.url !== url) {
-      const delivery = account.receiveRedirect(url);
-      if (delivery) {
-        if (getLinkingURL() === url) clearInitialURL();
-        const previous = completion.current?.result;
-        // A rejected late link must not replace an earlier successful route completion.
-        const result = previous
-          ? delivery.catch((error: unknown) =>
-              previous.catch(() => {
-                throw error;
-              }),
-            )
-          : delivery;
-        completion.current = { url, result };
-      }
+    if (!completion.current || completion.current.delivery !== delivery) {
+      const result = claimAccountCallback(delivery, account, completion.current?.result ?? null);
+      if (result) completion.current = { delivery, result };
     }
-    if (!completion.current) return;
+    if (!completion.current) {
+      router.dismissTo(returnTo as Href);
+      return;
+    }
     let active = true;
     void completion.current.result.then(
       (stayed) => {
@@ -62,5 +53,5 @@ export function useAccountCallback() {
     return () => {
       active = false;
     };
-  }, [url, account, router, reportError, returnTo]);
+  }, [delivery, account, router, reportError, returnTo]);
 }

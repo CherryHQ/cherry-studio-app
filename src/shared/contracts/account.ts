@@ -51,6 +51,17 @@ export type AccountState = Readonly<{
   organizationName?: string;
 }>;
 
+export function isAccountCallbackUrl(raw: string, redirectUri: string | undefined): boolean {
+  try {
+    const url = new URL(raw);
+    url.search = '';
+    url.hash = '';
+    return url.href === redirectUri;
+  } catch {
+    return false;
+  }
+}
+
 export type PrivateSignIn = { address: string; username: string; password: string };
 
 /**

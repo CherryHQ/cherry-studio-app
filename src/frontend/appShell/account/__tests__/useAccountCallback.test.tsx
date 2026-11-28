@@ -1,11 +1,15 @@
 import { clearInitialURL } from 'expo-linking';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { redirectSystemPath as redirectUuRemoteSystemPath } from '@/frontend/appShell/uuRemote/nativeIntent';
 import type { PreferenceSchema } from '@/shared/data/preference';
 
+import { routeAccountCallback } from '../nativeIntent';
 import { useAccountCallback } from '../useAccountCallback';
 
-let mockUrl: string | null;
+const accountUrl = 'cherrystudio://auth/callback?code=one-use';
+let mockDelivery: string | undefined;
+let mockNextId = 0;
 let mockNativeUrl: string | null;
 let mockReturnTo: string | undefined;
 let mockOnboarding: PreferenceSchema['app.onboarding.status'];
@@ -21,9 +25,13 @@ const mockAccount = {
 jest.mock('expo-linking', () => ({
   clearInitialURL: jest.fn(),
   getLinkingURL: () => mockNativeUrl,
-  useLinkingURL: () => mockUrl,
 }));
-jest.mock('expo-router', () => ({ useRouter: () => mockRouter }));
+jest.mock('expo-constants', () => ({ expoConfig: { scheme: 'cherrystudio' } }));
+jest.mock('expo-crypto', () => ({ randomUUID: () => String(++mockNextId) }));
+jest.mock('expo-router', () => ({
+  useLocalSearchParams: () => ({ delivery: mockDelivery }),
+  useRouter: () => mockRouter,
+}));
 jest.mock('@/frontend/data', () => ({ usePreference: () => [mockOnboarding] }));
 jest.mock('../accountNavigation', () => ({
   getAccountReturnTo: (fallback: string) => mockReturnTo ?? fallback,
@@ -36,6 +44,14 @@ function Probe() {
   useAccountCallback();
   return null;
 }
+function route(url: string, initial = false) {
+  mockNativeUrl = url;
+  const path = routeAccountCallback(url, redirectUuRemoteSystemPath({ path: url, initial }));
+  if (path !== null) {
+    mockDelivery = new URL(path, 'https://route.invalid').searchParams.get('delivery') ?? undefined;
+  }
+  return path;
+}
 function render() {
   act(() => {
     if (renderer) renderer.update(<Probe />);
@@ -44,8 +60,8 @@ function render() {
 }
 beforeEach(() => {
   jest.clearAllMocks();
-  mockUrl = 'cherrystudio://auth/callback?code=one-use';
-  mockNativeUrl = mockUrl;
+  route('/', true);
+  route(accountUrl, true);
   mockReturnTo = '/settings';
   mockOnboarding = 'completed';
   mockNeedsSignIn = false;
@@ -64,29 +80,64 @@ it('returns to the saved caller after the URL is cleared, exchanging the callbac
   );
   render();
   expect(clearInitialURL).toHaveBeenCalledTimes(1);
-  mockUrl = null;
+  mockNativeUrl = null;
   render();
   await act(async () => finish(true));
   expect(mockReceiveRedirect).toHaveBeenCalledTimes(1);
   expect(mockRouter.dismissTo.mock.calls).toEqual([['/settings']]);
 });
 
-it('leaves another feature’s callback in the native URL cache', () => {
-  mockUrl = mockNativeUrl = 'cherrystudio://oauth/callback?code=provider';
-  mockReceiveRedirect.mockReturnValueOnce(null);
+it('abandons an unmounted delivery after navigation to another feature and exits a direct visit', () => {
+  const abandoned = mockDelivery;
+  const other = 'cherrystudio://oauth/callback?code=provider';
+  expect(route(other)).toBe(other);
+  mockDelivery = abandoned;
   render();
+  expect(mockReceiveRedirect).not.toHaveBeenCalled();
   expect(clearInitialURL).not.toHaveBeenCalled();
   expect(mockReportError).not.toHaveBeenCalled();
-  expect(mockRouter.dismissTo).not.toHaveBeenCalled();
+  expect(mockRouter.dismissTo).toHaveBeenCalledWith('/settings');
+});
+
+it('claims the cold account URL after a warm in-place return replaced the native URL before mount', async () => {
+  const ticket = mockDelivery;
+  expect(route('cherrystudio://uu-remote/callback?request=other')).toBeNull();
+  expect(mockDelivery).toBe(ticket);
+  mockReceiveRedirect.mockResolvedValueOnce(true);
+  await act(async () => render());
+  expect(mockReceiveRedirect.mock.calls).toEqual([[accountUrl]]);
+  expect(clearInitialURL).not.toHaveBeenCalled();
+  expect(mockRouter.dismissTo.mock.calls).toEqual([['/settings']]);
+});
+
+it('exits a direct account route without a callback', () => {
+  expect(route('/auth/callback')).toBe('/auth/callback');
+  render();
+  expect(mockReceiveRedirect).not.toHaveBeenCalled();
+  expect(mockRouter.dismissTo).toHaveBeenCalledWith('/settings');
+});
+
+it('delivers distinct account links in order when both arrive before the route mounts', async () => {
+  const second = 'cherrystudio://auth/callback?code=second';
+  const target = route(second);
+  expect(target).toBe(`/auth/callback?delivery=${mockDelivery}`);
+  expect(target).not.toContain('code=');
+  mockReceiveRedirect
+    .mockRejectedValueOnce(new Error('stale callback'))
+    .mockResolvedValueOnce(true);
+  await act(async () => render());
+  expect(mockReceiveRedirect.mock.calls).toEqual([[accountUrl], [second]]);
+  expect(mockRouter.dismissTo.mock.calls).toEqual([['/settings']]);
+  expect(mockReportError).not.toHaveBeenCalled();
 });
 
 it.each(['success', 'failure'] as const)(
   'presents the pending account %s after an unrelated warm link',
   async (outcome) => {
     const account = Promise.withResolvers<boolean>();
-    mockReceiveRedirect.mockReturnValueOnce(account.promise).mockReturnValueOnce(null);
+    mockReceiveRedirect.mockReturnValueOnce(account.promise);
     render();
-    mockUrl = mockNativeUrl = 'cherrystudio://uu-remote/callback?request=other';
+    route('cherrystudio://uu-remote/callback?request=other');
     render();
     const failure = new Error('Exchange failed');
     await act(async () => {
@@ -117,12 +168,12 @@ it('handles a second link on the mounted route if the first callback is rejected
   );
   mockReceiveRedirect.mockResolvedValueOnce(true);
   render();
-  mockUrl = 'cherrystudio://auth/callback?code=current';
+  route('cherrystudio://auth/callback?code=current');
   render();
   await act(async () => rejectFirst(new Error('stale callback')));
   expect(mockReceiveRedirect.mock.calls).toEqual([
     ['cherrystudio://auth/callback?code=one-use'],
-    [mockUrl],
+    ['cherrystudio://auth/callback?code=current'],
   ]);
   expect(mockReportError).not.toHaveBeenCalled();
   expect(mockRouter.dismissTo.mock.calls).toEqual([['/settings']]);
@@ -137,7 +188,7 @@ it('keeps a successful route completion when an overlapping link is rejected', a
   );
   mockReceiveRedirect.mockRejectedValueOnce(new Error('stale callback'));
   render();
-  mockUrl = 'cherrystudio://auth/callback?code=stale';
+  route('cherrystudio://auth/callback?code=stale');
   render();
   await act(async () => accept(true));
   expect(mockReportError).not.toHaveBeenCalled();

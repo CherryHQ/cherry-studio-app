@@ -3,9 +3,11 @@ import { randomUUID } from 'expo-crypto';
 import { cacheService } from '@/frontend/data/CacheService';
 
 import { readAccountReturnTo } from './accountRoute';
+import { discardAccountCallback } from './nativeIntent';
 
 /** Profile-scoped, non-secret intent survives a cold auth callback, without crossing data spaces. */
 export function rememberAccountReturnTo(returnTo: string): void {
+  discardAccountCallback();
   cacheService.setPersist('account.sign_in.return_to', readAccountReturnTo(returnTo) ?? null);
 }
 

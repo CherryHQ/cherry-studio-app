@@ -6,7 +6,7 @@ import {
   getRandomBytes,
 } from 'expo-crypto';
 
-const NATIVE_SCHEMES = new Set(['cherrystudio', 'cherrystudio-dev', 'cherrystudio-preview']);
+import { resolveNativeCallbackUrl } from '@/shared/utils/nativeCallbackUrl';
 
 const base64Url = (value: string) =>
   value.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -27,9 +27,6 @@ export async function createPkceChallenge(): Promise<{ verifier: string; challen
   return { verifier, challenge };
 }
 
-/** `<scheme>://<path>` on this build's Cherry scheme; undefined outside native Cherry builds. */
 export function nativeCallbackUrl(path: string): string | undefined {
-  const configured = Constants.expoConfig?.scheme;
-  const scheme = Array.isArray(configured) ? configured[0] : configured;
-  return scheme && NATIVE_SCHEMES.has(scheme) ? `${scheme}://${path}` : undefined;
+  return resolveNativeCallbackUrl(Constants.expoConfig?.scheme, path);
 }

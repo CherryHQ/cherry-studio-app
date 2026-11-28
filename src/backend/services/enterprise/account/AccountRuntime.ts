@@ -13,6 +13,7 @@ import {
   type AccountModule,
   type AccountSessionContext,
   type AccountState,
+  isAccountCallbackUrl,
   normalizeEnterpriseAddress,
   type PrivateSignIn,
 } from '@/shared/contracts/account';
@@ -218,14 +219,7 @@ export class AccountRuntime implements AccountModule {
   }
 
   readonly receiveRedirect = (url: string): Promise<boolean> | null => {
-    try {
-      const target = new URL(url);
-      target.search = '';
-      target.hash = '';
-      if (target.href !== this.options.redirectUri) return null;
-    } catch {
-      return null;
-    }
+    if (!isAccountCallbackUrl(url, this.options.redirectUri)) return null;
     const attempt = this.signInRedirects;
     const browser = attempt.browser;
     attempt.routed = true;
