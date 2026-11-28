@@ -1109,7 +1109,13 @@ diff --git a/ios/input/EnrichedMarkdownTextInput.mm b/ios/input/EnrichedMarkdown
    [super updateProps:props oldProps:oldProps];
  }
  
-@@ -1682,6 +1714,7 @@ - (BOOL)applyMarkdownShortcutForEditAtLocation:(NSUInteger)editLocation
+@@ -733,4 +765,5 @@ - (void)replaceTextInRange:(NSRange)selection
+   [self updatePlaceholderVisibility];
++  [self updateEmptyBulletMarker];
+   [_inputEventEmitter emitOnChangeText];
+   [_inputEventEmitter emitOnChangeSelection];
+   [_inputEventEmitter emitFormattingChanged];
+@@ -1682,6 +1715,7 @@ - (BOOL)applyMarkdownShortcutForEditAtLocation:(NSUInteger)editLocation
  - (void)handleTextChanged
  {
    if (_editSession.isComposing) {
@@ -1117,7 +1123,7 @@ diff --git a/ios/input/EnrichedMarkdownTextInput.mm b/ios/input/EnrichedMarkdown
      return;
    }
  
-@@ -1833,6 +1866,21 @@ - (void)manageSelectionBasedChanges
+@@ -1833,6 +1867,21 @@ - (void)manageSelectionBasedChanges
    }
  }
  

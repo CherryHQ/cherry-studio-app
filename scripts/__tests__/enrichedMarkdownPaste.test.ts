@@ -1,5 +1,9 @@
 import { readFileSync } from 'node:fs';
 
+const editor = readFileSync(
+  'node_modules/react-native-enriched-markdown/ios/input/EnrichedMarkdownTextInput.mm',
+  'utf8',
+);
 const patch = readFileSync('patches/react-native-enriched-markdown@1.1.1.patch', 'utf8');
 const inputPatch = patch
   .split('+++ b/ios/input/ENRMInputTextView.mm\n')[1]
@@ -49,13 +53,16 @@ describe('iOS asynchronous editor paste patch', () => {
   });
 
   test('preserves the programmatic edit phase across UIKit replacement callbacks', () => {
-    const editor = readFileSync(
-      'node_modules/react-native-enriched-markdown/ios/input/EnrichedMarkdownTextInput.mm',
-      'utf8',
-    );
     const delegate = editor.split('shouldChangeTextInRange:(NSRange)range replacementText:')[1];
     expect(delegate).toMatch(
       /if \(_editSession.shouldSuppressFormatting\) return YES;[\s\S]*?emitOnKeyPress:text[\s\S]*?enterPhase:ENRMEditPhaseProcessing/,
+    );
+  });
+
+  test('refreshes the empty list marker using the final pasted blocks and selection', () => {
+    const replacement = editor.split('- (void)replaceTextInRange:(NSRange)selection')[1];
+    expect(replacement).toMatch(
+      /\[_blockStore setBlockType:[^;]*;[\s\S]*?_lastSelectedRange = _textView.selectedRange;[\s\S]*?\[self applyFormatting\];[\s\S]*?\[self updateEmptyBulletMarker\];[\s\S]*?\[self requestHeightUpdate\];/,
     );
   });
 
