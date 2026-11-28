@@ -42,6 +42,23 @@ describe('iOS asynchronous editor paste patch', () => {
     expect(additions).toContain('[textView.markdownTextInput pasteMarkdown:text]');
   });
 
+  test('suspends smart punctuation only while inserting the parsed paste', () => {
+    expect(additions).toMatch(
+      /smartQuotesType = UITextSmartQuotesTypeNo;[\s\S]*smartDashesType = UITextSmartDashesTypeNo;[\s\S]*pasteMarkdown:text[\s\S]*@finally[\s\S]*smartQuotesType = quotes;[\s\S]*smartDashesType = dashes;/,
+    );
+  });
+
+  test('preserves the programmatic edit phase across UIKit replacement callbacks', () => {
+    const editor = readFileSync(
+      'node_modules/react-native-enriched-markdown/ios/input/EnrichedMarkdownTextInput.mm',
+      'utf8',
+    );
+    const delegate = editor.split('shouldChangeTextInRange:(NSRange)range replacementText:')[1];
+    expect(delegate).toMatch(
+      /if \(_editSession.shouldSuppressFormatting\) return YES;[\s\S]*?emitOnKeyPress:text[\s\S]*?enterPhase:ENRMEditPhaseProcessing/,
+    );
+  });
+
   // Pasting during IME composition worked before the asynchronous load and must keep working.
   test('does not skip paste while text is being composed', () => {
     const paste = inputPatch

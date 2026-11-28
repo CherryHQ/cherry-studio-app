@@ -1100,7 +1100,7 @@ diff --git a/ios/input/EnrichedMarkdownTextInput.mm b/ios/input/EnrichedMarkdown
      return;
    }
  
-@@ -1833,6 +1866,19 @@ - (void)manageSelectionBasedChanges
+@@ -1833,6 +1866,21 @@ - (void)manageSelectionBasedChanges
    }
  }
  
@@ -1119,6 +1119,8 @@ diff --git a/ios/input/EnrichedMarkdownTextInput.mm b/ios/input/EnrichedMarkdown
 +
  - (BOOL)textView:(UITextView *)textView shouldChangeTextInRange:(NSRange)range replacementText:(NSString *)text
  {
++  // Programmatic replacements own the edit and publish their final formatted measurement.
++  if (_editSession.shouldSuppressFormatting) return YES;
    [_inputEventEmitter emitOnKeyPress:text];
 diff --git a/ios/input/InputStylePropsUtils.h b/ios/input/InputStylePropsUtils.h
 index 1d28946d1ec4e46fc0d502d35adec208645674ed..740f65a1046fb98308442b7bd1673d89d46fb5d2 100644
@@ -2399,7 +2401,7 @@ index c937222bc213002b629c14093aecc80082cdb51b..1d41a58868d7cd8728e18c974ae49e2d
      updateAccessibilityLabel()
  
 diff --git a/ios/input/ENRMInputTextView.mm b/ios/input/ENRMInputTextView.mm
-index a5391c7e8..279bfec9d 100644
+index a5391c7e8..7def96c7b 100644
 --- a/ios/input/ENRMInputTextView.mm
 +++ b/ios/input/ENRMInputTextView.mm
 @@ -11,8 +11,71 @@
@@ -2474,7 +2476,7 @@ index a5391c7e8..279bfec9d 100644
  }
  
  - (void)copy:(id)sender
-@@ -40,33 +103,33 @@ - (void)cut:(id)sender
+@@ -40,33 +103,43 @@ - (void)cut:(id)sender
  
  - (void)paste:(id)sender
  {
@@ -2516,7 +2518,17 @@ index a5391c7e8..279bfec9d 100644
 +    if (text.length == 0 || !NSEqualRanges(textView.selectedRange, textView->_pasteSelection)) return;
 +    // External plain text is treated as markdown so pasted syntax formats instead of landing literal.
 +    if (textView.markdownTextInput != nil) {
-+      [textView.markdownTextInput pasteMarkdown:text];
++      // Markdown already specifies its punctuation. Keep native selection and undo for the replacement.
++      UITextSmartQuotesType quotes = textView.smartQuotesType;
++      UITextSmartDashesType dashes = textView.smartDashesType;
++      @try {
++        textView.smartQuotesType = UITextSmartQuotesTypeNo;
++        textView.smartDashesType = UITextSmartDashesTypeNo;
++        [textView.markdownTextInput pasteMarkdown:text];
++      } @finally {
++        textView.smartQuotesType = quotes;
++        textView.smartDashesType = dashes;
++      }
 +    } else {
 +      [textView replaceRange:textView.selectedTextRange withText:text];
 +    }
@@ -2531,7 +2543,7 @@ index a5391c7e8..279bfec9d 100644
    if (action == @selector(paste:)) {
      UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
      if (pasteboard.hasStrings || [pasteboard containsPasteboardTypes:@[ kENRMMarkdownPasteboardType ]]) {
-@@ -102,12 +165,27 @@ - (void)deleteBackward
+@@ -102,12 +175,27 @@ - (void)deleteBackward
  /// through the text-change delegate (see handleListKeyForReplacementRange:).
  - (NSArray<UIKeyCommand *> *)keyCommands
  {
