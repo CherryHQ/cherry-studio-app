@@ -50,7 +50,7 @@ clean install.
 
 ### Enriched Markdown Patch
 
-`patches/react-native-enriched-markdown@1.1.1.patch` is the app's largest dependency patch: 87
+`patches/react-native-enriched-markdown@1.1.1.patch` is the app's largest dependency patch: 88
 files of native code, generated props, and matching JavaScript and TypeScript. An upgrade re-ports
 every native block below and needs a native rebuild with iOS/Android device acceptance of paste,
 undo, selection, and accessibility. Keep this table current when a block is added or retired; a
@@ -60,6 +60,7 @@ block leaves when upstream ships an equivalent.
 | --- | --- | --- | --- | --- |
 | Android input null and long-press guards | Bug fix | #973, #1015 | 1.1.1 guards only `Editor.performLongClick`; touch and drag paths are not upstream | Upstream guards the same Sentry crashes |
 | Android input height invalidation and scroll clamp | Bug fix | #1028 | Not upstream | Upstream re-measures after insertion |
+| Single-line draft layout and measurement on iOS and Android | Bug fix | Compact chat composer | 1.1.1 measures wrapped text even in a single-row field | Upstream measures visible lines and can fold a live editor without replacing its buffer |
 | Android measurement snapshot on the UI thread | Bug fix | #973, #1028 | Not upstream | Upstream measures on the UI thread |
 | Android simple line breaking for live input and height measurement | Bug fix | Google Play 0.5.3 (204) input ANR | 1.1.1 forces high-quality paragraph optimization | Upstream uses simple line breaking in both input and measurement |
 | iOS input measurement without main-thread waits | Bug fix | Duo startup and display-transition deadlock | [#582](https://github.com/software-mansion/enriched-markdown/pull/582) leaves input measurement unresolved | Upstream input layout consumes immutable text without waiting for the main thread |

@@ -10,7 +10,9 @@ describe('Enriched Markdown input measurement patch', () => {
     const node = read('input/internals/EnrichedMarkdownTextInputShadowNode.mm');
     const state = read('input/internals/EnrichedMarkdownTextInputState.h');
     expect(node).toContain('getStateData().getMeasurementText()');
-    expect(node).toContain('ENRMMeasureInputText(text, layoutConstraints.maximumSize.width)');
+    expect(node).toContain(
+      'ENRMMeasureInputText(text, layoutConstraints.maximumSize.width, getConcreteProps().multiline)',
+    );
     expect(node).not.toMatch(
       /dispatch_sync|dispatch_get_main_queue|setupMockInputView|getComponentViewRef/,
     );

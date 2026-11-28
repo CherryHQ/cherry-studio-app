@@ -40,7 +40,8 @@ exported through `index.ts` and receives the current Agent/Session and the conte
 - In local and remote chat, the ordinary field and primary actions share one row while the
   field's software keyboard is hidden. Its keyboard opening reveals the full-width text field
   and the model and reasoning toolbar. Closing the keyboard restores the single row with the
-  existing draft. Staged attachments occupy their own row.
+  existing draft. The compact field displays one line of a wrapped or multiline draft. Reopening
+  the keyboard restores multiline layout in the same native field. Staged attachments occupy their own row.
 - While the keyboard is open, the diagonal expand action is available. It opens a large opaque editing
   surface below the top safe area, with a collapse action and no heading. Its background fills
   both screen edges and extends through the footer and bottom safe area. Local and

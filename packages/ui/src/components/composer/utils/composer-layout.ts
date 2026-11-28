@@ -71,9 +71,8 @@ export const textInputBoxStyle = {
   maxHeight: COMPOSER_MAX_TEXT_HEIGHT,
   paddingVertical: textPaddingVertical,
 } as const;
-// The resting field gets the full composerActionSize row height with
-// paddingVertical: 0 to fit taller glyphs, CJK fallback metrics, and scaled
-// fonts. The resting frame bounds the field to a single row.
+// The native field measures one line at rest. Give taller glyphs, CJK fallback
+// fonts and scaled text the full toolbar row height.
 export const compactTextInputBoxStyle = {
   maxHeight: composerActionSize,
   paddingVertical: 0,

@@ -207,11 +207,14 @@ export function ComposerEditor({
 }
 
 /** Optional field layout for adapters that add app-specific paste or rich-text behavior. */
-export function useComposerEditorInput(): Pick<ComposerInputProps, 'layout' | 'style'> | null {
+export function useComposerEditorInput(): {
+  layout: 'compact' | 'content' | 'fill';
+  style?: ComposerInputProps['style'];
+} | null {
   const context = use(EditorContext);
   if (!context) return null;
   const { active, isExpanded, canExpand } = context.state;
-  if (!active) return { layout: 'content', style: compactTextInputBoxStyle };
+  if (!active) return { layout: 'compact', style: compactTextInputBoxStyle };
   return {
     layout: isExpanded ? 'fill' : 'content',
     style: !isExpanded && canExpand ? fieldActionInsetStyle : undefined,

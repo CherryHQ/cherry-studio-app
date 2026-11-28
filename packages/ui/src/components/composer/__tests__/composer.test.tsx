@@ -299,6 +299,28 @@ describe('Composer', () => {
     expect(nativeStyle()).toMatchObject({ maxHeight: 132, paddingVertical: 4 });
   });
 
+  it('folds a wrapped draft into one line and reopens the same multiline editor', () => {
+    const draft = '草稿内容会随输入框宽度自动换行。'.repeat(8) + '\n第二段';
+    const onChangeText = jest.fn();
+    const composer = (active: boolean) => (
+      <Composer onChangeText={onChangeText} onSend={jest.fn()} value={draft}>
+        <Composer.Editor active={active} expandLabel="Expand" field={<Composer.Input />} />
+      </Composer>
+    );
+    act(() => {
+      renderer = create(composer(false));
+    });
+    const field = renderer!.root.findByType(EnrichedMarkdownTextInput);
+    expect(field.props.multiline).toBe(false);
+    for (const active of [true, false, true]) {
+      act(() => renderer!.update(composer(active)));
+      expect(renderer!.root.findByType(EnrichedMarkdownTextInput)).toBe(field);
+      expect(field.props.multiline).toBe(active);
+      expect(field.props.defaultValue).toBe(draft);
+    }
+    expect(onChangeText).not.toHaveBeenCalled();
+  });
+
   function renderReturnInput(submitOnReturn: boolean, insertNewlineLabel = 'Insert newline') {
     const inputRef = createRef<ComposerInputHandle>();
     const onReturnSubmit = jest.fn();

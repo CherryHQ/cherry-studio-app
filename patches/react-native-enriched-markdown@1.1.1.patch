@@ -201,7 +201,12 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
      isComponentReady = true
    }
  
-@@ -172,7 +224,7 @@
+@@ -169,10 +221,12 @@ class EnrichedMarkdownTextInputView(
+       InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+       InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or
+       InputType.TYPE_TEXT_FLAG_AUTO_CORRECT
++    // Match the Fabric prop default until the first multiline update.
++    maxLines = 1
      gravity = Gravity.TOP or Gravity.START
  
      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -210,10 +215,17 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
      }
  
      setEditableFactory(MarkdownEditableFactory(this))
-@@ -210,8 +262,18 @@ class EnrichedMarkdownTextInputView(
+@@ -210,8 +264,25 @@ class EnrichedMarkdownTextInputView(
      inputMethodManager?.hideSoftInputFromWindow(windowToken, 0)
    }
  
++  fun setMultilineLayout(multiline: Boolean) {
++    // EditText.setSingleLine also replaces the editable buffer and installs a length filter.
++    // Only the visible line count changes when the composer folds.
++    maxLines = if (multiline) Int.MAX_VALUE else 1
++    if (!multiline) super.scrollTo(0, 0)
++  }
++
 +  fun setSubmitOnReturnFromProps(value: Boolean) {
 +    if (submitOnReturn == value) return
 +    submitOnReturn = value
@@ -229,7 +241,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
      return InputConnectionWrapper(base, this)
    }
  
-@@ -278,6 +340,7 @@ class EnrichedMarkdownTextInputView(
+@@ -278,6 +349,7 @@ class EnrichedMarkdownTextInputView(
    override fun isLayoutRequested(): Boolean = false
  
    override fun onTouchEvent(ev: MotionEvent): Boolean {
@@ -237,7 +249,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
      when (ev.action) {
        MotionEvent.ACTION_DOWN -> {
          detectScrollMovement = true
-@@ -295,7 +358,19 @@ class EnrichedMarkdownTextInputView(
+@@ -295,7 +367,19 @@ class EnrichedMarkdownTextInputView(
          }
        }
      }
@@ -258,7 +270,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
    }
  
    override fun performClick(): Boolean = super.performClick()
-@@ -315,7 +390,10 @@ class EnrichedMarkdownTextInputView(
+@@ -315,7 +399,10 @@ class EnrichedMarkdownTextInputView(
        super.performLongClick()
      } catch (e: NullPointerException) {
        val top = e.stackTrace.firstOrNull()
@@ -270,7 +282,22 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
          throw e
        }
        Log.w(TAG, "Absorbed framework NPE in performLongClick (issue #728)", e)
-@@ -336,6 +414,32 @@ class EnrichedMarkdownTextInputView(
+@@ -329,13 +416,50 @@ class EnrichedMarkdownTextInputView(
+     y: Int,
+   ) {
+     if (!scrollEnabled) return
+-    super.scrollTo(x, y)
++    val textLayout = layout
++    if (maxLines == 1 && textLayout != null) {
++      // Android Back may keep focus. Keep a whole caret line visible for hardware input.
++      val offset = if (isFocused) selectionEnd.coerceIn(0, textLayout.text.length) else 0
++      super.scrollTo(0, textLayout.getLineTop(textLayout.getLineForOffset(offset)))
++    } else {
++      super.scrollTo(x, y)
++    }
+   }
+ 
+   override fun canScrollVertically(direction: Int): Boolean = scrollEnabled && super.canScrollVertically(direction)
  
    override fun canScrollHorizontally(direction: Int): Boolean = scrollEnabled && super.canScrollHorizontally(direction)
  
@@ -288,6 +315,10 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
 +    oldh: Int,
 +  ) {
 +    super.onSizeChanged(w, h, oldw, oldh)
++    if (maxLines == 1) {
++      scrollTo(0, 0)
++      return
++    }
 +
 +    val textLayout = layout ?: return
 +    val visibleTextHeight = h - paddingTop - paddingBottom
@@ -303,7 +334,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
    fun attachTextWatcher(editable: Editable) {
      if (textWatcher != null) {
        editable.removeSpan(textWatcher)
-@@ -498,6 +602,12 @@ class EnrichedMarkdownTextInputView(
+@@ -498,6 +622,12 @@ class EnrichedMarkdownTextInputView(
        postAdjust(editable)
        lastProcessedText = editable.toString()
        applyFormattingAndEmit()
@@ -341,7 +372,7 @@ index 8e3fc760ea1b6ff2c5ccc0911b0801b87da84aec..c2ce8ce4ea42211d67b0bd0088b91ba1
      }
  
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt
-index d7fc9ac55b5c9b9f9f9553f18c86fe742b245ccf..604e820431aa84223e2b21b42e64d90601f707c6 100644
+index d7fc9ac55b5c9b9f9f9553f18c86fe742b245ccf..10ea3bcd7e30b74ceb098b708e111da24e3852af 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt
 @@ -2,6 +2,7 @@ package com.swmansion.enriched.markdown.input.layout
@@ -352,49 +383,115 @@ index d7fc9ac55b5c9b9f9f9553f18c86fe742b245ccf..604e820431aa84223e2b21b42e64d906
  import android.text.StaticLayout
  import android.text.TextPaint
  import androidx.appcompat.widget.AppCompatEditText
-@@ -21,7 +22,7 @@ object InputMeasurementStore {
+@@ -20,8 +21,9 @@ object InputMeasurementStore {
+ 
    private data class MeasurementParams(
      val cachedWidth: Float,
++    val maxLines: Int,
      val cachedSize: Long,
 -    val text: CharSequence?,
 +    val text: SpannedString?,
      val paintParams: PaintParams,
    )
  
-@@ -35,10 +36,12 @@ object InputMeasurementStore {
-     val cachedWidth = data[id]?.cachedWidth ?: 0f
-     val cachedSize = data[id]?.cachedSize ?: 0L
+@@ -32,14 +34,17 @@ object InputMeasurementStore {
+     text: CharSequence?,
+     paint: TextPaint,
+   ): Boolean {
+-    val cachedWidth = data[id]?.cachedWidth ?: 0f
+-    val cachedSize = data[id]?.cachedSize ?: 0L
++    val cached = data[id]
++    val cachedWidth = cached?.cachedWidth ?: 0f
++    val maxLines = cached?.maxLines ?: Int.MAX_VALUE
  
 -    val size = measure(cachedWidth, text, paint)
 +    // Snapshot on the UI thread: Fabric must not measure an Editable while input mutates it.
 +    val textSnapshot = text?.let { SpannedString(it) }
-+    val size = measure(cachedWidth, textSnapshot, paint)
++    val size = measure(cachedWidth, textSnapshot, paint, maxLines)
      val paintParams = PaintParams(paint.typeface, paint.textSize)
  
 -    data[id] = MeasurementParams(cachedWidth, size, text, paintParams)
-+    data[id] = MeasurementParams(cachedWidth, size, textSnapshot, paintParams)
-     return size != cachedSize
+-    return size != cachedSize
++    data[id] = MeasurementParams(cachedWidth, maxLines, size, textSnapshot, paintParams)
++    return size != cached?.cachedSize
    }
  
-@@ -85,7 +88,8 @@ object InputMeasurementStore {
+   fun release(id: Int) {
+@@ -71,10 +76,10 @@ object InputMeasurementStore {
+     width: Float,
+     props: ReadableMap?,
+   ): Long {
+-    if (id == null) return initialMeasure(context, width, props)
+-    val value = data[id] ?: return initialMeasure(context, width, props)
+-
+-    if (width == value.cachedWidth) {
++    val maxLines = if (props?.getBoolean("multiline") == false) 1 else Int.MAX_VALUE
++    val value = if (id == null) null else data[id]
++    if (id == null || value == null) return initialMeasure(context, width, props, maxLines)
++    if (width == value.cachedWidth && maxLines == value.maxLines) {
+       return value.cachedSize
+     }
+ 
+@@ -84,8 +89,9 @@ object InputMeasurementStore {
+         textSize = value.paintParams.fontSize
        }
  
-     val size = measure(width, value.text, paint)
+-    val size = measure(width, value.text, paint)
 -    data[id] = MeasurementParams(width, size, value.text, value.paintParams)
++    val size = measure(width, value.text, paint, maxLines)
 +    // A newer UI snapshot or release must not be overwritten by this measurement.
-+    data.replace(id, value, MeasurementParams(width, size, value.text, value.paintParams))
++    data.replace(id, value, value.copy(cachedWidth = width, maxLines = maxLines, cachedSize = size))
      return size
    }
  
-@@ -128,7 +132,7 @@
+@@ -93,6 +99,7 @@ object InputMeasurementStore {
+     context: Context,
+     width: Float,
+     props: ReadableMap?,
++    maxLines: Int,
+   ): Long {
+     // Measure the rendered plain text, not the raw markdown. A mention link such as
+     // [Label](placeholder://x) hides its URL in the source, so measuring the markdown counts those
+@@ -110,13 +117,14 @@ object InputMeasurementStore {
+         isAntiAlias = true
+       }
+ 
+-    return measure(width, text, paint)
++    return measure(width, text, paint, maxLines)
+   }
+ 
+   private fun measure(
+     maxWidth: Float,
+     text: CharSequence?,
+     paint: TextPaint,
++    maxLines: Int,
+   ): Long {
+     val content = text ?: ""
+     val widthPx = maxWidth.toInt().coerceAtLeast(0)
+@@ -127,8 +135,12 @@ object InputMeasurementStore {
+         .setIncludePad(true)
          .setLineSpacing(0f, 1f)
  
++    if (maxLines == 1) {
++      builder.setMaxLines(1).setEllipsize(android.text.TextUtils.TruncateAt.END)
++    }
++
      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
 -      builder.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_HIGH_QUALITY)
 +      builder.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_SIMPLE)
      }
  
      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+@@ -136,7 +148,8 @@ object InputMeasurementStore {
+     }
+ 
+     val staticLayout = builder.build()
+-    val heightInDip = PixelUtil.toDIPFromPixel(staticLayout.height.toFloat())
++    val visibleHeight = staticLayout.getLineTop(minOf(maxLines, staticLayout.lineCount))
++    val heightInDip = PixelUtil.toDIPFromPixel(visibleHeight.toFloat())
+     val widthInDip = PixelUtil.toDIPFromPixel(maxWidth)
+     return YogaMeasureOutput.make(widthInDip, heightInDip)
+   }
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/model/InputFormatterStyle.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/model/InputFormatterStyle.kt
 index a961e675a0b0e4358675f9de6d8c75e83dd34bae..e785ba8fa23fe2ba663a74a614845b426fc5d410 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/input/model/InputFormatterStyle.kt
@@ -1061,11 +1158,26 @@ diff --git a/ios/input/EnrichedMarkdownTextInput.mm b/ios/input/EnrichedMarkdown
 -
 -  return CGSizeMake(maxWidth, ceil(boundingBox.size.height));
 +  return ENRMMeasureInputText(ENRMInputMeasurementText(ENRMGetAttributedText(_textView), _textView.typingAttributes),
-+                              maxWidth);
++                              maxWidth, _textView.textContainer.maximumNumberOfLines != 1);
  }
  
  #pragma mark - Props
-@@ -434,6 +455,13 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
+@@ -407,10 +428,12 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
+     }
+   }
+ 
+-  if (newViewProps.multiline != oldViewProps.multiline) {
+-    _textView.textContainer.maximumNumberOfLines = newViewProps.multiline ? 0 : 1;
++  NSUInteger lineLimit = newViewProps.multiline ? 0 : 1;
++  if (_textView.textContainer.maximumNumberOfLines != lineLimit) {
++    _textView.textContainer.maximumNumberOfLines = lineLimit;
+     _textView.textContainer.lineBreakMode =
+         newViewProps.multiline ? NSLineBreakByWordWrapping : NSLineBreakByTruncatingTail;
++    if (lineLimit == 1) [_textView setContentOffset:CGPointZero animated:NO];
+   }
+ #endif
+ 
+@@ -434,6 +457,13 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
      ENRMApplySelectionColor(_textView, newViewProps.selectionColor);
    }
  
@@ -1079,7 +1191,7 @@ diff --git a/ios/input/EnrichedMarkdownTextInput.mm b/ios/input/EnrichedMarkdown
    _inputEventEmitter.emitMarkdown = newViewProps.isOnChangeMarkdownSet;
  
    {
-@@ -515,10 +543,12 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
+@@ -515,10 +545,12 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
      writingDirectionChanged = YES;
    }
  
@@ -1092,7 +1204,7 @@ diff --git a/ios/input/EnrichedMarkdownTextInput.mm b/ios/input/EnrichedMarkdown
      }
    }
  
-@@ -530,12 +560,14 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
+@@ -530,12 +562,14 @@ - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &
      if (_formattingStore.allRanges.count > 0) {
        [self applyFormatting];
      }
@@ -1109,7 +1221,7 @@ diff --git a/ios/input/EnrichedMarkdownTextInput.mm b/ios/input/EnrichedMarkdown
    [super updateProps:props oldProps:oldProps];
  }
  
-@@ -1682,6 +1714,7 @@ - (BOOL)applyMarkdownShortcutForEditAtLocation:(NSUInteger)editLocation
+@@ -1682,6 +1716,7 @@ - (BOOL)applyMarkdownShortcutForEditAtLocation:(NSUInteger)editLocation
  - (void)handleTextChanged
  {
    if (_editSession.isComposing) {
@@ -1117,7 +1229,7 @@ diff --git a/ios/input/EnrichedMarkdownTextInput.mm b/ios/input/EnrichedMarkdown
      return;
    }
  
-@@ -1833,6 +1866,19 @@ - (void)manageSelectionBasedChanges
+@@ -1833,6 +1868,19 @@ - (void)manageSelectionBasedChanges
    }
  }
  
@@ -2601,7 +2713,7 @@ index f7166a42af2ae4c07f7f3e192c5b7e91c3a5c22d..86353ab2ba682c42a35c776e67be45b8
  
 diff --git a/ios/input/ENRMInputMeasurement.h b/ios/input/ENRMInputMeasurement.h
 new file mode 100644
-index 0000000000000000000000000000000000000000..9757495b5a9e176e228b47b4915e13716069ab38
+index 0000000000000000000000000000000000000000..e74a643f4eb7a264e49501fe1c6aa94e345fe489
 --- /dev/null
 +++ b/ios/input/ENRMInputMeasurement.h
 @@ -0,0 +1,14 @@
@@ -2616,14 +2728,14 @@ index 0000000000000000000000000000000000000000..9757495b5a9e176e228b47b4915e1371
 +NSAttributedString *ENRMInputMeasurementText(NSAttributedString *text, NSDictionary *typingAttributes);
 +
 +/// Can run on any thread without consulting a view or waiting for the main queue.
-+CGSize ENRMMeasureInputText(NSAttributedString *text, CGFloat maxWidth);
++CGSize ENRMMeasureInputText(NSAttributedString *text, CGFloat maxWidth, BOOL multiline);
 +
 +NS_ASSUME_NONNULL_END
 diff --git a/ios/input/ENRMInputMeasurement.mm b/ios/input/ENRMInputMeasurement.mm
 new file mode 100644
 --- /dev/null
 +++ b/ios/input/ENRMInputMeasurement.mm
-@@ -0,0 +1,83 @@
+@@ -0,0 +1,85 @@
 +#import "ENRMInputMeasurement.h"
 +
 +#if !TARGET_OS_OSX
@@ -2677,7 +2789,7 @@ new file mode 100644
 +  return [snapshot copy];
 +}
 +
-+CGSize ENRMMeasureInputText(NSAttributedString *text, CGFloat maxWidth)
++CGSize ENRMMeasureInputText(NSAttributedString *text, CGFloat maxWidth, BOOL multiline)
 +{
 +  @autoreleasepool {
 +    NSAttributedString *measuredText = text;
@@ -2700,9 +2812,11 @@ new file mode 100644
 +    if (withAttachments) measuredText = withAttachments;
 +#endif
 +    NSStringDrawingContext *context = [NSStringDrawingContext new];
++    NSStringDrawingOptions options = NSStringDrawingUsesFontLeading;
++    if (multiline) options |= NSStringDrawingUsesLineFragmentOrigin;
 +    CGRect boundingBox =
 +        [measuredText boundingRectWithSize:CGSizeMake(maxWidth, CGFLOAT_MAX)
-+                                   options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading
++                                   options:options
 +                                   context:context];
 +    return CGSizeMake(maxWidth, ceil(boundingBox.size.height));
 +  }
@@ -2720,7 +2834,7 @@ index 1488126f99c0499320e7e0950a9df18da8ece543..ab0da9cfaca3645cca077f30cd17ba83
  
  } // namespace facebook::react
 diff --git a/ios/input/internals/EnrichedMarkdownTextInputShadowNode.mm b/ios/input/internals/EnrichedMarkdownTextInputShadowNode.mm
-index bf1992c2fd84edc078d107f2ff045da5d124f177..274c21d179050c127235609ae33c89eb9547471a 100644
+index bf1992c2fd84edc078d107f2ff045da5d124f177..a2ff25aab3d962f4c3f8ec63c1be3dafe991b63a 100644
 --- a/ios/input/internals/EnrichedMarkdownTextInputShadowNode.mm
 +++ b/ios/input/internals/EnrichedMarkdownTextInputShadowNode.mm
 @@ -1,6 +1,9 @@
@@ -2798,7 +2912,7 @@ index bf1992c2fd84edc078d107f2ff045da5d124f177..274c21d179050c127235609ae33c89eb
 +    auto snapshot = getStateData().getMeasurementText();
 +    NSAttributedString *text = snapshot ? (NSAttributedString *)unwrapManagedObject(snapshot)
 +                                        : initialMeasurementText(getConcreteProps(), layoutConstraints);
-+    CGSize size = ENRMMeasureInputText(text, layoutConstraints.maximumSize.width);
++    CGSize size = ENRMMeasureInputText(text, layoutConstraints.maximumSize.width, getConcreteProps().multiline);
 +    Float clampedWidth = std::max((Float)size.width, layoutConstraints.minimumSize.width);
 +    clampedWidth = std::min(clampedWidth, layoutConstraints.maximumSize.width);
 +    Float clampedHeight = std::max((Float)size.height, layoutConstraints.minimumSize.height);
@@ -3333,7 +3447,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
        OnStartMentionEvent.EVENT_NAME,
        OnChangeMentionEvent.EVENT_NAME,
        OnEndMentionEvent.EVENT_NAME,
-@@ -185,6 +189,11 @@ class EnrichedMarkdownTextInputManager :
+@@ -185,12 +189,17 @@ class EnrichedMarkdownTextInputManager :
      view?.setAutoCapitalize(value)
    }
  
@@ -3345,6 +3459,13 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
    @ReactProp(name = "multiline", defaultBoolean = true)
    override fun setMultiline(
      view: EnrichedMarkdownTextInputView?,
+     value: Boolean,
+   ) {
+-    view?.isSingleLine = !value
++    view?.setMultilineLayout(value)
+   }
+ 
+   @ReactProp(name = "cursorColor", customType = "Color")
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/events/OnSubmitEvent.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/events/OnSubmitEvent.kt
 new file mode 100644
 index 000000000..05e8ee766
@@ -3847,3 +3968,14 @@ diff --git a/cpp/md4c/md4c.c b/cpp/md4c/md4c.c
      if(ctx->parser.flags & MD_FLAG_HIGHLIGHT)
          emph_mark_types[n_emph_mark_types++] = _T('=');
      if(ctx->parser.flags & MD_FLAG_INSERT)
+diff --git a/android/src/main/jni/react/renderer/components/EnrichedMarkdownTextSpec/conversions.h b/android/src/main/jni/react/renderer/components/EnrichedMarkdownTextSpec/conversions.h
+--- a/android/src/main/jni/react/renderer/components/EnrichedMarkdownTextSpec/conversions.h
++++ b/android/src/main/jni/react/renderer/components/EnrichedMarkdownTextSpec/conversions.h
+@@ -50,6 +50,7 @@ inline folly::dynamic toDynamic(const EnrichedMarkdownProps &props) {
+ inline folly::dynamic toDynamic(const EnrichedMarkdownTextInputProps &props) {
+   folly::dynamic serializedProps = folly::dynamic::object();
+   serializedProps["defaultValue"] = props.defaultValue;
++  serializedProps["multiline"] = props.multiline;
+   serializedProps["placeholder"] = props.placeholder;
+   serializedProps["fontSize"] = props.fontSize;
+   serializedProps["fontWeight"] = props.fontWeight;

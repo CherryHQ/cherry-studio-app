@@ -159,7 +159,7 @@ export function ComposerInput({
         // entity this field is supposed to reserve for mentions.
         linkRegex={null}
         markdownStyle={markdownStyle}
-        multiline
+        multiline={editorInput?.layout !== 'compact'}
         onBlur={onBlur}
         onChangeMarkdown={handleChangeMarkdown}
         onFocus={onFocus}
