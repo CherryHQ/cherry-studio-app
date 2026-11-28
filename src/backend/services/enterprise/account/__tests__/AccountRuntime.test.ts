@@ -224,6 +224,20 @@ describe('AccountRuntime', () => {
     expect(options.portal.completeSignIn).toHaveBeenCalledTimes(1);
   });
 
+  it('presents a malformed portal token response as an account response error', async () => {
+    const { runtime, options } = setup(signedIn('cloud'));
+    const cause = Object.assign(new Error('token response incomplete'), {
+      name: 'AccountsPortalError',
+      code: 'invalid_response',
+    });
+    options.portal.completeSignIn.mockRejectedValueOnce(cause);
+    await expect(runtime.receiveRedirect('cb://?code=1')).rejects.toMatchObject({
+      code: 'response',
+      cause,
+    });
+    expect(options.reload).not.toHaveBeenCalled();
+  });
+
   it('rejects callbacks without a selected space instead of treating them as community', async () => {
     const { runtime, options, select } = setup(signedIn('cloud'));
     select({ _tag: 'signedIn', subject: 'user-2', name: undefined, profile: undefined });

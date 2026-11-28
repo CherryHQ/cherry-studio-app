@@ -1,5 +1,6 @@
 import type {
   AccountsPortal,
+  AccountsPortalError,
   AuthState,
   ProfileChoice,
 } from '@cherryinternal/accounts-portal/client';
@@ -80,12 +81,16 @@ export interface AccountRuntimeOptions {
   reload(): Promise<void>;
 }
 
+function isPortalError(error: unknown): error is AccountsPortalError {
+  return error instanceof Error && error.name === 'AccountsPortalError';
+}
+
 /** Whether the server refused the session, as opposed to being unreachable. */
 function isAuthenticationRejection(error: unknown): boolean {
   if (error instanceof AccountError) return error.code === 'rejected';
   if (isHttpError(error)) return error.status === 401 || error.status === 403;
-  if (error instanceof Error && error.name === 'AccountsPortalError') {
-    const { code, status } = error as Error & { code: string; status: number };
+  if (isPortalError(error)) {
+    const { code, status } = error;
     return code === 'signed_out' || code === 'no_profile' || status === 401 || status === 403;
   }
   return false;
@@ -279,6 +284,8 @@ export class AccountRuntime implements AccountModule {
       if (error instanceof AccountError) throw error;
       if (isAuthenticationRejection(error)) throw new AccountError('rejected', { cause: error });
       if (isConnectionFailure(error)) throw new AccountError('connection', { cause: error });
+      if (isPortalError(error) && error.code === 'invalid_response')
+        throw new AccountError('response', { cause: error });
       throw error;
     }
   }
@@ -731,9 +738,5 @@ export class AccountRuntime implements AccountModule {
 function isConnectionFailure(error: unknown): boolean {
   if (isHttpError(error))
     return error.kind === 'network' || error.kind === 'timeout' || error.kind === 'http';
-  return (
-    error instanceof Error &&
-    error.name === 'AccountsPortalError' &&
-    (error as Error & { code: string }).code === 'network_error'
-  );
+  return isPortalError(error) && error.code === 'network_error';
 }

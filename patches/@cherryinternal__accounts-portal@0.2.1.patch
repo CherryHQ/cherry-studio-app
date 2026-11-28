@@ -1,0 +1,12 @@
+diff --git a/dist/AccountsPortal.js b/dist/AccountsPortal.js
+--- a/dist/AccountsPortal.js
++++ b/dist/AccountsPortal.js
+@@ -180,7 +180,7 @@
+         }
+     };
+     const tokensFrom = (body, previous) => {
+-        const fields = body;
++        const fields = body ?? {};
+         const accessToken = fields.access_token;
+         const idToken = fields.id_token ?? previous?.idToken;
+         if (typeof accessToken !== "string" || typeof idToken !== "string")
