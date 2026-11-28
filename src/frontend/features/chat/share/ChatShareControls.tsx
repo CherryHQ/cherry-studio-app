@@ -179,40 +179,41 @@ function ActiveMessageSelection({
           </Pressable>
         </BackgroundPressExclusion>
         <View className="min-w-0 flex-1">
-          <SelectionExcerpt enabled={message.role === 'assistant'}>{children}</SelectionExcerpt>
+          {message.role === 'assistant' ? (
+            <SelectionExcerpt>{children}</SelectionExcerpt>
+          ) : (
+            children
+          )}
         </View>
       </BackgroundPressArea>
     </View>
   );
 }
 
-function SelectionExcerpt({ children, enabled }: PropsWithChildren<{ enabled: boolean }>) {
+function SelectionExcerpt({ children }: PropsWithChildren) {
   const mask = useThemeColor('constant-black');
-  const [contentHeight, setContentHeight] = useState(0);
+  const [isClipped, setIsClipped] = useState(false);
   const limit = 234;
   const fadeStart = ((limit - 56) / limit) * 100;
-  const isClipped = enabled && contentHeight > limit;
   return (
-    <View className="overflow-hidden" style={enabled ? { maxHeight: limit } : undefined}>
-      <MaskedView
-        style={isClipped ? { height: limit } : undefined}
-        maskElement={
-          <View
-            className="flex-1"
-            style={
-              isClipped
-                ? {
-                    experimental_backgroundImage: `linear-gradient(to bottom, ${mask} ${fadeStart}%, transparent)`,
-                  }
-                : { backgroundColor: mask }
-            }
-          />
-        }
-      >
-        <View onLayout={({ nativeEvent }) => setContentHeight(nativeEvent.layout.height)}>
-          {children}
-        </View>
-      </MaskedView>
-    </View>
+    <MaskedView
+      style={{ maxHeight: limit, overflow: 'hidden' }}
+      maskElement={
+        <View
+          className="flex-1"
+          style={
+            isClipped
+              ? {
+                  experimental_backgroundImage: `linear-gradient(to bottom, ${mask} ${fadeStart}%, transparent)`,
+                }
+              : { backgroundColor: mask }
+          }
+        />
+      }
+    >
+      <View onLayout={({ nativeEvent }) => setIsClipped(nativeEvent.layout.height > limit)}>
+        {children}
+      </View>
+    </MaskedView>
   );
 }
