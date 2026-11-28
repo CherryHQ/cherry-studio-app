@@ -93,7 +93,8 @@ export class AndroidBackgroundActivityRuntime
   private nextId = 0;
   private operationTail: Promise<void> = Promise.resolve();
   private permissionRequested = false;
-  private unprotected = false;
+  private admissionGeneration = 0;
+  private deniedGeneration?: number;
   private interrupted = false;
   private native?: SystemIntegrationNativeModule | null;
   private readonly statusListeners = new Set<() => void>();
@@ -111,7 +112,7 @@ export class AndroidBackgroundActivityRuntime
   getStatus = (): BackgroundExecutionStatus => {
     if (this.interrupted) return 'interrupted';
     if (this.leases.size === 0) return 'idle';
-    if (this.unprotected) return 'limited';
+    if (this.deniedGeneration === this.admissionGeneration) return 'limited';
     if (!this.background?.isRunning()) return 'starting';
     return this.background.isProtected() && this.native?.showBackgroundTaskNotification
       ? 'active'
@@ -190,9 +191,8 @@ export class AndroidBackgroundActivityRuntime
       if (state === 'active') {
         this.backgroundStartedAt = undefined;
         this.backgroundLimitReached = false;
-        this.unprotected = false;
         this.clearDeadline();
-        this.scheduleReconcile();
+        this.scheduleReconcile(true);
       } else {
         this.backgroundStartedAt ??= Date.now();
         this.armDeadline();
@@ -239,9 +239,8 @@ export class AndroidBackgroundActivityRuntime
       release: () => {
         if (!this.leases.delete(lease)) return;
         // Later work gets its own admission attempt once the unprotected work has ended.
-        if (this.leases.size === 0) this.unprotected = false;
+        this.scheduleReconcile(this.leases.size === 0);
         this.publishStatus();
-        this.scheduleReconcile();
       },
     };
   }
@@ -354,8 +353,9 @@ export class AndroidBackgroundActivityRuntime
     });
   }
 
-  private scheduleReconcile(): void {
+  private scheduleReconcile(retryAdmission = false): void {
     if (this.disposed) return;
+    if (retryAdmission) this.admissionGeneration++;
     void this.enqueue(() => this.reconcile()).catch((error: unknown) => {
       logger.warn('Background service update failed', error as Error);
     });
@@ -372,10 +372,12 @@ export class AndroidBackgroundActivityRuntime
     const content = this.runningContent();
     try {
       if (!background.isRunning()) {
-        if (this.unprotected) return;
+        // A refusal only applies to the eligibility that existed when this attempt began.
+        const generation = this.admissionGeneration;
+        if (this.deniedGeneration === generation) return;
         // Android 12+: start only from a visible Activity, never from a background retry.
         if (AppState.currentState !== 'active' || this.backgroundLimitReached) {
-          this.continueUnprotected();
+          this.continueUnprotected(generation);
           return;
         }
         try {
@@ -392,7 +394,7 @@ export class AndroidBackgroundActivityRuntime
             progressBar: { max: 1, value: 0, indeterminate: true },
           });
         } catch (error) {
-          this.continueUnprotected(error);
+          this.continueUnprotected(generation, error);
           return;
         }
       }
@@ -430,8 +432,8 @@ export class AndroidBackgroundActivityRuntime
    * Protection is best effort: work that could not get it keeps running and ends through its
    * own result or a real platform revocation. Returning to the foreground retries admission.
    */
-  private continueUnprotected(cause?: unknown): void {
-    this.unprotected = true;
+  private continueUnprotected(generation: number, cause?: unknown): void {
+    this.deniedGeneration = generation;
     this.publishStatus();
     const context = {
       operation: 'background.start',
