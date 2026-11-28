@@ -71,6 +71,9 @@ export function ChatToolsMenu<TPanel extends string = never>({
     setIsOpen(false);
     setActivePanel(null);
   }
+  if (isOpen && activePanel?.kind === 'files' && media !== 'all') {
+    setActivePanel(null);
+  }
   const [shownDismissToken, setShownDismissToken] = useState(dismissToken);
   if (dismissToken !== shownDismissToken) {
     setShownDismissToken(dismissToken);
@@ -199,7 +202,7 @@ export function ChatToolsMenu<TPanel extends string = never>({
           ) : null}
         </View>
       </BottomSheet>
-      {media === 'all' && activePanel?.kind === 'files' ? (
+      {activePanel?.kind === 'files' ? (
         <FilePickerBottomSheet
           allowCreateFolder={allowCreateFolder}
           maxAttachments={maxAttachments}

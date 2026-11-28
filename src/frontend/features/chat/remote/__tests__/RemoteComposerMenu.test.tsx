@@ -195,3 +195,67 @@ test('renders the workspace row as read-only when canChangeWorkspace is false', 
   expect(host.props.accessibilityLabel).toBe('remoteAgent.workspaceLabel, Default PC workspace');
   expect(renderer.root.findAllByProps({ testID: 'remote-workspace-sheet' })).toHaveLength(0);
 });
+
+test('closes the file picker and keeps tools sheet active if supportsAttachments becomes false', async () => {
+  await mount();
+  await act(async () => trigger().onPress());
+
+  act(() => renderer.root.findByProps({ accessibilityLabel: 'chat.media.file' }).props.onPress());
+  expect(renderer.root.findByType('FilePickerSheet' as never).props.open).toBe(true);
+  expect(toolsSheet().active).toBe(false);
+
+  await act(async () => {
+    renderer.update(
+      <RemoteComposerMenu
+        attachmentsCount={0}
+        canChangeWorkspace
+        enabled
+        onSelectWorkspace={jest.fn()}
+        selectedWorkspace={systemWorkspace}
+        showWorkspaceRow
+        supportsAttachments={false}
+        workspaceValue="Default PC workspace"
+        workspaces={makeWorkspaces([systemWorkspace, projectWorkspace])}
+      />,
+    );
+  });
+
+  expect(renderer.root.findAllByType('FilePickerSheet' as never)).toHaveLength(0);
+  expect(toolsSheet().open).toBe(true);
+  expect(toolsSheet().active).toBe(true);
+});
+
+test('keeps an open RemoteWorkspaceSheet mounted as disabled and dismissible if canChangeWorkspace flips false', async () => {
+  await mount();
+  await act(async () => trigger().onPress());
+
+  act(() => renderer.root.findByProps({ testID: 'remote-composer-workspace' }).props.onPress());
+  expect(renderer.root.findByProps({ testID: 'remote-workspace-sheet' }).props.open).toBe(true);
+  expect(toolsSheet().active).toBe(false);
+
+  await act(async () => {
+    renderer.update(
+      <RemoteComposerMenu
+        attachmentsCount={0}
+        canChangeWorkspace={false}
+        enabled
+        onSelectWorkspace={jest.fn()}
+        selectedWorkspace={systemWorkspace}
+        showWorkspaceRow
+        supportsAttachments
+        workspaceValue="Default PC workspace"
+        workspaces={makeWorkspaces([systemWorkspace, projectWorkspace])}
+      />,
+    );
+  });
+
+  const workspaceSheet = renderer.root.findByProps({ testID: 'remote-workspace-sheet' });
+  expect(workspaceSheet.props.open).toBe(true);
+  expect(
+    renderer.root.findByProps({ testID: 'remote-workspace-option-ws-project' }).props.disabled,
+  ).toBe(true);
+
+  act(() => workspaceSheet.props.onClose());
+  expect(renderer.root.findAllByProps({ testID: 'remote-workspace-sheet' })).toHaveLength(0);
+  expect(toolsSheet().active).toBe(true);
+});

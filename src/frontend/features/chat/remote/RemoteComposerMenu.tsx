@@ -58,7 +58,7 @@ export function RemoteComposerMenu({
         ) : null
       }
       renderPanels={(menu) =>
-        menu.panel === 'workspace' && canChangeWorkspace ? (
+        menu.panel === 'workspace' ? (
           <RemoteWorkspaceSheet
             disabled={!canChangeWorkspace}
             onClose={menu.closePanel}

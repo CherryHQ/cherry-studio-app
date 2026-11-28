@@ -249,7 +249,8 @@ export function RemoteChatSession({ target, opened, navigation }: RemoteChatSess
   if (workspaceSelection.agentRef !== agent?.ref) {
     setWorkspaceSelection({ agentRef: agent?.ref, workspace: undefined });
   }
-  const selectedAgentWorkspace = workspaceSelection.workspace;
+  const selectedAgentWorkspace =
+    workspaceSelection.agentRef === agent?.ref ? workspaceSelection.workspace : undefined;
   const selectedWorkspace = existing
     ? workspaces.items.find((item) => item.kind !== 'system' && item.id === snapshot.workspaceId)
     : (workspaces.items.find((item) => item.ref === selectedAgentWorkspace?.ref) ??
