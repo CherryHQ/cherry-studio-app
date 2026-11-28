@@ -42,7 +42,23 @@ test.each(['user', 'assistant'] as const)('bounds selection masks for a long %s 
       expect(masks).toHaveLength(0);
     } else {
       expect(masks).toHaveLength(1);
-      expect(StyleSheet.flatten(masks[0]!.props.style).maxHeight).toBe(234);
+      const mask = masks[0]!;
+      const expectCappedMask = () =>
+        expect(StyleSheet.flatten(mask.props.style).maxHeight).toBe(234);
+      const resize = (height: number) =>
+        act(() => {
+          mask.props.children.props.onLayout({ nativeEvent: { layout: { height } } });
+        });
+
+      expectCappedMask();
+      resize(235);
+      expect(mask.props.maskElement.props.style.experimental_backgroundImage).toContain(
+        'linear-gradient',
+      );
+      expectCappedMask();
+      resize(234);
+      expect(mask.props.maskElement.props.style).toEqual({ backgroundColor: 'black' });
+      expectCappedMask();
     }
   } finally {
     act(() => row.unmount());
