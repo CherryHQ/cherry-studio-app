@@ -78,6 +78,7 @@ export interface AccountRuntimeOptions {
     delete(profileId: string): Promise<void>;
   };
   openBrowser(url: string, redirectUri: string): Promise<string | null>;
+  consumeLaunchUrl?(url: string): Promise<void>;
   /** Restarts JavaScript so the selected profile's stores open from scratch. */
   reload(): Promise<void>;
 }
@@ -266,7 +267,7 @@ export class AccountRuntime implements AccountModule {
     let target: ActiveProfile | undefined;
     let proposed: AuthState | undefined;
     try {
-      const session = await portal.completeSignIn(url, {
+      const completion = portal.completeSignIn(url, {
         validate: async (candidate) => {
           proposed = candidate.state;
           if (!proposed.subject || !proposed.profile?.profileId) throw new AccountError('rejected');
@@ -295,6 +296,15 @@ export class AccountRuntime implements AccountModule {
             address,
           );
         },
+      });
+      const session = await completion.finally(async () => {
+        if (!this.options.consumeLaunchUrl || !isAccountCallbackUrl(url, this.options.redirectUri))
+          return;
+        try {
+          await this.options.consumeLaunchUrl(url);
+        } catch {
+          logger.warn('Could not retire the handled account launch URL');
+        }
       });
       if (session._tag !== 'signedIn' || !session.profile || !target)
         throw new AccountError('rejected');

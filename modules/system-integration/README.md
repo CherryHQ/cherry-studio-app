@@ -29,6 +29,12 @@ state.
 iOS uses `group.<bundle-id>.system-integration`. Shared files use complete file protection and are
 excluded from backup. Android uses `noBackupFilesDir`.
 
+Android can deliver the original Activity URL again after a JavaScript reload. The account
+owner awaits `consumeLaunchUrl` after the SDK handles a callback and before it opens a different
+data profile. On the main thread this clears only an exact matching launch URI. Later links,
+intent flags, extras and MIME type stay available to their respective consumers. This native
+method requires an updated Android binary.
+
 ## Acceptance
 
 Before release, authorize and perform native builds and device checks for cold and warm share

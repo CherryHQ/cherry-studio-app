@@ -19,6 +19,7 @@ import { AccountError, type AccountSessionContext } from '@/shared/contracts/acc
 import { getActiveProfile } from '@/shared/data/activeProfile';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
+import { getSystemIntegration } from '../../../modules/system-integration';
 import { setDiagnosticAccountReader } from '../runtime/diagnosticContext';
 import {
   configOrigin,
@@ -140,6 +141,9 @@ function createAccount(): AccountRuntime {
     openBrowser: async (url, callbackUrl) => {
       const result = await WebBrowser.openAuthSessionAsync(url, callbackUrl);
       return result.type === 'success' ? result.url : null;
+    },
+    async consumeLaunchUrl(url) {
+      if (Platform.OS === 'android') await getSystemIntegration()?.consumeLaunchUrl?.(url);
     },
     reload: () => reloadAppAsync('Switch data profile'),
   });

@@ -215,6 +215,37 @@ describe('AccountRuntime', () => {
     expect(options.reload).toHaveBeenCalledTimes(1);
   });
 
+  it('awaits release of the handled launch URL before reloading into the admitted profile', async () => {
+    const { options } = setup(signedIn('enterprise'));
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const consumeLaunchUrl = jest.fn(async () => {
+      entered.resolve();
+      await release.promise;
+    });
+    const runtime = new AccountRuntime({ ...options, consumeLaunchUrl });
+    const callback = 'cb://?code=cold';
+    const result = runtime.receiveRedirect(callback);
+    await entered.promise;
+    expect(options.portal.completeSignIn).toHaveBeenCalledTimes(1);
+    expect(consumeLaunchUrl).toHaveBeenCalledWith(callback);
+    expect(options.reload).not.toHaveBeenCalled();
+    release.resolve();
+    await expect(result).resolves.toBe(false);
+    expect(options.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retire another feature’s launch URL returned by the browser', async () => {
+    const { options } = setup(signedIn('cloud'));
+    const failure = Object.assign(new Error('wrong callback'), { unmatchedCallback: true });
+    options.openBrowser.mockResolvedValueOnce('cb://other?code=other');
+    options.portal.completeSignIn.mockRejectedValueOnce(failure);
+    const consumeLaunchUrl = jest.fn(async () => {});
+    const runtime = new AccountRuntime({ ...options, consumeLaunchUrl });
+    await expect(runtime.signIn()).rejects.toBe(failure);
+    expect(consumeLaunchUrl).not.toHaveBeenCalled();
+  });
+
   it('admits the current browser callback after a stale deep link fails, including during validation', async () => {
     const { options, runtime } = setup(signedIn('cloud'));
     let rejectStale!: (error: Error) => void;

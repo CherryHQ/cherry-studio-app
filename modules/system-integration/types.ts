@@ -36,6 +36,8 @@ export interface SystemIntegrationNativeModule {
     eventName: EventName,
     listener: NativeSystemEvents[EventName],
   ): { remove(): void };
+  /** Android only. Retire the exact launch URL after its receiving flow has handled it. */
+  consumeLaunchUrl?(url: string): Promise<void>;
   claimNextEntry(): Promise<NativeSystemEntry | null>;
   releaseEntry(id: string): Promise<void>;
   completeEntry(id: string): Promise<void>;
